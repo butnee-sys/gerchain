@@ -1,0 +1,16 @@
+version: '3.8'
+services:
+  gerchain-node:
+    build: .
+    image: gerchain-core:v8.2.1
+    ports:
+      - "8485:8485"
+      - "9333:9333"
+    environment:
+      - NODE_ID=validator_01
+      - GENESIS_PATH=/config/genesis.json
+      - PEERS=tcp://node2_ip:8485,tcp://node3_ip:8485
+    volumes:
+      - ./data:/app/data
+      - ./config:/config
+    restart: always

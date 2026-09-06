@@ -1,0 +1,44 @@
+from sqlalchemy import Column, Integer, String, Float, DateTime
+from gerchain.database import Base
+from datetime import datetime
+
+class RWAAsset(Base):
+    __tablename__ = "rwa_assets"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    asset_code = Column(String, unique=True, index=True)
+    asset_type = Column(String)
+    location = Column(String)
+    valuation_nef = Column(Float)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+class EscrowAccount(Base):
+    __tablename__ = "escrow_accounts"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    account_number = Column(String, unique=True, index=True)
+    owner_name = Column(String)
+    balance_nef = Column(Float, default=0.0)
+    status = Column(String, default="ACTIVE")
+
+class AuditTrail(Base):
+    __tablename__ = "audit_trails"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    action = Column(String)
+    details = Column(String)
+    sha256_hash = Column(String)
+    timestamp = Column(DateTime, default=datetime.utcnow)
+
+class MilestoneEvidence(Base):
+    __tablename__ = "milestone_evidences"
+
+    id = Column(Integer, primary_key=True, index=True)
+    milestone_ref = Column(String, unique=True, index=True)
+    asset_code = Column(String, index=True)
+    herder_account = Column(String, index=True)
+    gps_coordinates = Column(String)  # Жишээ нь: "45.7578° N, 106.3743° E"
+    photo_url = Column(String)        # Газар дээрх зургийн холбоос
+    commission_act_ref = Column(String) # Орон нутгийн комиссын актынг дугаар
+    status = Column(String, default="PENDING") # PENDING, APPROVED, REJECTED
+    created_at = Column(DateTime, default=datetime.utcnow)

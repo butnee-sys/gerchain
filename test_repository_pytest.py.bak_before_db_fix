@@ -1,0 +1,47 @@
+import pytest
+from repository import GerchainRepository
+
+@pytest.fixture
+def repo():
+    # Тестийн зорилгоор түр санах ойн (in-memory) SQLite эсвэл тест датабааз ашиглана
+    return GerchainRepository("sqlite:///:memory:")
+
+def test_save_and_get_escrow_state(repo):
+    escrow_id = "test_escrow_999"
+    repo.save_escrow_state(
+        escrow_id=escrow_id,
+        state="PENDING",
+        amount=1500,
+        currency="USD",
+        history=[{"event": "INIT"}]
+    )
+    
+    data = repo.get_escrow_state(escrow_id)
+    assert data is not None
+    assert data["escrow_id"] == escrow_id
+    assert data["state"] == "PENDING"
+    assert data["amount"] == 1500
+    assert data["currency"] == "USD"
+    assert len(data["history"]) == 1
+
+def test_update_escrow_state(repo):
+    escrow_id = "test_escrow_999"
+    # Эхлээд хадгалах
+    repo.save_escrow_state(escrow_id, "PENDING", 1000, "MNT", [])
+    
+    # Төлөв шинэчлэх (Upsert)
+    repo.save_escrow_state(escrow_id, "SETTLED", 1000, "MNT", [{"event": "SETTLED"}])
+    
+    data = repo.get_escrow_state(escrow_id)
+    assert data["state"] == "SETTLED"
+    assert len(data["history"]) == 1
+
+def test_save_chain_tip(repo):
+    # Chain tip хадгалах алдаагүй ажиллаж буй эсэхийг шалгах
+    repo.save_chain_tip(
+        chain_tip_hash="tip_hash_123",
+        manifest_hash="manifest_456",
+        state_root="root_789"
+    )
+    # Алдаа заагаагүй бол тест амжилттай гэж үзнэ
+    assert True

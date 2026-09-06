@@ -1,0 +1,16 @@
+{
+    "chain_id": "gerchain-nef-1",
+    "consensus": {
+        "quorum": 2,
+        "authorized_witnesses": [
+            "node_a",
+            "node_b",
+            "node_c"
+        ]
+    },
+    "nef_state": {
+        "static_pool": 1000000.0,
+        "dynamic_limit": 500000.0,
+        "currency": "MNT_ESCROW"
+    }
+}

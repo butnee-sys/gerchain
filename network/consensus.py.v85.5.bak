@@ -1,0 +1,603 @@
+"""
+GerChain V83.2
+Authorized Multi-Node Cryptographic Consensus.
+
+Purpose:
+- V82.1 Multi-Node Cryptographic Consensus.
+- V83.0 Authorized Witness Registry.
+- Зөвшөөрөгдөөгүй Witness Node-ийг consensus-оос автоматаар хасах.
+- Authorization болон cryptographic verification-ийг тусдаа давхаргаар шалгах.
+- Chain Tip-ийг эх өгөгдлөөс дахин тооцох.
+- Quorum-ийг зөвхөн authorized + cryptographically valid node дээр тооцох.
+- Хуурамч consensus үүсгэхгүй байх.
+
+Architecture:
+
+    Node
+      ↓
+    Authorization
+      ↓
+    Independent Cryptographic Verification
+      ↓
+    Chain Tip
+      ↓
+    Authorized Chain Tip Group
+      ↓
+    Quorum
+      ↓
+    Consensus
+"""
+
+from __future__ import annotations
+
+from typing import Any, Dict, List, Optional
+
+from core.hashing import domain_hash
+from network.authorization import (
+    AuthorizedWitnessRegistry,
+)
+from verifier.independent_verifier import (
+    IndependentVerifier,
+)
+
+
+class MultiNodeConsensus:
+    """
+    V83.2 Authorized Multi-Node Consensus.
+
+    V82.1-ийн криптографийн verification логикийг
+    хадгалж, V83 authorization давхаргыг нэмнэ.
+    """
+
+    VERSION = "V83.2"
+
+    def __init__(
+        self,
+        quorum: int = 2,
+        authorization_registry: Optional[
+            AuthorizedWitnessRegistry
+        ] = None,
+    ):
+        if not isinstance(quorum, int):
+            raise TypeError(
+                "quorum must be an integer."
+            )
+
+        if quorum < 1:
+            raise ValueError(
+                "quorum must be at least 1."
+            )
+
+        self.quorum = quorum
+        self.verifier = IndependentVerifier()
+
+        if authorization_registry is not None and not isinstance(
+            authorization_registry,
+            AuthorizedWitnessRegistry,
+        ):
+            raise TypeError(
+                "authorization_registry must be an AuthorizedWitnessRegistry."
+            )
+
+        self.authorization_registry = authorization_registry
+
+    def compute_chain_tip(
+        self,
+        bundle: Dict[str, Any],
+    ) -> Optional[str]:
+        """
+        Bundle-ээс Chain Tip-ийг дахин тооцно.
+
+        Authorization энд шалгагдахгүй.
+        Учир нь криптографийн хүчинтэй байдал
+        болон node-ийн эрх нь тусдаа ойлголт.
+        """
+
+        if not isinstance(
+            bundle,
+            dict,
+        ):
+            return None
+
+        if not self.verifier.verify_bundle(
+            bundle
+        ):
+            return None
+
+        manifest = bundle.get(
+            "manifest"
+        )
+
+        entries = bundle.get(
+            "entries"
+        )
+
+        if not isinstance(
+            manifest,
+            dict,
+        ):
+            return None
+
+        if not isinstance(
+            entries,
+            list,
+        ):
+            return None
+
+        manifest_hash = domain_hash(
+            "MANIFEST",
+            manifest,
+        )
+
+        state_root = (
+            self.verifier.compute_state_root(
+                bundle
+            )
+        )
+
+        if state_root is None:
+            return None
+
+        if entries:
+            last_entry = entries[-1]
+
+            if not isinstance(
+                last_entry,
+                dict,
+            ):
+                return None
+
+            record = last_entry.get(
+                "record"
+            )
+
+            if not isinstance(
+                record,
+                dict,
+            ):
+                return None
+
+            final_sequence = record.get(
+                "sequence"
+            )
+
+            final_state_hash = record.get(
+                "new_state_hash"
+            )
+
+            if not isinstance(
+                final_sequence,
+                int,
+            ):
+                return None
+
+            if not isinstance(
+                final_state_hash,
+                str,
+            ):
+                return None
+
+        else:
+            final_sequence = 0
+
+            initial_state = bundle.get(
+                "initial_state"
+            )
+
+            final_state_hash = domain_hash(
+                "STATE",
+                initial_state,
+            )
+
+        return domain_hash(
+            "CHAIN_TIP",
+            {
+                "manifest_hash":
+                    manifest_hash,
+                "final_sequence":
+                    final_sequence,
+                "final_state_hash":
+                    final_state_hash,
+                "state_root":
+                    state_root,
+            },
+        )
+
+    def is_authorized(
+        self,
+        node_id: str,
+    ) -> bool:
+        """
+        Node authorization шалгана.
+        """
+
+        if self.authorization_registry is None:
+            return True
+        return self.authorization_registry.is_authorized(node_id)
+
+    def verify_node_bundle(
+        self,
+        node_id: str,
+        bundle: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """
+        Нэг node-ийн:
+
+        1. Authorization
+        2. Cryptographic verification
+        3. Chain Tip
+
+        гэсэн гурван түвшний шалгалт.
+        """
+
+        if not isinstance(
+            node_id,
+            str,
+        ):
+            raise TypeError(
+                "node_id must be a string."
+            )
+
+        authorized = (
+            self.is_authorized(node_id)
+        )
+
+        if not authorized:
+            return {
+                "node_id": node_id,
+                "authorized": False,
+                "verified": False,
+                "chain_tip": None,
+                "status": "UNAUTHORIZED",
+            }
+
+        verified = (
+            self.verifier.verify_bundle(
+                bundle
+            )
+        )
+
+        if not verified:
+            return {
+                "node_id": node_id,
+                "authorized": True,
+                "verified": False,
+                "chain_tip": None,
+                "status": "INVALID_BUNDLE",
+            }
+
+        chain_tip = (
+            self.compute_chain_tip(
+                bundle
+            )
+        )
+
+        if chain_tip is None:
+            return {
+                "node_id": node_id,
+                "authorized": True,
+                "verified": False,
+                "chain_tip": None,
+                "status": "INVALID_CHAIN_TIP",
+            }
+
+        return {
+            "node_id": node_id,
+            "authorized": True,
+            "verified": True,
+            "chain_tip": chain_tip,
+            "status": "VALID",
+        }
+
+    def group_by_chain_tip(
+        self,
+        node_results: List[
+            Dict[str, Any]
+        ],
+    ) -> Dict[str, List[str]]:
+        """
+        Зөвхөн:
+
+        authorized == True
+        verified == True
+
+        node-уудыг Chain Tip-ээр бүлэглэнэ.
+        """
+
+        groups: Dict[
+            str,
+            List[str],
+        ] = {}
+
+        for result in node_results:
+            if not result.get(
+                "authorized",
+                False,
+            ):
+                continue
+
+            if not result.get(
+                "verified",
+                False,
+            ):
+                continue
+
+            chain_tip = result.get(
+                "chain_tip"
+            )
+
+            node_id = result.get(
+                "node_id"
+            )
+
+            if not isinstance(
+                chain_tip,
+                str,
+            ):
+                continue
+
+            if not isinstance(
+                node_id,
+                str,
+            ):
+                continue
+
+            groups.setdefault(
+                chain_tip,
+                [],
+            ).append(node_id)
+
+        return groups
+
+    def determine_consensus(
+        self,
+        node_results: List[
+            Dict[str, Any]
+        ],
+    ) -> Dict[str, Any]:
+        """
+        Зөвшөөрөгдсөн + криптографийн
+        хувьд хүчинтэй node-уудаар
+        consensus тодорхойлно.
+        """
+
+        valid_results = [
+            result
+            for result in node_results
+            if result.get(
+                "authorized",
+                False,
+            )
+            and result.get(
+                "verified",
+                False,
+            )
+        ]
+
+        if not valid_results:
+            consensus_status = (
+                "NO_AUTHORIZED_VALID_NODES"
+                if self.authorization_registry is not None
+                else "NO_VALID_NODES"
+            )
+            return {
+                "consensus": consensus_status,
+                "chain_tip": None,
+                "nodes": [],
+                "count": 0,
+                "groups": {},
+            }
+
+        groups = (
+            self.group_by_chain_tip(
+                valid_results
+            )
+        )
+
+        quorum_groups = [
+            (
+                chain_tip,
+                node_ids,
+            )
+            for chain_tip, node_ids
+            in groups.items()
+            if len(node_ids)
+            >= self.quorum
+        ]
+
+        if len(
+            quorum_groups
+        ) == 1:
+            chain_tip, node_ids = (
+                quorum_groups[0]
+            )
+
+            return {
+                "consensus":
+                    "QUORUM_REACHED",
+                "chain_tip":
+                    chain_tip,
+                "nodes":
+                    sorted(node_ids),
+                "count":
+                    len(node_ids),
+                "groups":
+                    groups,
+            }
+
+        if len(
+            quorum_groups
+        ) > 1:
+            return {
+                "consensus":
+                    "CONFLICTING_QUORUM",
+                "chain_tip": None,
+                "nodes": [],
+                "count": 0,
+                "groups":
+                    groups,
+            }
+
+        if len(groups) > 1:
+            return {
+                "consensus":
+                    "SPLIT_CONSENSUS",
+                "chain_tip": None,
+                "nodes": [],
+                "count": 0,
+                "groups":
+                    groups,
+            }
+
+        return {
+            "consensus":
+                "QUORUM_NOT_REACHED",
+            "chain_tip": None,
+            "nodes": [],
+            "count": 0,
+            "groups":
+                groups,
+        }
+
+    def verify_network(
+        self,
+        node_bundles: Dict[
+            str,
+            Dict[str, Any],
+        ],
+    ) -> Dict[str, Any]:
+        """
+        Бүх node-ийг дарааллаар шалгана.
+
+        Authorization → Cryptographic
+        Verification → Chain Tip → Quorum.
+        """
+
+        if not isinstance(
+            node_bundles,
+            dict,
+        ):
+            raise TypeError(
+                "node_bundles must be a dictionary."
+            )
+
+        node_results = []
+
+        for node_id in sorted(
+            node_bundles.keys()
+        ):
+            result = (
+                self.verify_node_bundle(
+                    node_id,
+                    node_bundles[
+                        node_id
+                    ],
+                )
+            )
+
+            node_results.append(
+                result
+            )
+
+        consensus = (
+            self.determine_consensus(
+                node_results
+            )
+        )
+
+        authorized_node_count = sum(
+            1
+            for result in node_results
+            if result.get(
+                "authorized",
+                False,
+            )
+        )
+
+        verified_node_count = sum(
+            1
+            for result in node_results
+            if result.get(
+                "verified",
+                False,
+            )
+        )
+
+        authorized_verified_count = sum(
+            1
+            for result in node_results
+            if result.get(
+                "authorized",
+                False,
+            )
+            and result.get(
+                "verified",
+                False,
+            )
+        )
+
+        return {
+            "version":
+                self.VERSION,
+            "quorum":
+                self.quorum,
+            "node_count":
+                len(node_bundles),
+            "authorized_node_count":
+                authorized_node_count,
+            "verified_node_count":
+                verified_node_count,
+            "authorized_verified_count":
+                authorized_verified_count,
+            "node_results":
+                node_results,
+            "consensus":
+                consensus[
+                    "consensus"
+                ],
+            "chain_tip":
+                consensus[
+                    "chain_tip"
+                ],
+            "consensus_nodes":
+                consensus[
+                    "nodes"
+                ],
+            "consensus_count":
+                consensus[
+                    "count"
+                ],
+            "groups":
+                consensus[
+                    "groups"
+                ],
+        }
+
+    def status(
+        self,
+    ) -> Dict[str, Any]:
+        """
+        Consensus engine-ийн төлөв.
+        """
+
+        if self.authorization_registry is None:
+            return {
+                "version": self.VERSION,
+                "quorum": self.quorum,
+                "authorization_enabled": False,
+                "authorized_nodes": [],
+                "authorized_count": 0,
+            }
+
+        return {
+            "version": self.VERSION,
+            "quorum": self.quorum,
+            "authorization_enabled": True,
+            "authorized_nodes": self.authorization_registry.node_ids(),
+            "authorized_count": self.authorization_registry.count(),
+        }
+
+
+__all__ = [
+    "MultiNodeConsensus",
+]

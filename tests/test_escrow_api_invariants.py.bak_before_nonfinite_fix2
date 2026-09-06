@@ -1,0 +1,375 @@
+import pytest
+from fastapi.testclient import TestClient
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
+
+import gerchain.web_ui as web_ui
+from gerchain.database import Base
+from gerchain.models import EscrowAccount, AuditTrail, MilestoneEvidence
+
+
+@pytest.fixture
+def api_db(monkeypatch):
+    """
+    API invariant tests use an isolated in-memory database.
+    Production gerchain.db is never touched.
+    """
+    engine = create_engine(
+        "sqlite://",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+
+    Base.metadata.create_all(bind=engine)
+
+    TestSessionLocal = sessionmaker(
+        autocommit=False,
+        autoflush=False,
+        bind=engine,
+    )
+
+    monkeypatch.setattr(web_ui, "SessionLocal", TestSessionLocal)
+
+    db = TestSessionLocal()
+
+    db.add_all(
+        [
+            EscrowAccount(
+                account_number="ESCROW-SENDER",
+                owner_name="Test Sender",
+                balance_nef=1000.0,
+                status="ACTIVE",
+            ),
+            EscrowAccount(
+                account_number="ESCROW-RECEIVER",
+                owner_name="Test Receiver",
+                balance_nef=100.0,
+                status="ACTIVE",
+            ),
+        ]
+    )
+
+    db.commit()
+    db.close()
+
+    yield TestSessionLocal
+
+    Base.metadata.drop_all(bind=engine)
+    engine.dispose()
+
+
+@pytest.fixture
+def client(api_db):
+    return TestClient(web_ui.app)
+
+
+def get_account(session_factory, account_number):
+    db = session_factory()
+    try:
+        return db.query(EscrowAccount).filter_by(
+            account_number=account_number
+        ).first()
+    finally:
+        db.close()
+
+
+def get_audit_count(session_factory):
+    db = session_factory()
+    try:
+        return db.query(AuditTrail).count()
+    finally:
+        db.close()
+
+
+def test_same_account_is_rejected_without_state_change(client, api_db):
+    before_sender = get_account(api_db, "ESCROW-SENDER").balance_nef
+    before_audit = get_audit_count(api_db)
+
+    response = client.post(
+        "/api/v1/escrow/transfer",
+        json={
+            "from_account": "ESCROW-SENDER",
+            "to_account": "ESCROW-SENDER",
+            "amount_nef": 10,
+            "milestone_ref": "INV-SAME-001",
+        },
+    )
+
+    assert response.status_code == 400
+    assert "different" in response.json()["detail"]
+
+    assert get_account(api_db, "ESCROW-SENDER").balance_nef == before_sender
+    assert get_audit_count(api_db) == before_audit
+
+
+@pytest.mark.parametrize("amount", [0, -1, -100])
+def test_non_positive_amount_is_rejected(client, api_db, amount):
+    before_sender = get_account(api_db, "ESCROW-SENDER").balance_nef
+    before_receiver = get_account(api_db, "ESCROW-RECEIVER").balance_nef
+    before_audit = get_audit_count(api_db)
+
+    response = client.post(
+        "/api/v1/escrow/transfer",
+        json={
+            "from_account": "ESCROW-SENDER",
+            "to_account": "ESCROW-RECEIVER",
+            "amount_nef": amount,
+            "milestone_ref": f"INV-AMOUNT-{amount}",
+        },
+    )
+
+    assert response.status_code == 400
+
+    assert get_account(api_db, "ESCROW-SENDER").balance_nef == before_sender
+    assert get_account(api_db, "ESCROW-RECEIVER").balance_nef == before_receiver
+    assert get_audit_count(api_db) == before_audit
+
+
+@pytest.mark.parametrize("amount", [float("nan"), float("inf"), float("-inf")])
+def test_non_finite_amount_is_rejected(client, api_db, amount):
+    before_sender = get_account(api_db, "ESCROW-SENDER").balance_nef
+    before_receiver = get_account(api_db, "ESCROW-RECEIVER").balance_nef
+    before_audit = get_audit_count(api_db)
+
+    response = client.post(
+        "/api/v1/escrow/transfer",
+        json={
+            "from_account": "ESCROW-SENDER",
+            "to_account": "ESCROW-RECEIVER",
+            "amount_nef": amount,
+            "milestone_ref": "INV-NONFINITE-001",
+        },
+    )
+
+    assert response.status_code == 400
+
+    assert get_account(api_db, "ESCROW-SENDER").balance_nef == before_sender
+    assert get_account(api_db, "ESCROW-RECEIVER").balance_nef == before_receiver
+    assert get_audit_count(api_db) == before_audit
+
+
+def test_missing_source_account_is_rejected(client, api_db):
+    before_receiver = get_account(api_db, "ESCROW-RECEIVER").balance_nef
+    before_audit = get_audit_count(api_db)
+
+    response = client.post(
+        "/api/v1/escrow/transfer",
+        json={
+            "from_account": "DOES-NOT-EXIST",
+            "to_account": "ESCROW-RECEIVER",
+            "amount_nef": 10,
+            "milestone_ref": "INV-NOSOURCE-001",
+        },
+    )
+
+    assert response.status_code == 404
+
+    assert get_account(api_db, "ESCROW-RECEIVER").balance_nef == before_receiver
+    assert get_audit_count(api_db) == before_audit
+
+
+def test_missing_recipient_account_is_rejected(client, api_db):
+    before_sender = get_account(api_db, "ESCROW-SENDER").balance_nef
+    before_audit = get_audit_count(api_db)
+
+    response = client.post(
+        "/api/v1/escrow/transfer",
+        json={
+            "from_account": "ESCROW-SENDER",
+            "to_account": "DOES-NOT-EXIST",
+            "amount_nef": 10,
+            "milestone_ref": "INV-NORECEIVER-001",
+        },
+    )
+
+    assert response.status_code == 404
+
+    assert get_account(api_db, "ESCROW-SENDER").balance_nef == before_sender
+    assert get_audit_count(api_db) == before_audit
+
+
+def test_inactive_source_is_rejected(client, api_db):
+    db = api_db()
+    sender = db.query(EscrowAccount).filter_by(
+        account_number="ESCROW-SENDER"
+    ).first()
+    sender.status = "INACTIVE"
+    db.commit()
+    db.close()
+
+    before_receiver = get_account(api_db, "ESCROW-RECEIVER").balance_nef
+    before_audit = get_audit_count(api_db)
+
+    response = client.post(
+        "/api/v1/escrow/transfer",
+        json={
+            "from_account": "ESCROW-SENDER",
+            "to_account": "ESCROW-RECEIVER",
+            "amount_nef": 10,
+            "milestone_ref": "INV-INACTIVE-SOURCE-001",
+        },
+    )
+
+    assert response.status_code == 409
+    assert "not ACTIVE" in response.json()["detail"]
+
+    assert get_account(api_db, "ESCROW-RECEIVER").balance_nef == before_receiver
+    assert get_audit_count(api_db) == before_audit
+
+
+def test_inactive_recipient_is_rejected(client, api_db):
+    db = api_db()
+    receiver = db.query(EscrowAccount).filter_by(
+        account_number="ESCROW-RECEIVER"
+    ).first()
+    receiver.status = "INACTIVE"
+    db.commit()
+    db.close()
+
+    before_sender = get_account(api_db, "ESCROW-SENDER").balance_nef
+    before_audit = get_audit_count(api_db)
+
+    response = client.post(
+        "/api/v1/escrow/transfer",
+        json={
+            "from_account": "ESCROW-SENDER",
+            "to_account": "ESCROW-RECEIVER",
+            "amount_nef": 10,
+            "milestone_ref": "INV-INACTIVE-RECEIVER-001",
+        },
+    )
+
+    assert response.status_code == 409
+    assert "not ACTIVE" in response.json()["detail"]
+
+    assert get_account(api_db, "ESCROW-SENDER").balance_nef == before_sender
+    assert get_audit_count(api_db) == before_audit
+
+
+def test_invalid_owner_is_rejected(client, api_db):
+    db = api_db()
+    receiver = db.query(EscrowAccount).filter_by(
+        account_number="ESCROW-RECEIVER"
+    ).first()
+    receiver.owner_name = None
+    db.commit()
+    db.close()
+
+    before_sender = get_account(api_db, "ESCROW-SENDER").balance_nef
+    before_receiver = get_account(api_db, "ESCROW-RECEIVER").balance_nef
+    before_audit = get_audit_count(api_db)
+
+    response = client.post(
+        "/api/v1/escrow/transfer",
+        json={
+            "from_account": "ESCROW-SENDER",
+            "to_account": "ESCROW-RECEIVER",
+            "amount_nef": 10,
+            "milestone_ref": "INV-OWNER-001",
+        },
+    )
+
+    assert response.status_code == 409
+    assert "valid owner" in response.json()["detail"]
+
+    assert get_account(api_db, "ESCROW-SENDER").balance_nef == before_sender
+    assert get_account(api_db, "ESCROW-RECEIVER").balance_nef == before_receiver
+    assert get_audit_count(api_db) == before_audit
+
+
+def test_insufficient_funds_is_rejected(client, api_db):
+    before_sender = get_account(api_db, "ESCROW-SENDER").balance_nef
+    before_receiver = get_account(api_db, "ESCROW-RECEIVER").balance_nef
+    before_audit = get_audit_count(api_db)
+
+    response = client.post(
+        "/api/v1/escrow/transfer",
+        json={
+            "from_account": "ESCROW-SENDER",
+            "to_account": "ESCROW-RECEIVER",
+            "amount_nef": 1000.01,
+            "milestone_ref": "INV-INSUFFICIENT-001",
+        },
+    )
+
+    assert response.status_code == 400
+    assert "Insufficient funds" in response.json()["detail"]
+
+    assert get_account(api_db, "ESCROW-SENDER").balance_nef == before_sender
+    assert get_account(api_db, "ESCROW-RECEIVER").balance_nef == before_receiver
+    assert get_audit_count(api_db) == before_audit
+
+
+def test_successful_transfer_conserves_total_and_creates_audit(client, api_db):
+    before_sender = get_account(api_db, "ESCROW-SENDER").balance_nef
+    before_receiver = get_account(api_db, "ESCROW-RECEIVER").balance_nef
+    before_total = before_sender + before_receiver
+    before_audit = get_audit_count(api_db)
+
+    amount = 125.0
+
+    response = client.post(
+        "/api/v1/escrow/transfer",
+        json={
+            "from_account": "ESCROW-SENDER",
+            "to_account": "ESCROW-RECEIVER",
+            "amount_nef": amount,
+            "milestone_ref": "INV-SUCCESS-001",
+        },
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+
+    assert data["status"] == "success"
+    assert data["transferred_amount"] == amount
+    assert data["milestone_ref"] == "INV-SUCCESS-001"
+    assert len(data["sha256_hash"]) == 64
+
+    after_sender = get_account(api_db, "ESCROW-SENDER").balance_nef
+    after_receiver = get_account(api_db, "ESCROW-RECEIVER").balance_nef
+
+    assert after_sender == before_sender - amount
+    assert after_receiver == before_receiver + amount
+    assert after_sender + after_receiver == before_total
+
+    db = api_db()
+    try:
+        audit = (
+            db.query(AuditTrail)
+            .filter_by(
+                action="ESCROW_MILESTONE_TRANSFER",
+                sha256_hash=data["sha256_hash"],
+            )
+            .first()
+        )
+
+        assert audit is not None
+        assert "INV-SUCCESS-001" in audit.details
+    finally:
+        db.close()
+
+    assert get_audit_count(api_db) == before_audit + 1
+
+
+def test_transfer_requires_milestone_reference(client, api_db):
+    before_sender = get_account(api_db, "ESCROW-SENDER").balance_nef
+    before_receiver = get_account(api_db, "ESCROW-RECEIVER").balance_nef
+    before_audit = get_audit_count(api_db)
+
+    response = client.post(
+        "/api/v1/escrow/transfer",
+        json={
+            "from_account": "ESCROW-SENDER",
+            "to_account": "ESCROW-RECEIVER",
+            "amount_nef": 10,
+            "milestone_ref": "   ",
+        },
+    )
+
+    assert response.status_code == 400
+
+    assert get_account(api_db, "ESCROW-SENDER").balance_nef == before_sender
+    assert get_account(api_db, "ESCROW-RECEIVER").balance_nef == before_receiver
+    assert get_audit_count(api_db) == before_audit
