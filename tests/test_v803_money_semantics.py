@@ -14,10 +14,41 @@ Purpose:
 - Олон дараалсан мөнгөн шилжилт PASS болохыг шалгах.
 """
 
+from core.hashing import domain_hash
 from verifier.money_semantic_verifier import (
     MoneySemanticVerifier,
 )
 
+
+
+def make_initial_money_state(
+    currency="MNT",
+    balances=None,
+):
+    if balances is None:
+        balances = {
+            "BUYER": 1000,
+            "SELLER": 0,
+        }
+
+    state = {
+        "currency": currency,
+        "balances": balances,
+    }
+
+    return {
+        "record": {
+            "sequence": 0,
+            "event_type": "INITIAL_MONEY_STATE",
+        },
+        "event_payload": {
+            "state": state,
+            "state_hash": domain_hash(
+                "INITIAL_MONEY_STATE",
+                state,
+            ),
+        },
+    }
 
 def make_transfer(
     amount=100,
@@ -111,6 +142,7 @@ def make_second_transfer(
 def test_valid_money_transfer_passes():
     bundle = {
         "entries": [
+            make_initial_money_state(),
             make_transfer(),
         ]
     }
@@ -123,6 +155,7 @@ def test_valid_money_transfer_passes():
 def test_wrong_amount_is_rejected():
     bundle = {
         "entries": [
+            make_initial_money_state(),
             make_transfer(
                 amount=150,
             ),
@@ -137,6 +170,7 @@ def test_wrong_amount_is_rejected():
 def test_wrong_source_balance_is_rejected():
     bundle = {
         "entries": [
+            make_initial_money_state(),
             make_transfer(
                 previous_source_balance=1000,
                 new_source_balance=950,
@@ -152,6 +186,7 @@ def test_wrong_source_balance_is_rejected():
 def test_wrong_destination_balance_is_rejected():
     bundle = {
         "entries": [
+            make_initial_money_state(),
             make_transfer(
                 previous_destination_balance=0,
                 new_destination_balance=50,
@@ -167,6 +202,7 @@ def test_wrong_destination_balance_is_rejected():
 def test_invalid_atomic_settlement_is_rejected():
     bundle = {
         "entries": [
+            make_initial_money_state(),
             make_settlement(
                 currency="USD",
                 previous_escrow_state="FUNDED",
@@ -182,6 +218,7 @@ def test_invalid_atomic_settlement_is_rejected():
 def test_v8031_sequential_balances_pass():
     bundle = {
         "entries": [
+            make_initial_money_state(),
             make_transfer(),
             make_second_transfer(),
         ]
@@ -224,30 +261,34 @@ def test_v8031_destination_balance_continuity_is_rejected():
     assert verifier.verify(bundle) is False
 
 
-def test_v8031_currency_is_part_of_balance_continuity():
+def test_v8031_currency_mismatch_is_rejected():
     bundle = {
         "entries": [
+            make_initial_money_state(
+                currency="MNT",
+            ),
             make_transfer(
                 currency="MNT",
             ),
             make_second_transfer(
                 currency="USD",
-                previous_source_balance=950,
-                new_source_balance=750,
-                previous_destination_balance=50,
-                new_destination_balance=250,
+                previous_source_balance=900,
+                new_source_balance=700,
+                previous_destination_balance=100,
+                new_destination_balance=300,
             ),
         ]
     }
 
     verifier = MoneySemanticVerifier()
 
-    assert verifier.verify(bundle) is True
+    assert verifier.verify(bundle) is False
 
 
 def test_v8031_multiple_sequential_transfers_pass():
     bundle = {
         "entries": [
+            make_initial_money_state(),
             make_transfer(
                 amount=100,
                 previous_source_balance=1000,

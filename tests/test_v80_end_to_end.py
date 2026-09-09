@@ -40,10 +40,35 @@ def build_end_to_end_system():
         "purpose": "Escrow Settlement",
     }
 
+    money_state = {
+        "currency": "MNT",
+        "balances": {
+            "BUYER": 1000,
+            "SELLER": 0,
+        },
+    }
+
     witness_chain = WitnessChain(
         initial_state=initial_state,
         manifest=manifest,
         witness_id="WITNESS-001",
+        initial_money_state=money_state,
+    )
+
+    commitment = witness_chain.get_initial_money_commitment()
+
+    witness_chain.append_event(
+        event_id="INITIAL-MONEY-V80-E2E-001",
+        event_type="INITIAL_MONEY_STATE",
+        timestamp="2026-09-03T00:00:00Z",
+        payload={
+            "state": commitment["state"],
+            "state_hash": commitment["state_hash"],
+        },
+        evidence={
+            "type": "INITIAL_MONEY_COMMITMENT",
+            "reference": "INITIAL-MONEY-V80-E2E-001",
+        },
     )
 
     escrow = EscrowEngine(
@@ -132,15 +157,16 @@ def test_v80_end_to_end_released_settlement():
 
     # Expected Witness sequence:
     #
-    # 1 FUNDED
-    # 2 LOCKED
-    # 3 ATOMIC_SETTLEMENT
-    # 4 RELEASED
-    assert len(witness_chain.entries) == 4
+    # 1 INITIAL_MONEY_STATE
+    # 2 FUNDED
+    # 3 LOCKED
+    # 4 ATOMIC_SETTLEMENT
+    # 5 RELEASED
+    assert len(witness_chain.entries) == 5
 
     assert (
         witness_chain.entries[0].record.event_type
-        == "ESCROW_TRANSITION"
+        == "INITIAL_MONEY_STATE"
     )
 
     assert (
@@ -150,11 +176,16 @@ def test_v80_end_to_end_released_settlement():
 
     assert (
         witness_chain.entries[2].record.event_type
-        == "ATOMIC_SETTLEMENT"
+        == "ESCROW_TRANSITION"
     )
 
     assert (
         witness_chain.entries[3].record.event_type
+        == "ATOMIC_SETTLEMENT"
+    )
+
+    assert (
+        witness_chain.entries[4].record.event_type
         == "ESCROW_TRANSITION"
     )
 

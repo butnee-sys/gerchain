@@ -2,6 +2,7 @@ from fastapi import FastAPI, Depends, HTTPException
 from fastapi.responses import HTMLResponse
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm.exc import FlushError
 from typing import List, Optional
 from datetime import datetime
 from pydantic import BaseModel
@@ -441,6 +442,18 @@ def transfer_escrow_funds(
         raise HTTPException(
             status_code=409,
             detail="Milestone reference has already been used for an escrow transfer."
+        )
+
+    except FlushError as exc:
+        db.rollback()
+        print(
+            "G-08.1 CONCURRENCY CONFLICT:",
+            type(exc).__name__,
+            repr(exc)
+        )
+        raise HTTPException(
+            status_code=409,
+            detail="Concurrent escrow transfer conflict. Transaction rolled back."
         )
 
     except Exception as exc:

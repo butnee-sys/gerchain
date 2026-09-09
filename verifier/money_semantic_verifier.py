@@ -137,7 +137,8 @@ class MoneySemanticVerifier:
         # -------------------------------------------------
 
         if not self._verify_money_conservation(
-            money_entries
+            initial_money_entries,
+            money_entries,
         ):
             return False
 
@@ -652,33 +653,129 @@ class MoneySemanticVerifier:
 
     def _verify_money_conservation(
         self,
+        initial_money_entries: List[Dict[str, Any]],
         money_entries: List[Dict[str, Any]],
     ) -> bool:
         """
-        Мөнгөний хөдөлгөөн бүрийн өмнөх ба дараах
-        нийт observed balance өөрчлөгдөөгүй эсэхийг
-        шалгана.
+        Мөнгөний нийт хадгалалтын инвариантыг шалгана.
 
-        Энэ нь хөдөлгөөнүүдийн хүрээн дэх
-        conservation invariant юм.
+        Дүрэм:
 
-        Абсолют системийн нийт мөнгөний хэмжээг
-        тогтоохын тулд authoritative initial balance
-        тусдаа commitment шаардлагатай.
+            INITIAL_MONEY_STATE
+                    ↓
+            бүх money event
+                    ↓
+            эцсийн дансны үлдэгдэл
+
+        Эхний бүх дансны нийт мөнгө
+        эцсийн бүх дансны нийт мөнгөтэй
+        тэнцүү байх ёстой.
+
+        Зөвхөн тухайн гүйлгээний source/destination
+        хоёр дансыг хооронд нь харьцуулахгүй.
         """
 
         if not money_entries:
             return True
 
-        initial_totals: Dict[
-            str,
-            int,
-        ] = {}
+        # -------------------------------------------------
+        # 1. INITIAL_MONEY_STATE-оос authoritative
+        #    эхний дансны төлөвийг авна.
+        # -------------------------------------------------
 
-        final_totals: Dict[
+        if not initial_money_entries:
+            return False
+
+        if len(initial_money_entries) != 1:
+            return False
+
+        initial_entry = initial_money_entries[0]
+
+        payload = initial_entry.get(
+            "event_payload"
+        )
+
+        if not isinstance(
+            payload,
+            dict,
+        ):
+            return False
+
+        initial_state = payload.get(
+            "state"
+        )
+
+        if not isinstance(
+            initial_state,
+            dict,
+        ):
+            return False
+
+        currency = initial_state.get(
+            "currency"
+        )
+
+        initial_balances = initial_state.get(
+            "balances"
+        )
+
+        if not isinstance(
+            currency,
             str,
-            int,
-        ] = {}
+        ):
+            return False
+
+        if not currency:
+            return False
+
+        if not isinstance(
+            initial_balances,
+            dict,
+        ):
+            return False
+
+        # -------------------------------------------------
+        # 2. Эхний нийт мөнгө
+        # -------------------------------------------------
+
+        initial_total = 0
+
+        for account_id, balance in initial_balances.items():
+
+            if not isinstance(
+                account_id,
+                str,
+            ):
+                return False
+
+            if not account_id:
+                return False
+
+            if not isinstance(
+                balance,
+                int,
+            ):
+                return False
+
+            if isinstance(
+                balance,
+                bool,
+            ):
+                return False
+
+            if balance < 0:
+                return False
+
+            initial_total += balance
+
+        # -------------------------------------------------
+        # 3. Эцсийн дансны төлөвийг эхний төлөвөөс
+        #    сэргээнэ.
+        # -------------------------------------------------
+
+        final_balances = dict(
+            initial_balances
+        )
 
         for entry in money_entries:
 
@@ -693,41 +790,62 @@ class MoneySemanticVerifier:
                 source,
                 destination,
                 amount,
-                currency,
+                event_currency,
                 previous_source_balance,
                 new_source_balance,
                 previous_destination_balance,
                 new_destination_balance,
             ) = fields
 
-            if currency not in initial_totals:
+            if event_currency != currency:
+                return False
 
-                initial_totals[
-                    currency
-                ] = (
-                    previous_source_balance
-                    + previous_destination_balance
-                )
+            # Event-ийн previous balance нь
+            # бидний сэргээсэн төлөвтэй яг таарах ёстой.
 
-            final_totals[
-                currency
-            ] = (
-                new_source_balance
-                + new_destination_balance
-            )
+            if source not in final_balances:
+                return False
 
-        for currency in initial_totals:
+            if destination not in final_balances:
+                return False
 
             if (
-                final_totals.get(
-                    currency,
-                    0,
-                )
-                != initial_totals[currency]
+                final_balances[source]
+                != previous_source_balance
             ):
                 return False
 
-        return True
+            if (
+                final_balances[destination]
+                != previous_destination_balance
+            ):
+                return False
+
+            final_balances[source] = (
+                new_source_balance
+            )
+
+            final_balances[destination] = (
+                new_destination_balance
+            )
+
+        # -------------------------------------------------
+        # 4. Эцсийн нийт мөнгө
+        # -------------------------------------------------
+
+        final_total = sum(
+            final_balances.values()
+        )
+
+        # -------------------------------------------------
+        # 5. Conservation invariant
+        # -------------------------------------------------
+
+        return (
+            final_total
+            == initial_total
+        )
+
 
 
 __all__ = [

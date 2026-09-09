@@ -81,39 +81,63 @@ class MoneyEngine:
             transfer_obj,
         )
 
-        witness_record = self.escrow.witness_chain.append_event(
-            event_id=f"MONEY-{transaction_id}-{sequence}",
-            event_type="MONEY_TRANSFER",
-            timestamp=timestamp,
-            payload=transfer_obj,
-            evidence=evidence,
+        old_balances = copy.deepcopy(
+            self.ledger.balances
         )
 
-        self.ledger.transfer(
-            source,
-            destination,
-            amount,
-        )
+        old_records_length = len(self.records)
 
-        record = MoneyRecord(
-            transaction_id=transaction_id,
-            sequence=sequence,
-            source=source,
-            destination=destination,
-            amount=amount,
-            currency=self.ledger.currency,
-            previous_source_balance=source_balance,
-            new_source_balance=new_source_balance,
-            previous_destination_balance=destination_balance,
-            new_destination_balance=new_destination_balance,
-            transfer_hash=transfer_hash,
-            witness_event_hash=witness_record.event_hash,
-            witness_id=witness_record.witness_id,
-        )
+        witness_chain = self.escrow.witness_chain
+        witness_checkpoint = witness_chain._checkpoint()
 
-        self.records.append(record)
+        try:
+            witness_record = witness_chain.append_event(
+                event_id=f"MONEY-{transaction_id}-{sequence}",
+                event_type="MONEY_TRANSFER",
+                timestamp=timestamp,
+                payload=transfer_obj,
+                evidence=evidence,
+            )
 
-        return record
+            self.ledger.transfer(
+                source,
+                destination,
+                amount,
+            )
+
+            record = MoneyRecord(
+                transaction_id=transaction_id,
+                sequence=sequence,
+                source=source,
+                destination=destination,
+                amount=amount,
+                currency=self.ledger.currency,
+                previous_source_balance=source_balance,
+                new_source_balance=new_source_balance,
+                previous_destination_balance=destination_balance,
+                new_destination_balance=new_destination_balance,
+                transfer_hash=transfer_hash,
+                witness_event_hash=witness_record.event_hash,
+                witness_id=witness_record.witness_id,
+            )
+
+            self.records.append(record)
+
+            return record
+
+        except Exception:
+            self.ledger.balances = old_balances
+
+            if len(self.records) > old_records_length:
+                self.records = self.records[
+                    :old_records_length
+                ]
+
+            witness_chain._restore(
+                witness_checkpoint
+            )
+
+            raise
 
     def atomic_settlement(
         self,
@@ -141,19 +165,10 @@ class MoneyEngine:
                 "Settlement amount must equal escrow amount."
             )
 
-        if target_state == "RELEASED":
-            expected_destination = destination
-        elif target_state == "REFUNDED":
-            expected_destination = destination
-        else:
+        if target_state not in {"RELEASED", "REFUNDED"}:
             raise ValueError(
                 "Atomic settlement target must be "
                 "RELEASED or REFUNDED."
-            )
-
-        if destination != expected_destination:
-            raise ValueError(
-                "Invalid settlement destination."
             )
 
         source_balance = self.ledger.get_balance(source)
@@ -172,6 +187,9 @@ class MoneyEngine:
         )
 
         old_records_length = len(self.records)
+
+        witness_chain = self.escrow.witness_chain
+        witness_checkpoint = witness_chain._checkpoint()
 
         try:
             sequence = len(self.records) + 1
@@ -208,7 +226,7 @@ class MoneyEngine:
             )
 
             witness_record = (
-                self.escrow.witness_chain.append_event(
+                witness_chain.append_event(
                     event_id=(
                         f"SETTLEMENT-"
                         f"{transaction_id}-"
@@ -261,6 +279,10 @@ class MoneyEngine:
                 self.records = self.records[
                     :old_records_length
                 ]
+
+            witness_chain._restore(
+                witness_checkpoint
+            )
 
             raise
 

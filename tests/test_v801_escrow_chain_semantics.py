@@ -35,10 +35,35 @@ def build_valid_bundle():
         "purpose": "Escrow Settlement",
     }
 
+    money_state = {
+        "currency": "MNT",
+        "balances": {
+            "BUYER": 1000,
+            "SELLER": 0,
+        },
+    }
+
     witness_chain = WitnessChain(
         initial_state=initial_state,
         manifest=manifest,
         witness_id="WITNESS-001",
+        initial_money_state=money_state,
+    )
+
+    commitment = witness_chain.get_initial_money_commitment()
+
+    witness_chain.append_event(
+        event_id="INITIAL-MONEY-V801-001",
+        event_type="INITIAL_MONEY_STATE",
+        timestamp="2026-09-03T09:59:59Z",
+        payload={
+            "state": commitment["state"],
+            "state_hash": commitment["state_hash"],
+        },
+        evidence={
+            "type": "INITIAL_MONEY_COMMITMENT",
+            "reference": "INITIAL-MONEY-V801-001",
+        },
     )
 
     escrow = EscrowEngine(
