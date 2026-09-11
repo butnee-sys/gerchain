@@ -1,30 +1,41 @@
 """SHUUD API application-layer orchestration.
 
 This module deliberately does not implement escrow or a second witness engine.
-It exposes incident/evidence/decision data for the next integration stage.
-
-The current registry is an in-memory sandbox adapter. Production must replace
-it with durable persistence while preserving the same domain invariants.
+The sandbox adapter wires SHUUD milestones to the existing GerChain WitnessChain
+and EscrowEngine. Production must replace the in-memory registries with durable
+persistence while preserving the same domain invariants.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
+from escrow.engine import EscrowEngine
 from .evidence import EvidenceEnvelope, create_evidence_envelope
 from .incident import Incident, create_incident
 from .metrics import measure_clearance
 from .policy import GateStatus, PolicyInput
-from .shiid import Decision, decide
+from .release import ReleaseAuthorization, authorize_release, release_escrow
+from .shiid import Decision, SHIIDDecision, decide
 from .verify import verify_incident
+from .witness import (
+    record_evidence_locked,
+    record_release_authorized,
+    record_shiid_decision,
+)
+from witness.chain import WitnessChain
 
 router = APIRouter(prefix="/api/v1/shuud", tags=["SHUUD"])
 
-# Sandbox-only lifecycle registry. This prevents the API from reconstructing
-# fake incidents between requests and makes resource ownership explicit.
+# Sandbox-only lifecycle registries. These make ownership explicit while the
+# production persistence layer is still being designed.
 _INCIDENTS: dict[str, Incident] = {}
 _EVIDENCE: dict[str, EvidenceEnvelope] = {}
+_DECISIONS: dict[str, SHIIDDecision] = {}
+_AUTHORIZATIONS: dict[str, ReleaseAuthorization] = {}
+_WITNESSES: dict[str, WitnessChain] = {}
+_ESCROWS: dict[str, EscrowEngine] = {}
 
 
 class IncidentRequest(BaseModel):
@@ -62,6 +73,17 @@ class DecisionRequest(BaseModel):
     witness_verified: GateStatus = GateStatus.UNKNOWN
 
 
+class EscrowRequest(BaseModel):
+    incident_id: str
+    escrow_id: str
+    amount_nef: float = Field(gt=0)
+
+
+class ReleaseRequest(BaseModel):
+    incident_id: str
+    escrow_id: str
+
+
 class ClearanceRequest(BaseModel):
     incident_id: str
     incident_time: datetime
@@ -82,6 +104,13 @@ def _get_evidence(incident_id: str) -> EvidenceEnvelope:
     return evidence
 
 
+def _get_witness(incident_id: str) -> WitnessChain:
+    witness = _WITNESSES.get(incident_id)
+    if witness is None:
+        raise HTTPException(status_code=404, detail="WITNESS_NOT_FOUND")
+    return witness
+
+
 @router.post("/incidents", response_model=dict)
 def create_shuud_incident(payload: IncidentRequest):
     incident = create_incident(
@@ -90,7 +119,13 @@ def create_shuud_incident(payload: IncidentRequest):
         vehicle_b=payload.vehicle_b,
         description=payload.description,
     )
+    witness = WitnessChain(
+        initial_state={"value": 0, "incident_id": incident.incident_id},
+        manifest={"purpose": "SHUUD sandbox", "incident_id": incident.incident_id},
+        witness_id="WITNESS-ROOT-001",
+    )
     _INCIDENTS[incident.incident_id] = incident
+    _WITNESSES[incident.incident_id] = witness
     return {
         "status": "success",
         "incident_id": incident.incident_id,
@@ -102,6 +137,7 @@ def create_shuud_incident(payload: IncidentRequest):
 @router.post("/evidence", response_model=dict)
 def lock_shuud_evidence(payload: EvidenceRequest):
     _get_incident(payload.incident_id)
+    witness = _get_witness(payload.incident_id)
     envelope = create_evidence_envelope(
         payload.incident_id,
         evidence_refs=payload.evidence_refs,
@@ -111,11 +147,17 @@ def lock_shuud_evidence(payload: EvidenceRequest):
         consent_refs=payload.consent_refs,
         media_complete=payload.media_complete,
     )
+    record = record_evidence_locked(
+        witness,
+        envelope,
+        timestamp=payload.captured_at,
+    )
     _EVIDENCE[payload.incident_id] = envelope
     return {
         "status": "success",
         "incident_id": envelope.incident_id,
         "content_hash": envelope.content_hash,
+        "witness_event_id": record.event_id,
         "state": "EVIDENCE_LOCKED",
     }
 
@@ -124,6 +166,7 @@ def lock_shuud_evidence(payload: EvidenceRequest):
 def make_shiid_decision(payload: DecisionRequest):
     incident = _get_incident(payload.incident_id)
     evidence = _get_evidence(payload.incident_id)
+    witness = _get_witness(payload.incident_id)
 
     requested_refs = tuple(str(value).strip() for value in payload.evidence_refs)
     if requested_refs != evidence.evidence_refs:
@@ -145,6 +188,12 @@ def make_shiid_decision(payload: DecisionRequest):
         witness_verified=payload.witness_verified,
     )
     decision = decide(incident, verification, policy=policy)
+    record_shiid_decision(
+        witness,
+        decision,
+        timestamp=datetime.now(timezone.utc).isoformat(),
+    )
+    _DECISIONS[payload.incident_id] = decision
     return {
         "status": "success",
         "incident_id": decision.incident_id,
@@ -152,6 +201,79 @@ def make_shiid_decision(payload: DecisionRequest):
         "rule_version": decision.rule_version,
         "reasons": decision.reasons,
         "release_authorized": decision.decision is Decision.APPROVE,
+    }
+
+
+@router.post("/escrows", response_model=dict)
+def create_shuud_escrow(payload: EscrowRequest):
+    _get_incident(payload.incident_id)
+    if payload.escrow_id in _ESCROWS:
+        raise HTTPException(status_code=409, detail="ESCROW_ALREADY_EXISTS")
+    witness = _get_witness(payload.incident_id)
+    escrow = EscrowEngine(
+        escrow_id=payload.escrow_id,
+        amount=payload.amount_nef,
+        currency="NEF",
+        witness_chain=witness,
+    )
+    escrow.transition(
+        "FUNDED",
+        datetime.now(timezone.utc).isoformat(),
+        {"incident_id": payload.incident_id, "source": "SHUUD_SANDBOX"},
+    )
+    escrow.transition(
+        "LOCKED",
+        datetime.now(timezone.utc).isoformat(),
+        {"incident_id": payload.incident_id, "source": "SHUUD_SANDBOX"},
+    )
+    _ESCROWS[payload.escrow_id] = escrow
+    return {
+        "status": "success",
+        "incident_id": payload.incident_id,
+        "escrow_id": payload.escrow_id,
+        "state": escrow.get_state()["state"],
+    }
+
+
+@router.post("/release", response_model=dict)
+def release_shuud_escrow(payload: ReleaseRequest):
+    _get_incident(payload.incident_id)
+    witness = _get_witness(payload.incident_id)
+    decision = _DECISIONS.get(payload.incident_id)
+    if decision is None:
+        raise HTTPException(status_code=404, detail="DECISION_NOT_FOUND")
+    if decision.decision is not Decision.APPROVE:
+        raise HTTPException(status_code=409, detail="RELEASE_NOT_AUTHORIZED")
+
+    escrow = _ESCROWS.get(payload.escrow_id)
+    if escrow is None:
+        raise HTTPException(status_code=404, detail="ESCROW_NOT_FOUND")
+
+    authorization = _AUTHORIZATIONS.get(payload.incident_id)
+    if authorization is None:
+        authorization = authorize_release(
+            decision,
+            escrow_id=payload.escrow_id,
+        )
+        record_release_authorized(
+            witness,
+            authorization,
+            timestamp=datetime.now(timezone.utc).isoformat(),
+        )
+        _AUTHORIZATIONS[payload.incident_id] = authorization
+
+    record = release_escrow(
+        escrow,
+        authorization,
+        timestamp=datetime.now(timezone.utc).isoformat(),
+    )
+    return {
+        "status": "success",
+        "incident_id": payload.incident_id,
+        "escrow_id": payload.escrow_id,
+        "authorization_hash": authorization.authorization_hash,
+        "previous_state": record.previous_state,
+        "new_state": record.new_state,
     }
 
 
