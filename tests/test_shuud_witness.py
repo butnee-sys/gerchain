@@ -49,6 +49,7 @@ def test_shiid_decision_is_recorded_without_money_movement():
     decision = SHIIDDecision(
         incident_id="INC-001",
         decision=Decision.APPROVE,
+        damage_estimate_nef=1_500_000,
         rule_version="SHIID-0.2",
         reasons=("ALL_POLICY_GATES_PASSED",),
     )
@@ -62,4 +63,5 @@ def test_shiid_decision_is_recorded_without_money_movement():
     assert record.event_type == "SHIID_DECISION"
     assert len(witness.entries) == 1
     assert witness.entries[0].event_payload["payload"]["decision"] == "APPROVE"
+    assert witness.entries[0].event_payload["payload"]["damage_estimate_nef"] == 1_500_000
     assert witness.entries[0].event_payload["incident_id"] == "INC-001"

@@ -55,8 +55,13 @@ def record_shiid_decision(witness: WitnessChain, decision: SHIIDDecision, *, tim
             "decision": decision.decision.value,
             "rule_version": decision.rule_version,
             "reasons": list(decision.reasons),
+            "damage_estimate_nef": decision.damage_estimate_nef,
         },
-        evidence={"decision": decision.decision.value, "rule_version": decision.rule_version},
+        evidence={
+            "decision": decision.decision.value,
+            "rule_version": decision.rule_version,
+            "damage_estimate_nef": decision.damage_estimate_nef,
+        },
     )
 
 

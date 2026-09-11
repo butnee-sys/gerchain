@@ -36,6 +36,7 @@ def test_policy_approves_only_when_all_gates_pass():
 
     decision = decide(incident, verification, policy=approved_policy())
     assert decision.decision is Decision.APPROVE
+    assert decision.damage_estimate_nef == 1_500_000
 
 
 def test_policy_fails_closed_on_unknown_gate():

@@ -13,7 +13,7 @@ from shuud.witness import (
 from witness.chain import WitnessChain
 
 
-def _bundle():
+def _bundle(escrow_amount=1_500_000):
     incident = create_incident("Ulaanbaatar")
     chain = WitnessChain(
         initial_state={"value": 0},
@@ -33,6 +33,7 @@ def _bundle():
     decision = SHIIDDecision(
         incident_id=incident.incident_id,
         decision=Decision.APPROVE,
+        damage_estimate_nef=1_500_000,
         rule_version="SHUUD-POLICY-1",
         reasons=(),
     )
@@ -43,7 +44,7 @@ def _bundle():
 
     escrow = EscrowEngine(
         escrow_id="ESC-001",
-        amount=1_500_000,
+        amount=escrow_amount,
         currency="NEF",
         witness_chain=chain,
     )
@@ -118,3 +119,11 @@ def test_shuud_independent_verifier_rejects_missing_locked_to_released_path():
     result = SHUUDIndependentVerifier().verify_bundle(bundle)
     assert result.verified is False
     assert "GERCHAIN_BUNDLE_INVALID" in result.reasons
+
+def test_shuud_independent_verifier_rejects_escrow_amount_mismatch():
+    bundle, _, _ = _bundle(escrow_amount=1_600_000)
+
+    result = SHUUDIndependentVerifier().verify_bundle(bundle)
+
+    assert result.verified is False
+    assert "ESCROW_AMOUNT_MISMATCH" in result.reasons

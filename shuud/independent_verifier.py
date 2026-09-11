@@ -36,6 +36,7 @@ class SHUUDIndependentVerifier:
         incident_ids: set[str] = set()
         escrow_ids: set[str] = set()
         decision_values: list[str] = []
+        decision_damage_estimates: list[float | int | None] = []
         event_types: list[str] = []
 
         for entry in entries:
@@ -57,6 +58,7 @@ class SHUUDIndependentVerifier:
             inner = payload.get("payload", {})
             if event_type == "SHIID_DECISION":
                 decision_values.append(inner.get("decision"))
+                decision_damage_estimates.append(inner.get("damage_estimate_nef"))
             if event_type == "SHUUD_RELEASE_AUTHORIZED":
                 escrow_id = inner.get("escrow_id")
                 if isinstance(escrow_id, str) and escrow_id:
@@ -115,6 +117,15 @@ class SHUUDIndependentVerifier:
                 reasons.append("ESCROW_LIFECYCLE_INVALID")
             if escrow_events[-1].get("event_payload", {}).get("new_state") != "RELEASED":
                 reasons.append("ESCROW_NOT_RELEASED")
+
+            escrow_amounts = {
+                e.get("event_payload", {}).get("amount")
+                for e in escrow_events
+            }
+            if len(decision_damage_estimates) != 1 or len(escrow_amounts) != 1:
+                reasons.append("ESCROW_AMOUNT_REFERENCE_INVALID")
+            elif decision_damage_estimates[0] != next(iter(escrow_amounts)):
+                reasons.append("ESCROW_AMOUNT_MISMATCH")
 
         incident_id = next(iter(incident_ids), None)
         escrow_id = next(iter(escrow_ids), None)
