@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from enum import Enum
 
 from .incident import Incident
+from .policy import PolicyInput, evaluate_policy
 from .verify import VerificationResult
 
 
@@ -29,24 +30,35 @@ def decide(
     incident: Incident,
     verification: VerificationResult,
     *,
-    rule_version: str = "SHIID-0.1",
+    policy: PolicyInput | None = None,
+    rule_version: str = "SHIID-0.2",
 ) -> SHIIDDecision:
     if verification.incident_id != incident.incident_id:
         raise ValueError("verification does not belong to incident")
 
-    if not verification.verified:
+    if policy is None:
+        policy = PolicyInput()
+
+    result = evaluate_policy(
+        incident,
+        verification,
+        policy,
+        rule_version=rule_version,
+    )
+
+    if result.eligible:
         return SHIIDDecision(
             incident_id=incident.incident_id,
-            decision=Decision.HUMAN_REVIEW,
-            rule_version=rule_version,
-            reasons=verification.reasons,
+            decision=Decision.APPROVE,
+            rule_version=result.rule_version,
+            reasons=("ALL_POLICY_GATES_PASSED",),
         )
 
     return SHIIDDecision(
         incident_id=incident.incident_id,
-        decision=Decision.APPROVE,
-        rule_version=rule_version,
-        reasons=("VERIFICATION_COMPLETE",),
+        decision=Decision.HUMAN_REVIEW,
+        rule_version=result.rule_version,
+        reasons=result.reasons,
     )
 
 
