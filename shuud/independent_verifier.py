@@ -118,6 +118,13 @@ class SHUUDIndependentVerifier:
             if escrow_events[-1].get("event_payload", {}).get("new_state") != "RELEASED":
                 reasons.append("ESCROW_NOT_RELEASED")
 
+            escrow_transition_ids = {
+                e.get("event_payload", {}).get("escrow_id")
+                for e in escrow_events
+            }
+            if len(escrow_transition_ids) != 1 or escrow_transition_ids != escrow_ids:
+                reasons.append("ESCROW_ID_MISMATCH")
+
             escrow_amounts = {
                 e.get("event_payload", {}).get("amount")
                 for e in escrow_events

@@ -13,7 +13,7 @@ from shuud.witness import (
 from witness.chain import WitnessChain
 
 
-def _bundle(escrow_amount=1_500_000):
+def _bundle(escrow_amount=1_500_000, escrow_id="ESC-001", authorization_escrow_id=None):
     incident = create_incident("Ulaanbaatar")
     chain = WitnessChain(
         initial_state={"value": 0},
@@ -39,11 +39,11 @@ def _bundle(escrow_amount=1_500_000):
     )
     record_shiid_decision(chain, decision, timestamp="2026-09-12T00:00:20+00:00")
 
-    auth = authorize_release(decision, escrow_id="ESC-001")
+    auth = authorize_release(decision, escrow_id=authorization_escrow_id or escrow_id)
     record_release_authorized(chain, auth, timestamp="2026-09-12T00:00:25+00:00")
 
     escrow = EscrowEngine(
-        escrow_id="ESC-001",
+        escrow_id=escrow_id,
         amount=escrow_amount,
         currency="NEF",
         witness_chain=chain,
@@ -127,3 +127,15 @@ def test_shuud_independent_verifier_rejects_escrow_amount_mismatch():
 
     assert result.verified is False
     assert "ESCROW_AMOUNT_MISMATCH" in result.reasons
+
+
+def test_shuud_independent_verifier_rejects_escrow_id_mismatch():
+    bundle, _, _ = _bundle(
+        escrow_id="ESC-002",
+        authorization_escrow_id="ESC-001",
+    )
+
+    result = SHUUDIndependentVerifier().verify_bundle(bundle)
+
+    assert result.verified is False
+    assert "ESCROW_ID_MISMATCH" in result.reasons
