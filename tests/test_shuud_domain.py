@@ -29,14 +29,16 @@ def test_shuud_event_is_explicitly_domain_separated():
     assert payload["event_type"] == "SHUUD_EVIDENCE_LOCKED"
     assert payload["incident_id"] == evidence.incident_id
     assert payload["domain"] == "SHUUD"
-    assert record.event_hash == shuud_event_hash(
-        "SHUUD_EVIDENCE_LOCKED",
-        evidence.incident_id,
-        {
-            "content_hash": evidence.content_hash,
-            "evidence_refs": list(evidence.evidence_refs),
-        },
-    ) or record.event_hash != ""
+
+    application_hash = shuud_event_hash(
+        payload["event_type"],
+        payload["incident_id"],
+        payload["payload"],
+    )
+    assert application_hash
+    # The application commitment and the full WitnessChain event hash are
+    # deliberately different domains; SHUUD must not replace GerChain hashing.
+    assert application_hash != record.event_hash
 
 
 def test_shuud_payload_cannot_be_mistaken_for_escrow_payload():
