@@ -16,7 +16,7 @@ from shuud.witness import record_evidence_locked
 
 
 def test_shuud_witness_event_does_not_directly_change_escrow_state():
-    chain = WitnessChain(initial_state={"domain": "integration"})
+    chain = WitnessChain(initial_state={"domain": "integration"}, manifest={"domain": "SHUUD-INTEGRATION"}, witness_id="SHUUD-WITNESS-001")
     escrow = EscrowEngine("ESC-001", 1_500_000, "NEF", chain)
 
     before = escrow.get_state()
@@ -42,7 +42,7 @@ def test_shuud_witness_event_does_not_directly_change_escrow_state():
 
 
 def test_escrow_transition_remains_the_only_release_path():
-    chain = WitnessChain(initial_state={"domain": "integration"})
+    chain = WitnessChain(initial_state={"domain": "integration"}, manifest={"domain": "SHUUD-INTEGRATION"}, witness_id="SHUUD-WITNESS-001")
     escrow = EscrowEngine("ESC-002", 1_500_000, "NEF", chain)
 
     escrow.transition("FUNDED", "2026-09-12T00:00:20+00:00", {"source": "sandbox"})

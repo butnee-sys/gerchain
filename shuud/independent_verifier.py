@@ -90,6 +90,8 @@ class SHUUDIndependentVerifier:
 
         # Release must be the final escrow transition represented by the
         # witness bundle. SHUUD itself never authorizes money movement.
+        # The authoritative EscrowEngine records previous_state/new_state;
+        # the verifier must validate the deterministic lifecycle explicitly.
         escrow_events = [
             e for e in entries
             if e.get("record", {}).get("event_type") == "ESCROW_TRANSITION"
@@ -97,9 +99,21 @@ class SHUUDIndependentVerifier:
         if not escrow_events:
             reasons.append("NO_ESCROW_TRANSITIONS")
         else:
-            final_payload = escrow_events[-1].get("event_payload", {})
-            target_state = final_payload.get("target_state")
-            if target_state != "RELEASED":
+            escrow_states = [
+                (
+                    e.get("event_payload", {}).get("previous_state"),
+                    e.get("event_payload", {}).get("new_state"),
+                )
+                for e in escrow_events
+            ]
+            expected_path = [
+                ("CREATED", "FUNDED"),
+                ("FUNDED", "LOCKED"),
+                ("LOCKED", "RELEASED"),
+            ]
+            if escrow_states != expected_path:
+                reasons.append("ESCROW_LIFECYCLE_INVALID")
+            if escrow_events[-1].get("event_payload", {}).get("new_state") != "RELEASED":
                 reasons.append("ESCROW_NOT_RELEASED")
 
         incident_id = next(iter(incident_ids), None)

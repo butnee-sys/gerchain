@@ -29,17 +29,17 @@ def _bundle():
         consent_refs=["consent-a"],
         media_complete=True,
     )
-    record_evidence_locked(chain, evidence)
+    record_evidence_locked(chain, evidence, timestamp="2026-09-12T00:00:15+00:00")
     decision = SHIIDDecision(
         incident_id=incident.incident_id,
         decision=Decision.APPROVE,
         rule_version="SHUUD-POLICY-1",
         reasons=(),
     )
-    record_shiid_decision(chain, decision)
+    record_shiid_decision(chain, decision, timestamp="2026-09-12T00:00:20+00:00")
 
     auth = authorize_release(decision, escrow_id="ESC-001")
-    record_release_authorized(chain, auth)
+    record_release_authorized(chain, auth, timestamp="2026-09-12T00:00:25+00:00")
 
     escrow = EscrowEngine(
         escrow_id="ESC-001",
@@ -112,7 +112,7 @@ def test_shuud_independent_verifier_rejects_missing_locked_to_released_path():
         e for e in bundle["entries"]
         if not (
             e["record"]["event_type"] == "ESCROW_TRANSITION"
-            and e["event_payload"].get("target_state") == "LOCKED"
+            and e["event_payload"].get("new_state") == "LOCKED"
         )
     ]
     result = SHUUDIndependentVerifier().verify_bundle(bundle)

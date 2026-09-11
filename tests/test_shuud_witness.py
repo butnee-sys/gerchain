@@ -41,7 +41,7 @@ def test_shuud_evidence_is_recorded_by_existing_witness_chain():
     assert record.event_type == "SHUUD_EVIDENCE_LOCKED"
     assert record.evidence_hash
     assert len(witness.entries) == 1
-    assert witness.entries[0].event_payload["content_hash"] == evidence.content_hash
+    assert witness.entries[0].event_payload["payload"]["content_hash"] == evidence.content_hash
 
 
 def test_shiid_decision_is_recorded_without_money_movement():
@@ -61,5 +61,5 @@ def test_shiid_decision_is_recorded_without_money_movement():
 
     assert record.event_type == "SHIID_DECISION"
     assert len(witness.entries) == 1
-    assert witness.entries[0].event_payload["decision"] == "APPROVE"
+    assert witness.entries[0].event_payload["payload"]["decision"] == "APPROVE"
     assert witness.entries[0].event_payload["incident_id"] == "INC-001"
