@@ -15,6 +15,8 @@ from pydantic import BaseModel, Field
 from escrow.engine import EscrowEngine
 from .evidence import EvidenceEnvelope, create_evidence_envelope
 from .incident import Incident, create_incident
+from .measurement_api import MeasurementSummaryRequest
+from .measurement_summary import build_measurement_summary
 from .metrics import OperationalTiming, measure_clearance
 from .policy import GateStatus, PolicyInput
 from .persistence import SHUUDPersistence
@@ -447,6 +449,21 @@ def calculate_clearance(payload: ClearanceRequest):
         "milestones": updated_timing.as_dict(),
         "durations": updated_timing.durations(),
     }
+
+
+@router.post("/metrics/{incident_id}/summary", response_model=dict)
+def get_measurement_summary(incident_id: str, payload: MeasurementSummaryRequest):
+    _, incident, timing = _timing_for_incident(incident_id)
+    summary = build_measurement_summary(
+        incident_id=incident.incident_id,
+        timing=timing,
+        baseline_seconds=payload.baseline_seconds,
+        affected_vehicles=payload.affected_vehicles,
+        vehicle_value_per_minute_mnt=payload.vehicle_value_per_minute_mnt,
+        insurer_cost_per_minute_mnt=payload.insurer_cost_per_minute_mnt,
+        public_road_cost_per_minute_mnt=payload.public_road_cost_per_minute_mnt,
+    )
+    return {"status": "success", **summary.as_dict()}
 
 
 @router.get("/metrics/{incident_id}", response_model=dict)
