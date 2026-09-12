@@ -97,6 +97,17 @@ class SHUUDIndependentVerifier:
         ):
             reasons.append("INCIDENT_ID_MISMATCH")
 
+        milestone_counts = {
+            event_type: event_types.count(event_type)
+            for event_type in (
+                "SHUUD_EVIDENCE_LOCKED",
+                "SHIID_DECISION",
+                "SHUUD_RELEASE_AUTHORIZED",
+            )
+        }
+        if not all(count == 1 for count in milestone_counts.values()):
+            reasons.append("SHUUD_LIFECYCLE_DUPLICATE_OR_MISSING")
+
         required = {
             "SHUUD_EVIDENCE_LOCKED",
             "SHIID_DECISION",
