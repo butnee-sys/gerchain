@@ -4,6 +4,9 @@ The outbox retries durable publication only. It never recreates WitnessChain
 or EscrowEngine authority and never issues a second release decision.
 """
 
+from concurrent.futures import ThreadPoolExecutor
+from time import sleep
+
 from sqlalchemy import create_engine, select
 
 from shuud.persistence import (
@@ -147,3 +150,35 @@ def test_failed_publication_remains_retryable_on_transient_error(tmp_path, monke
         assert row.status == "PUBLISHED"
         assert row.attempts == 2
         assert row.last_error is None
+
+
+def test_concurrent_workers_claim_one_publication(tmp_path, monkeypatch):
+    engine = _engine(tmp_path, "concurrent.db")
+    publication = _publication()
+    _queue(engine, "AUTH-CONCURRENT", publication)
+
+    import shuud.publication_outbox as outbox_module
+
+    original = outbox_module.atomic_settlement
+    calls = {"count": 0}
+
+    def slow_settlement(*args, **kwargs):
+        calls["count"] += 1
+        sleep(0.05)
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(outbox_module, "atomic_settlement", slow_settlement)
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        results = list(pool.map(lambda _: publish_pending(engine), range(2)))
+
+    assert sorted(results) == [0, 1]
+    assert calls["count"] == 1
+
+    with engine.connect() as connection:
+        row = connection.execute(select(SHUUDPublicationOutbox)).fetchone()
+        assert row.status == "PUBLISHED"
+        assert row.attempts == 1
+        assert len(connection.execute(select(SHUUDLifecycleEvent)).fetchall()) == 1
+        assert len(connection.execute(select(SHUUDReleaseAuthorizationRecord)).fetchall()) == 1
+        assert len(connection.execute(select(SHUUDEscrowRecord)).fetchall()) == 1
