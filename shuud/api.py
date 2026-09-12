@@ -52,6 +52,7 @@ class IncidentRequest(BaseModel):
     vehicle_a: str | None = None
     vehicle_b: str | None = None
     description: str | None = None
+    occurred_at: datetime | None = None
 
 
 class EvidenceRequest(BaseModel):
@@ -192,6 +193,7 @@ def create_shuud_incident(payload: IncidentRequest):
         vehicle_a=payload.vehicle_a,
         vehicle_b=payload.vehicle_b,
         description=payload.description,
+        occurred_at=payload.occurred_at,
     )
     witness = WitnessChain(
         initial_state={"value": 0, "incident_id": incident.incident_id},
@@ -451,6 +453,20 @@ def calculate_clearance(payload: ClearanceRequest):
     }
 
 
+@router.get("/metrics/{incident_id}", response_model=dict)
+def get_operational_metrics(incident_id: str):
+    snapshot, incident, timing = _timing_for_incident(incident_id)
+    durations = timing.durations()
+    return {
+        "status": "success",
+        "incident_id": incident.incident_id,
+        "milestones": timing.as_dict(),
+        "durations": durations,
+        "within_two_minutes": timing.within_two_minutes,
+        "snapshot_persisted": snapshot is not None,
+    }
+
+
 @router.post("/metrics/{incident_id}/summary", response_model=dict)
 def get_measurement_summary(incident_id: str, payload: MeasurementSummaryRequest):
     _, incident, timing = _timing_for_incident(incident_id)
@@ -464,20 +480,6 @@ def get_measurement_summary(incident_id: str, payload: MeasurementSummaryRequest
         public_road_cost_per_minute_mnt=payload.public_road_cost_per_minute_mnt,
     )
     return {"status": "success", **summary.as_dict()}
-
-
-@router.get("/metrics/{incident_id}", response_model=dict)
-def get_operational_metrics(incident_id: str):
-    snapshot, incident, timing = _timing_for_incident(incident_id)
-    durations = timing.durations()
-    return {
-        "status": "success",
-        "incident_id": incident.incident_id,
-        "milestones": timing.as_dict(),
-        "durations": durations,
-        "within_two_minutes": timing.within_two_minutes(),
-        "snapshot_persisted": snapshot is not None,
-    }
 
 
 __all__ = ["router"]
