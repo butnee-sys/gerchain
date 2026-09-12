@@ -13,7 +13,13 @@ from shuud.witness import (
 from witness.chain import WitnessChain
 
 
-def _bundle(escrow_amount=1_500_000, escrow_id="ESC-001", authorization_escrow_id=None):
+def _bundle(
+    escrow_amount=1_500_000,
+    escrow_id="ESC-001",
+    authorization_escrow_id=None,
+    currency="MNT",
+    settlement_provider="NEF",
+):
     incident = create_incident("Ulaanbaatar")
     chain = WitnessChain(
         initial_state={"value": 0},
@@ -45,12 +51,13 @@ def _bundle(escrow_amount=1_500_000, escrow_id="ESC-001", authorization_escrow_i
     escrow = EscrowEngine(
         escrow_id=escrow_id,
         amount=escrow_amount,
-        currency="MNT",
+        currency=currency,
         witness_chain=chain,
     )
-    escrow.transition("FUNDED", "2026-09-12T00:00:40+00:00", {"source": "sandbox"})
-    escrow.transition("LOCKED", "2026-09-12T00:00:45+00:00", {"source": "sandbox"})
-    escrow.transition("RELEASED", "2026-09-12T00:01:00+00:00", {"source": "verified"})
+    transition_evidence = {"source": "sandbox", "settlement_provider": settlement_provider}
+    escrow.transition("FUNDED", "2026-09-12T00:00:40+00:00", transition_evidence)
+    escrow.transition("LOCKED", "2026-09-12T00:00:45+00:00", transition_evidence)
+    escrow.transition("RELEASED", "2026-09-12T00:01:00+00:00", {"source": "verified", "settlement_provider": settlement_provider})
 
     bundle = {
         "manifest": chain.manifest,
@@ -120,6 +127,7 @@ def test_shuud_independent_verifier_rejects_missing_locked_to_released_path():
     assert result.verified is False
     assert "GERCHAIN_BUNDLE_INVALID" in result.reasons
 
+
 def test_shuud_independent_verifier_rejects_escrow_amount_mismatch():
     bundle, _, _ = _bundle(escrow_amount=1_600_000)
 
@@ -139,3 +147,21 @@ def test_shuud_independent_verifier_rejects_escrow_id_mismatch():
 
     assert result.verified is False
     assert "ESCROW_ID_MISMATCH" in result.reasons
+
+
+def test_shuud_independent_verifier_rejects_non_mnt_currency():
+    bundle, _, _ = _bundle(currency="USD")
+
+    result = SHUUDIndependentVerifier().verify_bundle(bundle)
+
+    assert result.verified is False
+    assert "ESCROW_CURRENCY_INVALID" in result.reasons
+
+
+def test_shuud_independent_verifier_rejects_non_nef_settlement_provider():
+    bundle, _, _ = _bundle(settlement_provider="OTHER")
+
+    result = SHUUDIndependentVerifier().verify_bundle(bundle)
+
+    assert result.verified is False
+    assert "SETTLEMENT_PROVIDER_INVALID" in result.reasons
