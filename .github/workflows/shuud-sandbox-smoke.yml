@@ -33,7 +33,6 @@ jobs:
           API: http://127.0.0.1:18000/api/v1/shuud
         run: |
           set -euo pipefail
-
           INCIDENT_JSON=/tmp/incident.json
           EVIDENCE_JSON=/tmp/evidence.json
           DECISION_JSON=/tmp/decision.json
@@ -42,48 +41,35 @@ jobs:
           RELEASE_JSON=/tmp/release.json
           SUMMARY_JSON=/tmp/summary.json
 
-          curl -fsS -X POST "$API/incidents" \
-            -H 'content-type: application/json' \
-            -d '{"location":"SANDBOX","vehicle_a":"TEST-A","vehicle_b":"TEST-B","description":"SHUUD Day-0 full lifecycle smoke"}' \
-            | tee "$INCIDENT_JSON"
+          curl -fsS -X POST "$API/incidents" -H 'content-type: application/json' \
+            -d '{"location":"SANDBOX","vehicle_a":"TEST-A","vehicle_b":"TEST-B","description":"SHUUD Day-0 full lifecycle smoke"}' | tee "$INCIDENT_JSON"
           INCIDENT_ID=$(python - <<'PY'
           import json
           print(json.load(open('/tmp/incident.json'))['incident_id'])
           PY
           )
           test -n "$INCIDENT_ID"
+          printf '%s\n' "$INCIDENT_ID" > /tmp/shuud_sandbox_incident_id
 
           CAPTURED_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-          curl -fsS -X POST "$API/evidence" \
-            -H 'content-type: application/json' \
-            -d "{\"incident_id\":\"$INCIDENT_ID\",\"evidence_refs\":[\"SANDBOX-MEDIA-001\"],\"gps_coordinates\":\"47.9184,106.9177\",\"captured_at\":\"$CAPTURED_AT\",\"vehicle_identity_refs\":[\"TEST-A\",\"TEST-B\"],\"consent_refs\":[\"CONSENT-A\",\"CONSENT-B\"],\"media_complete\":true}" \
-            | tee "$EVIDENCE_JSON"
+          curl -fsS -X POST "$API/evidence" -H 'content-type: application/json' \
+            -d "{\"incident_id\":\"$INCIDENT_ID\",\"evidence_refs\":[\"SANDBOX-MEDIA-001\"],\"gps_coordinates\":\"47.9184,106.9177\",\"captured_at\":\"$CAPTURED_AT\",\"vehicle_identity_refs\":[\"TEST-A\",\"TEST-B\"],\"consent_refs\":[\"CONSENT-A\",\"CONSENT-B\"],\"media_complete\":true}" | tee "$EVIDENCE_JSON"
 
-          curl -fsS -X POST "$API/decisions" \
-            -H 'content-type: application/json' \
-            -d "{\"incident_id\":\"$INCIDENT_ID\",\"evidence_refs\":[\"SANDBOX-MEDIA-001\"],\"damage_estimate_mnt\":500000,\"two_party_consent\":\"PASS\",\"vehicle_identity_verified\":\"PASS\",\"timestamp_location_verified\":\"PASS\",\"media_complete\":\"PASS\",\"no_injury\":\"PASS\",\"no_third_party_property_damage\":\"PASS\",\"dispute_present\":\"PASS\",\"fraud_flag\":\"PASS\",\"insurance_valid\":\"PASS\",\"beneficiary_valid\":\"PASS\",\"witness_verified\":\"PASS\"}" \
-            | tee "$DECISION_JSON"
+          curl -fsS -X POST "$API/decisions" -H 'content-type: application/json' \
+            -d "{\"incident_id\":\"$INCIDENT_ID\",\"evidence_refs\":[\"SANDBOX-MEDIA-001\"],\"damage_estimate_mnt\":500000,\"two_party_consent\":\"PASS\",\"vehicle_identity_verified\":\"PASS\",\"timestamp_location_verified\":\"PASS\",\"media_complete\":\"PASS\",\"no_injury\":\"PASS\",\"no_third_party_property_damage\":\"PASS\",\"dispute_present\":\"PASS\",\"fraud_flag\":\"PASS\",\"insurance_valid\":\"PASS\",\"beneficiary_valid\":\"PASS\",\"witness_verified\":\"PASS\"}" | tee "$DECISION_JSON"
 
           CLEARANCE_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-          curl -fsS -X POST "$API/metrics/clearance" \
-            -H 'content-type: application/json' \
-            -d "{\"incident_id\":\"$INCIDENT_ID\",\"clearance_time\":\"$CLEARANCE_TIME\"}" \
-            | tee "$CLEARANCE_JSON"
+          curl -fsS -X POST "$API/metrics/clearance" -H 'content-type: application/json' \
+            -d "{\"incident_id\":\"$INCIDENT_ID\",\"clearance_time\":\"$CLEARANCE_TIME\"}" | tee "$CLEARANCE_JSON"
 
-          curl -fsS -X POST "$API/escrows" \
-            -H 'content-type: application/json' \
-            -d "{\"incident_id\":\"$INCIDENT_ID\",\"escrow_id\":\"SANDBOX-ESCROW-$INCIDENT_ID\",\"amount_mnt\":500000,\"settlement_provider\":\"NEF\"}" \
-            | tee "$ESCROW_JSON"
+          curl -fsS -X POST "$API/escrows" -H 'content-type: application/json' \
+            -d "{\"incident_id\":\"$INCIDENT_ID\",\"escrow_id\":\"SANDBOX-ESCROW-$INCIDENT_ID\",\"amount_mnt\":500000,\"settlement_provider\":\"NEF\"}" | tee "$ESCROW_JSON"
 
-          curl -fsS -X POST "$API/release" \
-            -H 'content-type: application/json' \
-            -d "{\"incident_id\":\"$INCIDENT_ID\",\"escrow_id\":\"SANDBOX-ESCROW-$INCIDENT_ID\"}" \
-            | tee "$RELEASE_JSON"
+          curl -fsS -X POST "$API/release" -H 'content-type: application/json' \
+            -d "{\"incident_id\":\"$INCIDENT_ID\",\"escrow_id\":\"SANDBOX-ESCROW-$INCIDENT_ID\"}" | tee "$RELEASE_JSON"
 
-          curl -fsS -X POST "$API/metrics/$INCIDENT_ID/summary" \
-            -H 'content-type: application/json' \
-            -d '{"baseline_seconds":600,"affected_vehicles":2,"vehicle_value_per_minute_mnt":1000,"insurer_cost_per_minute_mnt":500,"public_road_cost_per_minute_mnt":800}' \
-            | tee "$SUMMARY_JSON"
+          curl -fsS -X POST "$API/metrics/$INCIDENT_ID/summary" -H 'content-type: application/json' \
+            -d '{"baseline_seconds":600,"affected_vehicles":2,"vehicle_value_per_minute_mnt":1000,"insurer_cost_per_minute_mnt":500,"public_road_cost_per_minute_mnt":800}' | tee "$SUMMARY_JSON"
 
           python - <<'PY'
           import json
@@ -93,7 +79,6 @@ jobs:
           e = json.load(open('/tmp/escrow.json'))
           r = json.load(open('/tmp/release.json'))
           s = json.load(open('/tmp/summary.json'))
-
           assert i['status'] == 'success'
           assert d['decision'] == 'APPROVE'
           assert d['release_authorized'] is True
@@ -108,6 +93,38 @@ jobs:
           print('INCIDENT_ID=', i['incident_id'])
           print('CLEARANCE_WITHIN_TWO_MINUTES=', c['within_two_minutes'])
           print('TOTAL_SAVINGS_MNT=', s['economic_impact']['total_savings_mnt'])
+          PY
+
+      - name: Restart SHUUD app against same PostgreSQL
+        working-directory: sandbox
+        run: |
+          docker compose stop app
+          docker compose rm -f app
+          docker compose up -d app
+
+      - name: Verify PostgreSQL-backed recovery after process restart
+        env:
+          API: http://127.0.0.1:18000/api/v1/shuud
+        run: |
+          set -euo pipefail
+          INCIDENT_ID=$(cat /tmp/shuud_sandbox_incident_id)
+          for i in {1..45}; do
+            if curl -fsS http://127.0.0.1:18000/openapi.json >/dev/null; then
+              break
+            fi
+            sleep 2
+          done
+          curl -fsS "$API/metrics/$INCIDENT_ID" | tee /tmp/recovered-metrics.json
+          python - <<'PY'
+          import json
+          body = json.load(open('/tmp/recovered-metrics.json'))
+          assert body['status'] == 'success'
+          assert body['snapshot_persisted'] is True
+          assert body['incident_id']
+          assert body['milestones']['incident_created_at'] is not None
+          assert body['milestones']['clearance_confirmed_at'] is not None
+          assert body['milestones']['settlement_released_at'] is not None
+          print('SHUUD_SANDBOX_POSTGRES_RESTART_RECOVERY=PASS')
           PY
 
       - name: Stop sandbox
