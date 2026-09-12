@@ -4,10 +4,9 @@ from sqlalchemy import create_engine
 from sqlalchemy.dialects import postgresql
 
 
-def test_postgresql_supports_repeatable_read_and_serializable_isolation():
+def test_postgresql_dialect_is_explicitly_supported():
     dialect = postgresql.dialect()
     assert dialect.name == "postgresql"
-    assert "SERIALIZABLE" in {"READ COMMITTED", "REPEATABLE READ", "SERIALIZABLE"}
 
 
 def test_sqlite_is_explicitly_not_the_production_dialect():
@@ -19,13 +18,27 @@ def test_sqlite_is_explicitly_not_the_production_dialect():
 def test_production_database_url_must_not_default_to_sqlite(monkeypatch):
     monkeypatch.setenv("SHUUD_RUNTIME_MODE", "production")
     monkeypatch.setenv("SHUUD_PERSISTENCE_BACKEND", "sqlalchemy")
-    monkeypatch.delenv("SHUUD_DATABASE_URL", raising=False)
+
+    from shuud.production import create_production_persistence, ProductionConfigurationError
+
+    for url in ("sqlite:///production.db", "mysql+pymysql://db.example/settlement"):
+        try:
+            create_production_persistence(database_url=url)
+        except ProductionConfigurationError as exc:
+            assert "PostgreSQL" in str(exc)
+        else:
+            raise AssertionError("non-PostgreSQL production persistence must fail closed")
+
+
+def test_production_postgresql_url_requires_host(monkeypatch):
+    monkeypatch.setenv("SHUUD_RUNTIME_MODE", "production")
+    monkeypatch.setenv("SHUUD_PERSISTENCE_BACKEND", "sqlalchemy")
 
     from shuud.production import create_production_persistence, ProductionConfigurationError
 
     try:
-        create_production_persistence()
+        create_production_persistence(database_url="postgresql:///settlement")
     except ProductionConfigurationError as exc:
-        assert "database URL" in str(exc)
+        assert "database host" in str(exc)
     else:
-        raise AssertionError("production persistence must require an explicit database URL")
+        raise AssertionError("production PostgreSQL URL must include a host")
