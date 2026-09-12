@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from sqlalchemy import Column, String, Text, create_engine
+from sqlalchemy import Column, String, Text, create_engine, update
 from sqlalchemy.orm import declarative_base, sessionmaker
 
 from witness.chain import WitnessChain
@@ -89,19 +89,18 @@ class SHUUDPersistence:
         encoded = self._canonical_snapshot(snapshot)
 
         with self.SessionLocal() as session:
-            row = (
-                session.query(SHUUDStateRow)
-                .filter(
+            result = session.execute(
+                update(SHUUDStateRow)
+                .where(
                     SHUUDStateRow.incident_id == incident_id,
                     SHUUDStateRow.snapshot_json == expected_encoded,
                 )
-                .first()
+                .values(snapshot_json=encoded)
             )
-            if row is None:
+            if result.rowcount != 1:
                 session.rollback()
                 return False
 
-            row.snapshot_json = encoded
             session.commit()
             return True
 
