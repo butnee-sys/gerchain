@@ -39,3 +39,8 @@ jobs:
         env:
           GERCHAIN_POSTGRES_DSN: postgresql+psycopg://gerchain:gerchain@127.0.0.1:5432/gerchain_test
         run: python -m pytest -q tests/test_shuud_postgres_persistence_ci.py
+      - name: Run SHUUD PostgreSQL process restart E2E
+        env:
+          SHUUD_PERSISTENCE_URL: postgresql+psycopg://gerchain:gerchain@127.0.0.1:5432/gerchain_test
+          SHUUD_POSTGRES_DSN: postgresql+psycopg://gerchain:gerchain@127.0.0.1:5432/gerchain_test
+        run: python -m pytest -q tests/test_shuud_process_restart_postgres_e2e.py
