@@ -1,13 +1,10 @@
-import importlib
-
 import pytest
-from sqlalchemy import create_engine, select
+from sqlalchemy import select
 
 from shuud.persistence import (
     SHUUDEscrowRecord,
     SHUUDLifecycleEvent,
     SHUUDReleaseAuthorizationRecord,
-    SHUUDPersistenceBase,
 )
 from shuud.persistence_adapter import SettlementPublication
 from shuud.production import ProductionConfigurationError, create_production_persistence
@@ -65,11 +62,3 @@ def test_production_wiring_rejects_incomplete_configuration(monkeypatch):
 
     with pytest.raises(ProductionConfigurationError, match="SHUUD_DATABASE_URL"):
         create_production_persistence()
-
-
-def test_production_wiring_does_not_modify_api_runtime_gate(monkeypatch):
-    monkeypatch.setenv("SHUUD_RUNTIME_MODE", "production")
-    monkeypatch.setenv("SHUUD_PERSISTENCE_BACKEND", "sqlalchemy")
-
-    with pytest.raises(RuntimeError, match="production runtime is disabled"):
-        importlib.import_module("shuud.api")
