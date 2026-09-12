@@ -6,7 +6,6 @@ WitnessChain or EscrowEngine: those remain authoritative domain engines.
 
 from __future__ import annotations
 
-from contextlib import contextmanager
 from datetime import datetime, timezone
 
 from sqlalchemy import DateTime, Integer, String, Text, UniqueConstraint, create_engine, inspect, text
@@ -128,47 +127,26 @@ def create_persistence_engine(url: str):
     return create_engine(url, future=True)
 
 
-@contextmanager
-def _schema_migration_guard(engine):
-    """Serialize PostgreSQL schema bootstrap across application instances.
-
-    PostgreSQL's transaction-scoped advisory lock is released automatically on
-    commit/rollback, including process failure. Other dialects retain their
-    existing test/local behavior and do not receive PostgreSQL-specific SQL.
-    """
-    if engine.dialect.name != "postgresql":
-        yield
-        return
-
-    with engine.begin() as connection:
-        connection.execute(
-            text("SELECT pg_advisory_xact_lock(hashtext(:lock_key))"),
-            {"lock_key": _SCHEMA_MIGRATION_LOCK_KEY},
-        )
-        yield
-
-
-def _migrate_schema(engine) -> None:
-    """Apply additive, restart-safe migrations without rewriting durable facts."""
-    inspector = inspect(engine)
+def _migrate_schema(bind) -> None:
+    """Apply additive, restart-safe migrations on the supplied database bind."""
+    inspector = inspect(bind)
     tables = set(inspector.get_table_names())
 
     if "shuud_schema_version" not in tables:
-        SHUUDSchemaVersion.__table__.create(engine)
+        SHUUDSchemaVersion.__table__.create(bind)
         tables.add("shuud_schema_version")
 
     if "shuud_publication_outbox" in tables:
         columns = {column["name"] for column in inspector.get_columns("shuud_publication_outbox")}
         if "processing_at" not in columns:
-            with engine.begin() as connection:
-                connection.execute(
-                    text(
-                        "ALTER TABLE shuud_publication_outbox "
-                        "ADD COLUMN processing_at TIMESTAMP"
-                    )
+            bind.execute(
+                text(
+                    "ALTER TABLE shuud_publication_outbox "
+                    "ADD COLUMN processing_at TIMESTAMP"
                 )
+            )
 
-    with Session(engine, expire_on_commit=False) as session:
+    with Session(bind, expire_on_commit=False) as session:
         with session.begin():
             current = session.query(SHUUDSchemaVersion).order_by(SHUUDSchemaVersion.version.desc()).first()
             if current is None:
@@ -178,10 +156,19 @@ def _migrate_schema(engine) -> None:
 
 
 def initialize_schema(engine) -> None:
-    """Create new SHUUD tables and apply additive migrations idempotently."""
-    with _schema_migration_guard(engine):
-        SHUUDPersistenceBase.metadata.create_all(engine)
-        _migrate_schema(engine)
+    """Create tables and migrate them under one PostgreSQL bootstrap transaction."""
+    if engine.dialect.name == "postgresql":
+        with engine.begin() as connection:
+            connection.execute(
+                text("SELECT pg_advisory_xact_lock(hashtext(:lock_key))"),
+                {"lock_key": _SCHEMA_MIGRATION_LOCK_KEY},
+            )
+            SHUUDPersistenceBase.metadata.create_all(connection)
+            _migrate_schema(connection)
+        return
+
+    SHUUDPersistenceBase.metadata.create_all(engine)
+    _migrate_schema(engine)
 
 
 def session_scope(engine):
