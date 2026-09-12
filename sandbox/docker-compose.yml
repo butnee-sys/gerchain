@@ -1,0 +1,33 @@
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: gerchain
+      POSTGRES_PASSWORD: gerchain
+      POSTGRES_DB: gerchain_sandbox
+    ports:
+      - "55432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gerchain -d gerchain_sandbox"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    volumes:
+      - shuud-sandbox-postgres:/var/lib/postgresql/data
+
+  app:
+    build:
+      context: ..
+      dockerfile: sandbox/Dockerfile
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      GERCHAIN_DATABASE_URL: postgresql+psycopg://gerchain:gerchain@postgres:5432/gerchain_sandbox
+      SHUUD_PERSISTENCE_URL: postgresql+psycopg://gerchain:gerchain@postgres:5432/gerchain_sandbox
+    ports:
+      - "18000:8000"
+    restart: unless-stopped
+
+volumes:
+  shuud-sandbox-postgres:
