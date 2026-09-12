@@ -24,7 +24,7 @@ class SHIIDDecision:
     decision: Decision
     rule_version: str
     reasons: tuple[str, ...]
-    damage_estimate_nef: float | None
+    damage_estimate_nef: float | None = None
 
 
 def decide(
