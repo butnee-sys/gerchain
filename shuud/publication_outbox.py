@@ -41,12 +41,7 @@ class SHUUDPublicationOutbox(SHUUDPersistenceBase):
 
 
 def queue_publication(engine, *, publication_key: str, lifecycle_event: dict, authorization: dict, escrow: dict) -> bool:
-    """Queue already-authoritative facts for durable delivery.
-
-    Returns True when a new row is created and False when the same publication
-    key was already queued. The queue itself never creates or changes domain
-    state.
-    """
+    """Queue already-authoritative facts for durable delivery."""
     if not publication_key.strip():
         raise ValueError("publication_key is required")
 
@@ -99,14 +94,17 @@ def _settlement_exists_exact(session: Session, *, lifecycle_event: dict, authori
     )
 
 
-def publish_pending(engine, *, limit: int = 100) -> int:
-    """Retry pending publications without replaying domain authority.
+def _mark_failed(engine, row_id: int, message: str) -> None:
+    with Session(engine, expire_on_commit=False) as session:
+        with session.begin():
+            failed = session.get(SHUUDPublicationOutbox, row_id)
+            if failed is not None:
+                failed.status = "FAILED"
+                failed.last_error = message
 
-    A crash after durable settlement commit but before outbox acknowledgement is
-    safe: the unique durable records are recognized as the same publication and
-    the outbox row is then marked PUBLISHED. A conflicting durable record is
-    treated as a failure rather than overwritten.
-    """
+
+def publish_pending(engine, *, limit: int = 100) -> int:
+    """Retry pending publications without replaying domain authority."""
     if limit < 1:
         raise ValueError("limit must be positive")
 
@@ -123,14 +121,15 @@ def publish_pending(engine, *, limit: int = 100) -> int:
         lifecycle_event = json.loads(row.lifecycle_event_json)
         authorization = json.loads(row.authorization_json)
         escrow = json.loads(row.escrow_json)
-        try:
-            with Session(engine, expire_on_commit=False) as session:
-                with session.begin():
-                    row_locked = session.get(SHUUDPublicationOutbox, row.id)
-                    if row_locked is None or row_locked.status != "PENDING":
-                        continue
-                    row_locked.attempts += 1
 
+        with Session(engine, expire_on_commit=False) as session:
+            with session.begin():
+                row_locked = session.get(SHUUDPublicationOutbox, row.id)
+                if row_locked is None or row_locked.status != "PENDING":
+                    continue
+                row_locked.attempts += 1
+
+        try:
             atomic_settlement(
                 engine,
                 lifecycle_event=lifecycle_event,
@@ -139,18 +138,15 @@ def publish_pending(engine, *, limit: int = 100) -> int:
             )
         except IntegrityError:
             with Session(engine, expire_on_commit=False) as session:
-                if not _settlement_exists_exact(
+                exact = _settlement_exists_exact(
                     session,
                     lifecycle_event=lifecycle_event,
                     authorization=authorization,
                     escrow=escrow,
-                ):
-                    with session.begin():
-                        failed = session.get(SHUUDPublicationOutbox, row.id)
-                        if failed is not None:
-                            failed.status = "FAILED"
-                            failed.last_error = "conflicting durable settlement record"
-                    continue
+                )
+            if not exact:
+                _mark_failed(engine, row.id, "conflicting durable settlement record")
+                continue
         except Exception as exc:
             with Session(engine, expire_on_commit=False) as session:
                 with session.begin():
