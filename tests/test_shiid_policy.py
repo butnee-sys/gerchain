@@ -14,7 +14,7 @@ def approved_policy() -> PolicyInput:
         media_complete=GateStatus.PASS,
         no_injury=GateStatus.PASS,
         no_third_party_property_damage=GateStatus.PASS,
-        damage_estimate_nef=1_500_000,
+        damage_estimate_mnt=1_500_000,
         dispute_present=GateStatus.PASS,
         fraud_flag=GateStatus.PASS,
         insurance_valid=GateStatus.PASS,
@@ -36,7 +36,7 @@ def test_policy_approves_only_when_all_gates_pass():
 
     decision = decide(incident, verification, policy=approved_policy())
     assert decision.decision is Decision.APPROVE
-    assert decision.damage_estimate_nef == 1_500_000
+    assert decision.damage_estimate_mnt == 1_500_000
 
 
 def test_policy_fails_closed_on_unknown_gate():
@@ -55,7 +55,7 @@ def test_policy_rejects_damage_above_sandbox_limit():
     incident = create_incident("Ulaanbaatar")
     verification = verify_incident(incident, ["EVIDENCE-001"])
     policy = approved_policy()
-    policy = PolicyInput(**{**policy.__dict__, "damage_estimate_nef": 2_000_001})
+    policy = PolicyInput(**{**policy.__dict__, "damage_estimate_mnt": 2_000_001})
 
     result = evaluate_policy(incident, verification, policy)
 

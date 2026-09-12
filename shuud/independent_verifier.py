@@ -58,7 +58,7 @@ class SHUUDIndependentVerifier:
             inner = payload.get("payload", {})
             if event_type == "SHIID_DECISION":
                 decision_values.append(inner.get("decision"))
-                decision_damage_estimates.append(inner.get("damage_estimate_nef"))
+                decision_damage_estimates.append(inner.get("damage_estimate_mnt"))
             if event_type == "SHUUD_RELEASE_AUTHORIZED":
                 escrow_id = inner.get("escrow_id")
                 if isinstance(escrow_id, str) and escrow_id:

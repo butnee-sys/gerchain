@@ -16,7 +16,7 @@ def _pass_policy():
         media_complete=GateStatus.PASS,
         no_injury=GateStatus.PASS,
         no_third_party_property_damage=GateStatus.PASS,
-        damage_estimate_nef=1_500_000,
+        damage_estimate_mnt=1_500_000,
         dispute_present=GateStatus.PASS,
         fraud_flag=GateStatus.PASS,
         insurance_valid=GateStatus.PASS,

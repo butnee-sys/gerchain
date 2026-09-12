@@ -27,7 +27,7 @@ class PolicyInput:
     media_complete: GateStatus = GateStatus.UNKNOWN
     no_injury: GateStatus = GateStatus.UNKNOWN
     no_third_party_property_damage: GateStatus = GateStatus.UNKNOWN
-    damage_estimate_nef: Optional[float] = None
+    damage_estimate_mnt: Optional[float] = None
     dispute_present: GateStatus = GateStatus.UNKNOWN
     fraud_flag: GateStatus = GateStatus.UNKNOWN
     insurance_valid: GateStatus = GateStatus.UNKNOWN
@@ -42,7 +42,7 @@ class PolicyResult:
     rule_version: str
 
 
-DEFAULT_MAX_DAMAGE_NEF = 2_000_000.0
+DEFAULT_MAX_DAMAGE_MNT = 2_000_000.0
 
 
 def evaluate_policy(
@@ -51,7 +51,7 @@ def evaluate_policy(
     policy: PolicyInput,
     *,
     rule_version: str = "SHIID-0.2",
-    max_damage_nef: float = DEFAULT_MAX_DAMAGE_NEF,
+    max_damage_mnt: float = DEFAULT_MAX_DAMAGE_MNT,
 ) -> PolicyResult:
     reasons: list[str] = []
 
@@ -83,11 +83,11 @@ def evaluate_policy(
         else:
             reasons.append(reason.replace("_REQUIRED", "_UNKNOWN"))
 
-    if policy.damage_estimate_nef is None:
+    if policy.damage_estimate_mnt is None:
         reasons.append("DAMAGE_ESTIMATE_UNKNOWN")
-    elif policy.damage_estimate_nef < 0:
+    elif policy.damage_estimate_mnt < 0:
         reasons.append("DAMAGE_ESTIMATE_INVALID")
-    elif policy.damage_estimate_nef > max_damage_nef:
+    elif policy.damage_estimate_mnt > max_damage_mnt:
         reasons.append("DAMAGE_LIMIT_EXCEEDED")
 
     return PolicyResult(
@@ -101,6 +101,6 @@ __all__ = [
     "GateStatus",
     "PolicyInput",
     "PolicyResult",
-    "DEFAULT_MAX_DAMAGE_NEF",
+    "DEFAULT_MAX_DAMAGE_MNT",
     "evaluate_policy",
 ]
