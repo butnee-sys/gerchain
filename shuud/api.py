@@ -137,6 +137,8 @@ def create_shuud_incident(payload: IncidentRequest):
 @router.post("/evidence", response_model=dict)
 def lock_shuud_evidence(payload: EvidenceRequest):
     _get_incident(payload.incident_id)
+    if payload.incident_id in _EVIDENCE:
+        raise HTTPException(status_code=409, detail="EVIDENCE_ALREADY_LOCKED")
     witness = _get_witness(payload.incident_id)
     envelope = create_evidence_envelope(
         payload.incident_id,
@@ -166,6 +168,8 @@ def lock_shuud_evidence(payload: EvidenceRequest):
 def make_shiid_decision(payload: DecisionRequest):
     incident = _get_incident(payload.incident_id)
     evidence = _get_evidence(payload.incident_id)
+    if payload.incident_id in _DECISIONS:
+        raise HTTPException(status_code=409, detail="DECISION_ALREADY_EXISTS")
     witness = _get_witness(payload.incident_id)
 
     requested_refs = tuple(str(value).strip() for value in payload.evidence_refs)
@@ -260,6 +264,9 @@ def release_shuud_escrow(payload: ReleaseRequest):
         raise HTTPException(status_code=404, detail="ESCROW_NOT_FOUND")
 
     authorization = _AUTHORIZATIONS.get(payload.incident_id)
+    if authorization is not None and authorization.escrow_id != payload.escrow_id:
+        raise HTTPException(status_code=409, detail="ESCROW_ID_MISMATCH")
+
     if authorization is None:
         authorization = authorize_release(
             decision,
