@@ -13,6 +13,7 @@ from escrow.engine import EscrowEngine
 from escrow.record import EscrowRecord
 from .evidence import EvidenceEnvelope
 from .incident import Incident
+from .metrics import OperationalTiming
 from .persistence import SHUUDPersistence
 from .release import ReleaseAuthorization
 from .shiid import Decision, SHIIDDecision
@@ -50,6 +51,7 @@ class SHUUDRuntimeStore:
         authorization: ReleaseAuthorization | None = None,
         escrow: EscrowEngine | None = None,
         settlement_provider: str = "NEF",
+        operational_timing: OperationalTiming | None = None,
     ) -> dict[str, Any]:
         return {
             "incident": {
@@ -91,6 +93,9 @@ class SHUUDRuntimeStore:
                 "records": [record.__dict__ for record in escrow.records],
                 "settlement_provider": settlement_provider,
             },
+            "operational_timing": None
+            if operational_timing is None
+            else operational_timing.as_dict(),
             "witness_bundle": self.witness_bundle(witness),
         }
 
@@ -112,6 +117,11 @@ class SHUUDRuntimeStore:
             vehicle_b=raw.get("vehicle_b"),
             description=raw.get("description"),
         )
+
+    @staticmethod
+    def recover_operational_timing(snapshot: dict[str, Any]) -> OperationalTiming:
+        raw = snapshot.get("operational_timing") or {}
+        return OperationalTiming.from_dict(raw)
 
     @staticmethod
     def recover_evidence(snapshot: dict[str, Any]) -> EvidenceEnvelope | None:
