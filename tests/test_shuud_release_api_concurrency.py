@@ -88,6 +88,14 @@ def _event_types(incident_id: str) -> list[str]:
     return [entry.record.event_type for entry in _WITNESSES[incident_id].entries]
 
 
+def _escrow_transition_states(incident_id: str) -> list[str]:
+    return [
+        entry.event_payload["new_state"]
+        for entry in _WITNESSES[incident_id].entries
+        if entry.record.event_type == "ESCROW_TRANSITION"
+    ]
+
+
 def test_concurrent_release_api_creates_one_authorization_and_one_release():
     _clear_shuud_state()
     with TestClient(app) as client:
@@ -108,4 +116,4 @@ def test_concurrent_release_api_creates_one_authorization_and_one_release():
         assert list(_AUTHORIZATIONS) == [incident_id]
         assert _ESCROWS[escrow_id].get_state()["state"] == "RELEASED"
         assert _event_types(incident_id).count("SHUUD_RELEASE_AUTHORIZED") == 1
-        assert _event_types(incident_id).count("ESCROW_RELEASED") == 1
+        assert _escrow_transition_states(incident_id) == ["FUNDED", "LOCKED", "RELEASED"]
