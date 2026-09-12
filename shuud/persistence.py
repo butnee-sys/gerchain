@@ -6,6 +6,7 @@ WitnessChain or EscrowEngine: those remain authoritative domain engines.
 
 from __future__ import annotations
 
+from contextlib import contextmanager
 from datetime import datetime, timezone
 
 from sqlalchemy import DateTime, Integer, String, Text, UniqueConstraint, create_engine, inspect, text
@@ -13,6 +14,7 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
 
 
 CURRENT_SCHEMA_VERSION = 2
+_SCHEMA_MIGRATION_LOCK_KEY = "shuud:schema:migration:v2"
 
 
 class SHUUDPersistenceBase(DeclarativeBase):
@@ -126,14 +128,28 @@ def create_persistence_engine(url: str):
     return create_engine(url, future=True)
 
 
-def _migrate_schema(engine) -> None:
-    """Apply additive, restart-safe migrations without rewriting durable facts.
+@contextmanager
+def _schema_migration_guard(engine):
+    """Serialize PostgreSQL schema bootstrap across application instances.
 
-    ``create_all`` is intentionally retained for new environments, while this
-    migration path handles existing production databases. Only additive schema
-    changes are performed here; destructive changes require a separately
-    reviewed migration.
+    PostgreSQL's transaction-scoped advisory lock is released automatically on
+    commit/rollback, including process failure. Other dialects retain their
+    existing test/local behavior and do not receive PostgreSQL-specific SQL.
     """
+    if engine.dialect.name != "postgresql":
+        yield
+        return
+
+    with engine.begin() as connection:
+        connection.execute(
+            text("SELECT pg_advisory_xact_lock(hashtext(:lock_key))"),
+            {"lock_key": _SCHEMA_MIGRATION_LOCK_KEY},
+        )
+        yield
+
+
+def _migrate_schema(engine) -> None:
+    """Apply additive, restart-safe migrations without rewriting durable facts."""
     inspector = inspect(engine)
     tables = set(inspector.get_table_names())
 
@@ -163,8 +179,9 @@ def _migrate_schema(engine) -> None:
 
 def initialize_schema(engine) -> None:
     """Create new SHUUD tables and apply additive migrations idempotently."""
-    SHUUDPersistenceBase.metadata.create_all(engine)
-    _migrate_schema(engine)
+    with _schema_migration_guard(engine):
+        SHUUDPersistenceBase.metadata.create_all(engine)
+        _migrate_schema(engine)
 
 
 def session_scope(engine):
