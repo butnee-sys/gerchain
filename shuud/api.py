@@ -15,7 +15,7 @@ from pydantic import BaseModel, Field
 from escrow.engine import EscrowEngine
 from .evidence import EvidenceEnvelope, create_evidence_envelope
 from .incident import Incident, create_incident
-from .metrics import measure_clearance
+from .metrics import OperationalTiming, measure_clearance
 from .policy import GateStatus, PolicyInput
 from .persistence import SHUUDPersistence
 from .runtime_store import SHUUDRuntimeStore
@@ -94,11 +94,46 @@ class ReleaseRequest(BaseModel):
 
 class ClearanceRequest(BaseModel):
     incident_id: str
-    incident_time: datetime
-    clearance_time: datetime
+    # Explicit timestamp remains supported for deterministic sandbox tests.
+    # Production callers should omit it so the server records the event time.
+    clearance_time: datetime | None = None
+
+
+def _now() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+def _timing_for_snapshot(
+    snapshot: dict,
+    incident: Incident,
+) -> OperationalTiming:
+    timing = _RUNTIME_STORE.recover_operational_timing(snapshot)
+    if not timing.timestamps:
+        timing = timing.with_milestone("incident_created_at", incident.occurred_at)
+    return timing
+
+
+def _timing_for_incident(incident_id: str) -> tuple[dict, Incident, OperationalTiming]:
+    incident = _get_incident(incident_id)
+    snapshot = _PERSISTENCE.load_snapshot(incident_id)
+    if snapshot is None:
+        raise HTTPException(status_code=404, detail="INCIDENT_NOT_FOUND")
+    return snapshot, incident, _timing_for_snapshot(snapshot, incident)
+
+
+def _save_timing_snapshot(
+    incident_id: str,
+    snapshot: dict,
+    timing: OperationalTiming,
+) -> None:
+    updated = dict(snapshot)
+    updated["operational_timing"] = timing.as_dict()
+    if not _PERSISTENCE.save_snapshot_if_current(incident_id, snapshot, updated):
+        raise HTTPException(status_code=409, detail="SHUUD_STATE_CONFLICT")
 
 
 def _get_incident(incident_id: str) -> Incident:
+    _restore(incident_id)
     incident = _INCIDENTS.get(incident_id)
     if incident is None:
         raise HTTPException(status_code=404, detail="INCIDENT_NOT_FOUND")
@@ -106,6 +141,7 @@ def _get_incident(incident_id: str) -> Incident:
 
 
 def _get_evidence(incident_id: str) -> EvidenceEnvelope:
+    _restore(incident_id)
     evidence = _EVIDENCE.get(incident_id)
     if evidence is None:
         raise HTTPException(status_code=404, detail="EVIDENCE_NOT_FOUND")
@@ -139,22 +175,6 @@ def _restore(incident_id: str) -> None:
         _ESCROWS[escrow.escrow_id] = escrow
 
 
-def _get_incident(incident_id: str) -> Incident:
-    _restore(incident_id)
-    incident = _INCIDENTS.get(incident_id)
-    if incident is None:
-        raise HTTPException(status_code=404, detail="INCIDENT_NOT_FOUND")
-    return incident
-
-
-def _get_evidence(incident_id: str) -> EvidenceEnvelope:
-    _restore(incident_id)
-    evidence = _EVIDENCE.get(incident_id)
-    if evidence is None:
-        raise HTTPException(status_code=404, detail="EVIDENCE_NOT_FOUND")
-    return evidence
-
-
 def _get_witness(incident_id: str) -> WitnessChain:
     _restore(incident_id)
     witness = _WITNESSES.get(incident_id)
@@ -176,9 +196,12 @@ def create_shuud_incident(payload: IncidentRequest):
         manifest={"purpose": "SHUUD sandbox", "incident_id": incident.incident_id},
         witness_id="WITNESS-ROOT-001",
     )
+    timing = OperationalTiming({}).with_milestone(
+        "incident_created_at", incident.occurred_at
+    )
     _INCIDENTS[incident.incident_id] = incident
     _WITNESSES[incident.incident_id] = witness
-    _RUNTIME_STORE.save(incident, witness)
+    _RUNTIME_STORE.save(incident, witness, operational_timing=timing)
     return {
         "status": "success",
         "incident_id": incident.incident_id,
@@ -189,7 +212,7 @@ def create_shuud_incident(payload: IncidentRequest):
 
 @router.post("/evidence", response_model=dict)
 def lock_shuud_evidence(payload: EvidenceRequest):
-    _get_incident(payload.incident_id)
+    incident = _get_incident(payload.incident_id)
     witness = _get_witness(payload.incident_id)
     envelope = create_evidence_envelope(
         payload.incident_id,
@@ -205,11 +228,15 @@ def lock_shuud_evidence(payload: EvidenceRequest):
         envelope,
         timestamp=payload.captured_at,
     )
+    timing = _timing_for_incident(payload.incident_id)[2].with_milestone(
+        "evidence_locked_at", _now()
+    )
     _EVIDENCE[payload.incident_id] = envelope
     _RUNTIME_STORE.save(
-        _INCIDENTS[payload.incident_id],
+        incident,
         witness,
         evidence=envelope,
+        operational_timing=timing,
     )
     return {
         "status": "success",
@@ -231,6 +258,7 @@ def make_shiid_decision(payload: DecisionRequest):
         raise HTTPException(status_code=409, detail="EVIDENCE_REFERENCE_MISMATCH")
 
     verification = verify_incident(incident, evidence.evidence_refs)
+    verified_at = _now()
     policy = PolicyInput(
         two_party_consent=payload.two_party_consent,
         vehicle_identity_verified=payload.vehicle_identity_verified,
@@ -246,17 +274,22 @@ def make_shiid_decision(payload: DecisionRequest):
         witness_verified=payload.witness_verified,
     )
     decision = decide(incident, verification, policy=policy)
+    decided_at = _now()
     record_shiid_decision(
         witness,
         decision,
-        timestamp=datetime.now(timezone.utc).isoformat(),
+        timestamp=decided_at.isoformat(),
     )
+    timing = _timing_for_incident(payload.incident_id)[2]
+    timing = timing.with_milestone("verification_completed_at", verified_at)
+    timing = timing.with_milestone("shiid_decided_at", decided_at)
     _DECISIONS[payload.incident_id] = decision
     _RUNTIME_STORE.save(
         incident,
         witness,
         evidence=evidence,
         decision=decision,
+        operational_timing=timing,
     )
     return {
         "status": "success",
@@ -270,7 +303,7 @@ def make_shiid_decision(payload: DecisionRequest):
 
 @router.post("/escrows", response_model=dict)
 def create_shuud_escrow(payload: EscrowRequest):
-    _get_incident(payload.incident_id)
+    incident = _get_incident(payload.incident_id)
     if payload.escrow_id in _ESCROWS:
         raise HTTPException(status_code=409, detail="ESCROW_ALREADY_EXISTS")
     witness = _get_witness(payload.incident_id)
@@ -282,7 +315,7 @@ def create_shuud_escrow(payload: EscrowRequest):
     )
     escrow.transition(
         "FUNDED",
-        datetime.now(timezone.utc).isoformat(),
+        _now().isoformat(),
         {
             "incident_id": payload.incident_id,
             "source": "SHUUD_SANDBOX",
@@ -291,7 +324,7 @@ def create_shuud_escrow(payload: EscrowRequest):
     )
     escrow.transition(
         "LOCKED",
-        datetime.now(timezone.utc).isoformat(),
+        _now().isoformat(),
         {
             "incident_id": payload.incident_id,
             "source": "SHUUD_SANDBOX",
@@ -299,14 +332,16 @@ def create_shuud_escrow(payload: EscrowRequest):
         },
     )
     _ESCROWS[payload.escrow_id] = escrow
+    _, _, timing = _timing_for_incident(payload.incident_id)
     _RUNTIME_STORE.save(
-        _INCIDENTS[payload.incident_id],
+        incident,
         witness,
         evidence=_EVIDENCE.get(payload.incident_id),
         decision=_DECISIONS.get(payload.incident_id),
         authorization=_AUTHORIZATIONS.get(payload.incident_id),
         escrow=escrow,
         settlement_provider=payload.settlement_provider,
+        operational_timing=timing,
     )
     return {
         "status": "success",
@@ -345,7 +380,7 @@ def release_shuud_escrow(payload: ReleaseRequest):
         record_release_authorized(
             witness,
             authorization,
-            timestamp=datetime.now(timezone.utc).isoformat(),
+            timestamp=_now().isoformat(),
         )
         _AUTHORIZATIONS[payload.incident_id] = authorization
 
@@ -355,12 +390,17 @@ def release_shuud_escrow(payload: ReleaseRequest):
         "rule_version": authorization.rule_version,
         "settlement_provider": "NEF",
     }
+    released_at = _now()
     record = release_escrow(
         escrow,
         authorization,
-        timestamp=datetime.now(timezone.utc).isoformat(),
+        timestamp=released_at.isoformat(),
         evidence=release_evidence,
     )
+    timing = _timing_for_snapshot(
+        expected_snapshot,
+        _INCIDENTS[payload.incident_id],
+    ).with_milestone("settlement_released_at", released_at)
     new_snapshot = _RUNTIME_STORE.snapshot(
         incident=_INCIDENTS[payload.incident_id],
         witness=witness,
@@ -369,6 +409,7 @@ def release_shuud_escrow(payload: ReleaseRequest):
         authorization=authorization,
         escrow=escrow,
         settlement_provider="NEF",
+        operational_timing=timing,
     )
     if not _PERSISTENCE.save_snapshot_if_current(
         payload.incident_id,
@@ -389,17 +430,36 @@ def release_shuud_escrow(payload: ReleaseRequest):
 
 @router.post("/metrics/clearance", response_model=dict)
 def calculate_clearance(payload: ClearanceRequest):
-    _get_incident(payload.incident_id)
+    snapshot, incident, timing = _timing_for_incident(payload.incident_id)
+    clearance_time = payload.clearance_time or _now()
+    updated_timing = timing.with_milestone("clearance_confirmed_at", clearance_time)
+    _save_timing_snapshot(payload.incident_id, snapshot, updated_timing)
     metric = measure_clearance(
         payload.incident_id,
-        payload.incident_time,
-        payload.clearance_time,
+        incident.occurred_at,
+        clearance_time,
     )
     return {
         "status": "success",
         "incident_id": metric.incident_id,
         "elapsed_seconds": metric.elapsed_seconds,
         "within_two_minutes": metric.within_two_minutes,
+        "milestones": updated_timing.as_dict(),
+        "durations": updated_timing.durations(),
+    }
+
+
+@router.get("/metrics/{incident_id}", response_model=dict)
+def get_operational_metrics(incident_id: str):
+    snapshot, incident, timing = _timing_for_incident(incident_id)
+    durations = timing.durations()
+    return {
+        "status": "success",
+        "incident_id": incident.incident_id,
+        "milestones": timing.as_dict(),
+        "durations": durations,
+        "within_two_minutes": timing.within_two_minutes(),
+        "snapshot_persisted": snapshot is not None,
     }
 
 
