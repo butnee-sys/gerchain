@@ -279,6 +279,9 @@ def release_shuud_escrow(payload: ReleaseRequest):
         )
         _AUTHORIZATIONS[payload.incident_id] = authorization
 
+    if escrow.get_state()["state"] != "LOCKED":
+        raise HTTPException(status_code=409, detail="ESCROW_NOT_LOCKED")
+
     record = release_escrow(
         escrow,
         authorization,
