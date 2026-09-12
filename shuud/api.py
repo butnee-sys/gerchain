@@ -320,6 +320,10 @@ def create_shuud_escrow(payload: EscrowRequest):
 
 @router.post("/release", response_model=dict)
 def release_shuud_escrow(payload: ReleaseRequest):
+    expected_snapshot = _PERSISTENCE.load_snapshot(payload.incident_id)
+    if expected_snapshot is None:
+        raise HTTPException(status_code=404, detail="INCIDENT_NOT_FOUND")
+
     _get_incident(payload.incident_id)
     witness = _get_witness(payload.incident_id)
     decision = _DECISIONS.get(payload.incident_id)
@@ -357,15 +361,22 @@ def release_shuud_escrow(payload: ReleaseRequest):
         timestamp=datetime.now(timezone.utc).isoformat(),
         evidence=release_evidence,
     )
-    _RUNTIME_STORE.save(
-        _INCIDENTS[payload.incident_id],
-        witness,
+    new_snapshot = _RUNTIME_STORE.snapshot(
+        incident=_INCIDENTS[payload.incident_id],
+        witness=witness,
         evidence=_EVIDENCE.get(payload.incident_id),
         decision=decision,
         authorization=authorization,
         escrow=escrow,
         settlement_provider="NEF",
     )
+    if not _PERSISTENCE.save_snapshot_if_current(
+        payload.incident_id,
+        expected_snapshot,
+        new_snapshot,
+    ):
+        raise HTTPException(status_code=409, detail="SHUUD_STATE_CONFLICT")
+
     return {
         "status": "success",
         "incident_id": payload.incident_id,
