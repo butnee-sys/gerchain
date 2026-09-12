@@ -172,3 +172,21 @@ def test_migrations_are_serialized_and_checksum_is_stable():
         rows = conn.execute("SELECT version, checksum FROM schema_version ORDER BY version").fetchall()
         assert [row[0] for row in rows] == [1]
         assert len(rows[0][1]) == 64
+
+
+def test_migration_checksum_mismatch_is_rejected(tmp_path):
+    with connect() as conn:
+        conn.execute("DROP TABLE IF EXISTS processed_events, outbox, audit_logs, escrows, schema_version CASCADE")
+        conn.commit()
+        apply_migrations(conn, MIGRATION_DIR)
+
+    migration = tmp_path / "001_modified.sql"
+    migration.write_text(
+        (MIGRATION_DIR / "001_concurrency.sql").read_text(encoding="utf-8")
+        + "\n-- modified after deployment\n",
+        encoding="utf-8",
+    )
+
+    with connect() as conn:
+        with pytest.raises(RuntimeError, match="checksum mismatch"):
+            apply_migrations(conn, tmp_path)
