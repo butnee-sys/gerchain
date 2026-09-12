@@ -22,6 +22,12 @@ pytestmark = pytest.mark.skipif(
 )
 
 
+@pytest.fixture(autouse=True)
+def ensure_schema():
+    with connect() as conn:
+        apply_migrations(conn, MIGRATION_DIR)
+
+
 def connect():
     return psycopg.connect(DATABASE_URL)
 
