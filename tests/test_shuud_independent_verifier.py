@@ -148,6 +148,18 @@ def test_shuud_independent_verifier_rejects_escrow_amount_mismatch():
     assert "ESCROW_AMOUNT_MISMATCH" in result.reasons
 
 
+def test_shuud_independent_verifier_rejects_non_numeric_decision_amount():
+    bundle, _, _ = _bundle()
+    for entry in bundle["entries"]:
+        payload = entry["event_payload"]
+        if payload.get("event_type") == "SHIID_DECISION":
+            payload["payload"]["damage_estimate_nef"] = True
+            break
+    result = SHUUDIndependentVerifier().verify_bundle(bundle)
+    assert result.verified is False
+    assert "GERCHAIN_BUNDLE_INVALID" in result.reasons
+
+
 def test_shuud_independent_verifier_rejects_escrow_id_mismatch():
     bundle, _, _ = _bundle(
         escrow_id="ESC-002",
