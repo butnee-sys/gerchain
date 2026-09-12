@@ -8,7 +8,7 @@ already been produced by those authoritative domain components.
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import DateTime, Integer, String, Text, select, update
 from sqlalchemy.exc import IntegrityError
@@ -21,6 +21,9 @@ from .persistence import (
     SHUUDLifecycleEvent,
     atomic_settlement,
 )
+
+
+DEFAULT_CLAIM_TIMEOUT_SECONDS = 300
 
 
 class SHUUDPublicationOutbox(SHUUDPersistenceBase):
@@ -37,6 +40,7 @@ class SHUUDPublicationOutbox(SHUUDPersistenceBase):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False
     )
+    processing_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
@@ -116,16 +120,14 @@ def _mark_failed(engine, row_id: int, message: str) -> None:
             if failed is not None:
                 failed.status = "FAILED"
                 failed.last_error = message
+                failed.processing_at = None
 
 
 def _claim_pending(engine, row_id: int) -> bool:
-    """Atomically claim one PENDING row for a single publication worker.
-
-    The conditional UPDATE is the concurrency boundary: two workers may read
-    the same candidate, but only one can change PENDING -> PROCESSING.
-    """
+    """Atomically claim one PENDING row for a single publication worker."""
     with Session(engine, expire_on_commit=False) as session:
         with session.begin():
+            now = datetime.now(timezone.utc)
             result = session.execute(
                 update(SHUUDPublicationOutbox)
                 .where(
@@ -135,6 +137,7 @@ def _claim_pending(engine, row_id: int) -> bool:
                 .values(
                     status="PROCESSING",
                     attempts=SHUUDPublicationOutbox.attempts + 1,
+                    processing_at=now,
                 )
             )
             return result.rowcount == 1
@@ -147,19 +150,42 @@ def _release_claim(engine, row_id: int, *, error: str) -> None:
             if row is not None and row.status == "PROCESSING":
                 row.status = "PENDING"
                 row.last_error = error
+                row.processing_at = None
 
 
-def publish_pending(engine, *, limit: int = 100) -> int:
+def _recover_stale_claims(engine, *, claim_timeout_seconds: int) -> int:
+    """Return abandoned PROCESSING rows to PENDING after a bounded lease."""
+    if claim_timeout_seconds < 1:
+        raise ValueError("claim_timeout_seconds must be positive")
+    cutoff = datetime.now(timezone.utc) - timedelta(seconds=claim_timeout_seconds)
+    with Session(engine, expire_on_commit=False) as session:
+        with session.begin():
+            result = session.execute(
+                update(SHUUDPublicationOutbox)
+                .where(
+                    SHUUDPublicationOutbox.status == "PROCESSING",
+                    SHUUDPublicationOutbox.processing_at.is_not(None),
+                    SHUUDPublicationOutbox.processing_at < cutoff,
+                )
+                .values(
+                    status="PENDING",
+                    processing_at=None,
+                    last_error="stale worker claim recovered",
+                )
+            )
+            return result.rowcount
+
+
+def publish_pending(engine, *, limit: int = 100, claim_timeout_seconds: int = DEFAULT_CLAIM_TIMEOUT_SECONDS) -> int:
     """Retry pending publications without replaying domain authority.
 
-    Each candidate is atomically claimed before settlement publication. This
-    prevents two concurrent workers from simultaneously processing the same
-    outbox row. PROCESSING is deliberately fail-closed; a future worker lease
-    and explicit stale-claim recovery must be added before unattended
-    multi-process production workers are enabled.
+    Claims are leases. A crashed worker leaves PROCESSING behind, and a later
+    worker may recover only a claim older than the bounded timeout. Durable
+    uniqueness and exact-fact reconciliation remain the final duplicate guard.
     """
     if limit < 1:
         raise ValueError("limit must be positive")
+    _recover_stale_claims(engine, claim_timeout_seconds=claim_timeout_seconds)
 
     with Session(engine, expire_on_commit=False) as session:
         rows = session.scalars(
@@ -206,6 +232,7 @@ def publish_pending(engine, *, limit: int = 100) -> int:
                 if done is not None and done.status == "PROCESSING":
                     done.status = "PUBLISHED"
                     done.last_error = None
+                    done.processing_at = None
                     done.published_at = datetime.now(timezone.utc)
                     published += 1
 
