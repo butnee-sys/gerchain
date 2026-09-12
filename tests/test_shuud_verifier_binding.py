@@ -14,11 +14,14 @@ from shuud.witness import (
 from witness.chain import WitnessChain
 
 
-def _bundle(*, currency="NEF", forged_hash=None, order="normal"):
+def _bundle(*, currency="NEF", forged_hash=None, order="normal", include_manifest_incident_id=True):
     incident = create_incident("Ulaanbaatar")
+    manifest = {"domain": "SHUUD"}
+    if include_manifest_incident_id:
+        manifest["incident_id"] = incident.incident_id
     chain = WitnessChain(
         initial_state={"value": 0},
-        manifest={"domain": "SHUUD", "incident_id": incident.incident_id},
+        manifest=manifest,
         witness_id="WITNESS-ROOT-001",
     )
     evidence = create_evidence_envelope(
@@ -112,3 +115,11 @@ def test_verifier_rejects_release_authorization_before_shiid_decision():
     )
     assert result.verified is False
     assert "SHUUD_LIFECYCLE_ORDER_INVALID" in result.reasons
+
+
+def test_verifier_requires_manifest_incident_id():
+    result = SHUUDIndependentVerifier().verify_bundle(
+        _bundle(include_manifest_incident_id=False)
+    )
+    assert result.verified is False
+    assert "MANIFEST_INCIDENT_ID_MISSING" in result.reasons
