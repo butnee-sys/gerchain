@@ -1,6 +1,8 @@
 name: SHUUD Sandbox Smoke
 
 on:
+  push:
+    branches: ["main"]
   pull_request:
     branches: ["main"]
   workflow_dispatch:
