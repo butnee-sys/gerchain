@@ -44,6 +44,7 @@ class SHUUDIndependentVerifier:
         release_authorizations: list[dict[str, Any]] = []
         event_types: list[str] = []
         ordered_milestones: list[str] = []
+        timestamps: list[str] = []
 
         manifest = bundle.get("manifest", {})
         manifest_incident_id = manifest.get("incident_id")
@@ -58,6 +59,9 @@ class SHUUDIndependentVerifier:
             payload = entry.get("event_payload", {})
             record_event_type = record.get("event_type")
             payload_event_type = payload.get("event_type")
+            timestamp = record.get("timestamp")
+            if isinstance(timestamp, str):
+                timestamps.append(timestamp)
 
             if record_event_type == "ESCROW_TRANSITION":
                 transition_state = payload.get("new_state")
@@ -215,6 +219,11 @@ class SHUUDIndependentVerifier:
                 or len(set(milestone_positions)) != len(milestone_positions)
             ):
                 reasons.append("SHUUD_LIFECYCLE_ORDER_INVALID")
+
+            if len(timestamps) != len(entries):
+                reasons.append("TIMESTAMP_MISSING")
+            elif timestamps != sorted(timestamps):
+                reasons.append("TIMESTAMP_ORDER_INVALID")
 
             decision_amount = (
                 decision_damage_estimates[0]
