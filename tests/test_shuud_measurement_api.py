@@ -54,7 +54,7 @@ def _allow_decision(client: TestClient, incident_id: str) -> None:
 
 def test_measurement_summary_api_exposes_timing_and_economics() -> None:
     client = _client()
-    occurred_at = datetime.now(timezone.utc) - timedelta(seconds=180)
+    occurred_at = datetime.now(timezone.utc) - timedelta(seconds=600)
     incident_response = client.post(
         "/api/v1/shuud/incidents",
         json={
