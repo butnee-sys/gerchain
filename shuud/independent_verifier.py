@@ -144,9 +144,19 @@ class SHUUDIndependentVerifier:
             if len(escrow_transition_ids) != 1 or escrow_transition_ids != escrow_ids:
                 reasons.append("ESCROW_ID_MISMATCH")
 
-            if len(decision_damage_estimates) != 1 or len(escrow_amounts) != 1:
+            decision_amount = (
+                decision_damage_estimates[0]
+                if len(decision_damage_estimates) == 1
+                else None
+            )
+            if (
+                len(decision_damage_estimates) != 1
+                or isinstance(decision_amount, bool)
+                or not isinstance(decision_amount, (int, float))
+                or len(escrow_amounts) != 1
+            ):
                 reasons.append("ESCROW_AMOUNT_REFERENCE_INVALID")
-            elif decision_damage_estimates[0] != next(iter(escrow_amounts)):
+            elif decision_amount != next(iter(escrow_amounts)):
                 reasons.append("ESCROW_AMOUNT_MISMATCH")
 
             final_payload = escrow_events[-1].get("event_payload", {})
