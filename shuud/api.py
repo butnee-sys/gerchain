@@ -207,8 +207,18 @@ def make_shiid_decision(payload: DecisionRequest):
 @router.post("/escrows", response_model=dict)
 def create_shuud_escrow(payload: EscrowRequest):
     _get_incident(payload.incident_id)
+    decision = _DECISIONS.get(payload.incident_id)
+    if decision is None:
+        raise HTTPException(status_code=404, detail="DECISION_NOT_FOUND")
+    if decision.decision is not Decision.APPROVE:
+        raise HTTPException(status_code=409, detail="ESCROW_NOT_AUTHORIZED")
+    if decision.damage_estimate_nef is None:
+        raise HTTPException(status_code=409, detail="ESCROW_AMOUNT_REFERENCE_INVALID")
+    if payload.amount_nef != decision.damage_estimate_nef:
+        raise HTTPException(status_code=409, detail="ESCROW_AMOUNT_MISMATCH")
     if payload.escrow_id in _ESCROWS:
         raise HTTPException(status_code=409, detail="ESCROW_ALREADY_EXISTS")
+
     witness = _get_witness(payload.incident_id)
     escrow = EscrowEngine(
         escrow_id=payload.escrow_id,
