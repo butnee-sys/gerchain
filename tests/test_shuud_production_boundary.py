@@ -26,7 +26,7 @@ def test_sandbox_defaults_to_in_memory_boundary(monkeypatch):
 
 
 def test_production_rejects_in_memory_persistence(monkeypatch):
-    with pytest.raises(RuntimeError, match="SHUUD production requires durable persistence"):
+    with pytest.raises(RuntimeError, match="SHUUD production runtime is disabled"):
         _reload_with_env(
             monkeypatch,
             runtime_mode="production",
@@ -34,15 +34,13 @@ def test_production_rejects_in_memory_persistence(monkeypatch):
         )
 
 
-def test_production_accepts_only_explicit_durable_backend(monkeypatch):
-    module = _reload_with_env(
-        monkeypatch,
-        runtime_mode="production",
-        persistence_backend="sqlalchemy",
-    )
-
-    assert module.SHUUD_RUNTIME_MODE == "production"
-    assert module.SHUUD_PERSISTENCE_BACKEND == "sqlalchemy"
+def test_production_rejects_unwired_backend_even_when_named_durable(monkeypatch):
+    with pytest.raises(RuntimeError, match="durable persistence adapter is wired"):
+        _reload_with_env(
+            monkeypatch,
+            runtime_mode="production",
+            persistence_backend="sqlalchemy",
+        )
 
 
 def test_unknown_runtime_mode_fails_closed(monkeypatch):
