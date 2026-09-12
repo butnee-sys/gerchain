@@ -19,8 +19,16 @@ def test_verifier_rejects_replayed_witness_entry():
 
 
 def test_verifier_rejects_timestamp_regression():
-    bundle = _bundle()
-    bundle["entries"][4]["record"]["timestamp"] = "2026-09-11T23:59:59+00:00"
+    bundle = _bundle(
+        timestamps=(
+            "2026-09-12T00:00:10+00:00",
+            "2026-09-12T00:00:15+00:00",
+            "2026-09-12T00:00:20+00:00",
+            "2026-09-12T00:00:25+00:00",
+            "2026-09-11T23:59:59+00:00",
+            "2026-09-12T00:01:00+00:00",
+        )
+    )
 
     result = SHUUDIndependentVerifier().verify_bundle(bundle)
 
@@ -29,11 +37,8 @@ def test_verifier_rejects_timestamp_regression():
 
 
 def test_verifier_uses_sequence_not_timestamp_for_lifecycle_order():
-    bundle = _bundle()
-    # Keep the authoritative event sequence intact while making timestamps
-    # equal. Equal timestamps must not reorder a valid sequence.
-    for entry in bundle["entries"]:
-        entry["record"]["timestamp"] = "2026-09-12T00:00:00+00:00"
+    equal_timestamp = "2026-09-12T00:00:00+00:00"
+    bundle = _bundle(timestamps=(equal_timestamp,) * 6)
 
     result = SHUUDIndependentVerifier().verify_bundle(bundle)
 
