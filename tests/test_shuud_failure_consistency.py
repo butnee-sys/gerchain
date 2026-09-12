@@ -91,8 +91,8 @@ def test_duplicate_authorization_rolls_back_new_escrow_and_lifecycle(tmp_path):
     atomic_settlement(engine, **payload)
 
     duplicate = _valid_payload()
-    duplicate["escrow"]["escrow_id"] = "ESC-FAIL-002"
     duplicate["lifecycle_event"]["event_id"] = "EV-RELEASE-002"
+    duplicate["lifecycle_event"]["event_hash"] = "HASH-RELEASE-002"
 
     with pytest.raises(IntegrityError):
         atomic_settlement(engine, **duplicate)
