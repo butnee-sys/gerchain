@@ -8,6 +8,9 @@ from __future__ import annotations
 
 import os
 
+# Import the outbox model before schema initialization so its table is included
+# in SHUUDPersistenceBase.metadata. The outbox is delivery infrastructure only.
+from . import publication_outbox  # noqa: F401
 from .persistence import create_persistence_engine, initialize_schema
 from .persistence_adapter import SQLAlchemySettlementPersistence
 
