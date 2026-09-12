@@ -1,4 +1,4 @@
-"""SH-16.10 recoverable publication tests.
+"""SH-16.11 recoverable publication and reconciliation tests.
 
 The outbox retries durable publication only. It never recreates WitnessChain
 or EscrowEngine authority and never issues a second release decision.
@@ -20,25 +20,28 @@ from shuud.publication_outbox import (
 from tests.test_shuud_production_wiring import _publication
 
 
-def test_outbox_queues_authoritative_facts_once(tmp_path):
-    engine = create_engine(f"sqlite:///{tmp_path / 'outbox.db'}", future=True)
+def _engine(tmp_path, name):
+    engine = create_engine(f"sqlite:///{tmp_path / name}", future=True)
     initialize_schema(engine)
+    return engine
+
+
+def _queue(engine, key, publication):
+    return queue_publication(
+        engine,
+        publication_key=key,
+        lifecycle_event=publication.lifecycle_event,
+        authorization=publication.authorization,
+        escrow=publication.escrow,
+    )
+
+
+def test_outbox_queues_authoritative_facts_once(tmp_path):
+    engine = _engine(tmp_path, "outbox.db")
     publication = _publication()
 
-    assert queue_publication(
-        engine,
-        publication_key="AUTH-WIRING",
-        lifecycle_event=publication.lifecycle_event,
-        authorization=publication.authorization,
-        escrow=publication.escrow,
-    ) is True
-    assert queue_publication(
-        engine,
-        publication_key="AUTH-WIRING",
-        lifecycle_event=publication.lifecycle_event,
-        authorization=publication.authorization,
-        escrow=publication.escrow,
-    ) is False
+    assert _queue(engine, "AUTH-WIRING", publication) is True
+    assert _queue(engine, "AUTH-WIRING", publication) is False
 
     with engine.connect() as connection:
         rows = connection.execute(select(SHUUDPublicationOutbox)).fetchall()
@@ -47,16 +50,9 @@ def test_outbox_queues_authoritative_facts_once(tmp_path):
 
 
 def test_pending_publication_becomes_durable_and_published(tmp_path):
-    engine = create_engine(f"sqlite:///{tmp_path / 'publish.db'}", future=True)
-    initialize_schema(engine)
+    engine = _engine(tmp_path, "publish.db")
     publication = _publication()
-    queue_publication(
-        engine,
-        publication_key="AUTH-PUBLISH",
-        lifecycle_event=publication.lifecycle_event,
-        authorization=publication.authorization,
-        escrow=publication.escrow,
-    )
+    _queue(engine, "AUTH-PUBLISH", publication)
 
     assert publish_pending(engine) == 1
 
@@ -70,16 +66,9 @@ def test_pending_publication_becomes_durable_and_published(tmp_path):
 
 
 def test_retry_after_settlement_commit_does_not_duplicate_records(tmp_path):
-    engine = create_engine(f"sqlite:///{tmp_path / 'retry.db'}", future=True)
-    initialize_schema(engine)
+    engine = _engine(tmp_path, "retry.db")
     publication = _publication()
-    queue_publication(
-        engine,
-        publication_key="AUTH-RETRY",
-        lifecycle_event=publication.lifecycle_event,
-        authorization=publication.authorization,
-        escrow=publication.escrow,
-    )
+    _queue(engine, "AUTH-RETRY", publication)
 
     # Simulate a worker crash after the settlement transaction committed but
     # before the outbox acknowledgement was written.
@@ -100,3 +89,61 @@ def test_retry_after_settlement_commit_does_not_duplicate_records(tmp_path):
         assert len(connection.execute(select(SHUUDLifecycleEvent)).fetchall()) == 1
         assert len(connection.execute(select(SHUUDReleaseAuthorizationRecord)).fetchall()) == 1
         assert len(connection.execute(select(SHUUDEscrowRecord)).fetchall()) == 1
+
+
+def test_conflicting_durable_settlement_fails_closed(tmp_path):
+    engine = _engine(tmp_path, "conflict.db")
+    publication = _publication()
+    _queue(engine, "AUTH-CONFLICT", publication)
+
+    # Occupy the same incident/escrow identity with different authoritative
+    # facts. The outbox must not overwrite or reinterpret an existing record.
+    from shuud.persistence import atomic_settlement
+
+    conflicting = {
+        "lifecycle_event": dict(publication.lifecycle_event),
+        "authorization": dict(publication.authorization),
+        "escrow": dict(publication.escrow),
+    }
+    conflicting["authorization"]["authorization_hash"] = "DIFFERENT-AUTH"
+    atomic_settlement(engine, **conflicting)
+
+    assert publish_pending(engine) == 0
+
+    with engine.connect() as connection:
+        outbox = connection.execute(select(SHUUDPublicationOutbox)).fetchall()
+        assert outbox[0].status == "FAILED"
+        assert "conflicting" in outbox[0].last_error
+
+
+def test_failed_publication_remains_retryable_on_transient_error(tmp_path, monkeypatch):
+    engine = _engine(tmp_path, "transient.db")
+    publication = _publication()
+    _queue(engine, "AUTH-TRANSIENT", publication)
+
+    import shuud.publication_outbox as outbox_module
+
+    original = outbox_module.atomic_settlement
+    calls = {"count": 0}
+
+    def fail_once(*args, **kwargs):
+        calls["count"] += 1
+        if calls["count"] == 1:
+            raise RuntimeError("database temporarily unavailable")
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(outbox_module, "atomic_settlement", fail_once)
+
+    assert publish_pending(engine) == 0
+    with engine.connect() as connection:
+        row = connection.execute(select(SHUUDPublicationOutbox)).fetchone()
+        assert row.status == "PENDING"
+        assert row.attempts == 1
+        assert "temporarily unavailable" in row.last_error
+
+    assert publish_pending(engine) == 1
+    with engine.connect() as connection:
+        row = connection.execute(select(SHUUDPublicationOutbox)).fetchone()
+        assert row.status == "PUBLISHED"
+        assert row.attempts == 2
+        assert row.last_error is None
