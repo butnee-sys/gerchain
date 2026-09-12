@@ -7,6 +7,7 @@ persistence while preserving the same domain invariants.
 """
 
 from datetime import datetime, timezone
+from threading import Lock
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
@@ -36,6 +37,11 @@ _DECISIONS: dict[str, SHIIDDecision] = {}
 _AUTHORIZATIONS: dict[str, ReleaseAuthorization] = {}
 _WITNESSES: dict[str, WitnessChain] = {}
 _ESCROWS: dict[str, EscrowEngine] = {}
+
+# The sandbox registry is process-local. This lock makes the check/create/store
+# operation atomic for concurrent requests in the same process. Production must
+# replace this with a database transaction plus a UNIQUE constraint on escrow_id.
+_ESCROW_REGISTRY_LOCK = Lock()
 
 
 class IncidentRequest(BaseModel):
@@ -220,27 +226,36 @@ def create_shuud_escrow(payload: EscrowRequest):
         raise HTTPException(status_code=409, detail="ESCROW_AMOUNT_REFERENCE_INVALID")
     if payload.amount_nef != decision.damage_estimate_nef:
         raise HTTPException(status_code=409, detail="ESCROW_AMOUNT_MISMATCH")
-    if payload.escrow_id in _ESCROWS:
-        raise HTTPException(status_code=409, detail="ESCROW_ALREADY_EXISTS")
+    if not payload.escrow_id.strip():
+        raise HTTPException(status_code=422, detail="ESCROW_ID_REQUIRED")
 
     witness = _get_witness(payload.incident_id)
-    escrow = EscrowEngine(
-        escrow_id=payload.escrow_id,
-        amount=payload.amount_nef,
-        currency="NEF",
-        witness_chain=witness,
-    )
-    escrow.transition(
-        "FUNDED",
-        datetime.now(timezone.utc).isoformat(),
-        {"incident_id": payload.incident_id, "source": "SHUUD_SANDBOX"},
-    )
-    escrow.transition(
-        "LOCKED",
-        datetime.now(timezone.utc).isoformat(),
-        {"incident_id": payload.incident_id, "source": "SHUUD_SANDBOX"},
-    )
-    _ESCROWS[payload.escrow_id] = escrow
+
+    # Critical section: the sandbox must not create two authoritative escrow
+    # objects for the same escrow_id. The entire check -> construct -> initial
+    # state transitions -> registry insert is serialized in this process.
+    with _ESCROW_REGISTRY_LOCK:
+        if payload.escrow_id in _ESCROWS:
+            raise HTTPException(status_code=409, detail="ESCROW_ALREADY_EXISTS")
+
+        escrow = EscrowEngine(
+            escrow_id=payload.escrow_id,
+            amount=payload.amount_nef,
+            currency="NEF",
+            witness_chain=witness,
+        )
+        escrow.transition(
+            "FUNDED",
+            datetime.now(timezone.utc).isoformat(),
+            {"incident_id": payload.incident_id, "source": "SHUUD_SANDBOX"},
+        )
+        escrow.transition(
+            "LOCKED",
+            datetime.now(timezone.utc).isoformat(),
+            {"incident_id": payload.incident_id, "source": "SHUUD_SANDBOX"},
+        )
+        _ESCROWS[payload.escrow_id] = escrow
+
     return {
         "status": "success",
         "incident_id": payload.incident_id,
