@@ -4,6 +4,7 @@ from datetime import datetime, timedelta, timezone
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from pytest import approx
 
 from shuud.api import _PERSISTENCE, router
 
@@ -54,7 +55,7 @@ def _allow_decision(client: TestClient, incident_id: str) -> None:
 
 def test_measurement_summary_api_exposes_timing_and_economics() -> None:
     client = _client()
-    occurred_at = datetime.now(timezone.utc) - timedelta(seconds=600)
+    occurred_at = datetime.now(timezone.utc) - timedelta(seconds=110)
     incident_response = client.post(
         "/api/v1/shuud/incidents",
         json={
@@ -69,7 +70,12 @@ def test_measurement_summary_api_exposes_timing_and_economics() -> None:
 
     _allow_decision(client, incident_id)
 
-    clearance = occurred_at + timedelta(seconds=110)
+    clearance_time = datetime.now(timezone.utc)
+    clearance_response = client.post(
+        "/api/v1/shuud/metrics/clearance",
+        json={"incident_id": incident_id, "clearance_time": clearance_time.isoformat()},
+    )
+    assert clearance_response.status_code == 200
 
     escrow_response = client.post(
         "/api/v1/shuud/escrows",
@@ -91,17 +97,6 @@ def test_measurement_summary_api_exposes_timing_and_economics() -> None:
     assert release_response.json()["previous_state"] == "LOCKED"
     assert release_response.json()["new_state"] == "RELEASED"
 
-    # The release endpoint records the real release time. The sandbox test
-    # separately records the deterministic observed clearance time that is
-    # exactly 110 seconds after the incident occurrence.
-    snapshot = _PERSISTENCE.load_snapshot(incident_id)
-    assert snapshot is not None
-    updated = dict(snapshot)
-    operational_timing = dict(updated["operational_timing"])
-    operational_timing["clearance_confirmed_at"] = clearance.isoformat()
-    updated["operational_timing"] = operational_timing
-    assert _PERSISTENCE.save_snapshot_if_current(incident_id, snapshot, updated)
-
     response = client.post(
         f"/api/v1/shuud/metrics/{incident_id}/summary",
         json={
@@ -114,14 +109,20 @@ def test_measurement_summary_api_exposes_timing_and_economics() -> None:
     )
     assert response.status_code == 200
     data = response.json()
-    assert data["actual_clearance_seconds"] == 110.0
-    assert data["actual_settlement_seconds"] >= 110.0
+
+    actual_clearance = data["actual_clearance_seconds"]
+    assert 110.0 <= actual_clearance < 120.0
+    assert data["actual_settlement_seconds"] >= actual_clearance
     assert data["within_two_minutes"] is True
-    assert data["economic_impact"]["time_saved_seconds"] == 190.0
-    assert data["economic_impact"]["vehicle_user_savings_mnt"] == 9500.0
-    assert data["economic_impact"]["insurer_savings_mnt"] == 1583.3333333333333
-    assert data["economic_impact"]["public_road_savings_mnt"] == 791.6666666666666
-    assert data["economic_impact"]["total_savings_mnt"] == 11875.0
+
+    saved_seconds = 300.0 - actual_clearance
+    saved_minutes = saved_seconds / 60.0
+    economic = data["economic_impact"]
+    assert economic["time_saved_seconds"] == approx(saved_seconds)
+    assert economic["vehicle_user_savings_mnt"] == approx(saved_minutes * 3 * 1000)
+    assert economic["insurer_savings_mnt"] == approx(saved_minutes * 500)
+    assert economic["public_road_savings_mnt"] == approx(saved_minutes * 250)
+    assert economic["total_savings_mnt"] == approx(saved_minutes * (3 * 1000 + 500 + 250))
 
 
 def test_measurement_summary_api_supports_timing_only() -> None:
