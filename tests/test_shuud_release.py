@@ -11,7 +11,7 @@ from shuud.verify import verify_incident
 from witness.chain import WitnessChain
 
 
-def approved_decision():
+def approved_decision(amount=1_500_000):
     incident = create_incident(
         "Ulaanbaatar",
         vehicle_a="1234ABC",
@@ -26,7 +26,7 @@ def approved_decision():
         media_complete=GateStatus.PASS,
         no_injury=GateStatus.PASS,
         no_third_party_property_damage=GateStatus.PASS,
-        damage_estimate_nef=1_500_000,
+        damage_estimate_nef=amount,
         dispute_present=GateStatus.PASS,
         fraud_flag=GateStatus.PASS,
         insurance_valid=GateStatus.PASS,
@@ -36,7 +36,7 @@ def approved_decision():
     return decide(incident, verification, policy=policy)
 
 
-def make_locked_escrow():
+def make_locked_escrow(amount=1_500_000):
     witness = WitnessChain(
         initial_state={"value": 0},
         manifest={"purpose": "SHUUD sandbox"},
@@ -44,7 +44,7 @@ def make_locked_escrow():
     )
     escrow = EscrowEngine(
         escrow_id="SHUUD-ESCROW-001",
-        amount=1_500_000,
+        amount=amount,
         currency="NEF",
         witness_chain=witness,
     )
@@ -61,6 +61,29 @@ def test_release_requires_approved_shiid_decision():
     assert decision.decision is Decision.HUMAN_REVIEW
     with pytest.raises(ValueError):
         authorize_release(decision, escrow_id="SHUUD-ESCROW-001")
+
+
+def test_release_authorization_binds_approved_amount():
+    decision = approved_decision(1_500_000)
+    authorization = authorize_release(
+        decision,
+        escrow_id="SHUUD-ESCROW-001",
+    )
+
+    assert authorization.damage_estimate_nef == 1_500_000
+    assert authorization.authorization_hash
+
+
+def test_release_rejects_amount_mismatch():
+    decision = approved_decision(1_500_000)
+    authorization = authorize_release(
+        decision,
+        escrow_id="SHUUD-ESCROW-001",
+    )
+    escrow = make_locked_escrow(1_600_000)
+
+    with pytest.raises(ValueError, match="authorization amount does not belong to escrow"):
+        release_escrow(escrow, authorization)
 
 
 def test_release_bridge_delegates_locked_to_released():

@@ -7,6 +7,8 @@ persistence while preserving the same domain invariants.
 """
 
 from datetime import datetime, timezone
+import os
+from threading import Lock
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
@@ -28,6 +30,29 @@ from witness.chain import WitnessChain
 
 router = APIRouter(prefix="/api/v1/shuud", tags=["SHUUD"])
 
+# Runtime boundary: the in-memory registry is explicitly sandbox-only.
+# The durable production persistence adapter is not yet wired into this API.
+# Therefore production startup fails closed rather than silently running a
+# process-local settlement registry that cannot coordinate multiple workers.
+SHUUD_RUNTIME_MODE = os.getenv("SHUUD_RUNTIME_MODE", "sandbox").strip().lower()
+SHUUD_PERSISTENCE_BACKEND = os.getenv("SHUUD_PERSISTENCE_BACKEND", "memory").strip().lower()
+
+if SHUUD_RUNTIME_MODE not in {"sandbox", "production"}:
+    raise RuntimeError(f"unsupported SHUUD_RUNTIME_MODE: {SHUUD_RUNTIME_MODE!r}")
+if SHUUD_PERSISTENCE_BACKEND not in {"memory", "sqlalchemy"}:
+    raise RuntimeError(
+        f"unsupported SHUUD_PERSISTENCE_BACKEND: {SHUUD_PERSISTENCE_BACKEND!r}"
+    )
+if SHUUD_RUNTIME_MODE == "production":
+    raise RuntimeError(
+        "SHUUD production runtime is disabled until the durable persistence "
+        "adapter is wired; process-local registries are sandbox-only"
+    )
+if SHUUD_RUNTIME_MODE == "sandbox" and SHUUD_PERSISTENCE_BACKEND != "memory":
+    raise RuntimeError(
+        "sandbox runtime requires SHUUD_PERSISTENCE_BACKEND='memory'"
+    )
+
 # Sandbox-only lifecycle registries. These make ownership explicit while the
 # production persistence layer is still being designed.
 _INCIDENTS: dict[str, Incident] = {}
@@ -36,6 +61,15 @@ _DECISIONS: dict[str, SHIIDDecision] = {}
 _AUTHORIZATIONS: dict[str, ReleaseAuthorization] = {}
 _WITNESSES: dict[str, WitnessChain] = {}
 _ESCROWS: dict[str, EscrowEngine] = {}
+
+# Sandbox registry critical sections. Each lock covers check -> authoritative
+# WitnessChain append -> registry store for one lifecycle resource. Production
+# must replace these process-local locks with database transactions and UNIQUE
+# constraints / row-level locking so the invariant survives multiple processes.
+_EVIDENCE_REGISTRY_LOCK = Lock()
+_DECISION_REGISTRY_LOCK = Lock()
+_AUTHORIZATION_REGISTRY_LOCK = Lock()
+_ESCROW_REGISTRY_LOCK = Lock()
 
 
 class IncidentRequest(BaseModel):
@@ -137,22 +171,26 @@ def create_shuud_incident(payload: IncidentRequest):
 @router.post("/evidence", response_model=dict)
 def lock_shuud_evidence(payload: EvidenceRequest):
     _get_incident(payload.incident_id)
-    witness = _get_witness(payload.incident_id)
-    envelope = create_evidence_envelope(
-        payload.incident_id,
-        evidence_refs=payload.evidence_refs,
-        gps_coordinates=payload.gps_coordinates,
-        captured_at=payload.captured_at,
-        vehicle_identity_refs=payload.vehicle_identity_refs,
-        consent_refs=payload.consent_refs,
-        media_complete=payload.media_complete,
-    )
-    record = record_evidence_locked(
-        witness,
-        envelope,
-        timestamp=payload.captured_at,
-    )
-    _EVIDENCE[payload.incident_id] = envelope
+    with _EVIDENCE_REGISTRY_LOCK:
+        if payload.incident_id in _EVIDENCE:
+            raise HTTPException(status_code=409, detail="EVIDENCE_ALREADY_LOCKED")
+        witness = _get_witness(payload.incident_id)
+        envelope = create_evidence_envelope(
+            payload.incident_id,
+            evidence_refs=payload.evidence_refs,
+            gps_coordinates=payload.gps_coordinates,
+            captured_at=payload.captured_at,
+            vehicle_identity_refs=payload.vehicle_identity_refs,
+            consent_refs=payload.consent_refs,
+            media_complete=payload.media_complete,
+        )
+        record = record_evidence_locked(
+            witness,
+            envelope,
+            timestamp=payload.captured_at,
+        )
+        _EVIDENCE[payload.incident_id] = envelope
+
     return {
         "status": "success",
         "incident_id": envelope.incident_id,
@@ -166,34 +204,38 @@ def lock_shuud_evidence(payload: EvidenceRequest):
 def make_shiid_decision(payload: DecisionRequest):
     incident = _get_incident(payload.incident_id)
     evidence = _get_evidence(payload.incident_id)
-    witness = _get_witness(payload.incident_id)
+    with _DECISION_REGISTRY_LOCK:
+        if payload.incident_id in _DECISIONS:
+            raise HTTPException(status_code=409, detail="DECISION_ALREADY_EXISTS")
+        witness = _get_witness(payload.incident_id)
 
-    requested_refs = tuple(str(value).strip() for value in payload.evidence_refs)
-    if requested_refs != evidence.evidence_refs:
-        raise HTTPException(status_code=409, detail="EVIDENCE_REFERENCE_MISMATCH")
+        requested_refs = tuple(str(value).strip() for value in payload.evidence_refs)
+        if requested_refs != evidence.evidence_refs:
+            raise HTTPException(status_code=409, detail="EVIDENCE_REFERENCE_MISMATCH")
 
-    verification = verify_incident(incident, evidence.evidence_refs)
-    policy = PolicyInput(
-        two_party_consent=payload.two_party_consent,
-        vehicle_identity_verified=payload.vehicle_identity_verified,
-        timestamp_location_verified=payload.timestamp_location_verified,
-        media_complete=payload.media_complete,
-        no_injury=payload.no_injury,
-        no_third_party_property_damage=payload.no_third_party_property_damage,
-        damage_estimate_nef=payload.damage_estimate_nef,
-        dispute_present=payload.dispute_present,
-        fraud_flag=payload.fraud_flag,
-        insurance_valid=payload.insurance_valid,
-        beneficiary_valid=payload.beneficiary_valid,
-        witness_verified=payload.witness_verified,
-    )
-    decision = decide(incident, verification, policy=policy)
-    record_shiid_decision(
-        witness,
-        decision,
-        timestamp=datetime.now(timezone.utc).isoformat(),
-    )
-    _DECISIONS[payload.incident_id] = decision
+        verification = verify_incident(incident, evidence.evidence_refs)
+        policy = PolicyInput(
+            two_party_consent=payload.two_party_consent,
+            vehicle_identity_verified=payload.vehicle_identity_verified,
+            timestamp_location_verified=payload.timestamp_location_verified,
+            media_complete=payload.media_complete,
+            no_injury=payload.no_injury,
+            no_third_party_property_damage=payload.no_third_party_property_damage,
+            damage_estimate_nef=payload.damage_estimate_nef,
+            dispute_present=payload.dispute_present,
+            fraud_flag=payload.fraud_flag,
+            insurance_valid=payload.insurance_valid,
+            beneficiary_valid=payload.beneficiary_valid,
+            witness_verified=payload.witness_verified,
+        )
+        decision = decide(incident, verification, policy=policy)
+        record_shiid_decision(
+            witness,
+            decision,
+            timestamp=datetime.now(timezone.utc).isoformat(),
+        )
+        _DECISIONS[payload.incident_id] = decision
+
     return {
         "status": "success",
         "incident_id": decision.incident_id,
@@ -207,26 +249,41 @@ def make_shiid_decision(payload: DecisionRequest):
 @router.post("/escrows", response_model=dict)
 def create_shuud_escrow(payload: EscrowRequest):
     _get_incident(payload.incident_id)
-    if payload.escrow_id in _ESCROWS:
-        raise HTTPException(status_code=409, detail="ESCROW_ALREADY_EXISTS")
+    decision = _DECISIONS.get(payload.incident_id)
+    if decision is None:
+        raise HTTPException(status_code=404, detail="DECISION_NOT_FOUND")
+    if decision.decision is not Decision.APPROVE:
+        raise HTTPException(status_code=409, detail="ESCROW_NOT_AUTHORIZED")
+    if decision.damage_estimate_nef is None:
+        raise HTTPException(status_code=409, detail="ESCROW_AMOUNT_REFERENCE_INVALID")
+    if payload.amount_nef != decision.damage_estimate_nef:
+        raise HTTPException(status_code=409, detail="ESCROW_AMOUNT_MISMATCH")
+    if not payload.escrow_id.strip():
+        raise HTTPException(status_code=422, detail="ESCROW_ID_REQUIRED")
+
     witness = _get_witness(payload.incident_id)
-    escrow = EscrowEngine(
-        escrow_id=payload.escrow_id,
-        amount=payload.amount_nef,
-        currency="NEF",
-        witness_chain=witness,
-    )
-    escrow.transition(
-        "FUNDED",
-        datetime.now(timezone.utc).isoformat(),
-        {"incident_id": payload.incident_id, "source": "SHUUD_SANDBOX"},
-    )
-    escrow.transition(
-        "LOCKED",
-        datetime.now(timezone.utc).isoformat(),
-        {"incident_id": payload.incident_id, "source": "SHUUD_SANDBOX"},
-    )
-    _ESCROWS[payload.escrow_id] = escrow
+    with _ESCROW_REGISTRY_LOCK:
+        if payload.escrow_id in _ESCROWS:
+            raise HTTPException(status_code=409, detail="ESCROW_ALREADY_EXISTS")
+
+        escrow = EscrowEngine(
+            escrow_id=payload.escrow_id,
+            amount=payload.amount_nef,
+            currency="NEF",
+            witness_chain=witness,
+        )
+        escrow.transition(
+            "FUNDED",
+            datetime.now(timezone.utc).isoformat(),
+            {"incident_id": payload.incident_id, "source": "SHUUD_SANDBOX"},
+        )
+        escrow.transition(
+            "LOCKED",
+            datetime.now(timezone.utc).isoformat(),
+            {"incident_id": payload.incident_id, "source": "SHUUD_SANDBOX"},
+        )
+        _ESCROWS[payload.escrow_id] = escrow
+
     return {
         "status": "success",
         "incident_id": payload.incident_id,
@@ -249,18 +306,29 @@ def release_shuud_escrow(payload: ReleaseRequest):
     if escrow is None:
         raise HTTPException(status_code=404, detail="ESCROW_NOT_FOUND")
 
-    authorization = _AUTHORIZATIONS.get(payload.incident_id)
-    if authorization is None:
-        authorization = authorize_release(
-            decision,
-            escrow_id=payload.escrow_id,
-        )
-        record_release_authorized(
-            witness,
-            authorization,
-            timestamp=datetime.now(timezone.utc).isoformat(),
-        )
-        _AUTHORIZATIONS[payload.incident_id] = authorization
+    # Authorization is immutable application evidence. Serialize only its
+    # creation/registry publication here; actual LOCKED -> RELEASED remains
+    # exclusively owned by release_escrow() and its own release lock. Keeping
+    # these locks separate avoids nested acquisition of the same primitive Lock.
+    with _AUTHORIZATION_REGISTRY_LOCK:
+        authorization = _AUTHORIZATIONS.get(payload.incident_id)
+        if authorization is not None and authorization.escrow_id != payload.escrow_id:
+            raise HTTPException(status_code=409, detail="ESCROW_ID_MISMATCH")
+
+        if authorization is None:
+            authorization = authorize_release(
+                decision,
+                escrow_id=payload.escrow_id,
+            )
+            record_release_authorized(
+                witness,
+                authorization,
+                timestamp=datetime.now(timezone.utc).isoformat(),
+            )
+            _AUTHORIZATIONS[payload.incident_id] = authorization
+
+    if escrow.get_state()["state"] != "LOCKED":
+        raise HTTPException(status_code=409, detail="ESCROW_NOT_LOCKED")
 
     record = release_escrow(
         escrow,

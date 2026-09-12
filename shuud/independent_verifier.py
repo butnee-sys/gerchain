@@ -6,8 +6,9 @@ verification and adds only SHUUD domain invariants required before release.
 """
 
 from dataclasses import dataclass
-from typing import Any, Dict, Iterable
+from typing import Any, Dict
 
+from core.hashing import domain_hash
 from verifier.independent_verifier import IndependentVerifier
 
 
@@ -34,13 +35,39 @@ class SHUUDIndependentVerifier:
         entries = bundle.get("entries", [])
         shuud_entries = []
         incident_ids: set[str] = set()
+        decision_incident_ids: list[str] = []
         escrow_ids: set[str] = set()
         decision_values: list[str] = []
+        decision_damage_estimates: list[float | int | None] = []
+        decision_rule_versions: list[str] = []
+        decision_reasons: list[tuple[str, ...]] = []
+        release_authorizations: list[dict[str, Any]] = []
         event_types: list[str] = []
+        ordered_milestones: list[str] = []
+        timestamps: list[str] = []
+
+        manifest = bundle.get("manifest", {})
+        manifest_incident_id = manifest.get("incident_id")
+        if not isinstance(manifest_incident_id, str) or not manifest_incident_id.strip():
+            reasons.append("MANIFEST_INCIDENT_ID_MISSING")
+            canonical_incident_id = None
+        else:
+            canonical_incident_id = manifest_incident_id
 
         for entry in entries:
             record = entry.get("record", {})
             payload = entry.get("event_payload", {})
+            record_event_type = record.get("event_type")
+            payload_event_type = payload.get("event_type")
+            timestamp = record.get("timestamp")
+            if isinstance(timestamp, str):
+                timestamps.append(timestamp)
+
+            if record_event_type == "ESCROW_TRANSITION":
+                transition_state = payload.get("new_state")
+                if transition_state in {"FUNDED", "LOCKED", "RELEASED"}:
+                    ordered_milestones.append(f"ESCROW_{transition_state}")
+
             if payload.get("domain") != "SHUUD":
                 continue
 
@@ -50,29 +77,67 @@ class SHUUDIndependentVerifier:
                 continue
 
             incident_ids.add(incident_id)
-            event_type = payload.get("event_type")
+            event_type = payload_event_type
             event_types.append(event_type)
             shuud_entries.append(entry)
+
+            if event_type in {
+                "SHUUD_EVIDENCE_LOCKED",
+                "SHIID_DECISION",
+                "SHUUD_RELEASE_AUTHORIZED",
+            }:
+                ordered_milestones.append(event_type)
+
+            if canonical_incident_id is not None and incident_id != canonical_incident_id:
+                reasons.append("INCIDENT_ID_MISMATCH")
 
             inner = payload.get("payload", {})
             if event_type == "SHIID_DECISION":
                 decision_values.append(inner.get("decision"))
+                decision_damage_estimates.append(inner.get("damage_estimate_nef"))
+                decision_rule_versions.append(inner.get("rule_version"))
+                decision_reasons.append(tuple(inner.get("reasons", ())))
+                decision_incident_ids.append(incident_id)
+
             if event_type == "SHUUD_RELEASE_AUTHORIZED":
+                release_authorizations.append({
+                    "incident_id": incident_id,
+                    "escrow_id": inner.get("escrow_id"),
+                    "rule_version": inner.get("rule_version"),
+                    "authorization_hash": inner.get("authorization_hash"),
+                })
                 escrow_id = inner.get("escrow_id")
                 if isinstance(escrow_id, str) and escrow_id:
                     escrow_ids.add(escrow_id)
                 else:
                     reasons.append("ESCROW_ID_MISSING")
 
-            if record.get("event_type") != event_type:
+            if record_event_type != event_type:
                 reasons.append("EVENT_TYPE_MISMATCH")
 
         if not shuud_entries:
             reasons.append("NO_SHUUD_EVENTS")
-            return SHUUDVerificationResult(False, tuple(reasons))
+            return SHUUDVerificationResult(False, tuple(dict.fromkeys(reasons)))
 
         if len(incident_ids) != 1:
             reasons.append("MULTIPLE_OR_MISSING_INCIDENT_IDS")
+
+        if len(decision_incident_ids) != 1 or (
+            canonical_incident_id is not None
+            and decision_incident_ids[0] != canonical_incident_id
+        ):
+            reasons.append("INCIDENT_ID_MISMATCH")
+
+        milestone_counts = {
+            event_type: event_types.count(event_type)
+            for event_type in (
+                "SHUUD_EVIDENCE_LOCKED",
+                "SHIID_DECISION",
+                "SHUUD_RELEASE_AUTHORIZED",
+            )
+        }
+        if not all(count == 1 for count in milestone_counts.values()):
+            reasons.append("SHUUD_LIFECYCLE_DUPLICATE_OR_MISSING")
 
         required = {
             "SHUUD_EVIDENCE_LOCKED",
@@ -88,8 +153,6 @@ class SHUUDIndependentVerifier:
         if len(escrow_ids) != 1:
             reasons.append("ESCROW_REFERENCE_INVALID")
 
-        # Release must be the final escrow transition represented by the
-        # witness bundle. SHUUD itself never authorizes money movement.
         escrow_events = [
             e for e in entries
             if e.get("record", {}).get("event_type") == "ESCROW_TRANSITION"
@@ -97,16 +160,109 @@ class SHUUDIndependentVerifier:
         if not escrow_events:
             reasons.append("NO_ESCROW_TRANSITIONS")
         else:
+            expected_path = [
+                ("CREATED", "FUNDED"),
+                ("FUNDED", "LOCKED"),
+                ("LOCKED", "RELEASED"),
+            ]
+            actual_path = []
+            escrow_transition_ids: set[str] = set()
+            escrow_amounts: set[float | int] = set()
+            escrow_currencies: set[str] = set()
+            escrow_sequences: list[Any] = []
+            for entry in escrow_events:
+                payload = entry.get("event_payload", {})
+                actual_path.append(
+                    (payload.get("previous_state"), payload.get("new_state"))
+                )
+                escrow_id = payload.get("escrow_id")
+                if isinstance(escrow_id, str) and escrow_id:
+                    escrow_transition_ids.add(escrow_id)
+                amount = payload.get("amount")
+                if isinstance(amount, (int, float)) and not isinstance(amount, bool):
+                    escrow_amounts.add(amount)
+                currency = payload.get("currency")
+                if isinstance(currency, str) and currency:
+                    escrow_currencies.add(currency)
+                escrow_sequences.append(payload.get("sequence"))
+
+            if actual_path != expected_path:
+                reasons.append("ESCROW_LIFECYCLE_INVALID")
+
+            if len(escrow_transition_ids) != 1 or escrow_transition_ids != escrow_ids:
+                reasons.append("ESCROW_ID_MISMATCH")
+
+            if escrow_currencies != {"NEF"}:
+                reasons.append("ESCROW_CURRENCY_INVALID")
+
+            if escrow_sequences != [1, 2, 3]:
+                reasons.append("ESCROW_SEQUENCE_INVALID")
+
+            expected_order = [
+                "SHUUD_EVIDENCE_LOCKED",
+                "SHIID_DECISION",
+                "SHUUD_RELEASE_AUTHORIZED",
+                "ESCROW_FUNDED",
+                "ESCROW_LOCKED",
+                "ESCROW_RELEASED",
+            ]
+            milestone_positions = []
+            for milestone in expected_order:
+                try:
+                    milestone_positions.append(ordered_milestones.index(milestone))
+                except ValueError:
+                    milestone_positions.append(None)
+
+            if (
+                any(position is None for position in milestone_positions)
+                or milestone_positions != sorted(milestone_positions)
+                or len(set(milestone_positions)) != len(milestone_positions)
+            ):
+                reasons.append("SHUUD_LIFECYCLE_ORDER_INVALID")
+
+            if len(timestamps) != len(entries):
+                reasons.append("TIMESTAMP_MISSING")
+            elif timestamps != sorted(timestamps):
+                reasons.append("TIMESTAMP_ORDER_INVALID")
+
+            decision_amount = (
+                decision_damage_estimates[0]
+                if len(decision_damage_estimates) == 1
+                else None
+            )
+            if (
+                len(decision_damage_estimates) != 1
+                or isinstance(decision_amount, bool)
+                or not isinstance(decision_amount, (int, float))
+                or len(escrow_amounts) != 1
+            ):
+                reasons.append("ESCROW_AMOUNT_REFERENCE_INVALID")
+            elif decision_amount != next(iter(escrow_amounts)):
+                reasons.append("ESCROW_AMOUNT_MISMATCH")
+
+            if len(release_authorizations) == 1 and len(decision_values) == 1 and decision_values[0] == "APPROVE":
+                auth = release_authorizations[0]
+                expected_auth_payload = {
+                    "incident_id": canonical_incident_id,
+                    "escrow_id": auth.get("escrow_id"),
+                    "rule_version": decision_rule_versions[0] if decision_rule_versions else None,
+                    "decision": decision_values[0],
+                    "reasons": list(decision_reasons[0]) if decision_reasons else [],
+                    "damage_estimate_nef": decision_damage_estimates[0] if decision_damage_estimates else None,
+                }
+                expected_hash = domain_hash("SHUUD_RELEASE_AUTH", expected_auth_payload)
+                if auth.get("authorization_hash") != expected_hash:
+                    reasons.append("RELEASE_AUTHORIZATION_HASH_INVALID")
+
             final_payload = escrow_events[-1].get("event_payload", {})
-            target_state = final_payload.get("target_state")
-            if target_state != "RELEASED":
+            if final_payload.get("new_state") != "RELEASED":
                 reasons.append("ESCROW_NOT_RELEASED")
 
-        incident_id = next(iter(incident_ids), None)
+        incident_id = canonical_incident_id if canonical_incident_id is not None else None
         escrow_id = next(iter(escrow_ids), None)
         return SHUUDVerificationResult(
             verified=not reasons,
-            reasons=tuple(reasons),
+            reasons=tuple(dict.fromkeys(reasons)),
             incident_id=incident_id,
             escrow_id=escrow_id,
         )

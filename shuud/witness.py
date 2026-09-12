@@ -5,12 +5,16 @@ application milestones through the existing append_event contract, while
 marking every application payload with an explicit SHUUD domain.
 """
 
+from threading import Lock
+
 from witness.chain import WitnessChain
 
 from .domain import canonical_shuud_payload
 from .evidence import EvidenceEnvelope
 from .shiid import SHIIDDecision
 from .release import ReleaseAuthorization
+
+_RELEASE_AUTH_WITNESS_LOCK = Lock()
 
 
 def _append_shuud_event(
@@ -55,25 +59,37 @@ def record_shiid_decision(witness: WitnessChain, decision: SHIIDDecision, *, tim
             "decision": decision.decision.value,
             "rule_version": decision.rule_version,
             "reasons": list(decision.reasons),
+            "damage_estimate_nef": decision.damage_estimate_nef,
         },
-        evidence={"decision": decision.decision.value, "rule_version": decision.rule_version},
+        evidence={
+            "decision": decision.decision.value,
+            "rule_version": decision.rule_version,
+            "damage_estimate_nef": decision.damage_estimate_nef,
+        },
     )
 
 
 def record_release_authorized(witness: WitnessChain, authorization: ReleaseAuthorization, *, timestamp: str):
-    return _append_shuud_event(
-        witness,
-        event_id=f"{authorization.incident_id}-RELEASE-AUTHORIZED",
-        event_type="SHUUD_RELEASE_AUTHORIZED",
-        incident_id=authorization.incident_id,
-        timestamp=timestamp,
-        payload={
-            "escrow_id": authorization.escrow_id,
-            "rule_version": authorization.rule_version,
-            "authorization_hash": authorization.authorization_hash,
-        },
-        evidence={"authorization_hash": authorization.authorization_hash},
-    )
+    """Record one release authorization event; concurrent replays are idempotent."""
+    event_id = f"{authorization.incident_id}-RELEASE-AUTHORIZED"
+    with _RELEASE_AUTH_WITNESS_LOCK:
+        for entry in witness.entries:
+            if getattr(entry.record, "event_id", None) == event_id:
+                return entry
+
+        return _append_shuud_event(
+            witness,
+            event_id=event_id,
+            event_type="SHUUD_RELEASE_AUTHORIZED",
+            incident_id=authorization.incident_id,
+            timestamp=timestamp,
+            payload={
+                "escrow_id": authorization.escrow_id,
+                "rule_version": authorization.rule_version,
+                "authorization_hash": authorization.authorization_hash,
+            },
+            evidence={"authorization_hash": authorization.authorization_hash},
+        )
 
 
 __all__ = ["record_evidence_locked", "record_shiid_decision", "record_release_authorized"]
