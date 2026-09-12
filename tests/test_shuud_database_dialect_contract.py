@@ -31,6 +31,6 @@ def test_production_database_url_must_be_explicit(monkeypatch):
     try:
         create_production_persistence()
     except ProductionConfigurationError as exc:
-        assert "database URL" in str(exc)
+        assert "SHUUD_DATABASE_URL" in str(exc)
     else:
         raise AssertionError("production persistence must require an explicit database URL")
