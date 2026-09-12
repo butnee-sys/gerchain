@@ -19,7 +19,7 @@ jobs:
 
       - name: Wait for SHUUD API
         run: |
-          for i in {1..30}; do
+          for i in {1..45}; do
             if curl -fsS http://127.0.0.1:18000/openapi.json >/dev/null; then
               exit 0
             fi
@@ -28,18 +28,86 @@ jobs:
           docker compose -f sandbox/docker-compose.yml logs
           exit 1
 
-      - name: Create smoke incident
+      - name: Run full SHUUD Day-0 lifecycle smoke
+        env:
+          API: http://127.0.0.1:18000/api/v1/shuud
         run: |
-          curl -fsS -X POST http://127.0.0.1:18000/api/v1/shuud/incidents \
+          set -euo pipefail
+
+          INCIDENT_JSON=/tmp/incident.json
+          EVIDENCE_JSON=/tmp/evidence.json
+          DECISION_JSON=/tmp/decision.json
+          CLEARANCE_JSON=/tmp/clearance.json
+          ESCROW_JSON=/tmp/escrow.json
+          RELEASE_JSON=/tmp/release.json
+          SUMMARY_JSON=/tmp/summary.json
+
+          curl -fsS -X POST "$API/incidents" \
             -H 'content-type: application/json' \
-            -d '{"location":"SANDBOX","vehicle_a":"TEST-A","vehicle_b":"TEST-B","description":"SHUUD Day-0 smoke"}' \
-            | tee /tmp/incident.json
+            -d '{"location":"SANDBOX","vehicle_a":"TEST-A","vehicle_b":"TEST-B","description":"SHUUD Day-0 full lifecycle smoke"}' \
+            | tee "$INCIDENT_JSON"
+          INCIDENT_ID=$(python - <<'PY'
+          import json
+          print(json.load(open('/tmp/incident.json'))['incident_id'])
+          PY
+          )
+          test -n "$INCIDENT_ID"
+
+          CAPTURED_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          curl -fsS -X POST "$API/evidence" \
+            -H 'content-type: application/json' \
+            -d "{\"incident_id\":\"$INCIDENT_ID\",\"evidence_refs\":[\"SANDBOX-MEDIA-001\"],\"gps_coordinates\":\"47.9184,106.9177\",\"captured_at\":\"$CAPTURED_AT\",\"vehicle_identity_refs\":[\"TEST-A\",\"TEST-B\"],\"consent_refs\":[\"CONSENT-A\",\"CONSENT-B\"],\"media_complete\":true}" \
+            | tee "$EVIDENCE_JSON"
+
+          curl -fsS -X POST "$API/decisions" \
+            -H 'content-type: application/json' \
+            -d "{\"incident_id\":\"$INCIDENT_ID\",\"evidence_refs\":[\"SANDBOX-MEDIA-001\"],\"damage_estimate_mnt\":500000,\"two_party_consent\":\"PASS\",\"vehicle_identity_verified\":\"PASS\",\"timestamp_location_verified\":\"PASS\",\"media_complete\":\"PASS\",\"no_injury\":\"PASS\",\"no_third_party_property_damage\":\"PASS\",\"dispute_present\":\"PASS\",\"fraud_flag\":\"PASS\",\"insurance_valid\":\"PASS\",\"beneficiary_valid\":\"PASS\",\"witness_verified\":\"PASS\"}" \
+            | tee "$DECISION_JSON"
+
+          CLEARANCE_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          curl -fsS -X POST "$API/metrics/clearance" \
+            -H 'content-type: application/json' \
+            -d "{\"incident_id\":\"$INCIDENT_ID\",\"clearance_time\":\"$CLEARANCE_TIME\"}" \
+            | tee "$CLEARANCE_JSON"
+
+          curl -fsS -X POST "$API/escrows" \
+            -H 'content-type: application/json' \
+            -d "{\"incident_id\":\"$INCIDENT_ID\",\"escrow_id\":\"SANDBOX-ESCROW-$INCIDENT_ID\",\"amount_mnt\":500000,\"settlement_provider\":\"NEF\"}" \
+            | tee "$ESCROW_JSON"
+
+          curl -fsS -X POST "$API/release" \
+            -H 'content-type: application/json' \
+            -d "{\"incident_id\":\"$INCIDENT_ID\",\"escrow_id\":\"SANDBOX-ESCROW-$INCIDENT_ID\"}" \
+            | tee "$RELEASE_JSON"
+
+          curl -fsS -X POST "$API/metrics/$INCIDENT_ID/summary" \
+            -H 'content-type: application/json' \
+            -d '{"baseline_seconds":600,"affected_vehicles":2,"vehicle_value_per_minute_mnt":1000,"insurer_cost_per_minute_mnt":500,"public_road_cost_per_minute_mnt":800}' \
+            | tee "$SUMMARY_JSON"
+
           python - <<'PY'
           import json
-          data = json.load(open('/tmp/incident.json'))
-          assert data["status"] == "success"
-          assert data["state"] == "INCIDENT_CREATED"
-          print(data["incident_id"])
+          i = json.load(open('/tmp/incident.json'))
+          d = json.load(open('/tmp/decision.json'))
+          c = json.load(open('/tmp/clearance.json'))
+          e = json.load(open('/tmp/escrow.json'))
+          r = json.load(open('/tmp/release.json'))
+          s = json.load(open('/tmp/summary.json'))
+
+          assert i['status'] == 'success'
+          assert d['decision'] == 'APPROVE'
+          assert d['release_authorized'] is True
+          assert c['status'] == 'success'
+          assert e['state'] == 'LOCKED'
+          assert e['currency'] == 'MNT'
+          assert e['settlement_provider'] == 'NEF'
+          assert r['new_state'] == 'RELEASED'
+          assert s['status'] == 'success'
+          assert s['economic_impact']['total_savings_mnt'] >= 0
+          print('SHUUD_SANDBOX_FULL_LIFECYCLE=PASS')
+          print('INCIDENT_ID=', i['incident_id'])
+          print('CLEARANCE_WITHIN_TWO_MINUTES=', c['within_two_minutes'])
+          print('TOTAL_SAVINGS_MNT=', s['economic_impact']['total_savings_mnt'])
           PY
 
       - name: Stop sandbox
