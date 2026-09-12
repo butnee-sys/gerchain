@@ -1,0 +1,46 @@
+name: SHUUD Sandbox Smoke
+
+on:
+  pull_request:
+    branches: ["main"]
+  workflow_dispatch:
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Start isolated sandbox
+        working-directory: sandbox
+        run: docker compose up -d --build
+
+      - name: Wait for SHUUD API
+        run: |
+          for i in {1..30}; do
+            if curl -fsS http://127.0.0.1:18000/openapi.json >/dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          docker compose -f sandbox/docker-compose.yml logs
+          exit 1
+
+      - name: Create smoke incident
+        run: |
+          curl -fsS -X POST http://127.0.0.1:18000/api/v1/shuud/incidents \
+            -H 'content-type: application/json' \
+            -d '{"location":"SANDBOX","vehicle_a":"TEST-A","vehicle_b":"TEST-B","description":"SHUUD Day-0 smoke"}' \
+            | tee /tmp/incident.json
+          python - <<'PY'
+          import json
+          data = json.load(open('/tmp/incident.json'))
+          assert data["status"] == "success"
+          assert data["state"] == "INCIDENT_CREATED"
+          print(data["incident_id"])
+          PY
+
+      - name: Stop sandbox
+        if: always()
+        working-directory: sandbox
+        run: docker compose down -v
