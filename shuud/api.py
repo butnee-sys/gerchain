@@ -39,10 +39,18 @@ SHUUD_PERSISTENCE_BACKEND = os.getenv("SHUUD_PERSISTENCE_BACKEND", "memory").str
 
 if SHUUD_RUNTIME_MODE not in {"sandbox", "production"}:
     raise RuntimeError(f"unsupported SHUUD_RUNTIME_MODE: {SHUUD_RUNTIME_MODE!r}")
+if SHUUD_PERSISTENCE_BACKEND not in {"memory", "sqlalchemy"}:
+    raise RuntimeError(
+        f"unsupported SHUUD_PERSISTENCE_BACKEND: {SHUUD_PERSISTENCE_BACKEND!r}"
+    )
 if SHUUD_RUNTIME_MODE == "production":
     raise RuntimeError(
         "SHUUD production runtime is disabled until the durable persistence "
         "adapter is wired; process-local registries are sandbox-only"
+    )
+if SHUUD_RUNTIME_MODE == "sandbox" and SHUUD_PERSISTENCE_BACKEND != "memory":
+    raise RuntimeError(
+        "sandbox runtime requires SHUUD_PERSISTENCE_BACKEND='memory'"
     )
 
 # Sandbox-only lifecycle registries. These make ownership explicit while the
