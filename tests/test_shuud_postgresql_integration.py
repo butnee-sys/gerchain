@@ -138,9 +138,21 @@ def test_postgresql_duplicate_settlement_rolls_back_the_second_transaction():
             )
 
         with Session(engine, expire_on_commit=False) as session:
-            assert session.scalar(select(SHUUDReleaseAuthorizationRecord)) is not None
-            assert session.scalar(select(SHUUDEscrowRecord)) is not None
-            events = session.scalars(select(SHUUDLifecycleEvent)).all()
+            assert session.scalar(
+                select(SHUUDReleaseAuthorizationRecord).where(
+                    SHUUDReleaseAuthorizationRecord.incident_id == first["incident_id"]
+                )
+            ) is not None
+            assert session.scalar(
+                select(SHUUDEscrowRecord).where(
+                    SHUUDEscrowRecord.incident_id == first["incident_id"]
+                )
+            ) is not None
+            events = session.scalars(
+                select(SHUUDLifecycleEvent).where(
+                    SHUUDLifecycleEvent.incident_id == first["incident_id"]
+                )
+            ).all()
             assert len(events) == 1
             assert events[0].event_id == first["event_id"]
     finally:
@@ -185,8 +197,22 @@ def test_postgresql_concurrent_outbox_workers_publish_exactly_once():
             assert row is not None
             assert row.status == "PUBLISHED"
             assert row.attempts >= 1
-            assert session.scalar(select(SHUUDReleaseAuthorizationRecord)) is not None
-            assert session.scalar(select(SHUUDEscrowRecord)) is not None
-            assert len(session.scalars(select(SHUUDLifecycleEvent)).all()) == 1
+            assert session.scalar(
+                select(SHUUDReleaseAuthorizationRecord).where(
+                    SHUUDReleaseAuthorizationRecord.incident_id == lifecycle_event["incident_id"]
+                )
+            ) is not None
+            assert session.scalar(
+                select(SHUUDEscrowRecord).where(
+                    SHUUDEscrowRecord.incident_id == lifecycle_event["incident_id"]
+                )
+            ) is not None
+            assert len(
+                session.scalars(
+                    select(SHUUDLifecycleEvent).where(
+                        SHUUDLifecycleEvent.incident_id == lifecycle_event["incident_id"]
+                    )
+                ).all()
+            ) == 1
     finally:
         engine.dispose()
