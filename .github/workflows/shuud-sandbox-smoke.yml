@@ -97,6 +97,7 @@ jobs:
           PY
 
       - name: Restart SHUUD app against same PostgreSQL
+        if: success()
         working-directory: sandbox
         run: |
           docker compose stop app
@@ -104,6 +105,7 @@ jobs:
           docker compose up -d app
 
       - name: Verify PostgreSQL-backed recovery after process restart
+        if: success()
         env:
           API: http://127.0.0.1:18000/api/v1/shuud
         run: |
@@ -127,6 +129,13 @@ jobs:
           assert body['milestones']['settlement_released_at'] is not None
           print('SHUUD_SANDBOX_POSTGRES_RESTART_RECOVERY=PASS')
           PY
+
+      - name: Dump sandbox logs for diagnosis
+        if: failure()
+        working-directory: sandbox
+        run: |
+          docker compose ps || true
+          docker compose logs --no-color --timestamps || true
 
       - name: Stop sandbox
         if: always()
