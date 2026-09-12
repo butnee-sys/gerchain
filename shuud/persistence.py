@@ -1,7 +1,7 @@
 """Durable SHUUD state persistence adapter.
 
-This adapter stores a canonical SHUUD state snapshot in SQLite and recovers
-its authoritative WitnessChain only through verification-first reconstruction.
+This adapter stores a canonical SHUUD state snapshot and recovers its
+authoritative WitnessChain only through verification-first reconstruction.
 It does not replace GerChain WitnessChain or EscrowEngine.
 """
 
@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from sqlalchemy import Column, String, Text, create_engine
+from sqlalchemy import Column, String, Text, create_engine, update
 from sqlalchemy.orm import declarative_base, sessionmaker
 
 from witness.chain import WitnessChain
@@ -27,7 +27,7 @@ class SHUUDStateRow(Base):
 
 
 class SHUUDPersistence:
-    """SQLite-backed SHUUD persistence with verification-first recovery."""
+    """Durable SHUUD persistence with verification-first recovery."""
 
     def __init__(self, database_url: str = "sqlite:///./gerchain.db") -> None:
         connect_args = (
@@ -70,6 +70,39 @@ class SHUUDPersistence:
             else:
                 row.snapshot_json = encoded
             session.commit()
+
+    def save_snapshot_if_current(
+        self,
+        incident_id: str,
+        expected_snapshot: dict[str, Any],
+        snapshot: dict[str, Any],
+    ) -> bool:
+        """Atomically replace a snapshot only when it still matches expected."""
+        if not incident_id or not incident_id.strip():
+            raise ValueError("incident_id is required")
+        if not isinstance(expected_snapshot, dict):
+            raise ValueError("expected_snapshot must be a dictionary")
+        if not isinstance(snapshot, dict):
+            raise ValueError("snapshot must be a dictionary")
+
+        expected_encoded = self._canonical_snapshot(expected_snapshot)
+        encoded = self._canonical_snapshot(snapshot)
+
+        with self.SessionLocal() as session:
+            result = session.execute(
+                update(SHUUDStateRow)
+                .where(
+                    SHUUDStateRow.incident_id == incident_id,
+                    SHUUDStateRow.snapshot_json == expected_encoded,
+                )
+                .values(snapshot_json=encoded)
+            )
+            if result.rowcount != 1:
+                session.rollback()
+                return False
+
+            session.commit()
+            return True
 
     def load_snapshot(self, incident_id: str) -> dict[str, Any] | None:
         with self.SessionLocal() as session:
