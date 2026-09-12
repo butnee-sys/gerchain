@@ -47,9 +47,11 @@ class SHUUDIndependentVerifier:
 
         manifest = bundle.get("manifest", {})
         manifest_incident_id = manifest.get("incident_id")
-        canonical_incident_id = (
-            manifest_incident_id if isinstance(manifest_incident_id, str) and manifest_incident_id else None
-        )
+        if not isinstance(manifest_incident_id, str) or not manifest_incident_id.strip():
+            reasons.append("MANIFEST_INCIDENT_ID_MISSING")
+            canonical_incident_id = None
+        else:
+            canonical_incident_id = manifest_incident_id
 
         for entry in entries:
             record = entry.get("record", {})
@@ -111,13 +113,10 @@ class SHUUDIndependentVerifier:
 
         if not shuud_entries:
             reasons.append("NO_SHUUD_EVENTS")
-            return SHUUDVerificationResult(False, tuple(reasons))
+            return SHUUDVerificationResult(False, tuple(dict.fromkeys(reasons)))
 
         if len(incident_ids) != 1:
             reasons.append("MULTIPLE_OR_MISSING_INCIDENT_IDS")
-
-        if canonical_incident_id is None and len(incident_ids) == 1:
-            canonical_incident_id = next(iter(incident_ids))
 
         if len(decision_incident_ids) != 1 or (
             canonical_incident_id is not None
@@ -250,7 +249,7 @@ class SHUUDIndependentVerifier:
             if final_payload.get("new_state") != "RELEASED":
                 reasons.append("ESCROW_NOT_RELEASED")
 
-        incident_id = canonical_incident_id or next(iter(incident_ids), None)
+        incident_id = canonical_incident_id if canonical_incident_id is not None else None
         escrow_id = next(iter(escrow_ids), None)
         return SHUUDVerificationResult(
             verified=not reasons,
