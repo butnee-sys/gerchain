@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -54,12 +54,14 @@ def _allow_decision(client: TestClient, incident_id: str) -> None:
 
 def test_measurement_summary_api_exposes_timing_and_economics() -> None:
     client = _client()
+    occurred_at = datetime.now(timezone.utc) - timedelta(seconds=110)
     incident_response = client.post(
         "/api/v1/shuud/incidents",
         json={
             "location": "Ulaanbaatar",
             "vehicle_a": "1234ABC",
             "vehicle_b": "5678DEF",
+            "occurred_at": occurred_at.isoformat(),
         },
     )
     assert incident_response.status_code == 200
@@ -67,8 +69,7 @@ def test_measurement_summary_api_exposes_timing_and_economics() -> None:
 
     _allow_decision(client, incident_id)
 
-    created = datetime.fromisoformat(incident_response.json()["occurred_at"])
-    clearance = created + timedelta(seconds=110)
+    clearance = occurred_at + timedelta(seconds=110)
 
     escrow_response = client.post(
         "/api/v1/shuud/escrows",
@@ -90,10 +91,9 @@ def test_measurement_summary_api_exposes_timing_and_economics() -> None:
     assert release_response.json()["previous_state"] == "LOCKED"
     assert release_response.json()["new_state"] == "RELEASED"
 
-    # The release endpoint records the real release time, while this sandbox
-    # test needs a deterministic 110-second clearance observation. Update the
-    # existing persisted snapshot directly without creating a second state
-    # engine or changing the authoritative release milestone.
+    # The release endpoint records the real release time. The sandbox test
+    # separately records the deterministic observed clearance time that is
+    # exactly 110 seconds after the incident occurrence.
     snapshot = _PERSISTENCE.load_snapshot(incident_id)
     assert snapshot is not None
     updated = dict(snapshot)
