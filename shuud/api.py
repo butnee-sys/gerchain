@@ -7,6 +7,7 @@ persistence while preserving the same domain invariants.
 """
 
 from datetime import datetime, timezone
+import os
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
@@ -16,6 +17,8 @@ from .evidence import EvidenceEnvelope, create_evidence_envelope
 from .incident import Incident, create_incident
 from .metrics import measure_clearance
 from .policy import GateStatus, PolicyInput
+from .persistence import SHUUDPersistence
+from .runtime_store import SHUUDRuntimeStore
 from .release import ReleaseAuthorization, authorize_release, release_escrow
 from .shiid import Decision, SHIIDDecision, decide
 from .verify import verify_incident
@@ -36,6 +39,10 @@ _DECISIONS: dict[str, SHIIDDecision] = {}
 _AUTHORIZATIONS: dict[str, ReleaseAuthorization] = {}
 _WITNESSES: dict[str, WitnessChain] = {}
 _ESCROWS: dict[str, EscrowEngine] = {}
+_PERSISTENCE = SHUUDPersistence(
+    os.getenv("SHUUD_PERSISTENCE_URL", "sqlite:///./gerchain.db")
+)
+_RUNTIME_STORE = SHUUDRuntimeStore(_PERSISTENCE)
 
 
 class IncidentRequest(BaseModel):
@@ -105,7 +112,51 @@ def _get_evidence(incident_id: str) -> EvidenceEnvelope:
     return evidence
 
 
+def _restore(incident_id: str) -> None:
+    if incident_id in _INCIDENTS:
+        return
+
+    snapshot = _PERSISTENCE.load_snapshot(incident_id)
+    if snapshot is None:
+        return
+
+    incident = _RUNTIME_STORE.recover_incident(snapshot)
+    witness = _RUNTIME_STORE.recover_witness(incident_id)
+    evidence = _RUNTIME_STORE.recover_evidence(snapshot)
+    decision = _RUNTIME_STORE.recover_decision(snapshot)
+    authorization = _RUNTIME_STORE.recover_authorization(snapshot)
+    escrow = _RUNTIME_STORE.recover_escrow(snapshot, witness)
+
+    _INCIDENTS[incident_id] = incident
+    _WITNESSES[incident_id] = witness
+    if evidence is not None:
+        _EVIDENCE[incident_id] = evidence
+    if decision is not None:
+        _DECISIONS[incident_id] = decision
+    if authorization is not None:
+        _AUTHORIZATIONS[incident_id] = authorization
+    if escrow is not None:
+        _ESCROWS[escrow.escrow_id] = escrow
+
+
+def _get_incident(incident_id: str) -> Incident:
+    _restore(incident_id)
+    incident = _INCIDENTS.get(incident_id)
+    if incident is None:
+        raise HTTPException(status_code=404, detail="INCIDENT_NOT_FOUND")
+    return incident
+
+
+def _get_evidence(incident_id: str) -> EvidenceEnvelope:
+    _restore(incident_id)
+    evidence = _EVIDENCE.get(incident_id)
+    if evidence is None:
+        raise HTTPException(status_code=404, detail="EVIDENCE_NOT_FOUND")
+    return evidence
+
+
 def _get_witness(incident_id: str) -> WitnessChain:
+    _restore(incident_id)
     witness = _WITNESSES.get(incident_id)
     if witness is None:
         raise HTTPException(status_code=404, detail="WITNESS_NOT_FOUND")
@@ -127,6 +178,7 @@ def create_shuud_incident(payload: IncidentRequest):
     )
     _INCIDENTS[incident.incident_id] = incident
     _WITNESSES[incident.incident_id] = witness
+    _RUNTIME_STORE.save(incident, witness)
     return {
         "status": "success",
         "incident_id": incident.incident_id,
@@ -154,6 +206,11 @@ def lock_shuud_evidence(payload: EvidenceRequest):
         timestamp=payload.captured_at,
     )
     _EVIDENCE[payload.incident_id] = envelope
+    _RUNTIME_STORE.save(
+        _INCIDENTS[payload.incident_id],
+        witness,
+        evidence=envelope,
+    )
     return {
         "status": "success",
         "incident_id": envelope.incident_id,
@@ -195,6 +252,12 @@ def make_shiid_decision(payload: DecisionRequest):
         timestamp=datetime.now(timezone.utc).isoformat(),
     )
     _DECISIONS[payload.incident_id] = decision
+    _RUNTIME_STORE.save(
+        incident,
+        witness,
+        evidence=evidence,
+        decision=decision,
+    )
     return {
         "status": "success",
         "incident_id": decision.incident_id,
@@ -236,6 +299,15 @@ def create_shuud_escrow(payload: EscrowRequest):
         },
     )
     _ESCROWS[payload.escrow_id] = escrow
+    _RUNTIME_STORE.save(
+        _INCIDENTS[payload.incident_id],
+        witness,
+        evidence=_EVIDENCE.get(payload.incident_id),
+        decision=_DECISIONS.get(payload.incident_id),
+        authorization=_AUTHORIZATIONS.get(payload.incident_id),
+        escrow=escrow,
+        settlement_provider=payload.settlement_provider,
+    )
     return {
         "status": "success",
         "incident_id": payload.incident_id,
@@ -277,6 +349,15 @@ def release_shuud_escrow(payload: ReleaseRequest):
         escrow,
         authorization,
         timestamp=datetime.now(timezone.utc).isoformat(),
+    )
+    _RUNTIME_STORE.save(
+        _INCIDENTS[payload.incident_id],
+        witness,
+        evidence=_EVIDENCE.get(payload.incident_id),
+        decision=decision,
+        authorization=authorization,
+        escrow=escrow,
+        settlement_provider="NEF",
     )
     return {
         "status": "success",
