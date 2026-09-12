@@ -41,29 +41,44 @@ class SHUUDPublicationOutbox(SHUUDPersistenceBase):
 
 
 def queue_publication(engine, *, publication_key: str, lifecycle_event: dict, authorization: dict, escrow: dict) -> bool:
-    """Queue already-authoritative facts for durable delivery."""
+    """Queue already-authoritative facts for durable delivery.
+
+    Returns False for a pre-existing key and for a concurrent insert of the
+    same key. The queue itself never creates or changes domain state.
+    """
     if not publication_key.strip():
         raise ValueError("publication_key is required")
 
-    with Session(engine, expire_on_commit=False) as session:
-        with session.begin():
+    try:
+        with Session(engine, expire_on_commit=False) as session:
+            with session.begin():
+                existing = session.scalar(
+                    select(SHUUDPublicationOutbox).where(
+                        SHUUDPublicationOutbox.publication_key == publication_key
+                    )
+                )
+                if existing is not None:
+                    return False
+                session.add(
+                    SHUUDPublicationOutbox(
+                        publication_key=publication_key,
+                        status="PENDING",
+                        lifecycle_event_json=json.dumps(lifecycle_event, sort_keys=True),
+                        authorization_json=json.dumps(authorization, sort_keys=True),
+                        escrow_json=json.dumps(escrow, sort_keys=True),
+                    )
+                )
+        return True
+    except IntegrityError:
+        with Session(engine, expire_on_commit=False) as session:
             existing = session.scalar(
                 select(SHUUDPublicationOutbox).where(
                     SHUUDPublicationOutbox.publication_key == publication_key
                 )
             )
-            if existing is not None:
-                return False
-            session.add(
-                SHUUDPublicationOutbox(
-                    publication_key=publication_key,
-                    status="PENDING",
-                    lifecycle_event_json=json.dumps(lifecycle_event, sort_keys=True),
-                    authorization_json=json.dumps(authorization, sort_keys=True),
-                    escrow_json=json.dumps(escrow, sort_keys=True),
-                )
-            )
-    return True
+        if existing is not None:
+            return False
+        raise
 
 
 def _settlement_exists_exact(session: Session, *, lifecycle_event: dict, authorization: dict, escrow: dict) -> bool:
