@@ -2,6 +2,7 @@
 
 from concurrent.futures import ThreadPoolExecutor
 
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from shuud.api import (
@@ -11,8 +12,11 @@ from shuud.api import (
     _ESCROWS,
     _INCIDENTS,
     _WITNESSES,
+    router,
 )
-from shuud.main import app
+
+app = FastAPI()
+app.include_router(router)
 
 
 def _clear_shuud_state():
