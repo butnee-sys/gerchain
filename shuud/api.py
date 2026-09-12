@@ -7,6 +7,7 @@ persistence while preserving the same domain invariants.
 """
 
 from datetime import datetime, timezone
+import os
 from threading import Lock
 
 from fastapi import APIRouter, HTTPException
@@ -28,6 +29,20 @@ from .witness import (
 from witness.chain import WitnessChain
 
 router = APIRouter(prefix="/api/v1/shuud", tags=["SHUUD"])
+
+# Runtime boundary: the in-memory registry is explicitly sandbox-only.
+# A production deployment must opt into a durable persistence backend rather
+# than accidentally running with process-local state.
+SHUUD_RUNTIME_MODE = os.getenv("SHUUD_RUNTIME_MODE", "sandbox").strip().lower()
+SHUUD_PERSISTENCE_BACKEND = os.getenv("SHUUD_PERSISTENCE_BACKEND", "memory").strip().lower()
+
+if SHUUD_RUNTIME_MODE not in {"sandbox", "production"}:
+    raise RuntimeError(f"unsupported SHUUD_RUNTIME_MODE: {SHUUD_RUNTIME_MODE!r}")
+if SHUUD_RUNTIME_MODE == "production" and SHUUD_PERSISTENCE_BACKEND == "memory":
+    raise RuntimeError(
+        "SHUUD production requires durable persistence; "
+        "process-local registries cannot provide multi-process settlement safety"
+    )
 
 # Sandbox-only lifecycle registries. These make ownership explicit while the
 # production persistence layer is still being designed.
