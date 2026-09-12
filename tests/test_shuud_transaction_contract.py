@@ -26,8 +26,9 @@ def test_duplicate_authorization_rolls_back_entire_settlement(tmp_path):
     publication = _publication()
     atomic_settlement(engine, **publication.__dict__)
 
-    # Reuse the exact incident/authorization identity but change the escrow
-    # projection; the unique authorization row must reject the whole transaction.
+    # Reuse the exact incident/authorization/escrow identity. Only the
+    # lifecycle event identity changes, so the authorization UNIQUE constraint
+    # is the first durable conflict and the whole transaction must roll back.
     with pytest.raises(IntegrityError):
         atomic_settlement(
             engine,
@@ -37,7 +38,7 @@ def test_duplicate_authorization_rolls_back_entire_settlement(tmp_path):
                 "event_hash": "HASH-CONFLICT",
             },
             authorization=publication.authorization,
-            escrow={**publication.escrow, "amount_nef": "999999"},
+            escrow=publication.escrow,
         )
 
     with Session(engine) as session:
