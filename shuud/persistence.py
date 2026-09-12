@@ -7,6 +7,7 @@ WitnessChain or EscrowEngine: those remain authoritative domain engines.
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from threading import Lock
 
 from sqlalchemy import DateTime, Integer, String, Text, UniqueConstraint, create_engine, inspect, text
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
@@ -14,6 +15,7 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
 
 CURRENT_SCHEMA_VERSION = 2
 _SCHEMA_MIGRATION_LOCK_KEY = "shuud:schema:migration:v2"
+_NON_POSTGRES_SCHEMA_LOCK = Lock()
 
 
 class SHUUDPersistenceBase(DeclarativeBase):
@@ -156,7 +158,7 @@ def _migrate_schema(bind) -> None:
 
 
 def initialize_schema(engine) -> None:
-    """Create tables and migrate them under one PostgreSQL bootstrap transaction."""
+    """Create tables and migrate them under the appropriate bootstrap lock."""
     if engine.dialect.name == "postgresql":
         with engine.begin() as connection:
             connection.execute(
@@ -167,8 +169,12 @@ def initialize_schema(engine) -> None:
             _migrate_schema(connection)
         return
 
-    SHUUDPersistenceBase.metadata.create_all(engine)
-    _migrate_schema(engine)
+    # Local/CI dialects have no cross-process production guarantee here. The
+    # process-local lock only prevents same-process bootstrap races in tests;
+    # production PostgreSQL uses the database advisory lock above.
+    with _NON_POSTGRES_SCHEMA_LOCK:
+        SHUUDPersistenceBase.metadata.create_all(engine)
+        _migrate_schema(engine)
 
 
 def session_scope(engine):
