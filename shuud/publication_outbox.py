@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 from datetime import datetime, timezone
 
-from sqlalchemy import DateTime, Integer, String, Text, select
+from sqlalchemy import DateTime, Integer, String, Text, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Mapped, Session, mapped_column
 
@@ -118,8 +118,46 @@ def _mark_failed(engine, row_id: int, message: str) -> None:
                 failed.last_error = message
 
 
+def _claim_pending(engine, row_id: int) -> bool:
+    """Atomically claim one PENDING row for a single publication worker.
+
+    The conditional UPDATE is the concurrency boundary: two workers may read
+    the same candidate, but only one can change PENDING -> PROCESSING.
+    """
+    with Session(engine, expire_on_commit=False) as session:
+        with session.begin():
+            result = session.execute(
+                update(SHUUDPublicationOutbox)
+                .where(
+                    SHUUDPublicationOutbox.id == row_id,
+                    SHUUDPublicationOutbox.status == "PENDING",
+                )
+                .values(
+                    status="PROCESSING",
+                    attempts=SHUUDPublicationOutbox.attempts + 1,
+                )
+            )
+            return result.rowcount == 1
+
+
+def _release_claim(engine, row_id: int, *, error: str) -> None:
+    with Session(engine, expire_on_commit=False) as session:
+        with session.begin():
+            row = session.get(SHUUDPublicationOutbox, row_id)
+            if row is not None and row.status == "PROCESSING":
+                row.status = "PENDING"
+                row.last_error = error
+
+
 def publish_pending(engine, *, limit: int = 100) -> int:
-    """Retry pending publications without replaying domain authority."""
+    """Retry pending publications without replaying domain authority.
+
+    Each candidate is atomically claimed before settlement publication. This
+    prevents two concurrent workers from simultaneously processing the same
+    outbox row. PROCESSING is deliberately fail-closed; a future worker lease
+    and explicit stale-claim recovery must be added before unattended
+    multi-process production workers are enabled.
+    """
     if limit < 1:
         raise ValueError("limit must be positive")
 
@@ -133,16 +171,12 @@ def publish_pending(engine, *, limit: int = 100) -> int:
 
     published = 0
     for row in rows:
+        if not _claim_pending(engine, row.id):
+            continue
+
         lifecycle_event = json.loads(row.lifecycle_event_json)
         authorization = json.loads(row.authorization_json)
         escrow = json.loads(row.escrow_json)
-
-        with Session(engine, expire_on_commit=False) as session:
-            with session.begin():
-                row_locked = session.get(SHUUDPublicationOutbox, row.id)
-                if row_locked is None or row_locked.status != "PENDING":
-                    continue
-                row_locked.attempts += 1
 
         try:
             atomic_settlement(
@@ -163,18 +197,13 @@ def publish_pending(engine, *, limit: int = 100) -> int:
                 _mark_failed(engine, row.id, "conflicting durable settlement record")
                 continue
         except Exception as exc:
-            with Session(engine, expire_on_commit=False) as session:
-                with session.begin():
-                    failed = session.get(SHUUDPublicationOutbox, row.id)
-                    if failed is not None:
-                        failed.status = "PENDING"
-                        failed.last_error = str(exc)
+            _release_claim(engine, row.id, error=str(exc))
             continue
 
         with Session(engine, expire_on_commit=False) as session:
             with session.begin():
                 done = session.get(SHUUDPublicationOutbox, row.id)
-                if done is not None:
+                if done is not None and done.status == "PROCESSING":
                     done.status = "PUBLISHED"
                     done.last_error = None
                     done.published_at = datetime.now(timezone.utc)
