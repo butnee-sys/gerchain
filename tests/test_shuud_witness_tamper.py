@@ -16,13 +16,24 @@ from shuud.witness import (
 from witness.chain import WitnessChain
 
 
-def _bundle():
+def _bundle(timestamps=None):
     incident = create_incident("Ulaanbaatar")
     chain = WitnessChain(
         initial_state={"value": 0},
         manifest={"domain": "SHUUD", "incident_id": incident.incident_id},
         witness_id="WITNESS-ROOT-001",
     )
+    timestamps = timestamps or (
+        "2026-09-12T00:00:15+00:00",
+        "2026-09-12T00:00:20+00:00",
+        "2026-09-12T00:00:25+00:00",
+        "2026-09-12T00:00:40+00:00",
+        "2026-09-12T00:00:45+00:00",
+        "2026-09-12T00:01:00+00:00",
+    )
+    if len(timestamps) != 6:
+        raise ValueError("_bundle requires exactly six timestamps")
+
     evidence = create_evidence_envelope(
         incident.incident_id,
         evidence_refs=["photo-1"],
@@ -40,9 +51,9 @@ def _bundle():
         damage_estimate_nef=1_500_000,
     )
     auth = authorize_release(decision, escrow_id="ESC-TAMPER")
-    record_evidence_locked(chain, evidence, timestamp="2026-09-12T00:00:15+00:00")
-    record_shiid_decision(chain, decision, timestamp="2026-09-12T00:00:20+00:00")
-    record_release_authorized(chain, auth, timestamp="2026-09-12T00:00:25+00:00")
+    record_evidence_locked(chain, evidence, timestamp=timestamps[0])
+    record_shiid_decision(chain, decision, timestamp=timestamps[1])
+    record_release_authorized(chain, auth, timestamp=timestamps[2])
 
     escrow = EscrowEngine(
         escrow_id="ESC-TAMPER",
@@ -50,9 +61,9 @@ def _bundle():
         currency="NEF",
         witness_chain=chain,
     )
-    escrow.transition("FUNDED", "2026-09-12T00:00:40+00:00", {"source": "sandbox"})
-    escrow.transition("LOCKED", "2026-09-12T00:00:45+00:00", {"source": "sandbox"})
-    escrow.transition("RELEASED", "2026-09-12T00:01:00+00:00", {"source": "verified"})
+    escrow.transition("FUNDED", timestamps[3], {"source": "sandbox"})
+    escrow.transition("LOCKED", timestamps[4], {"source": "sandbox"})
+    escrow.transition("RELEASED", timestamps[5], {"source": "verified"})
 
     return {
         "manifest": deepcopy(chain.manifest),
