@@ -8,6 +8,7 @@ verification and adds only SHUUD domain invariants required before release.
 from dataclasses import dataclass
 from typing import Any, Dict
 
+from core.hashing import domain_hash
 from verifier.independent_verifier import IndependentVerifier
 
 
@@ -38,6 +39,9 @@ class SHUUDIndependentVerifier:
         escrow_ids: set[str] = set()
         decision_values: list[str] = []
         decision_damage_estimates: list[float | int | None] = []
+        decision_rule_versions: list[str] = []
+        decision_reasons: list[tuple[str, ...]] = []
+        release_authorizations: list[dict[str, Any]] = []
         event_types: list[str] = []
 
         manifest = bundle.get("manifest", {})
@@ -69,9 +73,17 @@ class SHUUDIndependentVerifier:
             if event_type == "SHIID_DECISION":
                 decision_values.append(inner.get("decision"))
                 decision_damage_estimates.append(inner.get("damage_estimate_nef"))
+                decision_rule_versions.append(inner.get("rule_version"))
+                decision_reasons.append(tuple(inner.get("reasons", ())))
                 decision_incident_ids.append(incident_id)
 
             if event_type == "SHUUD_RELEASE_AUTHORIZED":
+                release_authorizations.append({
+                    "incident_id": incident_id,
+                    "escrow_id": inner.get("escrow_id"),
+                    "rule_version": inner.get("rule_version"),
+                    "authorization_hash": inner.get("authorization_hash"),
+                })
                 escrow_id = inner.get("escrow_id")
                 if isinstance(escrow_id, str) and escrow_id:
                     escrow_ids.add(escrow_id)
@@ -137,6 +149,8 @@ class SHUUDIndependentVerifier:
             actual_path = []
             escrow_transition_ids: set[str] = set()
             escrow_amounts: set[float | int] = set()
+            escrow_currencies: set[str] = set()
+            escrow_sequences: list[Any] = []
             for entry in escrow_events:
                 payload = entry.get("event_payload", {})
                 actual_path.append(
@@ -148,12 +162,22 @@ class SHUUDIndependentVerifier:
                 amount = payload.get("amount")
                 if isinstance(amount, (int, float)) and not isinstance(amount, bool):
                     escrow_amounts.add(amount)
+                currency = payload.get("currency")
+                if isinstance(currency, str) and currency:
+                    escrow_currencies.add(currency)
+                escrow_sequences.append(payload.get("sequence"))
 
             if actual_path != expected_path:
                 reasons.append("ESCROW_LIFECYCLE_INVALID")
 
             if len(escrow_transition_ids) != 1 or escrow_transition_ids != escrow_ids:
                 reasons.append("ESCROW_ID_MISMATCH")
+
+            if escrow_currencies != {"NEF"}:
+                reasons.append("ESCROW_CURRENCY_INVALID")
+
+            if escrow_sequences != [1, 2, 3]:
+                reasons.append("ESCROW_SEQUENCE_INVALID")
 
             decision_amount = (
                 decision_damage_estimates[0]
@@ -169,6 +193,20 @@ class SHUUDIndependentVerifier:
                 reasons.append("ESCROW_AMOUNT_REFERENCE_INVALID")
             elif decision_amount != next(iter(escrow_amounts)):
                 reasons.append("ESCROW_AMOUNT_MISMATCH")
+
+            if len(release_authorizations) == 1 and len(decision_values) == 1 and decision_values[0] == "APPROVE":
+                auth = release_authorizations[0]
+                expected_auth_payload = {
+                    "incident_id": canonical_incident_id,
+                    "escrow_id": auth.get("escrow_id"),
+                    "rule_version": decision_rule_versions[0] if decision_rule_versions else None,
+                    "decision": decision_values[0],
+                    "reasons": list(decision_reasons[0]) if decision_reasons else [],
+                    "damage_estimate_nef": decision_damage_estimates[0] if decision_damage_estimates else None,
+                }
+                expected_hash = domain_hash("SHUUD_RELEASE_AUTH", expected_auth_payload)
+                if auth.get("authorization_hash") != expected_hash:
+                    reasons.append("RELEASE_AUTHORIZATION_HASH_INVALID")
 
             final_payload = escrow_events[-1].get("event_payload", {})
             if final_payload.get("new_state") != "RELEASED":
