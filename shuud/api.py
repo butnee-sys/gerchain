@@ -345,10 +345,17 @@ def release_shuud_escrow(payload: ReleaseRequest):
         )
         _AUTHORIZATIONS[payload.incident_id] = authorization
 
+    release_evidence = {
+        "incident_id": payload.incident_id,
+        "authorization_hash": authorization.authorization_hash,
+        "rule_version": authorization.rule_version,
+        "settlement_provider": "NEF",
+    }
     record = release_escrow(
         escrow,
         authorization,
         timestamp=datetime.now(timezone.utc).isoformat(),
+        evidence=release_evidence,
     )
     _RUNTIME_STORE.save(
         _INCIDENTS[payload.incident_id],
