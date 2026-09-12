@@ -13,7 +13,8 @@ def test_concurrent_schema_bootstrap_is_idempotent(tmp_path):
     with ThreadPoolExecutor(max_workers=4) as pool:
         results = list(pool.map(lambda _: _bootstrap(engine), range(4)))
 
-    assert results == [True, True, True, True]
+    failures = [result for result in results if result is not None]
+    assert failures == []
     tables = set(inspect(engine).get_table_names())
     assert "shuud_schema_version" in tables
     assert "shuud_publication_outbox" in tables
@@ -22,6 +23,6 @@ def test_concurrent_schema_bootstrap_is_idempotent(tmp_path):
 def _bootstrap(engine):
     try:
         initialize_schema(engine)
-        return True
-    except Exception:
-        return False
+        return None
+    except Exception as exc:
+        return repr(exc)
