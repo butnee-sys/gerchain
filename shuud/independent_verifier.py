@@ -6,9 +6,13 @@ verification and adds only SHUUD domain invariants required before release.
 """
 
 from dataclasses import dataclass
-from typing import Any, Dict, Iterable
+from typing import Any, Dict
 
 from verifier.independent_verifier import IndependentVerifier
+
+
+EXPECTED_CURRENCY = "MNT"
+EXPECTED_SETTLEMENT_PROVIDER = "NEF"
 
 
 @dataclass(frozen=True)
@@ -133,6 +137,20 @@ class SHUUDIndependentVerifier:
                 reasons.append("ESCROW_AMOUNT_REFERENCE_INVALID")
             elif decision_damage_estimates[0] != next(iter(escrow_amounts)):
                 reasons.append("ESCROW_AMOUNT_MISMATCH")
+
+            escrow_currencies = {
+                e.get("event_payload", {}).get("currency")
+                for e in escrow_events
+            }
+            if escrow_currencies != {EXPECTED_CURRENCY}:
+                reasons.append("ESCROW_CURRENCY_INVALID")
+
+            settlement_providers = {
+                e.get("evidence", {}).get("settlement_provider")
+                for e in escrow_events
+            }
+            if settlement_providers != {EXPECTED_SETTLEMENT_PROVIDER}:
+                reasons.append("SETTLEMENT_PROVIDER_INVALID")
 
         incident_id = next(iter(incident_ids), None)
         escrow_id = next(iter(escrow_ids), None)
