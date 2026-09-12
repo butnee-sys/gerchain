@@ -1,12 +1,7 @@
 """Durable persistence primitives for SHUUD production integration.
 
-This module stores immutable lifecycle facts only. It does not replace
-WitnessChain or EscrowEngine: those remain the authoritative domain engines.
-The persistence layer exists to provide transaction durability and database-
-level uniqueness across multiple application workers.
-
-The adapter is intentionally not wired into the sandbox API yet. That keeps
-migration separate from domain-authority changes.
+The persistence layer stores durable lifecycle facts only. It does not replace
+WitnessChain or EscrowEngine: those remain authoritative domain engines.
 """
 
 from __future__ import annotations
@@ -37,9 +32,7 @@ class SHUUDLifecycleEvent(SHUUDPersistenceBase):
     payload_json: Mapped[str] = mapped_column(Text, nullable=False)
     evidence_json: Mapped[str] = mapped_column(Text, nullable=False)
     recorded_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        default=lambda: datetime.now(timezone.utc),
-        nullable=False,
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False
     )
 
 
@@ -56,17 +49,13 @@ class SHUUDEvidenceRecord(SHUUDPersistenceBase):
     evidence_json: Mapped[str] = mapped_column(Text, nullable=False)
     witness_event_id: Mapped[str] = mapped_column(String(128), nullable=False)
     recorded_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        default=lambda: datetime.now(timezone.utc),
-        nullable=False,
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False
     )
 
 
 class SHUUDDecisionRecord(SHUUDPersistenceBase):
     __tablename__ = "shuud_decisions"
-    __table_args__ = (
-        UniqueConstraint("incident_id", name="uq_shuud_decision_incident"),
-    )
+    __table_args__ = (UniqueConstraint("incident_id", name="uq_shuud_decision_incident"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     incident_id: Mapped[str] = mapped_column(String(128), nullable=False)
@@ -76,9 +65,7 @@ class SHUUDDecisionRecord(SHUUDPersistenceBase):
     decision_json: Mapped[str] = mapped_column(Text, nullable=False)
     witness_event_id: Mapped[str] = mapped_column(String(128), nullable=False)
     recorded_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        default=lambda: datetime.now(timezone.utc),
-        nullable=False,
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False
     )
 
 
@@ -98,9 +85,7 @@ class SHUUDReleaseAuthorizationRecord(SHUUDPersistenceBase):
     authorization_json: Mapped[str] = mapped_column(Text, nullable=False)
     witness_event_id: Mapped[str] = mapped_column(String(128), nullable=False)
     recorded_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        default=lambda: datetime.now(timezone.utc),
-        nullable=False,
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False
     )
 
 
@@ -119,9 +104,7 @@ class SHUUDEscrowRecord(SHUUDPersistenceBase):
     currency: Mapped[str] = mapped_column(String(16), nullable=False)
     transition_counter: Mapped[int] = mapped_column(Integer, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        default=lambda: datetime.now(timezone.utc),
-        nullable=False,
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False
     )
 
 
@@ -142,12 +125,9 @@ def session_scope(engine):
 
 def persist_evidence(session: Session, *, incident_id: str, content_hash: str,
                      evidence_json: str, witness_event_id: str) -> SHUUDEvidenceRecord:
-    """Persist one immutable evidence envelope inside the caller transaction."""
     record = SHUUDEvidenceRecord(
-        incident_id=incident_id,
-        content_hash=content_hash,
-        evidence_json=evidence_json,
-        witness_event_id=witness_event_id,
+        incident_id=incident_id, content_hash=content_hash,
+        evidence_json=evidence_json, witness_event_id=witness_event_id,
     )
     session.add(record)
     return record
@@ -156,13 +136,9 @@ def persist_evidence(session: Session, *, incident_id: str, content_hash: str,
 def persist_decision(session: Session, *, incident_id: str, decision: str,
                      rule_version: str, damage_estimate_nef: str,
                      decision_json: str, witness_event_id: str) -> SHUUDDecisionRecord:
-    """Persist one immutable SHIID decision inside the caller transaction."""
     record = SHUUDDecisionRecord(
-        incident_id=incident_id,
-        decision=decision,
-        rule_version=rule_version,
-        damage_estimate_nef=damage_estimate_nef,
-        decision_json=decision_json,
+        incident_id=incident_id, decision=decision, rule_version=rule_version,
+        damage_estimate_nef=damage_estimate_nef, decision_json=decision_json,
         witness_event_id=witness_event_id,
     )
     session.add(record)
@@ -170,41 +146,46 @@ def persist_decision(session: Session, *, incident_id: str, decision: str,
 
 
 def persist_release_authorization(
-    session: Session,
-    *,
-    incident_id: str,
-    escrow_id: str,
-    rule_version: str,
-    authorization_hash: str,
-    damage_estimate_nef: str,
-    authorization_json: str,
-    witness_event_id: str,
+    session: Session, *, incident_id: str, escrow_id: str,
+    rule_version: str, authorization_hash: str, damage_estimate_nef: str,
+    authorization_json: str, witness_event_id: str,
 ) -> SHUUDReleaseAuthorizationRecord:
-    """Persist one immutable release authorization inside the caller transaction."""
     record = SHUUDReleaseAuthorizationRecord(
-        incident_id=incident_id,
-        escrow_id=escrow_id,
-        rule_version=rule_version,
-        authorization_hash=authorization_hash,
-        damage_estimate_nef=damage_estimate_nef,
-        authorization_json=authorization_json,
-        witness_event_id=witness_event_id,
+        incident_id=incident_id, escrow_id=escrow_id, rule_version=rule_version,
+        authorization_hash=authorization_hash, damage_estimate_nef=damage_estimate_nef,
+        authorization_json=authorization_json, witness_event_id=witness_event_id,
     )
     session.add(record)
     return record
 
 
+def atomic_settlement(engine, *, lifecycle_event: dict, authorization: dict, escrow: dict) -> None:
+    """Atomically publish authorization, escrow snapshot and release event.
+
+    This function deliberately performs no WitnessChain append and no
+    EscrowEngine transition. Those domain actions must already be authoritative
+    and successful before their durable publication is committed here.
+    """
+    if authorization["incident_id"] != escrow["incident_id"]:
+        raise ValueError("escrow snapshot mismatch")
+    if authorization["escrow_id"] != escrow["escrow_id"]:
+        raise ValueError("escrow snapshot mismatch")
+    if authorization["damage_estimate_nef"] != escrow["amount_nef"]:
+        raise ValueError("amount mismatch")
+    if lifecycle_event["incident_id"] != authorization["incident_id"]:
+        raise ValueError("lifecycle incident mismatch")
+
+    with Session(engine, expire_on_commit=False) as session:
+        with session.begin():
+            session.add(SHUUDReleaseAuthorizationRecord(**authorization))
+            session.add(SHUUDEscrowRecord(**escrow))
+            session.add(SHUUDLifecycleEvent(**lifecycle_event))
+
+
 __all__ = [
-    "SHUUDPersistenceBase",
-    "SHUUDLifecycleEvent",
-    "SHUUDEvidenceRecord",
-    "SHUUDDecisionRecord",
-    "SHUUDReleaseAuthorizationRecord",
-    "SHUUDEscrowRecord",
-    "create_persistence_engine",
-    "initialize_schema",
-    "session_scope",
-    "persist_evidence",
-    "persist_decision",
-    "persist_release_authorization",
+    "SHUUDPersistenceBase", "SHUUDLifecycleEvent", "SHUUDEvidenceRecord",
+    "SHUUDDecisionRecord", "SHUUDReleaseAuthorizationRecord",
+    "SHUUDEscrowRecord", "create_persistence_engine", "initialize_schema",
+    "session_scope", "persist_evidence", "persist_decision",
+    "persist_release_authorization", "atomic_settlement",
 ]
