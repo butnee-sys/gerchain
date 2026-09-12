@@ -43,6 +43,7 @@ class SHUUDIndependentVerifier:
         decision_reasons: list[tuple[str, ...]] = []
         release_authorizations: list[dict[str, Any]] = []
         event_types: list[str] = []
+        ordered_milestones: list[str] = []
 
         manifest = bundle.get("manifest", {})
         manifest_incident_id = manifest.get("incident_id")
@@ -53,6 +54,14 @@ class SHUUDIndependentVerifier:
         for entry in entries:
             record = entry.get("record", {})
             payload = entry.get("event_payload", {})
+            record_event_type = record.get("event_type")
+            payload_event_type = payload.get("event_type")
+
+            if record_event_type == "ESCROW_TRANSITION":
+                transition_state = payload.get("new_state")
+                if transition_state in {"FUNDED", "LOCKED", "RELEASED"}:
+                    ordered_milestones.append(f"ESCROW_{transition_state}")
+
             if payload.get("domain") != "SHUUD":
                 continue
 
@@ -62,9 +71,16 @@ class SHUUDIndependentVerifier:
                 continue
 
             incident_ids.add(incident_id)
-            event_type = payload.get("event_type")
+            event_type = payload_event_type
             event_types.append(event_type)
             shuud_entries.append(entry)
+
+            if event_type in {
+                "SHUUD_EVIDENCE_LOCKED",
+                "SHIID_DECISION",
+                "SHUUD_RELEASE_AUTHORIZED",
+            }:
+                ordered_milestones.append(event_type)
 
             if canonical_incident_id is not None and incident_id != canonical_incident_id:
                 reasons.append("INCIDENT_ID_MISMATCH")
@@ -90,7 +106,7 @@ class SHUUDIndependentVerifier:
                 else:
                     reasons.append("ESCROW_ID_MISSING")
 
-            if record.get("event_type") != event_type:
+            if record_event_type != event_type:
                 reasons.append("EVENT_TYPE_MISMATCH")
 
         if not shuud_entries:
@@ -178,6 +194,28 @@ class SHUUDIndependentVerifier:
 
             if escrow_sequences != [1, 2, 3]:
                 reasons.append("ESCROW_SEQUENCE_INVALID")
+
+            expected_order = [
+                "SHUUD_EVIDENCE_LOCKED",
+                "SHIID_DECISION",
+                "SHUUD_RELEASE_AUTHORIZED",
+                "ESCROW_FUNDED",
+                "ESCROW_LOCKED",
+                "ESCROW_RELEASED",
+            ]
+            milestone_positions = []
+            for milestone in expected_order:
+                try:
+                    milestone_positions.append(ordered_milestones.index(milestone))
+                except ValueError:
+                    milestone_positions.append(None)
+
+            if (
+                any(position is None for position in milestone_positions)
+                or milestone_positions != sorted(milestone_positions)
+                or len(set(milestone_positions)) != len(milestone_positions)
+            ):
+                reasons.append("SHUUD_LIFECYCLE_ORDER_INVALID")
 
             decision_amount = (
                 decision_damage_estimates[0]
