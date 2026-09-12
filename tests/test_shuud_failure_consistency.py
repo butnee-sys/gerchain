@@ -7,6 +7,7 @@ make persistence authoritative over WitnessChain or EscrowEngine.
 
 import pytest
 from sqlalchemy import create_engine, select
+from sqlalchemy.exc import IntegrityError
 
 from shuud.persistence import (
     SHUUDEscrowRecord,
@@ -93,7 +94,7 @@ def test_duplicate_authorization_rolls_back_new_escrow_and_lifecycle(tmp_path):
     duplicate["escrow"]["escrow_id"] = "ESC-FAIL-002"
     duplicate["lifecycle_event"]["event_id"] = "EV-RELEASE-002"
 
-    with pytest.raises(Exception):
+    with pytest.raises(IntegrityError):
         atomic_settlement(engine, **duplicate)
 
     records = _records(engine)
