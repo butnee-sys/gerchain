@@ -1,4 +1,3 @@
-from core.hashing import domain_hash
 from escrow.engine import EscrowEngine
 from shuud.evidence import create_evidence_envelope
 from shuud.incident import create_incident
@@ -13,7 +12,14 @@ from shuud.witness import (
 from witness.chain import WitnessChain
 
 
-def _bundle():
+def _bundle(
+    *,
+    escrow_amount=1_500_000,
+    decision_damage_estimate=None,
+    escrow_id="ESC-001",
+    authorization_escrow_id=None,
+    decision_incident_id=None,
+):
     incident = create_incident("Ulaanbaatar")
     chain = WitnessChain(
         initial_state={"value": 0},
@@ -29,21 +35,41 @@ def _bundle():
         consent_refs=["consent-a"],
         media_complete=True,
     )
-    record_evidence_locked(chain, evidence)
+    record_evidence_locked(
+        chain,
+        evidence,
+        timestamp="2026-09-12T00:00:15+00:00",
+    )
     decision = SHIIDDecision(
-        incident_id=incident.incident_id,
+        incident_id=decision_incident_id or incident.incident_id,
         decision=Decision.APPROVE,
         rule_version="SHUUD-POLICY-1",
         reasons=(),
+        damage_estimate_nef=(
+            escrow_amount
+            if decision_damage_estimate is None
+            else decision_damage_estimate
+        ),
     )
-    record_shiid_decision(chain, decision)
+    record_shiid_decision(
+        chain,
+        decision,
+        timestamp="2026-09-12T00:00:20+00:00",
+    )
 
-    auth = authorize_release(decision, escrow_id="ESC-001")
-    record_release_authorized(chain, auth)
+    auth = authorize_release(
+        decision,
+        escrow_id=authorization_escrow_id or escrow_id,
+    )
+    record_release_authorized(
+        chain,
+        auth,
+        timestamp="2026-09-12T00:00:25+00:00",
+    )
 
     escrow = EscrowEngine(
-        escrow_id="ESC-001",
-        amount=1_500_000,
+        escrow_id=escrow_id,
+        amount=escrow_amount,
         currency="NEF",
         witness_chain=chain,
     )
@@ -90,6 +116,14 @@ def test_shuud_independent_verifier_rejects_wrong_incident_id():
     payload["incident_id"] = "INC-TAMPERED"
     result = SHUUDIndependentVerifier().verify_bundle(bundle)
     assert result.verified is False
+    assert "GERCHAIN_BUNDLE_INVALID" in result.reasons
+
+
+def test_shuud_independent_verifier_rejects_decision_incident_id_mismatch():
+    bundle, _, _ = _bundle(decision_incident_id="INC-OTHER")
+    result = SHUUDIndependentVerifier().verify_bundle(bundle)
+    assert result.verified is False
+    assert "INCIDENT_ID_MISMATCH" in result.reasons
 
 
 def test_shuud_independent_verifier_rejects_non_approved_decision():
@@ -98,23 +132,41 @@ def test_shuud_independent_verifier_rejects_non_approved_decision():
         payload = entry["event_payload"]
         if payload.get("event_type") == "SHIID_DECISION":
             payload["payload"]["decision"] = "REJECT"
-            # The event hash must also be stale; this should fail before
-            # application-domain approval is trusted.
             break
     result = SHUUDIndependentVerifier().verify_bundle(bundle)
     assert result.verified is False
     assert "GERCHAIN_BUNDLE_INVALID" in result.reasons
 
 
-def test_shuud_independent_verifier_rejects_missing_locked_to_released_path():
+def test_shuud_independent_verifier_rejects_escrow_amount_mismatch():
+    bundle, _, _ = _bundle(
+        escrow_amount=1_500_000,
+        decision_damage_estimate=1_600_000,
+    )
+    result = SHUUDIndependentVerifier().verify_bundle(bundle)
+    assert result.verified is False
+    assert "ESCROW_AMOUNT_MISMATCH" in result.reasons
+
+
+def test_shuud_independent_verifier_rejects_escrow_id_mismatch():
+    bundle, _, _ = _bundle(
+        escrow_id="ESC-002",
+        authorization_escrow_id="ESC-001",
+    )
+    result = SHUUDIndependentVerifier().verify_bundle(bundle)
+    assert result.verified is False
+    assert "ESCROW_ID_MISMATCH" in result.reasons
+
+
+def test_shuud_independent_verifier_rejects_invalid_escrow_lifecycle():
     bundle, _, _ = _bundle()
     bundle["entries"] = [
         e for e in bundle["entries"]
         if not (
             e["record"]["event_type"] == "ESCROW_TRANSITION"
-            and e["event_payload"].get("target_state") == "LOCKED"
+            and e["event_payload"].get("new_state") == "LOCKED"
         )
     ]
     result = SHUUDIndependentVerifier().verify_bundle(bundle)
     assert result.verified is False
-    assert "GERCHAIN_BUNDLE_INVALID" in result.reasons
+    assert "ESCROW_LIFECYCLE_INVALID" in result.reasons
