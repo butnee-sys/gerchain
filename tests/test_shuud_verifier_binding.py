@@ -14,7 +14,7 @@ from shuud.witness import (
 from witness.chain import WitnessChain
 
 
-def _bundle(*, currency="NEF", forged_hash=None):
+def _bundle(*, currency="NEF", forged_hash=None, order="normal"):
     incident = create_incident("Ulaanbaatar")
     chain = WitnessChain(
         initial_state={"value": 0},
@@ -30,7 +30,6 @@ def _bundle(*, currency="NEF", forged_hash=None):
         consent_refs=["consent-a"],
         media_complete=True,
     )
-    record_evidence_locked(chain, evidence, timestamp="2026-09-12T00:00:15+00:00")
 
     decision = SHIIDDecision(
         incident_id=incident.incident_id,
@@ -39,8 +38,6 @@ def _bundle(*, currency="NEF", forged_hash=None):
         reasons=("ALL_POLICY_GATES_PASSED",),
         damage_estimate_nef=1_500_000,
     )
-    record_shiid_decision(chain, decision, timestamp="2026-09-12T00:00:20+00:00")
-
     auth = authorize_release(decision, escrow_id="ESC-BIND")
     if forged_hash is not None:
         auth = ReleaseAuthorization(
@@ -50,7 +47,24 @@ def _bundle(*, currency="NEF", forged_hash=None):
             authorization_hash=forged_hash,
             damage_estimate_nef=auth.damage_estimate_nef,
         )
-    record_release_authorized(chain, auth, timestamp="2026-09-12T00:00:25+00:00")
+
+    def add_evidence():
+        record_evidence_locked(chain, evidence, timestamp="2026-09-12T00:00:15+00:00")
+
+    def add_decision():
+        record_shiid_decision(chain, decision, timestamp="2026-09-12T00:00:20+00:00")
+
+    def add_auth():
+        record_release_authorized(chain, auth, timestamp="2026-09-12T00:00:25+00:00")
+
+    if order == "auth_before_decision":
+        add_evidence()
+        add_auth()
+        add_decision()
+    else:
+        add_evidence()
+        add_decision()
+        add_auth()
 
     escrow = EscrowEngine(
         escrow_id="ESC-BIND",
@@ -90,3 +104,11 @@ def test_verifier_rejects_non_nef_escrow_currency():
     result = SHUUDIndependentVerifier().verify_bundle(_bundle(currency="USD"))
     assert result.verified is False
     assert "ESCROW_CURRENCY_INVALID" in result.reasons
+
+
+def test_verifier_rejects_release_authorization_before_shiid_decision():
+    result = SHUUDIndependentVerifier().verify_bundle(
+        _bundle(order="auth_before_decision")
+    )
+    assert result.verified is False
+    assert "SHUUD_LIFECYCLE_ORDER_INVALID" in result.reasons
