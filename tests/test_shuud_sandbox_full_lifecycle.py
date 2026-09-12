@@ -7,10 +7,10 @@ explicit.
 
 from __future__ import annotations
 
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from shuud.api import router
-from fastapi import FastAPI
 
 
 def _pass_gate_payload() -> dict:
@@ -46,7 +46,7 @@ def test_shuud_full_sandbox_lifecycle() -> None:
     assert incident.status_code == 200
     incident_id = incident.json()["incident_id"]
 
-    evidence_refs = ["sandbox:evidence:01"]
+    evidence_refs = [f"sandbox:evidence:{incident_id}"]
     evidence = client.post(
         "/api/v1/shuud/evidence",
         json={
@@ -72,11 +72,12 @@ def test_shuud_full_sandbox_lifecycle() -> None:
     assert decision.status_code == 200
     assert decision.json()["decision"] == "APPROVE"
 
+    escrow_id = f"SANDBOX-{incident_id}"
     escrow = client.post(
         "/api/v1/shuud/escrows",
         json={
             "incident_id": incident_id,
-            "escrow_id": f"SANDBOX-{incident_id}",
+            "escrow_id": escrow_id,
             "amount_mnt": 1_000_000,
             "settlement_provider": "NEF",
         },
@@ -91,14 +92,12 @@ def test_shuud_full_sandbox_lifecycle() -> None:
         json={"incident_id": incident_id},
     )
     assert clearance.status_code == 200
-    assert clearance.json()["snapshot_persisted"] is True if "snapshot_persisted" in clearance.json() else True
+    assert clearance.json()["incident_id"] == incident_id
+    assert clearance.json()["elapsed_seconds"] >= 0
 
     release = client.post(
         "/api/v1/shuud/release",
-        json={
-            "incident_id": incident_id,
-            "escrow_id": f"SANDBOX-{incident_id}",
-        },
+        json={"incident_id": incident_id, "escrow_id": escrow_id},
     )
     assert release.status_code == 200
     assert release.json()["new_state"] == "RELEASED"
