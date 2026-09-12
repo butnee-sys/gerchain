@@ -1,4 +1,4 @@
-"""Durable persistence primitives for SHUUD production integration.
+"""Durable persistence primitives and schema migration for SHUUD.
 
 The persistence layer stores durable lifecycle facts only. It does not replace
 WitnessChain or EscrowEngine: those remain authoritative domain engines.
@@ -8,12 +8,25 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from sqlalchemy import DateTime, Integer, String, Text, UniqueConstraint, create_engine
+from sqlalchemy import DateTime, Integer, String, Text, UniqueConstraint, create_engine, inspect, text
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
+
+
+CURRENT_SCHEMA_VERSION = 2
 
 
 class SHUUDPersistenceBase(DeclarativeBase):
     pass
+
+
+class SHUUDSchemaVersion(SHUUDPersistenceBase):
+    __tablename__ = "shuud_schema_version"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    version: Mapped[int] = mapped_column(Integer, nullable=False)
+    applied_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False
+    )
 
 
 class SHUUDLifecycleEvent(SHUUDPersistenceBase):
@@ -113,9 +126,45 @@ def create_persistence_engine(url: str):
     return create_engine(url, future=True)
 
 
+def _migrate_schema(engine) -> None:
+    """Apply additive, restart-safe migrations without rewriting durable facts.
+
+    ``create_all`` is intentionally retained for new environments, while this
+    migration path handles existing production databases. Only additive schema
+    changes are performed here; destructive changes require a separately
+    reviewed migration.
+    """
+    inspector = inspect(engine)
+    tables = set(inspector.get_table_names())
+
+    if "shuud_schema_version" not in tables:
+        SHUUDSchemaVersion.__table__.create(engine)
+        tables.add("shuud_schema_version")
+
+    if "shuud_publication_outbox" in tables:
+        columns = {column["name"] for column in inspector.get_columns("shuud_publication_outbox")}
+        if "processing_at" not in columns:
+            with engine.begin() as connection:
+                connection.execute(
+                    text(
+                        "ALTER TABLE shuud_publication_outbox "
+                        "ADD COLUMN processing_at TIMESTAMP"
+                    )
+                )
+
+    with Session(engine, expire_on_commit=False) as session:
+        with session.begin():
+            current = session.query(SHUUDSchemaVersion).order_by(SHUUDSchemaVersion.version.desc()).first()
+            if current is None:
+                session.add(SHUUDSchemaVersion(version=CURRENT_SCHEMA_VERSION))
+            elif current.version < CURRENT_SCHEMA_VERSION:
+                session.add(SHUUDSchemaVersion(version=CURRENT_SCHEMA_VERSION))
+
+
 def initialize_schema(engine) -> None:
-    """Create only the SHUUD persistence tables for a new environment."""
+    """Create new SHUUD tables and apply additive migrations idempotently."""
     SHUUDPersistenceBase.metadata.create_all(engine)
+    _migrate_schema(engine)
 
 
 def session_scope(engine):
@@ -183,9 +232,10 @@ def atomic_settlement(engine, *, lifecycle_event: dict, authorization: dict, esc
 
 
 __all__ = [
-    "SHUUDPersistenceBase", "SHUUDLifecycleEvent", "SHUUDEvidenceRecord",
-    "SHUUDDecisionRecord", "SHUUDReleaseAuthorizationRecord",
-    "SHUUDEscrowRecord", "create_persistence_engine", "initialize_schema",
-    "session_scope", "persist_evidence", "persist_decision",
-    "persist_release_authorization", "atomic_settlement",
+    "CURRENT_SCHEMA_VERSION", "SHUUDPersistenceBase", "SHUUDSchemaVersion",
+    "SHUUDLifecycleEvent", "SHUUDEvidenceRecord", "SHUUDDecisionRecord",
+    "SHUUDReleaseAuthorizationRecord", "SHUUDEscrowRecord",
+    "create_persistence_engine", "initialize_schema", "session_scope",
+    "persist_evidence", "persist_decision", "persist_release_authorization",
+    "atomic_settlement",
 ]
