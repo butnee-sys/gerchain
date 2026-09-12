@@ -40,6 +40,7 @@ CREATE TABLE IF NOT EXISTS outbox (
     available_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     processing_started_at TIMESTAMPTZ,
     lease_until TIMESTAMPTZ,
+    lease_token UUID,
     processed_at TIMESTAMPTZ,
     last_error TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
