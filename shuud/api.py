@@ -31,17 +31,18 @@ from witness.chain import WitnessChain
 router = APIRouter(prefix="/api/v1/shuud", tags=["SHUUD"])
 
 # Runtime boundary: the in-memory registry is explicitly sandbox-only.
-# A production deployment must opt into a durable persistence backend rather
-# than accidentally running with process-local state.
+# The durable production persistence adapter is not yet wired into this API.
+# Therefore production startup fails closed rather than silently running a
+# process-local settlement registry that cannot coordinate multiple workers.
 SHUUD_RUNTIME_MODE = os.getenv("SHUUD_RUNTIME_MODE", "sandbox").strip().lower()
 SHUUD_PERSISTENCE_BACKEND = os.getenv("SHUUD_PERSISTENCE_BACKEND", "memory").strip().lower()
 
 if SHUUD_RUNTIME_MODE not in {"sandbox", "production"}:
     raise RuntimeError(f"unsupported SHUUD_RUNTIME_MODE: {SHUUD_RUNTIME_MODE!r}")
-if SHUUD_RUNTIME_MODE == "production" and SHUUD_PERSISTENCE_BACKEND == "memory":
+if SHUUD_RUNTIME_MODE == "production":
     raise RuntimeError(
-        "SHUUD production requires durable persistence; "
-        "process-local registries cannot provide multi-process settlement safety"
+        "SHUUD production runtime is disabled until the durable persistence "
+        "adapter is wired; process-local registries are sandbox-only"
     )
 
 # Sandbox-only lifecycle registries. These make ownership explicit while the
