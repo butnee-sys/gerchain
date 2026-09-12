@@ -1,7 +1,14 @@
 import pytest
+from sqlalchemy import create_engine
 
-from shuud.persistence import SHUUDEscrowRecord, SHUUDLifecycleEvent, SHUUDPersistenceBase, SHUUDReleaseAuthorizationRecord
-from shuud.persistence_adapter import SettlementPublication
+from shuud.persistence import (
+    SHUUDEscrowRecord,
+    SHUUDLifecycleEvent,
+    SHUUDPersistenceBase,
+    SHUUDReleaseAuthorizationRecord,
+    initialize_schema,
+)
+from shuud.persistence_adapter import SettlementPublication, SQLAlchemySettlementPersistence
 from shuud.production import ProductionConfigurationError, create_production_persistence
 
 
@@ -60,13 +67,13 @@ def test_production_requires_database_url(monkeypatch):
         create_production_persistence()
 
 
-def test_production_bootstrap_creates_durable_adapter(tmp_path, monkeypatch):
-    monkeypatch.setenv("SHUUD_RUNTIME_MODE", "production")
-    monkeypatch.setenv("SHUUD_PERSISTENCE_BACKEND", "sqlalchemy")
-    database_url = f"sqlite:///{tmp_path / 'production.db'}"
-    monkeypatch.setenv("SHUUD_DATABASE_URL", database_url)
-
-    adapter = create_production_persistence()
+def test_production_bootstrap_creates_durable_adapter(tmp_path):
+    # SQLite is used here only as an isolated test database. The production
+    # bootstrap itself rejects SQLite URLs, so this test exercises the same
+    # durable adapter/schema path without weakening that production boundary.
+    engine = create_engine(f"sqlite:///{tmp_path / 'production.db'}", future=True)
+    initialize_schema(engine)
+    adapter = SQLAlchemySettlementPersistence(engine)
     adapter.publish_settlement(_publication())
 
     with adapter.engine.connect() as connection:
