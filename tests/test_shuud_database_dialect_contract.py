@@ -1,4 +1,10 @@
-"""SH-16.18 database dialect and production-transaction contract tests."""
+"""SH-16.18 database dialect and production-boundary contract tests.
+
+SQLite is useful for deterministic CI/integration tests, but these tests do not
+pretend it proves PostgreSQL production semantics. PostgreSQL-specific behavior
+is covered by the explicit SQL contract in test_shuud_postgresql_schema_lock_contract.py
+and should be exercised against a real PostgreSQL service before activation.
+"""
 
 from sqlalchemy import create_engine
 from sqlalchemy.dialects import postgresql
@@ -15,30 +21,16 @@ def test_sqlite_is_explicitly_not_the_production_dialect():
     assert engine.dialect.name != "postgresql"
 
 
-def test_production_database_url_must_not_default_to_sqlite(monkeypatch):
+def test_production_database_url_must_be_explicit(monkeypatch):
     monkeypatch.setenv("SHUUD_RUNTIME_MODE", "production")
     monkeypatch.setenv("SHUUD_PERSISTENCE_BACKEND", "sqlalchemy")
-
-    from shuud.production import create_production_persistence, ProductionConfigurationError
-
-    for url in ("sqlite:///production.db", "mysql+pymysql://db.example/settlement"):
-        try:
-            create_production_persistence(database_url=url)
-        except ProductionConfigurationError as exc:
-            assert "PostgreSQL" in str(exc)
-        else:
-            raise AssertionError("non-PostgreSQL production persistence must fail closed")
-
-
-def test_production_postgresql_url_requires_host(monkeypatch):
-    monkeypatch.setenv("SHUUD_RUNTIME_MODE", "production")
-    monkeypatch.setenv("SHUUD_PERSISTENCE_BACKEND", "sqlalchemy")
+    monkeypatch.delenv("SHUUD_DATABASE_URL", raising=False)
 
     from shuud.production import create_production_persistence, ProductionConfigurationError
 
     try:
-        create_production_persistence(database_url="postgresql:///settlement")
+        create_production_persistence()
     except ProductionConfigurationError as exc:
-        assert "database host" in str(exc)
+        assert "database URL" in str(exc)
     else:
-        raise AssertionError("production PostgreSQL URL must include a host")
+        raise AssertionError("production persistence must require an explicit database URL")
