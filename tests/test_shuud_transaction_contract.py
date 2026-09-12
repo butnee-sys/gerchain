@@ -26,15 +26,16 @@ def test_duplicate_authorization_rolls_back_entire_settlement(tmp_path):
     publication = _publication()
     atomic_settlement(engine, **publication.__dict__)
 
-    conflicting = _publication()
-    conflicting.authorization["authorization_hash"] = "AUTH-CONFLICT" if isinstance(conflicting.authorization, dict) else conflicting.authorization
-
     # Reuse the exact incident/authorization identity but change the escrow
     # projection; the unique authorization row must reject the whole transaction.
     with pytest.raises(IntegrityError):
         atomic_settlement(
             engine,
-            lifecycle_event={**publication.lifecycle_event, "event_id": "EV-CONFLICT", "event_hash": "HASH-CONFLICT"},
+            lifecycle_event={
+                **publication.lifecycle_event,
+                "event_id": "EV-CONFLICT",
+                "event_hash": "HASH-CONFLICT",
+            },
             authorization=publication.authorization,
             escrow={**publication.escrow, "amount_nef": "999999"},
         )
