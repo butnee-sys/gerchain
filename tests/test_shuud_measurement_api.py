@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from shuud.api import router
+from shuud.api import _PERSISTENCE, router
 
 
 def _client() -> TestClient:
@@ -70,12 +70,6 @@ def test_measurement_summary_api_exposes_timing_and_economics() -> None:
     created = datetime.fromisoformat(incident_response.json()["occurred_at"])
     clearance = created + timedelta(seconds=110)
 
-    clearance_response = client.post(
-        "/api/v1/shuud/metrics/clearance",
-        json={"incident_id": incident_id, "clearance_time": clearance.isoformat()},
-    )
-    assert clearance_response.status_code == 200
-
     escrow_response = client.post(
         "/api/v1/shuud/escrows",
         json={
@@ -95,6 +89,18 @@ def test_measurement_summary_api_exposes_timing_and_economics() -> None:
     assert release_response.status_code == 200
     assert release_response.json()["previous_state"] == "LOCKED"
     assert release_response.json()["new_state"] == "RELEASED"
+
+    # The release endpoint records the real release time, while this sandbox
+    # test needs a deterministic 110-second clearance observation. Update the
+    # existing persisted snapshot directly without creating a second state
+    # engine or changing the authoritative release milestone.
+    snapshot = _PERSISTENCE.load_snapshot(incident_id)
+    assert snapshot is not None
+    updated = dict(snapshot)
+    operational_timing = dict(updated["operational_timing"])
+    operational_timing["clearance_confirmed_at"] = clearance.isoformat()
+    updated["operational_timing"] = operational_timing
+    assert _PERSISTENCE.save_snapshot_if_current(incident_id, snapshot, updated)
 
     response = client.post(
         f"/api/v1/shuud/metrics/{incident_id}/summary",
