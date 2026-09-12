@@ -24,7 +24,7 @@ class SHIIDDecision:
     decision: Decision
     rule_version: str
     reasons: tuple[str, ...]
-    damage_estimate_nef: float | None
+    damage_estimate_mnt: float | None
 
 
 def decide(
@@ -53,7 +53,7 @@ def decide(
             decision=Decision.APPROVE,
             rule_version=result.rule_version,
             reasons=("ALL_POLICY_GATES_PASSED",),
-            damage_estimate_nef=policy.damage_estimate_nef,
+            damage_estimate_mnt=policy.damage_estimate_mnt,
         )
 
     return SHIIDDecision(
@@ -61,7 +61,7 @@ def decide(
         decision=Decision.HUMAN_REVIEW,
         rule_version=result.rule_version,
         reasons=result.reasons,
-        damage_estimate_nef=policy.damage_estimate_nef,
+        damage_estimate_mnt=policy.damage_estimate_mnt,
     )
 
 

@@ -33,7 +33,7 @@ def _bundle(escrow_amount=1_500_000, escrow_id="ESC-001", authorization_escrow_i
     decision = SHIIDDecision(
         incident_id=incident.incident_id,
         decision=Decision.APPROVE,
-        damage_estimate_nef=1_500_000,
+        damage_estimate_mnt=1_500_000,
         rule_version="SHUUD-POLICY-1",
         reasons=(),
     )
@@ -45,7 +45,7 @@ def _bundle(escrow_amount=1_500_000, escrow_id="ESC-001", authorization_escrow_i
     escrow = EscrowEngine(
         escrow_id=escrow_id,
         amount=escrow_amount,
-        currency="NEF",
+        currency="MNT",
         witness_chain=chain,
     )
     escrow.transition("FUNDED", "2026-09-12T00:00:40+00:00", {"source": "sandbox"})

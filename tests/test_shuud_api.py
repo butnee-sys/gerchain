@@ -58,7 +58,7 @@ def test_decision_fails_closed_by_default():
         json={
             "incident_id": incident_id,
             "evidence_refs": ["photo-1"],
-            "damage_estimate_nef": 1_500_000,
+            "damage_estimate_mnt": 1_500_000,
         },
     )
 
@@ -93,7 +93,7 @@ def test_decision_rejects_evidence_reference_mismatch():
         json={
             "incident_id": incident_id,
             "evidence_refs": ["photo-forged"],
-            "damage_estimate_nef": 1_500_000,
+            "damage_estimate_mnt": 1_500_000,
         },
     )
 

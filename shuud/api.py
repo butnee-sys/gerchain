@@ -58,7 +58,7 @@ class EvidenceRequest(BaseModel):
 class DecisionRequest(BaseModel):
     incident_id: str
     evidence_refs: list[str] = Field(min_length=1)
-    damage_estimate_nef: float
+    damage_estimate_mnt: float
     # Fail closed: callers must explicitly provide every policy gate.
     two_party_consent: GateStatus = GateStatus.UNKNOWN
     vehicle_identity_verified: GateStatus = GateStatus.UNKNOWN
@@ -76,7 +76,8 @@ class DecisionRequest(BaseModel):
 class EscrowRequest(BaseModel):
     incident_id: str
     escrow_id: str
-    amount_nef: float = Field(gt=0)
+    amount_mnt: float = Field(gt=0)
+    settlement_provider: str = "NEF"
 
 
 class ReleaseRequest(BaseModel):
@@ -180,7 +181,7 @@ def make_shiid_decision(payload: DecisionRequest):
         media_complete=payload.media_complete,
         no_injury=payload.no_injury,
         no_third_party_property_damage=payload.no_third_party_property_damage,
-        damage_estimate_nef=payload.damage_estimate_nef,
+        damage_estimate_mnt=payload.damage_estimate_mnt,
         dispute_present=payload.dispute_present,
         fraud_flag=payload.fraud_flag,
         insurance_valid=payload.insurance_valid,
@@ -212,25 +213,35 @@ def create_shuud_escrow(payload: EscrowRequest):
     witness = _get_witness(payload.incident_id)
     escrow = EscrowEngine(
         escrow_id=payload.escrow_id,
-        amount=payload.amount_nef,
-        currency="NEF",
+        amount=payload.amount_mnt,
+        currency="MNT",
         witness_chain=witness,
     )
     escrow.transition(
         "FUNDED",
         datetime.now(timezone.utc).isoformat(),
-        {"incident_id": payload.incident_id, "source": "SHUUD_SANDBOX"},
+        {
+            "incident_id": payload.incident_id,
+            "source": "SHUUD_SANDBOX",
+            "settlement_provider": payload.settlement_provider,
+        },
     )
     escrow.transition(
         "LOCKED",
         datetime.now(timezone.utc).isoformat(),
-        {"incident_id": payload.incident_id, "source": "SHUUD_SANDBOX"},
+        {
+            "incident_id": payload.incident_id,
+            "source": "SHUUD_SANDBOX",
+            "settlement_provider": payload.settlement_provider,
+        },
     )
     _ESCROWS[payload.escrow_id] = escrow
     return {
         "status": "success",
         "incident_id": payload.incident_id,
         "escrow_id": payload.escrow_id,
+        "currency": "MNT",
+        "settlement_provider": payload.settlement_provider,
         "state": escrow.get_state()["state"],
     }
 

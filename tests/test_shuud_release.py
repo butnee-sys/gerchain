@@ -26,7 +26,7 @@ def approved_decision():
         media_complete=GateStatus.PASS,
         no_injury=GateStatus.PASS,
         no_third_party_property_damage=GateStatus.PASS,
-        damage_estimate_nef=1_500_000,
+        damage_estimate_mnt=1_500_000,
         dispute_present=GateStatus.PASS,
         fraud_flag=GateStatus.PASS,
         insurance_valid=GateStatus.PASS,
@@ -45,7 +45,7 @@ def make_locked_escrow():
     escrow = EscrowEngine(
         escrow_id="SHUUD-ESCROW-001",
         amount=1_500_000,
-        currency="NEF",
+        currency="MNT",
         witness_chain=witness,
     )
     escrow.transition("FUNDED", "2026-09-12T00:00:00+00:00", {"seed": True})
@@ -97,7 +97,7 @@ def test_release_cannot_bypass_locked_state():
     escrow = EscrowEngine(
         escrow_id="SHUUD-ESCROW-001",
         amount=1_500_000,
-        currency="NEF",
+        currency="MNT",
         witness_chain=witness,
     )
 

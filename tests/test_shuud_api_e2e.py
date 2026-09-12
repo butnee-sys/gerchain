@@ -47,7 +47,7 @@ def test_http_incident_to_escrow_release():
         json={
             "incident_id": incident_id,
             "evidence_refs": ["PHOTO-001", "VIDEO-001"],
-            "damage_estimate_nef": 1_500_000,
+            "damage_estimate_mnt": 1_500_000,
             "two_party_consent": "PASS",
             "vehicle_identity_verified": "PASS",
             "timestamp_location_verified": "PASS",
@@ -70,7 +70,7 @@ def test_http_incident_to_escrow_release():
         json={
             "incident_id": incident_id,
             "escrow_id": f"ESC-{incident_id}",
-            "amount_nef": 1_500_000,
+            "amount_mnt": 1_500_000,
         },
     )
     assert escrow.status_code == 200
