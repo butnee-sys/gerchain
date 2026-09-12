@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+import json
 from datetime import datetime, timedelta, timezone
-from uuid import UUID
+from uuid import UUID, uuid4
 
 
 class ConcurrentStateTransition(RuntimeError):
@@ -67,11 +68,11 @@ class EscrowRepository:
                 VALUES (%s, 'escrow', %s, 'ESCROW_STATE_CHANGED', %s::jsonb)
                 ON CONFLICT (event_id) DO NOTHING
                 """,
-                (event_id, escrow_id, __import__('json').dumps(payload)),
+                (event_id, escrow_id, json.dumps(payload)),
             )
 
     def claim_one(self, worker_id: str, lease_seconds: int = 60):
-        """Atomically claim one event; concurrent workers cannot claim the same row."""
+        """Atomically claim one event and return its lease token with the event."""
         with self.conn.transaction():
             row = self.conn.execute(
                 """
@@ -87,21 +88,24 @@ class EscrowRepository:
             if row is None:
                 return None
 
+            lease_token = uuid4()
             self.conn.execute(
                 """
                 UPDATE outbox
                 SET status = 'PROCESSING',
                     processing_started_at = now(),
                     lease_until = now() + (%s * interval '1 second'),
+                    lease_token = %s,
                     attempts = attempts + 1,
                     last_error = NULL
                 WHERE id = %s
                 """,
-                (lease_seconds, row[0]),
+                (lease_seconds, lease_token, row[0]),
             )
-            return row
+            return (*row, lease_token)
 
     def recover_expired(self, limit: int = 100) -> int:
+        """Return expired leases to PENDING; ownership changes on the next claim."""
         with self.conn.transaction():
             result = self.conn.execute(
                 """
@@ -118,6 +122,7 @@ class EscrowRepository:
                 SET status = 'PENDING',
                     processing_started_at = NULL,
                     lease_until = NULL,
+                    lease_token = NULL,
                     available_at = now()
                 FROM expired e
                 WHERE o.id = e.id
@@ -127,9 +132,23 @@ class EscrowRepository:
             )
             return result.rowcount
 
-    def mark_processed(self, event_id: UUID) -> bool:
-        """Idempotent completion marker. Returns False if already processed."""
+    def mark_processed(self, event_id: UUID, lease_token: UUID) -> bool:
+        """Complete only the current lease owner; stale workers cannot finalize a reclaimed event."""
         with self.conn.transaction():
+            owned = self.conn.execute(
+                """
+                SELECT 1
+                FROM outbox
+                WHERE event_id = %s
+                  AND status = 'PROCESSING'
+                  AND lease_token = %s
+                FOR UPDATE
+                """,
+                (event_id, lease_token),
+            ).fetchone()
+            if owned is None:
+                return False
+
             inserted = self.conn.execute(
                 """
                 INSERT INTO processed_events(event_id)
@@ -139,8 +158,6 @@ class EscrowRepository:
                 """,
                 (event_id,),
             ).fetchone()
-            if inserted is None:
-                return False
 
             self.conn.execute(
                 """
@@ -148,9 +165,10 @@ class EscrowRepository:
                 SET status = 'PROCESSED',
                     processed_at = now(),
                     lease_until = NULL,
+                    lease_token = NULL,
                     processing_started_at = NULL
-                WHERE event_id = %s AND status = 'PROCESSING'
+                WHERE event_id = %s AND status = 'PROCESSING' AND lease_token = %s
                 """,
-                (event_id,),
+                (event_id, lease_token),
             )
-            return True
+            return inserted is not None
