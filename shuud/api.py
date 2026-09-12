@@ -38,9 +38,12 @@ _AUTHORIZATIONS: dict[str, ReleaseAuthorization] = {}
 _WITNESSES: dict[str, WitnessChain] = {}
 _ESCROWS: dict[str, EscrowEngine] = {}
 
-# The sandbox registry is process-local. This lock makes the check/create/store
-# operation atomic for concurrent requests in the same process. Production must
-# replace this with a database transaction plus a UNIQUE constraint on escrow_id.
+# Sandbox registry critical sections. Each lock covers check -> authoritative
+# WitnessChain append -> registry store for one lifecycle resource. Production
+# must replace these process-local locks with database transactions and UNIQUE
+# constraints / row-level locking so the invariant survives multiple processes.
+_EVIDENCE_REGISTRY_LOCK = Lock()
+_DECISION_REGISTRY_LOCK = Lock()
 _ESCROW_REGISTRY_LOCK = Lock()
 
 
@@ -143,24 +146,31 @@ def create_shuud_incident(payload: IncidentRequest):
 @router.post("/evidence", response_model=dict)
 def lock_shuud_evidence(payload: EvidenceRequest):
     _get_incident(payload.incident_id)
-    if payload.incident_id in _EVIDENCE:
-        raise HTTPException(status_code=409, detail="EVIDENCE_ALREADY_LOCKED")
-    witness = _get_witness(payload.incident_id)
-    envelope = create_evidence_envelope(
-        payload.incident_id,
-        evidence_refs=payload.evidence_refs,
-        gps_coordinates=payload.gps_coordinates,
-        captured_at=payload.captured_at,
-        vehicle_identity_refs=payload.vehicle_identity_refs,
-        consent_refs=payload.consent_refs,
-        media_complete=payload.media_complete,
-    )
-    record = record_evidence_locked(
-        witness,
-        envelope,
-        timestamp=payload.captured_at,
-    )
-    _EVIDENCE[payload.incident_id] = envelope
+
+    # Critical section: evidence locking is itself an authoritative WitnessChain
+    # milestone, so the duplicate check must remain coupled to the event append
+    # and registry store. Otherwise concurrent requests could append two
+    # SHUUD_EVIDENCE_LOCKED events before either request stores _EVIDENCE.
+    with _EVIDENCE_REGISTRY_LOCK:
+        if payload.incident_id in _EVIDENCE:
+            raise HTTPException(status_code=409, detail="EVIDENCE_ALREADY_LOCKED")
+        witness = _get_witness(payload.incident_id)
+        envelope = create_evidence_envelope(
+            payload.incident_id,
+            evidence_refs=payload.evidence_refs,
+            gps_coordinates=payload.gps_coordinates,
+            captured_at=payload.captured_at,
+            vehicle_identity_refs=payload.vehicle_identity_refs,
+            consent_refs=payload.consent_refs,
+            media_complete=payload.media_complete,
+        )
+        record = record_evidence_locked(
+            witness,
+            envelope,
+            timestamp=payload.captured_at,
+        )
+        _EVIDENCE[payload.incident_id] = envelope
+
     return {
         "status": "success",
         "incident_id": envelope.incident_id,
@@ -174,36 +184,42 @@ def lock_shuud_evidence(payload: EvidenceRequest):
 def make_shiid_decision(payload: DecisionRequest):
     incident = _get_incident(payload.incident_id)
     evidence = _get_evidence(payload.incident_id)
-    if payload.incident_id in _DECISIONS:
-        raise HTTPException(status_code=409, detail="DECISION_ALREADY_EXISTS")
-    witness = _get_witness(payload.incident_id)
 
-    requested_refs = tuple(str(value).strip() for value in payload.evidence_refs)
-    if requested_refs != evidence.evidence_refs:
-        raise HTTPException(status_code=409, detail="EVIDENCE_REFERENCE_MISMATCH")
+    # The decision object and its SHIID_DECISION WitnessChain milestone must be
+    # created atomically with the duplicate check. This prevents two concurrent
+    # requests from both passing the registry check and appending two decisions.
+    with _DECISION_REGISTRY_LOCK:
+        if payload.incident_id in _DECISIONS:
+            raise HTTPException(status_code=409, detail="DECISION_ALREADY_EXISTS")
+        witness = _get_witness(payload.incident_id)
 
-    verification = verify_incident(incident, evidence.evidence_refs)
-    policy = PolicyInput(
-        two_party_consent=payload.two_party_consent,
-        vehicle_identity_verified=payload.vehicle_identity_verified,
-        timestamp_location_verified=payload.timestamp_location_verified,
-        media_complete=payload.media_complete,
-        no_injury=payload.no_injury,
-        no_third_party_property_damage=payload.no_third_party_property_damage,
-        damage_estimate_nef=payload.damage_estimate_nef,
-        dispute_present=payload.dispute_present,
-        fraud_flag=payload.fraud_flag,
-        insurance_valid=payload.insurance_valid,
-        beneficiary_valid=payload.beneficiary_valid,
-        witness_verified=payload.witness_verified,
-    )
-    decision = decide(incident, verification, policy=policy)
-    record_shiid_decision(
-        witness,
-        decision,
-        timestamp=datetime.now(timezone.utc).isoformat(),
-    )
-    _DECISIONS[payload.incident_id] = decision
+        requested_refs = tuple(str(value).strip() for value in payload.evidence_refs)
+        if requested_refs != evidence.evidence_refs:
+            raise HTTPException(status_code=409, detail="EVIDENCE_REFERENCE_MISMATCH")
+
+        verification = verify_incident(incident, evidence.evidence_refs)
+        policy = PolicyInput(
+            two_party_consent=payload.two_party_consent,
+            vehicle_identity_verified=payload.vehicle_identity_verified,
+            timestamp_location_verified=payload.timestamp_location_verified,
+            media_complete=payload.media_complete,
+            no_injury=payload.no_injury,
+            no_third_party_property_damage=payload.no_third_party_property_damage,
+            damage_estimate_nef=payload.damage_estimate_nef,
+            dispute_present=payload.dispute_present,
+            fraud_flag=payload.fraud_flag,
+            insurance_valid=payload.insurance_valid,
+            beneficiary_valid=payload.beneficiary_valid,
+            witness_verified=payload.witness_verified,
+        )
+        decision = decide(incident, verification, policy=policy)
+        record_shiid_decision(
+            witness,
+            decision,
+            timestamp=datetime.now(timezone.utc).isoformat(),
+        )
+        _DECISIONS[payload.incident_id] = decision
+
     return {
         "status": "success",
         "incident_id": decision.incident_id,
