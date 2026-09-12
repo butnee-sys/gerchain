@@ -44,6 +44,7 @@ _ESCROWS: dict[str, EscrowEngine] = {}
 # constraints / row-level locking so the invariant survives multiple processes.
 _EVIDENCE_REGISTRY_LOCK = Lock()
 _DECISION_REGISTRY_LOCK = Lock()
+_AUTHORIZATION_REGISTRY_LOCK = Lock()
 _ESCROW_REGISTRY_LOCK = Lock()
 
 
@@ -146,11 +147,6 @@ def create_shuud_incident(payload: IncidentRequest):
 @router.post("/evidence", response_model=dict)
 def lock_shuud_evidence(payload: EvidenceRequest):
     _get_incident(payload.incident_id)
-
-    # Critical section: evidence locking is itself an authoritative WitnessChain
-    # milestone, so the duplicate check must remain coupled to the event append
-    # and registry store. Otherwise concurrent requests could append two
-    # SHUUD_EVIDENCE_LOCKED events before either request stores _EVIDENCE.
     with _EVIDENCE_REGISTRY_LOCK:
         if payload.incident_id in _EVIDENCE:
             raise HTTPException(status_code=409, detail="EVIDENCE_ALREADY_LOCKED")
@@ -184,10 +180,6 @@ def lock_shuud_evidence(payload: EvidenceRequest):
 def make_shiid_decision(payload: DecisionRequest):
     incident = _get_incident(payload.incident_id)
     evidence = _get_evidence(payload.incident_id)
-
-    # The decision object and its SHIID_DECISION WitnessChain milestone must be
-    # created atomically with the duplicate check. This prevents two concurrent
-    # requests from both passing the registry check and appending two decisions.
     with _DECISION_REGISTRY_LOCK:
         if payload.incident_id in _DECISIONS:
             raise HTTPException(status_code=409, detail="DECISION_ALREADY_EXISTS")
@@ -246,10 +238,6 @@ def create_shuud_escrow(payload: EscrowRequest):
         raise HTTPException(status_code=422, detail="ESCROW_ID_REQUIRED")
 
     witness = _get_witness(payload.incident_id)
-
-    # Critical section: the sandbox must not create two authoritative escrow
-    # objects for the same escrow_id. The entire check -> construct -> initial
-    # state transitions -> registry insert is serialized in this process.
     with _ESCROW_REGISTRY_LOCK:
         if payload.escrow_id in _ESCROWS:
             raise HTTPException(status_code=409, detail="ESCROW_ALREADY_EXISTS")
@@ -294,21 +282,26 @@ def release_shuud_escrow(payload: ReleaseRequest):
     if escrow is None:
         raise HTTPException(status_code=404, detail="ESCROW_NOT_FOUND")
 
-    authorization = _AUTHORIZATIONS.get(payload.incident_id)
-    if authorization is not None and authorization.escrow_id != payload.escrow_id:
-        raise HTTPException(status_code=409, detail="ESCROW_ID_MISMATCH")
+    # Authorization is immutable application evidence. Serialize only its
+    # creation/registry publication here; actual LOCKED -> RELEASED remains
+    # exclusively owned by release_escrow() and its own release lock. Keeping
+    # these locks separate avoids nested acquisition of the same primitive Lock.
+    with _AUTHORIZATION_REGISTRY_LOCK:
+        authorization = _AUTHORIZATIONS.get(payload.incident_id)
+        if authorization is not None and authorization.escrow_id != payload.escrow_id:
+            raise HTTPException(status_code=409, detail="ESCROW_ID_MISMATCH")
 
-    if authorization is None:
-        authorization = authorize_release(
-            decision,
-            escrow_id=payload.escrow_id,
-        )
-        record_release_authorized(
-            witness,
-            authorization,
-            timestamp=datetime.now(timezone.utc).isoformat(),
-        )
-        _AUTHORIZATIONS[payload.incident_id] = authorization
+        if authorization is None:
+            authorization = authorize_release(
+                decision,
+                escrow_id=payload.escrow_id,
+            )
+            record_release_authorized(
+                witness,
+                authorization,
+                timestamp=datetime.now(timezone.utc).isoformat(),
+            )
+            _AUTHORIZATIONS[payload.incident_id] = authorization
 
     if escrow.get_state()["state"] != "LOCKED":
         raise HTTPException(status_code=409, detail="ESCROW_NOT_LOCKED")
