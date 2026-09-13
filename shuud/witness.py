@@ -5,8 +5,7 @@ application milestones through the existing append_event contract, while
 marking every application payload with an explicit SHUUD domain.
 """
 
-from witness.chain import WitnessChain
-
+from .integration import WitnessChain
 from .domain import canonical_shuud_payload
 from .evidence import EvidenceEnvelope
 from .shiid import SHIIDDecision
