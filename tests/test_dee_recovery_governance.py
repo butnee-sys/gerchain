@@ -37,6 +37,8 @@ def _setup():
         reason="owner key compromise",
         target_owner_id="OWNER-001",
         replacement_key_id="KEY-NEW-001",
+        witness_state_root="a" * 64,
+        settlement_hash="b" * 64,
     )
     return governance, request, (k1, k2, k3)
 
@@ -51,6 +53,8 @@ def test_threshold_recovery_succeeds_and_is_auditable():
     assert decision.approved is True
     assert decision.threshold == 2
     assert decision.approver_ids == ("REC-GOV", "REC-SEC")
+    assert decision.witness_state_root == request.witness_state_root
+    assert decision.settlement_hash == request.settlement_hash
     assert len(decision.request_hash) == 64
     assert len(decision.decision_hash) == 64
     assert governance.is_replayed("REC-001")
@@ -74,7 +78,7 @@ def test_approvals_must_span_governance_roles():
     k1, a1 = _authority("REC-SEC-1", RecoveryRole.SECURITY)
     k2, a2 = _authority("REC-SEC-2", RecoveryRole.SECURITY)
     governance = RecoveryGovernance(RecoveryPolicy("DEE-RECOVERY-1.0", 2, (a1, a2)))
-    request = RecoveryRequest("REC-002", "INC-002", "compromise", "OWNER-001", "KEY-NEW-002")
+    request = RecoveryRequest("REC-002", "INC-002", "compromise", "OWNER-001", "KEY-NEW-002", witness_state_root="a" * 64, settlement_hash="b" * 64)
     approvals = (
         build_recovery_approval(k1, "REC-SEC-1", request),
         build_recovery_approval(k2, "REC-SEC-2", request),
@@ -110,10 +114,30 @@ def test_request_binding_prevents_reason_or_target_tampering():
         reason="different reason",
         target_owner_id=request.target_owner_id,
         replacement_key_id=request.replacement_key_id,
+        witness_state_root=request.witness_state_root,
+        settlement_hash=request.settlement_hash,
     )
     second = build_recovery_approval(keys[1], "REC-GOV", other)
     with pytest.raises(RecoveryGovernanceError, match="invalid recovery signature"):
         governance.authorize(other, (approval, second))
+
+
+def test_witness_root_tampering_invalidates_approval():
+    governance, request, keys = _setup()
+    approval = build_recovery_approval(keys[0], "REC-SEC", request)
+    tampered = RecoveryRequest(**{**vars(request), "witness_state_root": "c" * 64})
+    second = build_recovery_approval(keys[1], "REC-GOV", tampered)
+    with pytest.raises(RecoveryGovernanceError, match="invalid recovery signature"):
+        governance.authorize(tampered, (approval, second))
+
+
+def test_settlement_hash_tampering_invalidates_approval():
+    governance, request, keys = _setup()
+    approval = build_recovery_approval(keys[0], "REC-SEC", request)
+    tampered = RecoveryRequest(**{**vars(request), "settlement_hash": "c" * 64})
+    second = build_recovery_approval(keys[1], "REC-GOV", tampered)
+    with pytest.raises(RecoveryGovernanceError, match="invalid recovery signature"):
+        governance.authorize(tampered, (approval, second))
 
 
 def test_replay_is_rejected():
@@ -136,6 +160,8 @@ def test_policy_version_mismatch_fails_closed():
         target_owner_id=request.target_owner_id,
         replacement_key_id=request.replacement_key_id,
         policy_version="DEE-RECOVERY-2.0",
+        witness_state_root=request.witness_state_root,
+        settlement_hash=request.settlement_hash,
     )
     approvals = (
         build_recovery_approval(keys[0], "REC-SEC", mismatched),
