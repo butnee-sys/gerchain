@@ -24,6 +24,18 @@ class SHUUDApplicationAdapter:
     def create_witness_chain(self, *, initial_state: dict[str, Any], manifest: dict[str, Any], witness_id: str, initial_money_state: dict[str, Any] | None = None) -> Any:
         return self.gateway.dispatch(self.connector_id, "create_witness_chain", initial_state=initial_state, manifest=manifest, witness_id=witness_id, initial_money_state=initial_money_state)
 
+    def restore_witness_chain(self, bundle: dict[str, Any]) -> Any:
+        return self.gateway.dispatch(self.connector_id, "restore_witness_chain", bundle=bundle)
+
+    def create_escrow(self, *, escrow_id: str, amount: int, currency: str, settlement_provider: str, witness_chain: Any) -> Any:
+        return self.gateway.dispatch(self.connector_id, "create_escrow", escrow_id=escrow_id, amount=amount, currency=currency, settlement_provider=settlement_provider, witness_chain=witness_chain)
+
+    def restore_escrow(self, *, escrow_id: str, amount: int, currency: str, state: dict[str, Any], records: list[dict[str, Any]], witness_chain: Any) -> Any:
+        return self.gateway.dispatch(self.connector_id, "restore_escrow", escrow_id=escrow_id, amount=amount, currency=currency, state=state, records=records, witness_chain=witness_chain)
+
+    def verifier(self) -> Any:
+        return self.gateway.dispatch(self.connector_id, "verifier")
+
     def release_escrow(self, escrow: Any, **kwargs: Any) -> Any:
         return self.gateway.dispatch(self.connector_id, "release_escrow", escrow=escrow, **kwargs)
 
