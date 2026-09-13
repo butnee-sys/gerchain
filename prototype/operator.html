@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="mn">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SHUUD — Sandbox Operator</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <main class="shell">
+    <header class="topbar">
+      <div>
+        <div class="eyebrow">SHUUD / SHIID • SANDBOX OPERATOR</div>
+        <h1>Тохиолдлыг хурдан шийдвэрлэ</h1>
+        <p class="muted">Incident → Evidence → SHIID → Clearance → Escrow → Release → Measurement</p>
+      </div>
+      <div class="status-pill" id="systemStatus">READY</div>
+    </header>
+    <section class="hero-grid">
+      <article class="card flow-card">
+        <div class="card-head"><h2>Операторын урсгал</h2><span class="badge">LIVE</span></div>
+        <div class="flow" id="flow">
+          <div class="flow-step active" data-step="incident"><span>1</span><div><b>Incident</b><small>Бүртгэх</small></div></div><div class="flow-line"></div>
+          <div class="flow-step" data-step="evidence"><span>2</span><div><b>Evidence</b><small>Баталгаажуулах</small></div></div><div class="flow-line"></div>
+          <div class="flow-step" data-step="decision"><span>3</span><div><b>SHIID</b><small>Шийдвэр</small></div></div><div class="flow-line"></div>
+          <div class="flow-step" data-step="clearance"><span>4</span><div><b>Clearance</b><small>Зам чөлөөлөх</small></div></div><div class="flow-line"></div>
+          <div class="flow-step" data-step="escrow"><span>5</span><div><b>Escrow</b><small>Мөнгийг түгжих</small></div></div><div class="flow-line"></div>
+          <div class="flow-step" data-step="release"><span>6</span><div><b>Release</b><small>Төлбөр гаргах</small></div></div><div class="flow-line"></div>
+          <div class="flow-step" data-step="summary"><span>7</span><div><b>Measurement</b><small>Үр дүн</small></div></div>
+        </div>
+        <button class="primary" id="runCase">▶ Sandbox тохиолдол ажиллуулах</button>
+      </article>
+      <article class="card metrics-card">
+        <div class="card-head"><h2>Операторын самбар</h2><span class="badge success" id="kpiBadge">READY</span></div>
+        <div class="big-number"><span id="elapsed">00:00</span><small> / 02:00</small></div>
+        <div class="meter"><div id="meterFill"></div></div>
+        <div class="metric-grid">
+          <div><span>Тохиолдол</span><b id="incidentValue">—</b></div>
+          <div><span>SHIID</span><b id="decisionValue">—</b></div>
+          <div><span>Escrow</span><b id="escrowValue">—</b></div>
+          <div><span>Хэмнэлт</span><b id="savedValue">—</b></div>
+        </div>
+      </article>
+    </section>
+    <section class="lower-grid">
+      <article class="card"><div class="card-head"><h2>Шалгалтын нөхцөл</h2><span class="badge">PASS GATES</span></div><div class="checks" id="checks"></div></article>
+      <article class="card"><div class="card-head"><h2>Операторын үйл явдлын бүртгэл</h2><span class="badge">AUDIT VIEW</span></div><div id="log" class="checks"></div></article>
+    </section>
+    <footer class="footer"><span>Sandbox Operator • Бодит API ашиглана</span><span id="incidentLabel">Incident: —</span></footer>
+  </main>
+  <script src="./operator.js"></script>
+</body>
+</html>
