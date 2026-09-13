@@ -24,6 +24,7 @@ from escrow.engine import EscrowEngine
 from gateway import OpenMultiConnectorGateway
 from money.engine import MoneyEngine
 from money.ledger import MoneyLedger
+from verifier.independent_verifier import IndependentVerifier
 from witness.chain import WitnessChain
 
 TRINITY = {"trust": True, "transparency": True, "performance": True}
@@ -43,6 +44,23 @@ def _authorities():
         RecoveryAuthority("GOV-CANONICAL", RecoveryRole.GOVERNANCE, base64.b64encode(governance_key.public_key().public_bytes(serialization.Encoding.Raw, serialization.PublicFormat.Raw)).decode("ascii")),
     )
     return security_key, governance_key, authorities
+
+
+def _witness_bundle(witness: WitnessChain):
+    return {
+        "manifest": witness.manifest,
+        "manifest_hash": witness.manifest_hash,
+        "witness_id": witness.witness_id,
+        "initial_state": witness.initial_state,
+        "entries": [
+            {
+                "record": vars(entry.record).copy(),
+                "event_payload": entry.event_payload,
+                "evidence": entry.evidence,
+            }
+            for entry in witness.entries
+        ],
+    }
 
 
 def test_canonical_dee_e2e_proof_is_derived_from_runtime():
@@ -79,9 +97,23 @@ def test_canonical_dee_e2e_proof_is_derived_from_runtime():
     escrow.transition("LOCKED", "2026-09-14T03:00:02Z", {"case_id": "CANONICAL-E2E"})
     escrow_verified = escrow.get_state()["state"] == "LOCKED"
 
-    checkpoint = witness.checkpoint()
-    witness_verified = bool(checkpoint)
-    require_witness_verification(root=root, owner_id=root.owner_id, proof=WitnessVerificationProof(witness_verified=witness_verified, independent_verifier_verified=witness_verified, state_root_verified=witness_verified, no_fork_verified=witness_verified), trinity_proof=TRINITY)
+    verifier = IndependentVerifier()
+    witness_bundle = _witness_bundle(witness)
+    independent_verified = verifier.verify_bundle(witness_bundle)
+    state_root = verifier.compute_state_root(witness_bundle)
+    no_fork_verified = verifier.verify_no_fork([witness_bundle])
+    witness_verified = independent_verified and state_root is not None and no_fork_verified
+    require_witness_verification(
+        root=root,
+        owner_id=root.owner_id,
+        proof=WitnessVerificationProof(
+            witness_verified=witness_verified,
+            independent_verifier_verified=independent_verified,
+            state_root_verified=state_root is not None,
+            no_fork_verified=no_fork_verified,
+        ),
+        trinity_proof=TRINITY,
+    )
 
     ledger = MoneyLedger("MNT")
     ledger.create_account("ESCROW_POOL", 2_000_000)
