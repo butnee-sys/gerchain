@@ -11,6 +11,7 @@ from .escrow_trinity import EscrowExecutionProof, EscrowTrinityError, require_es
 from .witness_verification import WitnessVerificationError, WitnessVerificationProof, require_witness_verification, verify_witness_bundle
 from .connector_governance import ConnectorAccessRequest, ConnectorGovernanceError, authorize_connector_access
 from .gateway_governance import GatewayAccessRequest, GatewayGovernanceError, authorize_gateway_access
+from .connector_isolation import ConnectorIsolationError, ConnectorIsolationRequest, authorize_connector_isolation
 from .manifest import build_manifest, canonical_manifest
 from .release_policy import ReleaseAuthorization, authorize_release
 from .key_management import OwnerKeyRecord, generate_owner_keypair, key_id_from_public_key, load_private_key, public_key_b64
@@ -29,7 +30,8 @@ __all__ = [
     "CoreAccessError", "CoreAccessRequest", "authorize_core_access", "EXIMPortRequest", "EXIMPortSecurityError", "authorize_exim_port_request",
     "EscrowExecutionProof", "EscrowTrinityError", "require_escrow_trinity", "WitnessVerificationError", "WitnessVerificationProof",
     "require_witness_verification", "verify_witness_bundle", "ConnectorAccessRequest", "ConnectorGovernanceError", "authorize_connector_access",
-    "GatewayAccessRequest", "GatewayGovernanceError", "authorize_gateway_access", "authorize_release", "build_manifest", "canonical_manifest", "ReleaseAuthorization",
+    "GatewayAccessRequest", "GatewayGovernanceError", "authorize_gateway_access", "ConnectorIsolationError", "ConnectorIsolationRequest", "authorize_connector_isolation",
+    "authorize_release", "build_manifest", "canonical_manifest", "ReleaseAuthorization",
     "OwnerKeyRecord", "generate_owner_keypair", "key_id_from_public_key", "load_private_key", "public_key_b64", "SignedRelease", "sign_change", "sign_release", "verify_release",
     "KeyRegistry", "KeyRotationRequest", "build_rotation_request", "PersistentKeyRegistry", "RuntimeAction", "RuntimeAuthorization", "RuntimeGovernance", "RuntimeGovernanceError", "RuntimeIdentity", "RuntimeRole",
     "RecoveryApproval", "RecoveryAuthority", "RecoveryDecision", "RecoveryGovernance", "RecoveryGovernanceError", "RecoveryPolicy", "RecoveryRequest", "RecoveryRole", "build_recovery_approval",
