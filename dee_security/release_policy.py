@@ -32,7 +32,9 @@ def authorize_release(
     if expected_hash != actual_hash:
         raise SecurityError("release manifest hash mismatch")
 
-    if manifest.get("commit_sha") != change.payload_hash:
+    # The signature binds the exact manifest hash, while the manifest itself
+    # binds the Git commit, protected paths, artifact hashes and schema version.
+    if change.payload_hash != expected_hash:
         raise SecurityError("release manifest is not bound to the authorized change")
 
     policy.check(
