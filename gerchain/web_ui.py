@@ -8,19 +8,12 @@ from datetime import datetime
 from pydantic import BaseModel
 from gerchain.database import SessionLocal, engine, Base
 from gerchain.models import RWAAsset, EscrowAccount, AuditTrail, MilestoneEvidence
-
-from shuud.api import router as shuud_router
-from shuud.ui import router as shuud_ui_router
-
 import hashlib
 import math
 
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="Gerchain + NEF RWA Dashboard", version="1.1.0")
-
-app.include_router(shuud_router)
-app.include_router(shuud_ui_router)
 
 @app.on_event("startup")
 def startup_event():
