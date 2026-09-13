@@ -1,0 +1,17 @@
+{
+  "name": "SHUUD Demo",
+  "dockerComposeFile": "../sandbox/docker-compose.yml",
+  "service": "app",
+  "workspaceFolder": "/app",
+  "forwardPorts": [8000, 18000, 55432],
+  "portsAttributes": {
+    "18000": {
+      "label": "SHUUD Demo",
+      "onAutoForward": "openBrowser"
+    },
+    "8000": {
+      "label": "SHUUD API"
+    }
+  },
+  "shutdownAction": "stopCompose"
+}
