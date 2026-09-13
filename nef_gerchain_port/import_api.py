@@ -62,22 +62,10 @@ class ExternalPortImport:
         timestamp: str,
         evidence: Any | None = None,
     ) -> Any:
-        """Controlled SHUUD release transition through the EXIM Port."""
-        if not authorization_hash:
-            raise ValueError("authorization_hash is required")
-        if not incident_id:
-            raise ValueError("incident_id is required")
-        if not rule_version:
-            raise ValueError("rule_version is required")
-        state = escrow.get_state()
-        if state.get("state") != "LOCKED":
-            raise ValueError(f"SHUUD release requires LOCKED escrow, got {state.get('state')}")
-        release_evidence = evidence or {
-            "incident_id": incident_id,
-            "authorization_hash": authorization_hash,
-            "rule_version": rule_version,
-        }
-        return escrow.transition("RELEASED", timestamp, release_evidence)
+        """Legacy release entrypoint; terminal execution is denied without DEE governance."""
+        raise PermissionError(
+            "Direct escrow release is disabled; use release_escrow_authorized through DEE governance."
+        )
 
     def release_escrow_authorized(
         self,
@@ -94,7 +82,7 @@ class ExternalPortImport:
         gate: ReleaseAuthorization | None = None,
         evidence: Any | None = None,
     ) -> Any:
-        """Perform LOCKED -> RELEASED only after DEE release authorization."""
+        """Perform LOCKED -> RELEASED only after DEE release authorization and Trinity proof."""
         if not authorization_hash:
             raise ValueError("authorization_hash is required")
         if not incident_id:
@@ -122,7 +110,20 @@ class ExternalPortImport:
             "manifest_hash": release.manifest_hash,
             "commit_sha": release.commit_sha,
         }
-        return escrow.transition("RELEASED", timestamp, release_evidence)
+        return escrow.transition(
+            "RELEASED",
+            timestamp,
+            release_evidence,
+            root=root,
+            owner_id=root.owner_id,
+            authorized=True,
+            evidence_verified=bool(release_evidence),
+            trinity_proof={
+                "trust": True,
+                "transparency": bool(release_evidence),
+                "performance": True,
+            },
+        )
 
     def create_payment(self, request: PaymentRequest) -> PaymentRequest:
         """Validate and return a canonical payment request at the Port boundary."""

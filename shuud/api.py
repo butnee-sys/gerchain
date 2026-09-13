@@ -1,7 +1,7 @@
 """SHUUD API application-layer orchestration.
 
 SHUUD is an external application. Core NEF–GerChain engines are accessed only
-through the stable EXIM Escrow Port boundary.
+through the SHUUD application boundary.
 """
 
 from datetime import datetime, timezone
@@ -11,7 +11,7 @@ from typing import Any
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
-from nef_gerchain_port import ExternalPortImport, EscrowRequest as PortEscrowRequest
+from application_adapters import SHUUDApplicationAdapter
 from .evidence import EvidenceEnvelope, create_evidence_envelope
 from .incident import Incident, create_incident
 from .measurement_api import MeasurementSummaryRequest
@@ -35,7 +35,7 @@ _WITNESSES: dict[str, Any] = {}
 _ESCROWS: dict[str, Any] = {}
 _PERSISTENCE = SHUUDPersistence(os.getenv("SHUUD_PERSISTENCE_URL", "sqlite:///./gerchain.db"))
 _RUNTIME_STORE = SHUUDRuntimeStore(_PERSISTENCE)
-_PORT_IMPORT = ExternalPortImport()
+_APP_ADAPTER = SHUUDApplicationAdapter()
 
 
 class IncidentRequest(BaseModel):
@@ -168,7 +168,7 @@ def _get_witness(incident_id: str) -> Any:
 def create_shuud_incident(payload: IncidentRequest):
     incident = create_incident(payload.location, vehicle_a=payload.vehicle_a, vehicle_b=payload.vehicle_b,
                                description=payload.description, occurred_at=payload.occurred_at)
-    witness = _PORT_IMPORT.create_witness_chain(
+    witness = _APP_ADAPTER.create_witness_chain(
         initial_state={"value": 0, "incident_id": incident.incident_id},
         manifest={"purpose": "SHUUD sandbox", "incident_id": incident.incident_id},
         witness_id="WITNESS-ROOT-001",
@@ -234,8 +234,9 @@ def create_shuud_escrow(payload: EscrowRequest):
     if payload.escrow_id in _ESCROWS:
         raise HTTPException(status_code=409, detail="ESCROW_ALREADY_EXISTS")
     witness = _get_witness(payload.incident_id)
-    escrow = _PORT_IMPORT.create_escrow(PortEscrowRequest(escrow_id=payload.escrow_id, amount=payload.amount_mnt,
-                                                          currency="MNT", settlement_provider=payload.settlement_provider), witness)
+    escrow = _APP_ADAPTER.create_escrow(escrow_id=payload.escrow_id, amount=payload.amount_mnt,
+                                         currency="MNT", settlement_provider=payload.settlement_provider,
+                                         witness_chain=witness)
     now = _now().isoformat()
     escrow.transition("FUNDED", now, {"incident_id": payload.incident_id, "source": "SHUUD_SANDBOX",
                                       "settlement_provider": payload.settlement_provider})
