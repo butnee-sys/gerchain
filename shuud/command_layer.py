@@ -53,11 +53,11 @@ class CaseRecord:
     economic_measured: bool
     lifecycle: tuple[str, ...] = field(default_factory=tuple)
 
-    @property
-    def within_target(self) -> bool:
+    def within_target(self, target_seconds: float = 120.0) -> bool:
+        """Evaluate the case against the supplied sandbox target."""
         return (
             self.clearance_seconds is not None
-            and self.clearance_seconds <= 120.0
+            and self.clearance_seconds <= target_seconds
         )
 
     @property
@@ -68,7 +68,7 @@ class CaseRecord:
 def validate_case(case: CaseRecord, *, target_seconds: float = 120.0) -> dict:
     """Return case-level evidence without changing persisted state."""
     elapsed = case.clearance_seconds
-    within = elapsed is not None and elapsed <= target_seconds
+    within = case.within_target(target_seconds)
     return {
         "case_id": case.case_id,
         "lifecycle_complete": case.lifecycle_complete,
@@ -164,11 +164,13 @@ def build_command_summary(
     }
 
 
-def summarize_cases(cases: Iterable[CaseRecord], *, target_seconds: float = 120.0) -> Mapping[str, int | float]:
+def summarize_cases(
+    cases: Iterable[CaseRecord], *, target_seconds: float = 120.0
+) -> Mapping[str, int | float]:
     """Produce deterministic case-level counts for adapters and tests."""
     rows = list(cases)
     measured = [c for c in rows if c.clearance_seconds is not None]
-    within = [c for c in measured if c.clearance_seconds <= target_seconds]
+    within = [c for c in measured if c.within_target(target_seconds)]
     economic = [c for c in rows if c.economic_measured]
     return {
         "total_cases": len(rows),
