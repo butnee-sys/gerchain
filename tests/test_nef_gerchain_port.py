@@ -16,27 +16,38 @@ def test_external_port_can_create_witness_and_escrow():
         manifest={"purpose": "external-port-test"},
         witness_id="WITNESS-PORT-001",
     )
-    escrow = port.create_escrow(
-        EscrowRequest(
-            escrow_id="ESCROW-PORT-001",
-            amount=100,
-        ),
-        witness,
-    )
-
+    escrow = port.create_escrow(EscrowRequest(escrow_id="ESCROW-PORT-001", amount=100), witness)
     assert escrow.get_state()["escrow_id"] == "ESCROW-PORT-001"
+    assert escrow.get_state()["state"] == "CREATED"
+
+
+def test_external_port_can_restore_witness_and_escrow():
+    port = ExternalPortImport()
+    witness = port.create_witness_chain(
+        initial_state={"value": 0}, manifest={"purpose": "recovery-test"}, witness_id="WITNESS-PORT-RECOVER"
+    )
+    bundle = {
+        "manifest": witness.manifest,
+        "manifest_hash": witness.manifest_hash,
+        "witness_id": witness.witness_id,
+        "initial_state": witness.initial_state,
+        "entries": [],
+    }
+    restored_witness = port.restore_witness_chain(bundle)
+    escrow = port.restore_escrow(
+        escrow_id="ESCROW-PORT-RECOVER", amount=100, currency="MNT",
+        state={"escrow_id": "ESCROW-PORT-RECOVER", "state": "CREATED"},
+        records=[], witness_chain=restored_witness,
+    )
+    assert restored_witness.witness_id == "WITNESS-PORT-RECOVER"
     assert escrow.get_state()["state"] == "CREATED"
 
 
 def test_external_port_exports_only_port_status():
     port = ExternalPortImport()
-    witness = port.create_witness_chain(
-        initial_state={"value": 0},
-        manifest={"purpose": "external-port-test"},
-        witness_id="WITNESS-PORT-002",
-    )
+    witness = port.create_witness_chain(initial_state={"value": 0}, manifest={"purpose": "external-port-test"},
+                                        witness_id="WITNESS-PORT-002")
     exported = ExternalPortExport().witness_status(witness)
-
     assert exported.port_version == PORT_VERSION
     assert exported.reference_id == "WITNESS-PORT-002"
     assert exported.data["entry_count"] == 0
@@ -45,11 +56,5 @@ def test_external_port_exports_only_port_status():
 def test_core_modules_are_not_imported_by_shuud_integration():
     root = Path(__file__).resolve().parents[1]
     integration = (root / "shuud" / "integration.py").read_text(encoding="utf-8")
-
-    forbidden = (
-        "from escrow",
-        "from witness",
-        "from verifier",
-        "from network.nef",
-    )
+    forbidden = ("from escrow", "from witness", "from verifier", "from network.nef")
     assert not any(token in integration for token in forbidden)
