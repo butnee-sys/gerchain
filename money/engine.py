@@ -48,8 +48,8 @@ class MoneyEngine:
             witness_chain._restore(witness_checkpoint)
             raise
 
-    def atomic_settlement(self, transaction_id: str, target_state: str, source: str, destination: str, amount: int, timestamp: str, evidence: Any, *, root: RootOfTrust | None = None, owner_id: str | None = None, authorized: bool = False, evidence_verified: bool = False, trinity_proof: Mapping[str, bool] | None = None) -> MoneyRecord:
-        """Settle money and terminal escrow state only after DEE governance passes."""
+    def atomic_settlement(self, transaction_id: str, target_state: str, source: str, destination: str, amount: int, timestamp: str, evidence: Any, *, root: RootOfTrust | None = None, owner_id: str | None = None, authorized: bool = False, evidence_verified: bool = False, witness_state_root: str | None = None, trinity_proof: Mapping[str, bool] | None = None) -> MoneyRecord:
+        """Settle money and terminal escrow state only after DEE governance and verified witness state-root proof pass."""
         if root is None or owner_id is None or trinity_proof is None:
             raise ValueError("DEE Root of Trust and Trinity proof are required for atomic settlement")
         if self.escrow.state["state"] != "LOCKED":
@@ -60,7 +60,7 @@ class MoneyEngine:
             raise ValueError("Settlement amount must equal escrow amount.")
         if target_state not in {"RELEASED", "REFUNDED"}:
             raise ValueError("Atomic settlement target must be RELEASED or REFUNDED.")
-        authorize_settlement(root=root, authorization=SettlementAuthorization(transaction_id=transaction_id, escrow_id=self.escrow.escrow_id, owner_id=owner_id, authorized=authorized, evidence_verified=evidence_verified), trinity_proof=trinity_proof)
+        authorize_settlement(root=root, authorization=SettlementAuthorization(transaction_id=transaction_id, escrow_id=self.escrow.escrow_id, owner_id=owner_id, authorized=authorized, evidence_verified=evidence_verified, witness_state_root=witness_state_root or ""), trinity_proof=trinity_proof)
         source_balance = self.ledger.get_balance(source)
         if source_balance < amount:
             raise ValueError("Insufficient escrow balance.")
@@ -74,7 +74,7 @@ class MoneyEngine:
             new_source_balance = source_balance - amount
             destination_balance = self.ledger.get_balance(destination)
             new_destination_balance = destination_balance + amount
-            settlement_obj = {"transaction_id": transaction_id, "sequence": sequence, "source": source, "destination": destination, "amount": amount, "currency": self.ledger.currency, "escrow_id": self.escrow.escrow_id, "previous_escrow_state": "LOCKED", "new_escrow_state": target_state, "previous_source_balance": source_balance, "new_source_balance": new_source_balance, "previous_destination_balance": destination_balance, "new_destination_balance": new_destination_balance}
+            settlement_obj = {"transaction_id": transaction_id, "sequence": sequence, "source": source, "destination": destination, "amount": amount, "currency": self.ledger.currency, "escrow_id": self.escrow.escrow_id, "previous_escrow_state": "LOCKED", "new_escrow_state": target_state, "previous_source_balance": source_balance, "new_source_balance": new_source_balance, "previous_destination_balance": destination_balance, "new_destination_balance": new_destination_balance, "witness_state_root": witness_state_root}
             settlement_hash = domain_hash("ATOMIC_SETTLEMENT", settlement_obj)
             witness_record = witness_chain.append_event(event_id=f"SETTLEMENT-{transaction_id}-{sequence}", event_type="ATOMIC_SETTLEMENT", timestamp=timestamp, payload=settlement_obj, evidence=evidence)
             self.ledger.transfer(source, destination, amount)
