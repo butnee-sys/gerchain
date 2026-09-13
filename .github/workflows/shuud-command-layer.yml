@@ -1,0 +1,21 @@
+name: SHUUD Command Layer
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+  workflow_dispatch:
+
+jobs:
+  command-layer:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install test runner
+        run: python -m pip install "pytest>=8,<10"
+      - name: Run SHUUD command-layer tests
+        run: python -m pytest -q tests/test_shuud_command_layer.py
