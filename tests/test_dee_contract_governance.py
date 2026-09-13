@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import json
 
 import pytest
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
@@ -22,7 +23,12 @@ def _root() -> tuple[RootOfTrust, Ed25519PrivateKey]:
 
 def _change(private: Ed25519PrivateKey, owner: str = "owner-1") -> SignedChange:
     unsigned = SignedChange(owner, "change-1", 1, "contract-payload", "")
-    payload = str(unsigned.signing_payload()).encode()
+    payload = json.dumps(
+        unsigned.signing_payload(),
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+    ).encode("utf-8")
     signature = private.sign(payload)
     return SignedChange(
         owner,
