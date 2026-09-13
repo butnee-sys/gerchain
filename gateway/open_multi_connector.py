@@ -1,8 +1,8 @@
 """Open Multi-Connector Gateway with explicit connector trust controls.
 
 "Open" means extensible by registered connectors, not unauthenticated or
-unrestricted. Authenticated dispatch requires an active connector identity,
-operation authorization, and a request nonce that has not already been used.
+unrestricted. Every connector is authenticated at registration and every
+protected dispatch requires the connector credential plus a fresh nonce.
 Credentials are stored only as fingerprints; audit records never contain
 credential material.
 """
@@ -57,27 +57,24 @@ class OpenMultiConnectorGateway:
         self,
         adapter: ConnectorAdapter,
         *,
-        credential: str | None = None,
-        allowed_operations: set[str] | frozenset[str] | None = None,
+        credential: str,
+        allowed_operations: set[str] | frozenset[str],
     ) -> None:
         connector_id = str(adapter.connector_id).strip()
         if not connector_id:
             raise ValueError("connector_id is required")
         if connector_id in self._connectors:
             raise ValueError(f"connector already registered: {connector_id}")
-        credential_record = None
-        if credential is not None:
-            operations = frozenset(str(value).strip() for value in (allowed_operations or set()))
-            if not operations:
-                raise ValueError("allowed_operations are required for authenticated connectors")
-            credential_record = ConnectorCredential(
-                connector_id=connector_id,
-                credential_fingerprint=self.fingerprint_credential(credential),
-                allowed_operations=operations,
-            )
+        operations = frozenset(str(value).strip() for value in allowed_operations)
+        if not operations:
+            raise ValueError("allowed_operations are required")
+        credential_record = ConnectorCredential(
+            connector_id=connector_id,
+            credential_fingerprint=self.fingerprint_credential(credential),
+            allowed_operations=operations,
+        )
         self._connectors[connector_id] = adapter
-        if credential_record is not None:
-            self._credentials[connector_id] = credential_record
+        self._credentials[connector_id] = credential_record
         self._record("REGISTER", connector_id)
 
     def rotate_credential(
@@ -154,19 +151,12 @@ class OpenMultiConnectorGateway:
         connector_id: str,
         operation: str,
         *,
-        credential: str | None = None,
-        nonce: str | None = None,
+        credential: str,
+        nonce: str,
         **kwargs: Any,
     ) -> Any:
         self.connector(connector_id)
-        if credential is not None or nonce is not None:
-            if credential is None or nonce is None:
-                self._record("DISPATCH", connector_id, operation, "DENIED")
-                raise ValueError("credential and nonce are required together")
-            self.authorize(connector_id, operation, credential=credential, nonce=nonce)
-        elif connector_id in self._credentials:
-            self._record("DISPATCH", connector_id, operation, "DENIED")
-            raise ValueError("authenticated connector requires credential and nonce")
+        self.authorize(connector_id, operation, credential=credential, nonce=nonce)
         adapter = self.connector(connector_id)
         handler = getattr(adapter, operation, None)
         if handler is None or not callable(handler):
