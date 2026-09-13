@@ -21,38 +21,23 @@ class SHUUDApplicationAdapter:
         if self.connector_id not in self.gateway.registered_connectors():
             self.gateway.register(EXIMConnectorAdapter())
 
-    def create_witness_chain(
-        self,
-        *,
-        initial_state: dict[str, Any],
-        manifest: dict[str, Any],
-        witness_id: str,
-        initial_money_state: dict[str, Any] | None = None,
-    ) -> Any:
-        return self.gateway.dispatch(
-            self.connector_id,
-            "create_witness_chain",
-            initial_state=initial_state,
-            manifest=manifest,
-            witness_id=witness_id,
-            initial_money_state=initial_money_state,
-        )
+    def create_witness_chain(self, *, initial_state: dict[str, Any], manifest: dict[str, Any], witness_id: str, initial_money_state: dict[str, Any] | None = None) -> Any:
+        return self.gateway.dispatch(self.connector_id, "create_witness_chain", initial_state=initial_state, manifest=manifest, witness_id=witness_id, initial_money_state=initial_money_state)
 
     def release_escrow(self, escrow: Any, **kwargs: Any) -> Any:
-        return self.gateway.dispatch(
-            self.connector_id,
-            "release_escrow",
-            escrow=escrow,
-            **kwargs,
-        )
+        return self.gateway.dispatch(self.connector_id, "release_escrow", escrow=escrow, **kwargs)
 
     def release_escrow_authorized(self, escrow: Any, **kwargs: Any) -> Any:
-        return self.gateway.dispatch(
-            self.connector_id,
-            "release_escrow_authorized",
-            escrow=escrow,
-            **kwargs,
-        )
+        return self.gateway.dispatch(self.connector_id, "release_escrow_authorized", escrow=escrow, **kwargs)
+
+    def export_status(self, **kwargs: Any) -> Any:
+        return self.gateway.dispatch(self.connector_id, "export_status", **kwargs)
+
+    def export_escrow_status(self, **kwargs: Any) -> Any:
+        return self.gateway.dispatch(self.connector_id, "export_escrow_status", **kwargs)
+
+    def export_settlement(self, **kwargs: Any) -> Any:
+        return self.gateway.dispatch(self.connector_id, "export_settlement_status", **kwargs)
 
     def export_evidence(self, **kwargs: Any) -> Any:
         return self.gateway.dispatch(self.connector_id, "export_evidence_status", **kwargs)
