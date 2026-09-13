@@ -1,2 +1,4 @@
 # DEE Root of Trust / Owner Authorization
 cryptography>=43,<47
+# SHUUD boundary persistence used by the DEE ecosystem gate
+SQLAlchemy>=2,<3
