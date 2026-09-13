@@ -1,7 +1,8 @@
 """SHUUD runtime state store.
 
 Keeps persistence concerns outside the FastAPI route functions while preserving
-GerChain WitnessChain as the verification authority.
+NEF–GerChain WitnessChain and EscrowEngine as authoritative infrastructure,
+accessed only through the EXIM Escrow Port.
 """
 
 from __future__ import annotations
@@ -9,7 +10,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from .integration import EscrowEngine, EscrowRecord, WitnessChain
+from nef_gerchain_port import ExternalPortImport
 from .evidence import EvidenceEnvelope
 from .incident import Incident
 from .metrics import OperationalTiming
@@ -18,12 +19,15 @@ from .release import ReleaseAuthorization
 from .shiid import Decision, SHIIDDecision
 
 
+_PORT_IMPORT = ExternalPortImport()
+
+
 class SHUUDRuntimeStore:
     def __init__(self, persistence: SHUUDPersistence) -> None:
         self.persistence = persistence
 
     @staticmethod
-    def witness_bundle(witness: WitnessChain) -> dict[str, Any]:
+    def witness_bundle(witness: Any) -> dict[str, Any]:
         return {
             "manifest": witness.manifest,
             "manifest_hash": witness.manifest_hash,
@@ -43,11 +47,11 @@ class SHUUDRuntimeStore:
         self,
         *,
         incident: Incident,
-        witness: WitnessChain,
+        witness: Any,
         evidence: EvidenceEnvelope | None = None,
         decision: SHIIDDecision | None = None,
         authorization: ReleaseAuthorization | None = None,
-        escrow: EscrowEngine | None = None,
+        escrow: Any | None = None,
         settlement_provider: str = "NEF",
         operational_timing: OperationalTiming | None = None,
     ) -> dict[str, Any]:
@@ -91,17 +95,15 @@ class SHUUDRuntimeStore:
                 "records": [record.__dict__ for record in escrow.records],
                 "settlement_provider": settlement_provider,
             },
-            "operational_timing": None
-            if operational_timing is None
-            else operational_timing.as_dict(),
+            "operational_timing": None if operational_timing is None else operational_timing.as_dict(),
             "witness_bundle": self.witness_bundle(witness),
         }
 
-    def save(self, incident: Incident, witness: WitnessChain, **kwargs: Any) -> None:
+    def save(self, incident: Incident, witness: Any, **kwargs: Any) -> None:
         snapshot = self.snapshot(incident=incident, witness=witness, **kwargs)
         self.persistence.save_snapshot(incident.incident_id, snapshot)
 
-    def recover_witness(self, incident_id: str) -> WitnessChain:
+    def recover_witness(self, incident_id: str) -> Any:
         return self.persistence.recover_witness(incident_id)
 
     @staticmethod
@@ -163,19 +165,15 @@ class SHUUDRuntimeStore:
         )
 
     @staticmethod
-    def recover_escrow(
-        snapshot: dict[str, Any],
-        witness: WitnessChain,
-    ) -> EscrowEngine | None:
+    def recover_escrow(snapshot: dict[str, Any], witness: Any) -> Any | None:
         raw = snapshot.get("escrow")
         if raw is None:
             return None
-        escrow = EscrowEngine(
+        return _PORT_IMPORT.restore_escrow(
             escrow_id=raw["escrow_id"],
-            amount=raw["amount"],
+            amount=int(raw["amount"]),
             currency=raw["currency"],
+            state=raw["state"],
+            records=raw.get("records", []),
             witness_chain=witness,
         )
-        escrow.state = raw["state"]
-        escrow.records = [EscrowRecord(**record) for record in raw.get("records", [])]
-        return escrow
