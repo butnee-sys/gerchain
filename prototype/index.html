@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="mn">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SHUUD — 2 минутанд замаа чөлөөл</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <main class="shell">
+    <header class="topbar">
+      <div>
+        <div class="eyebrow">SHUUD / SHIID • DEMO PROTOTYPE</div>
+        <h1>2 минутанд замаа чөлөөл</h1>
+        <p class="muted">Нийслэл, даатгал, зохицуулагчид үзүүлэх танилцуулгын хувилбар.</p>
+      </div>
+      <div class="status-pill" id="systemStatus">DEMO MODE</div>
+    </header>
+
+    <section class="hero-grid">
+      <article class="card flow-card">
+        <div class="card-head">
+          <h2>Нэг тохиолдлын урсгал</h2>
+          <span class="badge">SHUUD</span>
+        </div>
+        <div class="flow" id="flow">
+          <div class="flow-step active" data-step="incident"><span>1</span><div><b>Incident</b><small>Тохиолдол бүртгэх</small></div></div>
+          <div class="flow-line"></div>
+          <div class="flow-step" data-step="evidence"><span>2</span><div><b>Evidence</b><small>Нотлох мэдээлэл</small></div></div>
+          <div class="flow-line"></div>
+          <div class="flow-step" data-step="decision"><span>3</span><div><b>SHIID</b><small>Дүрэмд суурилсан шийдвэр</small></div></div>
+          <div class="flow-line"></div>
+          <div class="flow-step" data-step="clearance"><span>4</span><div><b>Clearance</b><small>Зам чөлөөлөлт</small></div></div>
+          <div class="flow-line"></div>
+          <div class="flow-step" data-step="escrow"><span>5</span><div><b>Escrow</b><small>MNT / NEF</small></div></div>
+          <div class="flow-line"></div>
+          <div class="flow-step" data-step="release"><span>6</span><div><b>Release</b><small>Төлбөр чөлөөлөх</small></div></div>
+          <div class="flow-line"></div>
+          <div class="flow-step" data-step="summary"><span>7</span><div><b>Measurement</b><small>Хугацаа + эдийн засаг</small></div></div>
+        </div>
+        <button class="primary" id="runDemo">▶ Demo-г эхлүүлэх</button>
+      </article>
+
+      <article class="card metrics-card">
+        <div class="card-head">
+          <h2>Гол үзүүлэлт</h2>
+          <span class="badge success" id="kpiBadge">READY</span>
+        </div>
+        <div class="big-number"><span id="elapsed">00:00</span><small> / 02:00</small></div>
+        <div class="meter"><div id="meterFill"></div></div>
+        <div class="metric-grid">
+          <div><span>SHIID шийдвэр</span><b id="decisionValue">—</b></div>
+          <div><span>Escrow</span><b id="escrowValue">—</b></div>
+          <div><span>Төлбөрийн эх үүсвэр</span><b id="providerValue">—</b></div>
+          <div><span>Хэмнэсэн хугацаа</span><b id="savedValue">—</b></div>
+        </div>
+      </article>
+    </section>
+
+    <section class="lower-grid">
+      <article class="card">
+        <div class="card-head"><h2>SHIID шалгалт</h2><span class="badge">RULES</span></div>
+        <div class="checks" id="checks"></div>
+      </article>
+
+      <article class="card">
+        <div class="card-head"><h2>Системийн утга</h2><span class="badge">ARCHITECTURE</span></div>
+        <div class="arch">
+          <div><b>SHUUD</b><small>Үйлчилгээ</small></div>
+          <div class="arrow">→</div>
+          <div><b>SHIID</b><small>Шийдвэр</small></div>
+          <div class="arrow">→</div>
+          <div><b>GerChain</b><small>Нотолгоо • төлөв • эскроу • аудит</small></div>
+          <div class="arrow">→</div>
+          <div><b>NEF</b><small>Төлбөрийн дэд бүтэц</small></div>
+        </div>
+      </article>
+    </section>
+
+    <footer class="footer">
+      <span>Прототип • Бодит Sandbox-д нэвтрүүлэхээс өмнөх танилцуулгын хувилбар</span>
+      <span id="incidentLabel">Incident: —</span>
+    </footer>
+  </main>
+  <script src="./app.js"></script>
+</body>
+</html>

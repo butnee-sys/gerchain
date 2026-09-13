@@ -462,7 +462,7 @@ def get_operational_metrics(incident_id: str):
         "incident_id": incident.incident_id,
         "milestones": timing.as_dict(),
         "durations": durations,
-        "within_two_minutes": timing.within_two_minutes,
+        "within_two_minutes": timing.within_two_minutes(),
         "snapshot_persisted": snapshot is not None,
     }
 
