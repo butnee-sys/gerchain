@@ -5,91 +5,23 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>SHUUD — 2 минутын дотор замаа чөлөөл</title>
   <link rel="stylesheet" href="./styles.css">
-  <style>
-    .nav{display:flex;gap:8px;flex-wrap:wrap;margin-top:18px}.nav a{color:inherit;text-decoration:none;padding:9px 12px;border:1px solid rgba(255,255,255,.12);border-radius:10px;background:rgba(255,255,255,.04)}.nav a:hover{background:rgba(255,255,255,.08)}
-  </style>
+  <style>.nav{display:flex;gap:8px;flex-wrap:wrap;margin-top:18px}.nav a{color:inherit;text-decoration:none;padding:9px 12px;border:1px solid rgba(255,255,255,.12);border-radius:10px;background:rgba(255,255,255,.04)}.nav a:hover{background:rgba(255,255,255,.08)}</style>
 </head>
 <body>
-  <main class="shell">
-    <header class="topbar">
-      <div>
-        <div class="eyebrow">SHUUD / SHIID • LIVE MVP</div>
-        <h1>2 минутын дотор замаа чөлөөл.</h1>
-        <p class="muted">Нийслэл, даатгал, зохицуулагчид болон хөрөнгө оруулагчдад үзүүлэх бодит урсгалын прототип.</p>
-        <nav class="nav" aria-label="SHUUD demo navigation">
-          <a href="./index.html">SHUUD</a>
-          <a href="./operator.html">Оператор</a>
-          <a href="./sandbox-kpi.html">Sandbox KPI</a>
-        </nav>
-      </div>
-      <div class="status-pill" id="systemStatus">READY</div>
-    </header>
-
-    <section class="hero-grid">
-      <article class="card flow-card">
-        <div class="card-head">
-          <h2>Нэг тохиолдлын бүрэн урсгал</h2>
-          <span class="badge">SHUUD</span>
-        </div>
-        <div class="flow" id="flow">
-          <div class="flow-step active" data-step="incident"><span>1</span><div><b>Тохиолдол</b><small>Бүртгэх</small></div></div>
-          <div class="flow-line"></div>
-          <div class="flow-step" data-step="evidence"><span>2</span><div><b>Баримт</b><small>Нотлох мэдээлэл</small></div></div>
-          <div class="flow-line"></div>
-          <div class="flow-step" data-step="decision"><span>3</span><div><b>SHIID</b><small>Дүрэмд суурилсан шийдвэр</small></div></div>
-          <div class="flow-line"></div>
-          <div class="flow-step" data-step="clearance"><span>4</span><div><b>Зам чөлөөлөх</b><small>≤ 120 секунд</small></div></div>
-          <div class="flow-line"></div>
-          <div class="flow-step" data-step="escrow"><span>5</span><div><b>Эх үүсвэр</b><small>Төлбөрийн баталгаа</small></div></div>
-          <div class="flow-line"></div>
-          <div class="flow-step" data-step="release"><span>6</span><div><b>Төлбөр</b><small>Чөлөөлөх</small></div></div>
-          <div class="flow-line"></div>
-          <div class="flow-step" data-step="summary"><span>7</span><div><b>Үр дүн</b><small>Хугацаа + эдийн засаг</small></div></div>
-        </div>
-        <button class="primary" id="runDemo">▶ Бүтэн мөчлөг турших</button>
-      </article>
-
-      <article class="card metrics-card">
-        <div class="card-head">
-          <h2>Гол үзүүлэлт</h2>
-          <span class="badge success" id="kpiBadge">READY</span>
-        </div>
-        <div class="big-number"><span id="elapsed">00:00</span><small> / 02:00</small></div>
-        <div class="meter"><div id="meterFill"></div></div>
-        <div class="metric-grid">
-          <div><span>SHIID шийдвэр</span><b id="decisionValue">—</b></div>
-          <div><span>Төлбөрийн төлөв</span><b id="escrowValue">—</b></div>
-          <div><span>Эх үүсвэр</span><b id="providerValue">—</b></div>
-          <div><span>Нийт хэмнэлт</span><b id="savedValue">—</b></div>
-        </div>
-      </article>
-    </section>
-
-    <section class="lower-grid">
-      <article class="card">
-        <div class="card-head"><h2>SHIID шалгалт</h2><span class="badge">RULES</span></div>
-        <div class="checks" id="checks"></div>
-      </article>
-
-      <article class="card">
-        <div class="card-head"><h2>Үйлчилгээний утга</h2><span class="badge">ARCHITECTURE</span></div>
-        <div class="arch">
-          <div><b>SHUUD</b><small>Тохиолдол мэдээлэх</small></div>
-          <div class="arrow">→</div>
-          <div><b>SHIID</b><small>Шийдвэр</small></div>
-          <div class="arrow">→</div>
-          <div><b>Баталгаажуулалт</b><small>Баримт • төлөв • төлбөр</small></div>
-          <div class="arrow">→</div>
-          <div><b>Зам чөлөөлөх</b><small>Хөдөлгөөнийг саатуулах хугацааг бууруулах</small></div>
-        </div>
-      </article>
-    </section>
-
-    <footer class="footer">
-      <span>SHUUD MVP • Sandbox-д нэвтрүүлэхэд бэлэн болгох хувилбар</span>
-      <span id="incidentLabel">Тохиолдол: —</span>
-    </footer>
-  </main>
-  <script src="./app.js"></script>
-</body>
-</html>
+<main class="shell">
+<header class="topbar"><div><div class="eyebrow">SHUUD / SHIID • LIVE MVP</div><h1>2 минутын дотор замаа чөлөөл.</h1><p class="muted">Нийслэл, даатгал, зохицуулагчид болон хөрөнгө оруулагчдад үзүүлэх бодит урсгалын прототип.</p><nav class="nav"><a href="./index.html">SHUUD</a><a href="./operator.html">Оператор</a><a href="./sandbox-kpi.html">Sandbox KPI</a></nav></div><div class="status-pill" id="systemStatus">READY</div></header>
+<section class="hero-grid">
+<article class="card flow-card"><div class="card-head"><h2>Нэг тохиолдлын бүрэн урсгал</h2><span class="badge">SHUUD</span></div><div class="flow" id="flow">
+<div class="flow-step active" data-step="incident"><span>1</span><div><b>Тохиолдол</b><small>Бүртгэх</small></div></div><div class="flow-line"></div>
+<div class="flow-step" data-step="evidence"><span>2</span><div><b>Баримт</b><small>Нотлох мэдээлэл</small></div></div><div class="flow-line"></div>
+<div class="flow-step" data-step="decision"><span>3</span><div><b>SHIID</b><small>Дүрэмд суурилсан шийдвэр</small></div></div><div class="flow-line"></div>
+<div class="flow-step" data-step="clearance"><span>4</span><div><b>Зам чөлөөлөх</b><small>≤ 120 секунд</small></div></div><div class="flow-line"></div>
+<div class="flow-step" data-step="escrow"><span>5</span><div><b>Эх үүсвэр</b><small>Төлбөрийн баталгаа</small></div></div><div class="flow-line"></div>
+<div class="flow-step" data-step="release"><span>6</span><div><b>Төлбөр</b><small>Чөлөөлөх</small></div></div><div class="flow-line"></div>
+<div class="flow-step" data-step="summary"><span>7</span><div><b>Үр дүн</b><small>Хугацаа + эдийн засаг</small></div></div></div><button class="primary" id="runDemo">▶ Бүтэн мөчлөг турших</button></article>
+<article class="card metrics-card"><div class="card-head"><h2>Гол үзүүлэлт</h2><span class="badge success" id="kpiBadge">READY</span></div><div class="big-number"><span id="elapsed">00:00</span><small> / 02:00</small></div><div class="meter"><div id="meterFill"></div></div><div class="metric-grid"><div><span>SHIID шийдвэр</span><b id="decisionValue">—</b></div><div><span>Төлбөрийн төлөв</span><b id="escrowValue">—</b></div><div><span>Эх үүсвэр</span><b id="providerValue">—</b></div><div><span>Нийт хэмнэлт</span><b id="savedValue">—</b></div></div></article>
+</section>
+<section class="lower-grid"><article class="card"><div class="card-head"><h2>SHIID шалгалт</h2><span class="badge">RULES</span></div><div class="checks" id="checks"></div></article><article class="card"><div class="card-head"><h2>Үйлчилгээний утга</h2><span class="badge">ARCHITECTURE</span></div><div class="arch"><div><b>SHUUD</b><small>Тохиолдол мэдээлэх</small></div><div class="arrow">→</div><div><b>SHIID</b><small>Шийдвэр</small></div><div class="arrow">→</div><div><b>Баталгаажуулалт</b><small>Баримт • төлөв • төлбөр</small></div><div class="arrow">→</div><div><b>Зам чөлөөлөх</b><small>Хөдөлгөөнийг саатуулах хугацааг бууруулах</small></div></div></article></section>
+<footer class="footer"><span>SHUUD MVP • Sandbox-д нэвтрүүлэхэд бэлэн болгох хувилбар</span><span id="incidentLabel">Тохиолдол: —</span></footer>
+</main><script src="./live-demo.js"></script>
+</body></html>
