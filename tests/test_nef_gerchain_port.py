@@ -1,12 +1,15 @@
 from pathlib import Path
 
-from nef_gerchain_port.contract import PORT_VERSION, EscrowRequest
+import pytest
+
+from nef_gerchain_port.contract import EXIM_PORT_VERSION, PORT_VERSION, EscrowRequest
 from nef_gerchain_port.export_api import ExternalPortExport
 from nef_gerchain_port.import_api import ExternalPortImport
 
 
-def test_external_port_has_explicit_version():
-    assert PORT_VERSION == "1.0"
+def test_exim_port_has_explicit_version():
+    assert EXIM_PORT_VERSION == "1.0"
+    assert PORT_VERSION == EXIM_PORT_VERSION
 
 
 def test_external_port_can_create_witness_and_escrow():
@@ -19,6 +22,20 @@ def test_external_port_can_create_witness_and_escrow():
     escrow = port.create_escrow(EscrowRequest(escrow_id="ESCROW-PORT-001", amount=100), witness)
     assert escrow.get_state()["escrow_id"] == "ESCROW-PORT-001"
     assert escrow.get_state()["state"] == "CREATED"
+
+
+def test_external_port_rejects_non_integer_money_amounts():
+    port = ExternalPortImport()
+    witness = port.create_witness_chain(initial_state={"value": 0}, manifest={}, witness_id="WITNESS-MONEY-001")
+    with pytest.raises((TypeError, ValueError)):
+        port.create_escrow(EscrowRequest(escrow_id="ESCROW-MONEY-001", amount=100.5), witness)
+
+
+def test_external_port_rejects_non_positive_amounts():
+    port = ExternalPortImport()
+    witness = port.create_witness_chain(initial_state={"value": 0}, manifest={}, witness_id="WITNESS-MONEY-002")
+    with pytest.raises(ValueError):
+        port.create_escrow(EscrowRequest(escrow_id="ESCROW-MONEY-002", amount=0), witness)
 
 
 def test_external_port_can_restore_witness_and_escrow():
