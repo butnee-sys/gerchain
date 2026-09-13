@@ -32,10 +32,10 @@ def _change(private_key: Ed25519PrivateKey, version: int = 1) -> SignedChange:
     return SignedChange(**{**unsigned.__dict__, "signature": _sign(private_key, unsigned)})
 
 
-def _root(private: Ed25519PrivateKey) -> RootOfTrust:
+def _root(private_key: Ed25519PrivateKey) -> RootOfTrust:
     return RootOfTrust(
         "owner:primary",
-        base64.b64encode(private.public_key().public_bytes_raw()).decode(),
+        base64.b64encode(private_key.public_key().public_bytes_raw()).decode(),
     )
 
 
@@ -173,7 +173,7 @@ def test_authorized_port_release_requires_the_dee_release_gate():
     )
 
     assert escrow.get_state()["state"] == "RELEASED"
-    assert escrow.records[-1].evidence["release_id"] == "release-port-001"
+    assert escrow.witness_chain.entries[-1].evidence["release_id"] == "release-port-001"
 
 
 def test_authorized_port_release_rejects_invalid_signature_before_transition():
