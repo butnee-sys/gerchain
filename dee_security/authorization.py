@@ -30,6 +30,7 @@ class AuthorizationPolicy:
     )
     minimum_version: int = 1
     _seen_change_ids: set[str] = field(default_factory=set, compare=False, repr=False)
+    _seen_release_ids: set[str] = field(default_factory=set, compare=False, repr=False)
 
     def protects(self, path: str) -> bool:
         return any(path == prefix or path.startswith(prefix) for prefix in self.protected_prefixes)
@@ -53,6 +54,13 @@ class AuthorizationPolicy:
             raise SecurityError("replayed change_id")
         root.require_valid(change)
         self._seen_change_ids.add(change.change_id)
+
+    def reserve_release_id(self, release_id: str) -> None:
+        if not release_id:
+            raise SecurityError("release_id is required")
+        if release_id in self._seen_release_ids:
+            raise SecurityError("replayed release_id")
+        self._seen_release_ids.add(release_id)
 
 
 def authorize_change(
