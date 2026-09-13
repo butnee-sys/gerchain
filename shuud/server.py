@@ -40,7 +40,7 @@ if not any(
     app.include_router(shuud_case_intake_router)
 
 # Serve the SHUUD presentation UIs from the same origin as the API so browser
-demos can use the real sandbox/API without CORS or a second server.
+# demos can use the real sandbox/API without CORS or a second server.
 prototype_dir = Path(__file__).resolve().parent.parent / "prototype"
 if prototype_dir.is_dir():
     if not any(getattr(route, "path", None) == "/shuud-demo" for route in app.routes):
