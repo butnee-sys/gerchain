@@ -27,6 +27,9 @@ _PERSISTENCE = SHUUDPersistence(
     os.getenv("SHUUD_PERSISTENCE_URL", "sqlite:///./gerchain.db")
 )
 
+ECONOMIC_MODEL_VERSION = "shuud-economic-v1"
+DEFAULT_TARGET_SECONDS = 120.0
+
 
 class EconomicMeasurementRequest(BaseModel):
     baseline_seconds: float = Field(ge=0)
@@ -51,12 +54,17 @@ def _rows(start_at: datetime | None = None) -> list[dict[str, Any]]:
     return snapshots
 
 
-def aggregate_snapshots(snapshots: list[dict[str, Any]]) -> dict[str, Any]:
+def aggregate_snapshots(
+    snapshots: list[dict[str, Any]],
+    *,
+    target_seconds: float = DEFAULT_TARGET_SECONDS,
+) -> dict[str, Any]:
     """Aggregate one canonical snapshot per incident without transient-state input.
 
     ``shuud_state`` is keyed by incident_id, so each snapshot represents one
-    authoritative case. Economic values are read only from the persisted
-    ``economic_measurement`` object; they are never recomputed here.
+    authoritative case. Economic values are read only from persisted
+    ``shuud-economic-v1`` records; other objects are not counted as economic
+    evidence and are never recomputed here.
     """
     clearance: list[float] = []
     approved = 0
@@ -66,6 +74,8 @@ def aggregate_snapshots(snapshots: list[dict[str, Any]]) -> dict[str, Any]:
         snapshot["economic_measurement"]
         for snapshot in snapshots
         if isinstance(snapshot.get("economic_measurement"), dict)
+        and snapshot["economic_measurement"].get("model_version")
+        == ECONOMIC_MODEL_VERSION
     ]
 
     for snapshot in snapshots:
@@ -79,7 +89,7 @@ def aggregate_snapshots(snapshots: list[dict[str, Any]]) -> dict[str, Any]:
             if seconds < 0:
                 continue
             clearance.append(seconds)
-            if seconds <= 120:
+            if seconds <= target_seconds:
                 within += 1
 
         decision = snapshot.get("decision") or {}
@@ -100,6 +110,7 @@ def aggregate_snapshots(snapshots: list[dict[str, Any]]) -> dict[str, Any]:
     return {
         "status": "success",
         "scope": "90-day-sandbox",
+        "target_seconds": target_seconds,
         "total_cases": total,
         "measured_clearance_cases": measured,
         "within_two_minutes_cases": within,
@@ -131,8 +142,12 @@ def aggregate_snapshots(snapshots: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
-def _aggregate(start_at: datetime | None = None) -> dict[str, Any]:
-    return aggregate_snapshots(_rows(start_at))
+def _aggregate(
+    start_at: datetime | None = None,
+    *,
+    target_seconds: float = DEFAULT_TARGET_SECONDS,
+) -> dict[str, Any]:
+    return aggregate_snapshots(_rows(start_at), target_seconds=target_seconds)
 
 
 @router.post("/metrics/{incident_id}/economic", response_model=dict)
@@ -159,7 +174,7 @@ def persist_economic_measurement(
         raise HTTPException(status_code=422, detail="ECONOMIC_MEASUREMENT_REQUIRED")
 
     record = {
-        "model_version": "shuud-economic-v1",
+        "model_version": ECONOMIC_MODEL_VERSION,
         "baseline_seconds": economic.baseline_seconds,
         "actual_clearance_seconds": economic.actual_seconds,
         "time_saved_seconds": economic.time_saved_seconds,
