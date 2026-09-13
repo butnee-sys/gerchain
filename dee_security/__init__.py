@@ -16,6 +16,17 @@ from .runtime_governance import (
     RuntimeIdentity,
     RuntimeRole,
 )
+from .recovery import (
+    RecoveryApproval,
+    RecoveryAuthority,
+    RecoveryDecision,
+    RecoveryGovernance,
+    RecoveryGovernanceError,
+    RecoveryPolicy,
+    RecoveryRequest,
+    RecoveryRole,
+    build_recovery_approval,
+)
 
 __all__ = [
     "AuthorizationPolicy", "RootOfTrust", "SecurityError", "SignedChange",
@@ -24,4 +35,6 @@ __all__ = [
     "SignedRelease", "sign_change", "sign_release", "verify_release",
     "KeyRegistry", "KeyRotationRequest", "build_rotation_request", "PersistentKeyRegistry",
     "RuntimeAction", "RuntimeAuthorization", "RuntimeGovernance", "RuntimeGovernanceError", "RuntimeIdentity", "RuntimeRole",
+    "RecoveryApproval", "RecoveryAuthority", "RecoveryDecision", "RecoveryGovernance", "RecoveryGovernanceError",
+    "RecoveryPolicy", "RecoveryRequest", "RecoveryRole", "build_recovery_approval",
 ]
