@@ -14,13 +14,27 @@ def authenticated_gateway():
 
 
 def test_gateway_registers_and_dispatches_named_connector():
-    gateway = OpenMultiConnectorGateway()
-    adapter = EXIMConnectorAdapter()
-    gateway.register(adapter)
-    assert gateway.registered_connectors() == ("EXIM",)
-    result = gateway.dispatch("EXIM", "export_status", status="ACTIVE", reference_id="CASE-1")
+    gateway = authenticated_gateway()
+    result = gateway.dispatch(
+        "EXIM", "export_status", credential="EXIM-SANDBOX-SECRET", nonce="N-000",
+        status="ACTIVE", reference_id="CASE-1",
+    )
     assert result.status == "ACTIVE"
     assert result.reference_id == "CASE-1"
+
+
+def test_gateway_requires_connector_credential_at_registration():
+    gateway = OpenMultiConnectorGateway()
+    with pytest.raises(TypeError):
+        gateway.register(EXIMConnectorAdapter())
+    assert gateway.registered_connectors() == ()
+
+
+def test_gateway_requires_nonempty_allowed_operations():
+    gateway = OpenMultiConnectorGateway()
+    with pytest.raises(ValueError, match="allowed_operations"):
+        gateway.register(EXIMConnectorAdapter(), credential="SECRET", allowed_operations=set())
+    assert gateway.registered_connectors() == ()
 
 
 def test_gateway_rejects_unknown_connector():
@@ -31,14 +45,13 @@ def test_gateway_rejects_unknown_connector():
 
 def test_gateway_rejects_duplicate_connector():
     gateway = OpenMultiConnectorGateway()
-    gateway.register(EXIMConnectorAdapter())
+    gateway.register(EXIMConnectorAdapter(), credential="SECRET", allowed_operations=READ_OPS)
     with pytest.raises(ValueError, match="already registered"):
-        gateway.register(EXIMConnectorAdapter())
+        gateway.register(EXIMConnectorAdapter(), credential="SECRET-2", allowed_operations=READ_OPS)
 
 
 def test_gateway_revocation_removes_connector():
-    gateway = OpenMultiConnectorGateway()
-    gateway.register(EXIMConnectorAdapter())
+    gateway = authenticated_gateway()
     gateway.revoke("EXIM")
     assert gateway.registered_connectors() == ()
 
@@ -119,10 +132,3 @@ def test_gateway_audit_never_contains_credential_material():
     audit = repr(gateway.audit_events())
     assert "EXIM-SANDBOX-SECRET" not in audit
     assert gateway.audit_events()[-1].outcome == "SUCCESS"
-
-
-def test_invalid_authenticated_registration_is_atomic():
-    gateway = OpenMultiConnectorGateway()
-    with pytest.raises(ValueError, match="allowed_operations"):
-        gateway.register(EXIMConnectorAdapter(), credential="SECRET", allowed_operations=set())
-    assert gateway.registered_connectors() == ()
