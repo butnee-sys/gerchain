@@ -1,15 +1,15 @@
-"""SHUUD integration boundary for the NEF–GerChain ecosystem.
+"""Compatibility shim for the SHUUD application.
 
-SHUUD is the application product.  GerChain remains the authoritative
-infrastructure for escrow, witness, and independent verification.  All
-SHUUD-side access to those core engines should pass through this module so the
-product boundary stays explicit and testable.
+The stable boundary is now ``nef_gerchain_port``.  Keep this module only as a
+short-term compatibility surface while SHUUD callers are migrated.
 """
 
-from escrow.engine import EscrowEngine
-from escrow.record import EscrowRecord
-from verifier.independent_verifier import IndependentVerifier
-from witness.chain import WitnessChain
+from nef_gerchain_port.gerchain_adapter import (
+    EscrowEngine,
+    EscrowRecord,
+    IndependentVerifier,
+    WitnessChain,
+)
 
 __all__ = [
     "EscrowEngine",
