@@ -1,0 +1,1 @@
+The PR is intended to validate the read-only command decision layer against durable sandbox evidence.
