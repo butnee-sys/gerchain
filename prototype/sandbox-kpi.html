@@ -6,7 +6,7 @@
   <title>SHUUD — Sandbox KPI</title>
   <link rel="stylesheet" href="./styles.css">
   <style>
-    .kpi-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:18px}.kpi{padding:16px;border:1px solid #e4e9e6;border-radius:12px;background:#fff}.kpi span{display:block;font-size:12px;color:#68756e}.kpi b{display:block;font-size:28px;margin-top:6px}.bar{height:10px;background:#edf1ee;border-radius:999px;overflow:hidden}.bar>i{display:block;height:100%;background:#2d6a4f;border-radius:999px}.table{width:100%;border-collapse:collapse;background:#fff}.table th,.table td{text-align:left;padding:10px;border-bottom:1px solid #edf1ee;font-size:13px}.muted2{color:#68756e}@media(max-width:900px){.kpi-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:560px){.kpi-grid{grid-template-columns:1fr}.table{font-size:12px}}
+    .kpi-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:18px}.kpi{padding:16px;border:1px solid #e4e9e6;border-radius:12px;background:#fff}.kpi span{display:block;font-size:12px;color:#68756e}.kpi b{display:block;font-size:28px;margin-top:6px}.bar{height:10px;background:#edf1ee;border-radius:999px;overflow:hidden}.bar>i{display:block;height:100%;background:#2d6a4f;border-radius:999px}.table{width:100%;border-collapse:collapse;background:#fff}.table th,.table td{text-align:left;padding:10px;border-bottom:1px solid #edf1ee;font-size:13px}.muted2{color:#68756e}.toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap}.toolbar select{padding:10px 12px;border:1px solid #d9e0db;border-radius:10px;background:#fff}.progress{margin-top:14px}.progress-line{display:flex;justify-content:space-between;font-size:12px;color:#68756e}.note{padding:12px;border-radius:10px;background:#f7f9f7;color:#55625b;font-size:12px;line-height:1.5;margin-top:12px}@media(max-width:900px){.kpi-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:560px){.kpi-grid{grid-template-columns:1fr}.table{font-size:12px}}
   </style>
 </head>
 <body>
@@ -15,53 +15,61 @@
     <div>
       <div class="eyebrow">SHUUD / SHIID • 90-DAY SANDBOX</div>
       <h1>Sandbox KPI самбар</h1>
-      <p class="muted">Техникийн баталгаажсан хэмжүүрүүдийг нэг дэлгэцэнд харах танилцуулгын хувилбар.</p>
+      <p class="muted">Олон sandbox case-ийн техникийн хэмжүүрийг нэг session-д нэгтгэн харуулна.</p>
     </div>
     <div class="status-pill" id="status">READY</div>
   </header>
 
   <section class="kpi-grid">
-    <article class="kpi"><span>Тохиолдлын зорилт</span><b>≤ 120 сек</b></article>
-    <article class="kpi"><span>Settlement provider</span><b>NEF</b></article>
-    <article class="kpi"><span>Валют</span><b>MNT</b></article>
-    <article class="kpi"><span>Scope</span><b>≤ ₮2M</b></article>
+    <article class="kpi"><span>Нийт case</span><b id="totalCases">0</b></article>
+    <article class="kpi"><span>≤ 120 секунд</span><b id="passRate">—</b></article>
+    <article class="kpi"><span>Дундаж clearance</span><b id="avgClearance">—</b></article>
+    <article class="kpi"><span>Нийт хэмнэлт</span><b id="totalSavings">0 MNT</b></article>
   </section>
 
   <section class="hero-grid">
     <article class="card">
-      <div class="card-head"><h2>Sandbox measurement model</h2><span class="badge">OBSERVED</span></div>
-      <div style="margin-bottom:14px"><div class="muted2">2 минутын зорилтын биелэлт</div><div class="bar" style="margin-top:8px"><i id="targetBar" style="width:0%"></i></div></div>
-      <div class="metric-grid">
-        <div><span>Observed clearance</span><b id="clearance">—</b></div>
-        <div><span>Within 120 sec</span><b id="within">—</b></div>
-        <div><span>Time saved</span><b id="saved">—</b></div>
-        <div><span>Incident</span><b id="incident">—</b></div>
-      </div>
-      <div style="margin-top:16px;display:flex;gap:10px;flex-wrap:wrap">
-        <button class="primary" id="run">▶ Шинэ sandbox case</button>
+      <div class="card-head"><h2>Sandbox batch runner</h2><span class="badge">LIVE API</span></div>
+      <p class="muted">Existing SHUUD API дээр дараалсан 1, 3 эсвэл 5 controlled case ажиллуулна.</p>
+      <div class="toolbar">
+        <label for="batch">Case тоо</label>
+        <select id="batch"><option value="1">1</option><option value="3" selected>3</option><option value="5">5</option></select>
+        <button class="primary" id="run">▶ Sandbox session ажиллуулах</button>
         <a class="badge" href="./operator.html">Operator view →</a>
         <a class="badge" href="./index.html">Demo →</a>
       </div>
+      <div class="progress">
+        <div class="progress-line"><span>Session progress</span><span id="progressText">0 / 3</span></div>
+        <div class="bar" style="margin-top:8px"><i id="progressBar" style="width:0%"></i></div>
+      </div>
+      <div class="note"><b>Анхаарах:</b> clearance нь sandbox API-ийн incident үүссэнээс clearance баталгаажсан хүртэлх техникийн хугацаа. Энэ нь зам дээрх бодит field clearance time гэсэн нотолгоо биш.</div>
     </article>
 
     <article class="card">
-      <div class="card-head"><h2>90 хоногийн gate</h2><span class="badge success">SCOPE</span></div>
+      <div class="card-head"><h2>Aggregate KPI</h2><span class="badge success">SESSION</span></div>
+      <div class="metric-grid">
+        <div><span>Median clearance</span><b id="medianClearance">—</b></div>
+        <div><span>Release success</span><b id="releaseRate">—</b></div>
+        <div><span>SHIID approve</span><b id="approveRate">—</b></div>
+        <div><span>Cases failed</span><b id="failedCases">0</b></div>
+      </div>
+      <p class="muted2" style="margin-top:14px">Sandbox model inputs</p>
       <div class="checks">
-        <div class="check"><span>Incident → Evidence</span><b class="ok">LIVE</b></div>
-        <div class="check"><span>Evidence → SHIID</span><b class="ok">LIVE</b></div>
-        <div class="check"><span>SHIID → Clearance</span><b class="ok">LIVE</b></div>
-        <div class="check"><span>Clearance ≤120s</span><b class="ok">MEASURE</b></div>
-        <div class="check"><span>Escrow → Release</span><b class="ok">LIVE</b></div>
-        <div class="check"><span>PostgreSQL restart recovery</span><b class="ok">VERIFIED</b></div>
+        <div class="check"><span>Baseline</span><b>600 sec</b></div>
+        <div class="check"><span>Affected vehicles</span><b>2</b></div>
+        <div class="check"><span>Vehicle value/min</span><b>1,000 MNT</b></div>
+        <div class="check"><span>Insurer cost/min</span><b>500 MNT</b></div>
+        <div class="check"><span>Public road cost/min</span><b>800 MNT</b></div>
+        <div class="check"><span>Escrow / settlement</span><b>MNT / NEF</b></div>
       </div>
     </article>
   </section>
 
   <section class="card" style="margin-top:18px">
-    <div class="card-head"><h2>Тухайн session</h2><span class="badge" id="caseState">READY</span></div>
+    <div class="card-head"><h2>Case-by-case result</h2><span class="badge" id="caseState">READY</span></div>
     <table class="table">
-      <thead><tr><th>Алхам</th><th>Төлөв</th><th>Хэмжүүр</th></tr></thead>
-      <tbody id="events"><tr><td colspan="3" class="muted2">Одоогоор case ажиллуулаагүй.</td></tr></tbody>
+      <thead><tr><th>#</th><th>Incident</th><th>SHIID</th><th>Clearance</th><th>≤120s</th><th>Release</th><th>Saving</th></tr></thead>
+      <tbody id="cases"><tr><td colspan="7" class="muted2">Одоогоор session ажиллуулаагүй.</td></tr></tbody>
     </table>
   </section>
 
