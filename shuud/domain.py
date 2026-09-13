@@ -7,7 +7,7 @@ prevents an application event from being confused with an escrow transition.
 
 from typing import Any, Mapping
 
-from core.hashing import domain_hash
+from .hashing import domain_hash
 
 SHUUD_DOMAIN = "SHUUD"
 
