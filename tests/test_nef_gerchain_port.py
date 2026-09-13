@@ -141,6 +141,92 @@ def test_exported_dtos_enforce_version_and_invariants():
         )
 
 
+def test_exim_port_level_e2e_import_verify_release_export():
+    port = ExternalPortImport()
+    exporter = ExternalPortExport()
+
+    asset = AssetImportRequest(
+        asset_id="ASSET-E2E-001",
+        asset_type="VEHICLE",
+        value_nef=2_000_000,
+        metadata={"source": "SHUUD"},
+    )
+    contract = ContractImportRequest(
+        contract_id="CONTRACT-E2E-001",
+        parties=("DRIVER", "INSURER"),
+        terms={"release": "VERIFIED_PERFORMANCE"},
+    )
+    evidence = EvidenceImportRequest(
+        evidence_id="EVID-E2E-001",
+        case_id="CASE-E2E-001",
+        evidence={"minor_incident": True, "verified": True},
+    )
+
+    assert port.validate_asset(asset) is True
+    assert port.validate_contract(contract) is True
+    assert port.validate_evidence(evidence) is True
+
+    witness = port.create_witness_chain(
+        initial_state={"case_id": evidence.case_id, "asset_id": asset.asset_id},
+        manifest={"contract_id": contract.contract_id, "port_version": PORT_VERSION},
+        witness_id="WITNESS-E2E-001",
+    )
+    escrow = port.create_escrow(
+        EscrowRequest(
+            escrow_id="ESCROW-E2E-001",
+            amount=100_000,
+            currency="MNT",
+            settlement_provider="NEF",
+        ),
+        witness,
+    )
+
+    escrow.transition("FUNDED", "2026-09-13T15:00:00Z", {"evidence_id": evidence.evidence_id})
+    escrow.transition("LOCKED", "2026-09-13T15:00:01Z", {"evidence_id": evidence.evidence_id})
+
+    settlement_before_release = exporter.settlement_status(escrow)
+    assert isinstance(settlement_before_release, ExportedSettlement)
+    assert settlement_before_release.status == "LOCKED"
+    assert settlement_before_release.amount == 100_000
+    assert settlement_before_release.currency == "MNT"
+    assert settlement_before_release.settlement_provider == "NEF"
+
+    port.release_escrow(
+        escrow,
+        incident_id=evidence.case_id,
+        authorization_hash="AUTH-E2E-001",
+        rule_version="SHUUD-1.0",
+        timestamp="2026-09-13T15:00:02Z",
+        evidence={
+            "evidence_id": evidence.evidence_id,
+            "evidence_hash": "EVIDENCE-HASH-E2E-001",
+            "verified_performance": True,
+        },
+    )
+
+    final_status = exporter.escrow_status(escrow)
+    exported_evidence = exporter.evidence(
+        evidence_id=evidence.evidence_id,
+        case_id=evidence.case_id,
+        evidence_hash="EVIDENCE-HASH-E2E-001",
+        metadata={"verified": True},
+    )
+    exported_audit = exporter.audit_event(
+        reference_id=evidence.case_id,
+        event_type="ESCROW_RELEASED",
+        timestamp="2026-09-13T15:00:02Z",
+        evidence_hash=exported_evidence.evidence_hash,
+        data={"escrow_id": "ESCROW-E2E-001"},
+    )
+
+    assert final_status.status == "RELEASED"
+    assert final_status.reference_id == "ESCROW-E2E-001"
+    assert exported_evidence.port_version == PORT_VERSION
+    assert exported_audit.event_type == "ESCROW_RELEASED"
+    assert exported_audit.evidence_hash == "EVIDENCE-HASH-E2E-001"
+    assert len(escrow.records) == 3
+
+
 def test_external_port_exports_versioned_evidence():
     exported = ExternalPortExport().evidence(
         evidence_id="EVID-PORT-001",
