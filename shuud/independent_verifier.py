@@ -1,14 +1,13 @@
 """SHUUD-specific verification boundary.
 
-This module does not implement cryptography or a second witness chain. It
-reuses GerChain's existing IndependentVerifier for cryptographic/state
-verification and adds only SHUUD domain invariants required before release.
+SHUUD owns only application-domain invariants. The authoritative GerChain
+IndependentVerifier is obtained through the EXIM Escrow Port.
 """
 
 from dataclasses import dataclass
 from typing import Any, Dict
 
-from .integration import IndependentVerifier
+from nef_gerchain_port import ExternalPortImport
 
 
 EXPECTED_CURRENCY = "MNT"
@@ -26,8 +25,8 @@ class SHUUDVerificationResult:
 class SHUUDIndependentVerifier:
     """Independent verification adapter for the SHUUD application domain."""
 
-    def __init__(self, verifier: IndependentVerifier | None = None):
-        self._verifier = verifier or IndependentVerifier()
+    def __init__(self, verifier: Any | None = None):
+        self._verifier = verifier or ExternalPortImport().verifier()
 
     def verify_bundle(self, bundle: Dict[str, Any]) -> SHUUDVerificationResult:
         reasons: list[str] = []
@@ -80,11 +79,7 @@ class SHUUDIndependentVerifier:
         if len(incident_ids) != 1:
             reasons.append("MULTIPLE_OR_MISSING_INCIDENT_IDS")
 
-        required = {
-            "SHUUD_EVIDENCE_LOCKED",
-            "SHIID_DECISION",
-            "SHUUD_RELEASE_AUTHORIZED",
-        }
+        required = {"SHUUD_EVIDENCE_LOCKED", "SHIID_DECISION", "SHUUD_RELEASE_AUTHORIZED"}
         if not required.issubset(set(event_types)):
             reasons.append("SHUUD_LIFECYCLE_INCOMPLETE")
 
@@ -94,61 +89,35 @@ class SHUUDIndependentVerifier:
         if len(escrow_ids) != 1:
             reasons.append("ESCROW_REFERENCE_INVALID")
 
-        # Release must be the final escrow transition represented by the
-        # witness bundle. SHUUD itself never authorizes money movement.
-        # The authoritative EscrowEngine records previous_state/new_state;
-        # the verifier must validate the deterministic lifecycle explicitly.
-        escrow_events = [
-            e for e in entries
-            if e.get("record", {}).get("event_type") == "ESCROW_TRANSITION"
-        ]
+        escrow_events = [e for e in entries if e.get("record", {}).get("event_type") == "ESCROW_TRANSITION"]
         if not escrow_events:
             reasons.append("NO_ESCROW_TRANSITIONS")
         else:
             escrow_states = [
-                (
-                    e.get("event_payload", {}).get("previous_state"),
-                    e.get("event_payload", {}).get("new_state"),
-                )
+                (e.get("event_payload", {}).get("previous_state"), e.get("event_payload", {}).get("new_state"))
                 for e in escrow_events
             ]
-            expected_path = [
-                ("CREATED", "FUNDED"),
-                ("FUNDED", "LOCKED"),
-                ("LOCKED", "RELEASED"),
-            ]
+            expected_path = [("CREATED", "FUNDED"), ("FUNDED", "LOCKED"), ("LOCKED", "RELEASED")]
             if escrow_states != expected_path:
                 reasons.append("ESCROW_LIFECYCLE_INVALID")
             if escrow_events[-1].get("event_payload", {}).get("new_state") != "RELEASED":
                 reasons.append("ESCROW_NOT_RELEASED")
 
-            escrow_transition_ids = {
-                e.get("event_payload", {}).get("escrow_id")
-                for e in escrow_events
-            }
+            escrow_transition_ids = {e.get("event_payload", {}).get("escrow_id") for e in escrow_events}
             if len(escrow_transition_ids) != 1 or escrow_transition_ids != escrow_ids:
                 reasons.append("ESCROW_ID_MISMATCH")
 
-            escrow_amounts = {
-                e.get("event_payload", {}).get("amount")
-                for e in escrow_events
-            }
+            escrow_amounts = {e.get("event_payload", {}).get("amount") for e in escrow_events}
             if len(decision_damage_estimates) != 1 or len(escrow_amounts) != 1:
                 reasons.append("ESCROW_AMOUNT_REFERENCE_INVALID")
             elif decision_damage_estimates[0] != next(iter(escrow_amounts)):
                 reasons.append("ESCROW_AMOUNT_MISMATCH")
 
-            escrow_currencies = {
-                e.get("event_payload", {}).get("currency")
-                for e in escrow_events
-            }
+            escrow_currencies = {e.get("event_payload", {}).get("currency") for e in escrow_events}
             if escrow_currencies != {EXPECTED_CURRENCY}:
                 reasons.append("ESCROW_CURRENCY_INVALID")
 
-            settlement_providers = {
-                e.get("evidence", {}).get("settlement_provider")
-                for e in escrow_events
-            }
+            settlement_providers = {e.get("evidence", {}).get("settlement_provider") for e in escrow_events}
             if settlement_providers != {EXPECTED_SETTLEMENT_PROVIDER}:
                 reasons.append("SETTLEMENT_PROVIDER_INVALID")
 
