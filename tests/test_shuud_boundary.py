@@ -10,10 +10,6 @@ CORE_MODULES = {
     "verifier",
     "network",
 }
-ADAPTER_MODULES = {
-    "nef_gerchain_port.gerchain_adapter",
-    "nef_gerchain_port.nef_adapter",
-}
 
 
 def _repo_root() -> Path:
@@ -30,7 +26,9 @@ def _imports(path: Path) -> list[tuple[str, int]]:
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
             imports.extend((alias.name, node.lineno) for alias in node.names)
-        elif isinstance(node, ast.ImportFrom) and node.module:
+        elif isinstance(node, ast.ImportFrom) and node.module and node.level == 0:
+            # Relative imports such as `from .witness import ...` stay inside
+            # the SHUUD application and are not core-module imports.
             imports.append((node.module, node.lineno))
     return imports
 
