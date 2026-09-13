@@ -69,7 +69,7 @@ def _start_server(database_url: str, port: int) -> subprocess.Popen[str]:
             sys.executable,
             "-m",
             "uvicorn",
-            "gerchain.web_ui:app",
+            "shuud.server:app",
             "--host",
             "127.0.0.1",
             "--port",
