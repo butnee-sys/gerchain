@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 import hashlib
 import json
+import os
 from typing import Any
 
 from application_adapters import SHUUDApplicationAdapter
@@ -50,16 +51,15 @@ def release_escrow(
     escrow: Any,
     authorization: ReleaseAuthorization,
     *,
-    credential: str,
-    nonce: str,
+    credential: str | None = None,
     timestamp: str | None = None,
     evidence: Any | None = None,
 ):
     """Delegate LOCKED -> RELEASED through the authenticated application boundary."""
-    adapter = SHUUDApplicationAdapter(credential=credential)
+    gateway_credential = credential or os.getenv("SHUUD_EXIM_CREDENTIAL", "")
+    adapter = SHUUDApplicationAdapter(credential=gateway_credential)
     return adapter.release_escrow(
         escrow,
-        nonce=nonce,
         authorization_hash=authorization.authorization_hash,
         incident_id=authorization.incident_id,
         rule_version=authorization.rule_version,
