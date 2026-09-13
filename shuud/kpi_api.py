@@ -6,6 +6,8 @@ state remains owned by the existing SHUUD persistence/runtime paths.
 
 from __future__ import annotations
 
+import json
+import os
 from datetime import datetime, timedelta, timezone
 from statistics import median
 from typing import Any
@@ -17,11 +19,9 @@ from .persistence import SHUUDPersistence, SHUUDStateRow
 
 router = APIRouter(prefix="/api/v1/shuud/sandbox", tags=["SHUUD Sandbox KPI"])
 
-_PERSISTENCE = SHUUDPersistence()
-
-
-def _as_bool(value: Any) -> bool:
-    return value is True or value == "1"
+_PERSISTENCE = SHUUDPersistence(
+    os.getenv("SHUUD_PERSISTENCE_URL", "sqlite:///./gerchain.db")
+)
 
 
 def _rows(start_at: datetime | None = None) -> list[dict[str, Any]]:
@@ -31,7 +31,7 @@ def _rows(start_at: datetime | None = None) -> list[dict[str, Any]]:
     start_iso = start_at.astimezone(timezone.utc).isoformat() if start_at else None
     snapshots: list[dict[str, Any]] = []
     for row in rows:
-        snapshot = __import__("json").loads(row.snapshot_json)
+        snapshot = json.loads(row.snapshot_json)
         recorded = snapshot.get("operational_timing", {}).get("incident_created_at")
         if start_iso and (recorded is None or recorded < start_iso):
             continue
@@ -41,10 +41,11 @@ def _rows(start_at: datetime | None = None) -> list[dict[str, Any]]:
 
 def _aggregate(start_at: datetime | None = None) -> dict[str, Any]:
     snapshots = _rows(start_at)
-    clearance = []
+    clearance: list[float] = []
     approved = 0
     released = 0
     within = 0
+
     for snapshot in snapshots:
         timing = snapshot.get("operational_timing") or {}
         created = timing.get("incident_created_at")
@@ -56,11 +57,14 @@ def _aggregate(start_at: datetime | None = None) -> dict[str, Any]:
             clearance.append(seconds)
             if seconds <= 120:
                 within += 1
+
         decision = snapshot.get("decision") or {}
         if decision.get("decision") == "APPROVE":
             approved += 1
+
         escrow = snapshot.get("escrow") or {}
-        if (escrow.get("state") or {}).get("state") == "RELEASED":
+        escrow_state = escrow.get("state") or {}
+        if escrow_state.get("state") == "RELEASED":
             released += 1
 
     total = len(snapshots)
