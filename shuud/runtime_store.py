@@ -2,7 +2,7 @@
 
 Keeps persistence concerns outside the FastAPI route functions while preserving
 NEF–GerChain WitnessChain and EscrowEngine as authoritative infrastructure,
-accessed only through the EXIM Escrow Port.
+accessed through the SHUUD application boundary.
 """
 
 from __future__ import annotations
@@ -10,7 +10,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from nef_gerchain_port import ExternalPortImport
+from application_adapters import SHUUDApplicationAdapter
 from .evidence import EvidenceEnvelope
 from .incident import Incident
 from .metrics import OperationalTiming
@@ -19,7 +19,7 @@ from .release import ReleaseAuthorization
 from .shiid import Decision, SHIIDDecision
 
 
-_PORT_IMPORT = ExternalPortImport()
+_APP_ADAPTER = SHUUDApplicationAdapter()
 
 
 class SHUUDRuntimeStore:
@@ -169,7 +169,7 @@ class SHUUDRuntimeStore:
         raw = snapshot.get("escrow")
         if raw is None:
             return None
-        return _PORT_IMPORT.restore_escrow(
+        return _APP_ADAPTER.restore_escrow(
             escrow_id=raw["escrow_id"],
             amount=int(raw["amount"]),
             currency=raw["currency"],
