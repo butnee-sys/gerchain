@@ -27,6 +27,7 @@ from .recovery import (
     RecoveryRole,
     build_recovery_approval,
 )
+from .genesis import GenesisAnchor, GenesisError, build_genesis_anchor, verify_genesis_anchor
 
 __all__ = [
     "AuthorizationPolicy", "RootOfTrust", "SecurityError", "SignedChange",
@@ -37,4 +38,5 @@ __all__ = [
     "RuntimeAction", "RuntimeAuthorization", "RuntimeGovernance", "RuntimeGovernanceError", "RuntimeIdentity", "RuntimeRole",
     "RecoveryApproval", "RecoveryAuthority", "RecoveryDecision", "RecoveryGovernance", "RecoveryGovernanceError",
     "RecoveryPolicy", "RecoveryRequest", "RecoveryRole", "build_recovery_approval",
+    "GenesisAnchor", "GenesisError", "build_genesis_anchor", "verify_genesis_anchor",
 ]
