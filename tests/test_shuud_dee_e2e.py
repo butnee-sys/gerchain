@@ -94,7 +94,10 @@ def test_shuud_full_dee_flow_through_exim_port():
     manifest = build_manifest(
         version=1,
         commit_sha="shuud-e2e-proof",
-        protected_paths=["dee_security", "nef_gerchain_port"],
+        protected_paths=[
+            "nef_gerchain_port/contract.py",
+            "nef_gerchain_port/import_api.py",
+        ],
         artifact_hashes={"SHUUD": evidence.content_hash},
         schema_version="1",
     )
