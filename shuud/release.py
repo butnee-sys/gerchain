@@ -1,16 +1,15 @@
-"""SHUUD -> GerChain release authorization bridge.
+"""SHUUD -> EXIM Escrow Port release authorization bridge.
 
-This module does not implement a second escrow engine. It creates an
-immutable release authorization from a SHIID approval and delegates the
-actual state transition to the existing GerChain EscrowEngine.
+SHUUD creates the release authorization from a SHIID approval. The actual
+GerChain escrow state transition is delegated to the external Port so SHUUD
+does not import or call GerChain core engines directly.
 """
 
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
 
-from core.hashing import domain_hash
-from escrow.engine import EscrowEngine
+from nef_gerchain_port import ExternalPortImport
 
 from .shiid import Decision, SHIIDDecision
 
@@ -42,42 +41,40 @@ def authorize_release(
         "reasons": list(decision.reasons),
     }
 
+    # Keep the SHUUD authorization hash local to the application boundary.
+    import hashlib
+    import json
+
+    canonical = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    authorization_hash = hashlib.sha256(
+        ("SHUUD_RELEASE_AUTH:" + canonical).encode("utf-8")
+    ).hexdigest()
+
     return ReleaseAuthorization(
         incident_id=decision.incident_id,
         escrow_id=escrow_id.strip(),
         rule_version=decision.rule_version,
-        authorization_hash=domain_hash("SHUUD_RELEASE_AUTH", payload),
+        authorization_hash=authorization_hash,
     )
 
 
 def release_escrow(
-    escrow: EscrowEngine,
+    escrow: Any,
     authorization: ReleaseAuthorization,
     *,
     timestamp: str | None = None,
     evidence: Any | None = None,
 ):
-    """Delegate LOCKED -> RELEASED to the existing GerChain EscrowEngine."""
-    if escrow.escrow_id != authorization.escrow_id:
-        raise ValueError("authorization does not belong to escrow")
-
-    state = escrow.get_state()
-    if state["state"] != "LOCKED":
-        raise ValueError(
-            f"SHUUD release requires LOCKED escrow, got {state['state']}"
-        )
-
+    """Delegate LOCKED -> RELEASED to the EXIM Escrow Port."""
+    port = ExternalPortImport()
     release_timestamp = timestamp or datetime.now(timezone.utc).isoformat()
-    release_evidence = evidence or {
-        "incident_id": authorization.incident_id,
-        "authorization_hash": authorization.authorization_hash,
-        "rule_version": authorization.rule_version,
-    }
-
-    return escrow.transition(
-        "RELEASED",
-        release_timestamp,
-        release_evidence,
+    return port.release_escrow(
+        escrow,
+        incident_id=authorization.incident_id,
+        authorization_hash=authorization.authorization_hash,
+        rule_version=authorization.rule_version,
+        timestamp=release_timestamp,
+        evidence=evidence,
     )
 
 
