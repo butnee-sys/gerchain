@@ -1,7 +1,7 @@
 """Durable SHUUD state persistence adapter.
 
 Keeps storage concerns in SHUUD while authoritative GerChain reconstruction
-is delegated to the NEF–GerChain external port.
+is delegated through the SHUUD application boundary.
 """
 
 from __future__ import annotations
@@ -12,7 +12,7 @@ from typing import Any
 from sqlalchemy import Column, String, Text, create_engine, update
 from sqlalchemy.orm import declarative_base, sessionmaker
 
-from nef_gerchain_port import ExternalPortImport
+from application_adapters import SHUUDApplicationAdapter
 
 
 Base = declarative_base()
@@ -38,7 +38,7 @@ class SHUUDPersistence:
         self.engine = create_engine(database_url, connect_args=connect_args)
         self.SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=self.engine)
         Base.metadata.create_all(bind=self.engine)
-        self._port = ExternalPortImport()
+        self._app_adapter = SHUUDApplicationAdapter()
 
     @staticmethod
     def _canonical_snapshot(snapshot: dict[str, Any]) -> str:
@@ -135,7 +135,7 @@ class SHUUDPersistence:
         bundle = snapshot.get("witness_bundle")
         if not isinstance(bundle, dict):
             raise ValueError("persisted SHUUD snapshot is missing witness_bundle")
-        return self._port.restore_witness_chain(bundle)
+        return self._app_adapter.restore_witness_chain(bundle)
 
 
 __all__ = ["SHUUDPersistence", "SHUUDSandboxConfigRow", "SHUUDStateRow", "Base"]
