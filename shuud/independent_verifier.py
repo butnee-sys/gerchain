@@ -1,13 +1,13 @@
 """SHUUD-specific verification boundary.
 
 SHUUD owns only application-domain invariants. The authoritative GerChain
-IndependentVerifier is obtained through the EXIM Escrow Port.
+IndependentVerifier is obtained through the SHUUD application adapter.
 """
 
 from dataclasses import dataclass
 from typing import Any, Dict
 
-from nef_gerchain_port import ExternalPortImport
+from application_adapters import SHUUDApplicationAdapter
 
 
 EXPECTED_CURRENCY = "MNT"
@@ -26,7 +26,7 @@ class SHUUDIndependentVerifier:
     """Independent verification adapter for the SHUUD application domain."""
 
     def __init__(self, verifier: Any | None = None):
-        self._verifier = verifier or ExternalPortImport().verifier()
+        self._verifier = verifier or SHUUDApplicationAdapter().verifier()
 
     def verify_bundle(self, bundle: Dict[str, Any]) -> SHUUDVerificationResult:
         reasons: list[str] = []
