@@ -2,7 +2,15 @@ from pathlib import Path
 
 import pytest
 
-from nef_gerchain_port.contract import EXIM_PORT_VERSION, PORT_VERSION, EscrowRequest
+from nef_gerchain_port.contract import (
+    EXIM_PORT_VERSION,
+    PORT_VERSION,
+    AssetImportRequest,
+    ContractImportRequest,
+    EscrowRequest,
+    EvidenceImportRequest,
+    PaymentRequest,
+)
 from nef_gerchain_port.export_api import ExternalPortExport
 from nef_gerchain_port.import_api import ExternalPortImport
 
@@ -38,6 +46,35 @@ def test_external_port_rejects_non_positive_amounts():
         port.create_escrow(EscrowRequest(escrow_id="ESCROW-MONEY-002", amount=0), witness)
 
 
+def test_contract_money_boundary_rejects_bool_and_negative_values():
+    with pytest.raises(TypeError):
+        EscrowRequest(escrow_id="ESCROW-BOOL", amount=True)
+    with pytest.raises(ValueError):
+        PaymentRequest(escrow_id="ESCROW-NEG", amount=-1)
+    with pytest.raises(ValueError):
+        AssetImportRequest(asset_id="ASSET-001", asset_type="LIVESTOCK", value_nef=0)
+
+
+def test_contract_boundary_rejects_unsupported_currency_and_provider():
+    with pytest.raises(ValueError):
+        EscrowRequest(escrow_id="ESCROW-USD", amount=100, currency="USD")
+    with pytest.raises(ValueError):
+        PaymentRequest(escrow_id="ESCROW-BANK", amount=100, settlement_provider="BANK")
+
+
+def test_import_contract_dtos_require_identifiers():
+    with pytest.raises(ValueError):
+        EvidenceImportRequest(evidence_id="", case_id="CASE-001", evidence={})
+    with pytest.raises(ValueError):
+        EvidenceImportRequest(evidence_id="EVID-001", case_id="", evidence={})
+    with pytest.raises(ValueError):
+        ContractImportRequest(contract_id="", parties=("PARTY-A",))
+    with pytest.raises(ValueError):
+        ContractImportRequest(contract_id="CONTRACT-001", parties=())
+    with pytest.raises(ValueError):
+        ContractImportRequest(contract_id="CONTRACT-001", parties=("",))
+
+
 def test_external_port_can_restore_witness_and_escrow():
     port = ExternalPortImport()
     witness = port.create_witness_chain(
@@ -58,6 +95,28 @@ def test_external_port_can_restore_witness_and_escrow():
     )
     assert restored_witness.witness_id == "WITNESS-PORT-RECOVER"
     assert escrow.get_state()["state"] == "CREATED"
+
+
+def test_external_port_exports_versioned_evidence():
+    exported = ExternalPortExport().evidence(
+        evidence_id="EVID-PORT-001",
+        case_id="CASE-PORT-001",
+        evidence_hash="abc123",
+        metadata={"source": "SHUUD"},
+    )
+    assert exported.port_version == PORT_VERSION
+    assert exported.evidence_id == "EVID-PORT-001"
+    assert exported.case_id == "CASE-PORT-001"
+    assert exported.evidence_hash == "abc123"
+    assert exported.metadata["source"] == "SHUUD"
+
+
+def test_external_port_evidence_export_requires_identifiers():
+    exporter = ExternalPortExport()
+    with pytest.raises(ValueError):
+        exporter.evidence(evidence_id="", case_id="CASE-001")
+    with pytest.raises(ValueError):
+        exporter.evidence(evidence_id="EVID-001", case_id="")
 
 
 def test_external_port_exports_only_port_status():
