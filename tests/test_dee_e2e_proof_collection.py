@@ -53,11 +53,7 @@ def _witness_bundle(witness: WitnessChain):
         "witness_id": witness.witness_id,
         "initial_state": witness.initial_state,
         "entries": [
-            {
-                "record": vars(entry.record).copy(),
-                "event_payload": entry.event_payload,
-                "evidence": entry.evidence,
-            }
+            {"record": vars(entry.record).copy(), "event_payload": entry.event_payload, "evidence": entry.evidence}
             for entry in witness.entries
         ],
     }
@@ -103,23 +99,13 @@ def test_canonical_dee_e2e_proof_is_derived_from_runtime():
     state_root = verifier.compute_state_root(witness_bundle)
     no_fork_verified = verifier.verify_no_fork([witness_bundle])
     witness_verified = independent_verified and state_root is not None and no_fork_verified
-    require_witness_verification(
-        root=root,
-        owner_id=root.owner_id,
-        proof=WitnessVerificationProof(
-            witness_verified=witness_verified,
-            independent_verifier_verified=independent_verified,
-            state_root_verified=state_root is not None,
-            no_fork_verified=no_fork_verified,
-        ),
-        trinity_proof=TRINITY,
-    )
+    require_witness_verification(root=root, owner_id=root.owner_id, proof=WitnessVerificationProof(witness_verified=witness_verified, independent_verifier_verified=independent_verified, state_root_verified=state_root is not None, no_fork_verified=no_fork_verified), trinity_proof=TRINITY)
 
     ledger = MoneyLedger("MNT")
     ledger.create_account("ESCROW_POOL", 2_000_000)
     ledger.create_account("BENEFICIARY", 0)
     money = MoneyEngine(ledger, escrow)
-    money.atomic_settlement("TX-CANONICAL-E2E", "RELEASED", "ESCROW_POOL", "BENEFICIARY", 2_000_000, "2026-09-14T03:00:03Z", {"case_id": "CANONICAL-E2E"}, root=root, owner_id=root.owner_id, authorized=True, evidence_verified=evidence_verified, trinity_proof=TRINITY)
+    money.atomic_settlement("TX-CANONICAL-E2E", "RELEASED", "ESCROW_POOL", "BENEFICIARY", 2_000_000, "2026-09-14T03:00:03Z", {"case_id": "CANONICAL-E2E"}, root=root, owner_id=root.owner_id, authorized=True, evidence_verified=evidence_verified, witness_state_root=state_root, trinity_proof=TRINITY)
     settlement_verified = ledger.balances["BENEFICIARY"] == 2_000_000 and ledger.balances["ESCROW_POOL"] == 0 and escrow.get_state()["state"] == "RELEASED"
 
     authorize_failure_isolation(root=root, request=FailureIsolationRequest("ESCROW", "INC-CANONICAL-E2E", root.owner_id, "ISOLATE", "NEF_GERCHAIN", "ISOLATE"), trinity_proof=TRINITY)
@@ -134,7 +120,7 @@ def test_canonical_dee_e2e_proof_is_derived_from_runtime():
     authorize_governed_release(root=root, request=ReleaseGovernanceRequest("REL-CANONICAL-E2E", root.owner_id, "REQ-REL-CANONICAL-E2E"), release_gate=ReleaseAuthorization(), policy=AuthorizationPolicy(), release=release, manifest=manifest, trinity_proof=TRINITY)
     release_verified = True
 
-    a1 = append_record(sequence=1, event="CANONICAL_SETTLEMENT", change_id="TX-CANONICAL-E2E", owner_id=root.owner_id, decision="ALLOW", stage="SETTLEMENT", connector_id="EXIM", request_id="TX-CANONICAL-E2E", operation="SETTLE", trinity=TRINITY)
+    a1 = append_record(sequence=1, event="CANONICAL_SETTLEMENT", change_id="TX-CANONICAL-E2E", owner_id=root.owner_id, decision="ALLOW", stage="SETTLEMENT", connector_id="EXIM", request_id="TX-CANONICAL-E2E", operation="SETTLE", witness_state_root=state_root, trinity=TRINITY)
     a2 = append_record(sequence=2, event="CANONICAL_RECOVERY", change_id="REC-CANONICAL-E2E", owner_id=root.owner_id, decision="ALLOW", stage="RECOVERY", connector_id="EXIM", request_id="REC-CANONICAL-E2E", operation="RECOVER", previous_hash=a1.record_hash, trinity=TRINITY)
     a3 = append_record(sequence=3, event="CANONICAL_RELEASE", change_id="REL-CANONICAL-E2E", owner_id=root.owner_id, decision="ALLOW", stage="RELEASE", connector_id="EXIM", request_id="REQ-REL-CANONICAL-E2E", operation="RELEASE", previous_hash=a2.record_hash, trinity=TRINITY)
     audit_verified = verify_chain([a1, a2, a3])
