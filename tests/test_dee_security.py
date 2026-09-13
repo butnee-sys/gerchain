@@ -7,7 +7,7 @@ import json
 import pytest
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
-from dee_security import AuthorizationPolicy, RootOfTrust, SecurityError, SignedChange
+from dee_security import AuthorizationPolicy, RootOfTrust, SecurityError, SignedChange, authorize_release
 from dee_security.audit import append_record, verify_chain
 from dee_security.manifest import build_manifest, canonical_manifest
 
@@ -90,6 +90,35 @@ def test_manifest_is_canonical_and_hashed():
     assert manifest["manifest_hash"] == hashlib.sha256(
         canonical_manifest({k: v for k, v in manifest.items() if k != "manifest_hash"})
     ).hexdigest()
+
+
+def test_release_gate_requires_owner_signed_manifest_hash():
+    private = Ed25519PrivateKey.generate()
+    root = RootOfTrust(
+        "owner:primary",
+        base64.b64encode(private.public_key().public_bytes_raw()).decode(),
+    )
+    policy = AuthorizationPolicy()
+    manifest = build_manifest(
+        version=1,
+        commit_sha="abc123",
+        protected_paths=["core/state.py", "dee_security/root_of_trust.py"],
+        artifact_hashes={"core/state.py": "deadbeef"},
+        schema_version="1",
+    )
+    unsigned = SignedChange(
+        owner_id="owner:primary",
+        change_id="release-001",
+        version=1,
+        payload_hash=manifest["manifest_hash"],
+        signature="",
+    )
+    change = SignedChange(**{**unsigned.__dict__, "signature": _sign(private, unsigned)})
+    authorize_release(root=root, policy=policy, change=change, manifest=manifest)
+
+    tampered = {**manifest, "artifact_hashes": {"core/state.py": "tampered"}}
+    with pytest.raises(SecurityError, match="manifest hash mismatch"):
+        authorize_release(root=root, policy=AuthorizationPolicy(), change=change, manifest=tampered)
 
 
 def test_audit_chain_is_tamper_evident():
