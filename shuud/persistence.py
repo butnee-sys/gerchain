@@ -26,6 +26,13 @@ class SHUUDStateRow(Base):
     snapshot_json = Column(Text, nullable=False)
 
 
+class SHUUDSandboxConfigRow(Base):
+    __tablename__ = "shuud_sandbox_config"
+
+    sandbox_id = Column(String, primary_key=True)
+    config_json = Column(Text, nullable=False)
+
+
 class SHUUDPersistence:
     """Durable SHUUD persistence with verification-first recovery."""
 
@@ -130,6 +137,38 @@ class SHUUDPersistence:
                 )
             return value
 
+    def save_sandbox_config(self, sandbox_id: str, config: dict[str, Any]) -> None:
+        """Create or replace the durable Day-0 sandbox configuration."""
+        if not sandbox_id or not sandbox_id.strip():
+            raise ValueError("sandbox_id is required")
+        if not isinstance(config, dict):
+            raise ValueError("config must be a dictionary")
+
+        encoded = self._canonical_snapshot(config)
+        with self.SessionLocal() as session:
+            row = session.get(SHUUDSandboxConfigRow, sandbox_id)
+            if row is None:
+                row = SHUUDSandboxConfigRow(
+                    sandbox_id=sandbox_id,
+                    config_json=encoded,
+                )
+                session.add(row)
+            else:
+                row.config_json = encoded
+            session.commit()
+
+    def load_sandbox_config(self, sandbox_id: str) -> dict[str, Any] | None:
+        with self.SessionLocal() as session:
+            row = session.get(SHUUDSandboxConfigRow, sandbox_id)
+            if row is None:
+                return None
+            value = json.loads(row.config_json)
+            if not isinstance(value, dict):
+                raise ValueError(
+                    "persisted SHUUD sandbox config must be a dictionary"
+                )
+            return value
+
     def delete_snapshot(self, incident_id: str) -> None:
         with self.SessionLocal() as session:
             row = session.get(SHUUDStateRow, incident_id)
@@ -151,4 +190,9 @@ class SHUUDPersistence:
         return WitnessChain.from_dict(bundle)
 
 
-__all__ = ["SHUUDPersistence", "SHUUDStateRow", "Base"]
+__all__ = [
+    "SHUUDPersistence",
+    "SHUUDSandboxConfigRow",
+    "SHUUDStateRow",
+    "Base",
+]
