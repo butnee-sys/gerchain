@@ -1,11 +1,13 @@
 {
-  "name": "SHUUD",
+  "name": "SHUUD — 2 минутын дотор замаа чөлөөл",
   "short_name": "SHUUD",
-  "description": "2 минутын дотор замаа чөлөөл",
-  "start_url": "./index.html",
-  "display": "standalone",
-  "background_color": "#07111f",
-  "theme_color": "#0b1220",
+  "description": "Замын жижиг тохиолдлыг мэдээлэх, SHIID шийдвэр, зам чөлөөлөлт болон төлбөрийн явцыг нэг урсгалаар харуулах SHUUD апп.",
   "lang": "mn",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#07111f",
+  "theme_color": "#07111f",
   "icons": []
 }
