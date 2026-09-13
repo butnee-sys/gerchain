@@ -36,6 +36,8 @@ class RecoveryRequest:
     target_owner_id: str
     replacement_key_id: str
     policy_version: str = "DEE-RECOVERY-1.0"
+    witness_state_root: str = ""
+    settlement_hash: str = ""
 
     def signing_payload(self) -> dict[str, str]:
         return {
@@ -44,7 +46,9 @@ class RecoveryRequest:
             "reason": self.reason,
             "replacement_key_id": self.replacement_key_id,
             "request_id": self.request_id,
+            "settlement_hash": self.settlement_hash,
             "target_owner_id": self.target_owner_id,
+            "witness_state_root": self.witness_state_root,
         }
 
 
@@ -70,6 +74,8 @@ class RecoveryDecision:
     approver_ids: tuple[str, ...]
     request_hash: str
     decision_hash: str
+    witness_state_root: str = ""
+    settlement_hash: str = ""
     approved: bool = True
 
 
@@ -96,11 +102,7 @@ class RecoveryGovernance:
         self.policy = policy
         self._consumed_request_ids: set[str] = set()
 
-    def authorize(
-        self,
-        request: RecoveryRequest,
-        approvals: tuple[RecoveryApproval, ...],
-    ) -> RecoveryDecision:
+    def authorize(self, request: RecoveryRequest, approvals: tuple[RecoveryApproval, ...]) -> RecoveryDecision:
         self._validate_request(request)
         if request.request_id in self._consumed_request_ids:
             raise RecoveryGovernanceError("recovery request replay detected")
@@ -137,7 +139,9 @@ class RecoveryGovernance:
             "policy_version": self.policy.version,
             "request_hash": request_hash,
             "request_id": request.request_id,
+            "settlement_hash": request.settlement_hash,
             "threshold": self.policy.threshold,
+            "witness_state_root": request.witness_state_root,
         }
         decision_hash = _sha256(_canonical(decision_payload))
         decision = RecoveryDecision(
@@ -147,6 +151,8 @@ class RecoveryGovernance:
             approver_ids=tuple(sorted(approver_ids)),
             request_hash=request_hash,
             decision_hash=decision_hash,
+            witness_state_root=request.witness_state_root,
+            settlement_hash=request.settlement_hash,
         )
         self._consumed_request_ids.add(request.request_id)
         return decision
@@ -165,6 +171,8 @@ class RecoveryGovernance:
         )
         if not all(field.strip() for field in fields):
             raise RecoveryGovernanceError("recovery request fields are incomplete")
+        if bool(request.witness_state_root) != bool(request.settlement_hash):
+            raise RecoveryGovernanceError("recovery execution context is incomplete")
 
 
 def _canonical(payload: Mapping[str, str]) -> bytes:
@@ -175,11 +183,7 @@ def _sha256(payload: bytes) -> str:
     return hashlib.sha256(payload).hexdigest()
 
 
-def build_recovery_approval(
-    private_key,
-    authority_id: str,
-    request: RecoveryRequest,
-) -> RecoveryApproval:
+def build_recovery_approval(private_key, authority_id: str, request: RecoveryRequest) -> RecoveryApproval:
     """Sign a recovery approval with an externally held Ed25519 private key."""
     if not authority_id:
         raise RecoveryGovernanceError("authority id is required")
@@ -191,9 +195,6 @@ def build_recovery_approval(
 def _verify(authority: RecoveryAuthority, approval: RecoveryApproval, request: RecoveryRequest) -> None:
     try:
         public_key = Ed25519PublicKey.from_public_bytes(base64.b64decode(authority.public_key_b64, validate=True))
-        public_key.verify(
-            base64.b64decode(approval.signature, validate=True),
-            _canonical(approval.signing_payload(request)),
-        )
+        public_key.verify(base64.b64decode(approval.signature, validate=True), _canonical(approval.signing_payload(request)))
     except Exception as exc:
         raise RecoveryGovernanceError("invalid recovery signature") from exc
