@@ -7,7 +7,7 @@ content commitment. GerChain WitnessChain remains the authoritative recorder.
 from dataclasses import dataclass
 from typing import Sequence
 
-from core.hashing import domain_hash
+from .hashing import domain_hash
 
 
 @dataclass(frozen=True)
