@@ -11,6 +11,7 @@ from dee_security import AuthorizationPolicy, RootOfTrust, SecurityError, Signed
 from dee_security.audit import append_record, verify_chain
 from dee_security.manifest import build_manifest, canonical_manifest
 from dee_security.signing import sign_release
+from nef_gerchain_port import EscrowRequest, ExternalPortImport
 
 
 def _sign(private_key: Ed25519PrivateKey, change: SignedChange) -> str:
@@ -46,6 +47,27 @@ def _manifest():
         artifact_hashes={"core/state.py": "deadbeef"},
         schema_version="1",
     )
+
+
+def _locked_escrow():
+    port = ExternalPortImport()
+    witness = port.create_witness_chain(
+        initial_state={"case_id": "CASE-SEC-001"},
+        manifest={"purpose": "security-release-test"},
+        witness_id="WITNESS-SEC-001",
+    )
+    escrow = port.create_escrow(
+        EscrowRequest(
+            escrow_id="ESCROW-SEC-001",
+            amount=100_000,
+            currency="MNT",
+            settlement_provider="NEF",
+        ),
+        witness,
+    )
+    escrow.transition("FUNDED", "2026-09-13T16:00:00Z", {"case_id": "CASE-SEC-001"})
+    escrow.transition("LOCKED", "2026-09-13T16:00:01Z", {"case_id": "CASE-SEC-001"})
+    return port, escrow
 
 
 def test_root_of_trust_accepts_owner_signature():
@@ -123,6 +145,64 @@ def test_release_replay_is_rejected():
     authorize_release(root=_root(private), policy=policy, release=release, manifest=manifest, gate=gate)
     with pytest.raises(SecurityError, match="replayed"):
         authorize_release(root=_root(private), policy=policy, release=release, manifest=manifest, gate=gate)
+
+
+def test_authorized_port_release_requires_the_dee_release_gate():
+    private = Ed25519PrivateKey.generate()
+    root = _root(private)
+    manifest = _manifest()
+    release = sign_release(
+        private,
+        owner_id=root.owner_id,
+        release_id="release-port-001",
+        commit_sha=manifest["commit_sha"],
+        manifest_hash=manifest["manifest_hash"],
+    )
+    port, escrow = _locked_escrow()
+
+    port.release_escrow_authorized(
+        escrow,
+        incident_id="CASE-SEC-001",
+        authorization_hash="AUTH-SEC-001",
+        rule_version="SHUUD-1.0",
+        timestamp="2026-09-13T16:00:02Z",
+        root=root,
+        policy=AuthorizationPolicy(),
+        release=release,
+        manifest=manifest,
+    )
+
+    assert escrow.get_state()["state"] == "RELEASED"
+    assert escrow.records[-1].evidence["release_id"] == "release-port-001"
+
+
+def test_authorized_port_release_rejects_invalid_signature_before_transition():
+    private = Ed25519PrivateKey.generate()
+    root = _root(private)
+    manifest = _manifest()
+    valid = sign_release(
+        private,
+        owner_id=root.owner_id,
+        release_id="release-port-002",
+        commit_sha=manifest["commit_sha"],
+        manifest_hash=manifest["manifest_hash"],
+    )
+    invalid = valid.__class__(**{**valid.__dict__, "signature": "invalid"})
+    port, escrow = _locked_escrow()
+
+    with pytest.raises(SecurityError, match="invalid release signature"):
+        port.release_escrow_authorized(
+            escrow,
+            incident_id="CASE-SEC-001",
+            authorization_hash="AUTH-SEC-002",
+            rule_version="SHUUD-1.0",
+            timestamp="2026-09-13T16:00:02Z",
+            root=root,
+            policy=AuthorizationPolicy(),
+            release=invalid,
+            manifest=manifest,
+        )
+    assert escrow.get_state()["state"] == "LOCKED"
 
 
 def test_audit_chain_is_tamper_evident():
