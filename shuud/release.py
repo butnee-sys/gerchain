@@ -1,4 +1,4 @@
-"""SHUUD release authorization through the EXIM Escrow Port."""
+"""SHUUD release authorization through the application adapter boundary."""
 
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -6,7 +6,7 @@ import hashlib
 import json
 from typing import Any
 
-from nef_gerchain_port import ExternalPortImport
+from application_adapters import SHUUDApplicationAdapter
 
 from .shiid import Decision, SHIIDDecision
 
@@ -24,11 +24,7 @@ def _authorization_hash(payload: dict[str, Any]) -> str:
     return hashlib.sha256(canonical).hexdigest()
 
 
-def authorize_release(
-    decision: SHIIDDecision,
-    *,
-    escrow_id: str,
-) -> ReleaseAuthorization:
+def authorize_release(decision: SHIIDDecision, *, escrow_id: str) -> ReleaseAuthorization:
     """Create a release authorization only from an APPROVE decision."""
     if decision.decision is not Decision.APPROVE:
         raise ValueError("SHIID decision is not APPROVE")
@@ -42,7 +38,6 @@ def authorize_release(
         "decision": decision.decision.value,
         "reasons": list(decision.reasons),
     }
-
     return ReleaseAuthorization(
         incident_id=decision.incident_id,
         escrow_id=escrow_id.strip(),
@@ -51,15 +46,10 @@ def authorize_release(
     )
 
 
-def release_escrow(
-    escrow: Any,
-    authorization: ReleaseAuthorization,
-    *,
-    timestamp: str | None = None,
-    evidence: Any | None = None,
-):
-    """Delegate LOCKED -> RELEASED through the EXIM Escrow Port."""
-    return ExternalPortImport().release_escrow(
+def release_escrow(escrow: Any, authorization: ReleaseAuthorization, *, timestamp: str | None = None, evidence: Any | None = None):
+    """Delegate LOCKED -> RELEASED through the application adapter."""
+    adapter = SHUUDApplicationAdapter()
+    return adapter.release_escrow(
         escrow,
         authorization_hash=authorization.authorization_hash,
         incident_id=authorization.incident_id,
