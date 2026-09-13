@@ -1,15 +1,11 @@
-"""SHUUD application events routed through its application adapter."""
+"""SHUUD application events; Port access stays outside this domain module."""
 
 from typing import Any
 
-from application_adapters import SHUUDApplicationAdapter
 from .domain import canonical_shuud_payload
 from .evidence import EvidenceEnvelope
 from .shiid import SHIIDDecision
 from .release import ReleaseAuthorization
-
-
-_APPLICATION_ADAPTER = SHUUDApplicationAdapter()
 
 
 def _append_shuud_event(witness: Any, *, event_id: str, event_type: str, incident_id: str, timestamp: str, payload: dict, evidence: dict):
