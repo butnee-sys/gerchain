@@ -5,7 +5,7 @@ import sqlite3
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
-from database.db import get_connection, log_transition
+from database.db import get_connection, log_transition, init_db
 
 router = APIRouter(prefix="/api/shuud", tags=["SHUUD"])
 
@@ -27,6 +27,7 @@ def now_iso() -> str:
 
 
 def init_shuud_db() -> None:
+    init_db()
     conn = get_connection()
     conn.execute("""CREATE TABLE IF NOT EXISTS shuud_incidents (
         id TEXT PRIMARY KEY, location TEXT NOT NULL, amount REAL NOT NULL,
@@ -97,12 +98,10 @@ def create_incident(data: IncidentCreate):
     conn.close(); _escrow_create(item)
     return {**item, "events": [{"state": "REPORTED", "actor": "DRIVER", "at": at}]}
 
-
 @router.get("/incidents")
 def list_incidents() -> List[dict]:
     conn = get_connection(); rows = conn.execute("SELECT * FROM shuud_incidents ORDER BY started_at DESC").fetchall()
     result = [_public(conn, r) for r in rows]; conn.close(); return result
-
 
 @router.get("/incidents/{incident_id}")
 def get_incident(incident_id: str):
@@ -122,7 +121,6 @@ def _transition(incident_id, expected, new_state, actor, lock=False, release=Fal
     if lock: _escrow_action(row["escrow_id"], "LOCK", actor)
     if release: _escrow_action(row["escrow_id"], "RELEASE", actor)
     return result
-
 
 @router.post("/incidents/{incident_id}/evidence")
 def verify_evidence(incident_id: str, data: IncidentAction):
