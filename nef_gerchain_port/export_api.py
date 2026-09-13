@@ -2,7 +2,13 @@
 
 from typing import Any, Dict, Optional
 
-from .contract import ExportedAudit, ExportedSettlement, ExportedStatus, EXIM_PORT_VERSION
+from .contract import (
+    ExportedAudit,
+    ExportedEvidence,
+    ExportedSettlement,
+    ExportedStatus,
+    EXIM_PORT_VERSION,
+)
 
 
 class ExternalPortExport:
@@ -32,6 +38,24 @@ class ExternalPortExport:
             settlement_provider=str(state.get("settlement_provider", "NEF")),
             reference_id=state.get("escrow_id"),
             evidence=dict(state.get("evidence", {}) or {}),
+        )
+
+    def evidence_status(
+        self,
+        *,
+        evidence_id: str,
+        case_id: str,
+        evidence_hash: Optional[str] = None,
+        status: str = "VERIFIED",
+        data: Optional[Dict[str, Any]] = None,
+    ) -> ExportedEvidence:
+        return ExportedEvidence(
+            port_version=EXIM_PORT_VERSION,
+            evidence_id=evidence_id,
+            case_id=case_id,
+            evidence_hash=evidence_hash,
+            status=status,
+            data=dict(data or {}),
         )
 
     def witness_status(self, witness: Any) -> ExportedStatus:
