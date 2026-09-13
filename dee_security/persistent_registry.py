@@ -7,16 +7,17 @@ line of defense against duplicate active keys and rotation identifiers.
 """
 from __future__ import annotations
 
+import base64
+import json
 from datetime import datetime, timezone
 
-from sqlalchemy import Boolean, DateTime, String, create_engine, select
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
+from sqlalchemy import DateTime, Index, String, create_engine, select
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
 
 from .key_management import OwnerKeyRecord
 from .root_of_trust import SecurityError
 from .rotation import KeyRotationRequest, key_id_from_public_key
-from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
-import base64
 
 
 class Base(DeclarativeBase):
@@ -34,6 +35,15 @@ class OwnerKeyRow(Base):
     rotated_from: Mapped[str | None] = mapped_column(String(128), nullable=True)
 
 
+Index(
+    "uq_dee_owner_one_active_key",
+    OwnerKeyRow.owner_id,
+    unique=True,
+    postgresql_where=OwnerKeyRow.status == "active",
+    sqlite_where=OwnerKeyRow.status == "active",
+)
+
+
 class RotationReplayRow(Base):
     __tablename__ = "dee_key_rotation_replays"
 
@@ -45,9 +55,9 @@ class RotationReplayRow(Base):
 class PersistentKeyRegistry:
     """Transaction-safe owner-key registry.
 
-    A caller should provide a PostgreSQL URL in production. SQLite is useful
-    for local tests; its database-level write serialization still preserves
-    the uniqueness constraints, while PostgreSQL provides row-level locking.
+    A PostgreSQL URL should be used in production. SQLite remains useful for
+    local tests. Rotation is serialized on the current active-key row, while
+    the partial unique index guarantees one active key per owner.
     """
 
     def __init__(self, database_url: str, initial: OwnerKeyRecord | None = None) -> None:
@@ -158,5 +168,9 @@ class PersistentKeyRegistry:
 
 
 def request_signing_payload(request: KeyRotationRequest) -> bytes:
-    import json
-    return json.dumps(request.signing_payload(), sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+    return json.dumps(
+        request.signing_payload(),
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+    ).encode("utf-8")
