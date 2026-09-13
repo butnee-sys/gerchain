@@ -1,5 +1,6 @@
 const API_BASE = window.SHUUD_API_BASE || "/api/v1/shuud";
 const runBtn = document.getElementById("run");
+const refreshBtn = document.getElementById("refreshKpi");
 const eventsEl = document.getElementById("events");
 const statusEl = document.getElementById("status");
 
@@ -19,6 +20,34 @@ async function api(path, options = {}) {
   const body = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(`${response.status}: ${body.detail || response.statusText}`);
   return body;
+}
+
+function pct(value) {
+  return `${(Number(value || 0) * 100).toFixed(1)}%`;
+}
+
+function seconds(value) {
+  return value == null ? "—" : `${Number(value).toFixed(1)}s`;
+}
+
+function renderDurableKpi(kpi) {
+  document.getElementById("kpiTotal").textContent = kpi.total_cases ?? 0;
+  document.getElementById("kpi120").textContent = pct(kpi.within_two_minutes_rate);
+  document.getElementById("kpiAvg").textContent = seconds(kpi.average_clearance_seconds);
+  document.getElementById("kpiMedian").textContent = seconds(kpi.median_clearance_seconds);
+  document.getElementById("kpiApproval").textContent = pct(kpi.shiid_approval_rate);
+  document.getElementById("kpiRelease").textContent = pct(kpi.release_success_rate);
+  document.getElementById("kpiMeta").textContent =
+    `Durable: ${kpi.measured_clearance_cases ?? 0} clearance measurement • scope ${kpi.scope || "sandbox"}`;
+}
+
+async function loadDurableKpi() {
+  try {
+    const kpi = await api("/sandbox/kpi");
+    renderDurableKpi(kpi);
+  } catch (error) {
+    document.getElementById("kpiMeta").textContent = `KPI API error: ${error.message}`;
+  }
 }
 
 async function runCase() {
@@ -79,11 +108,12 @@ async function runCase() {
       method: "POST",
       body: JSON.stringify({ incident_id: id })
     });
-    const seconds = Math.max(0, Math.round(clearance.elapsed_seconds));
-    document.getElementById("clearance").textContent = `${seconds}s`;
+    const elapsed = Number(clearance.elapsed_seconds || 0);
+    const caseSeconds = Math.max(0, Math.round(elapsed));
+    document.getElementById("clearance").textContent = `${caseSeconds}s`;
     document.getElementById("within").textContent = clearance.within_two_minutes ? "PASS" : "FAIL";
-    document.getElementById("targetBar").style.width = `${Math.min((seconds / 120) * 100, 100)}%`;
-    addEvent("Clearance", clearance.within_two_minutes ? "PASS" : "OVER TARGET", `${seconds}s`);
+    document.getElementById("targetBar").style.width = `${Math.min((caseSeconds / 120) * 100, 100)}%`;
+    addEvent("Clearance", clearance.within_two_minutes ? "PASS" : "OVER TARGET", `${caseSeconds}s`);
 
     const escrowId = `KPI-ESCROW-${id}`;
     const escrow = await api("/escrows", {
@@ -118,6 +148,8 @@ async function runCase() {
     document.getElementById("caseState").textContent = "COMPLETE";
     statusEl.textContent = "SANDBOX COMPLETE";
     addEvent("Measurement", "COMPLETE", `${savings} MNT savings`);
+
+    await loadDurableKpi();
   } catch (error) {
     statusEl.textContent = "ERROR";
     document.getElementById("caseState").textContent = "ERROR";
@@ -128,3 +160,5 @@ async function runCase() {
 }
 
 runBtn.addEventListener("click", runCase);
+refreshBtn.addEventListener("click", loadDurableKpi);
+loadDurableKpi();
