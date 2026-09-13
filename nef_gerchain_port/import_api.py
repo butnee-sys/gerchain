@@ -7,6 +7,13 @@ from .gerchain_adapter import EscrowEngine, EscrowRecord, IndependentVerifier, W
 from .nef_adapter import NEFStateEngine
 
 
+def _require_integer_money(value: Any, *, field_name: str) -> int:
+    """Enforce integer-only monetary values at the external port boundary."""
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise TypeError(f"{field_name} must be an integer amount")
+    return value
+
+
 class ExternalPortImport:
     """Controlled inbound access for Open Systems."""
 
@@ -22,16 +29,18 @@ class ExternalPortImport:
         return WitnessChain.from_dict(bundle)
 
     def create_escrow(self, request: EscrowRequest, witness_chain: WitnessChain) -> EscrowEngine:
-        if request.amount <= 0:
+        amount = _require_integer_money(request.amount, field_name="escrow amount")
+        if amount <= 0:
             raise ValueError("escrow amount must be a positive integer")
         if request.settlement_provider != "NEF":
             raise ValueError("Unsupported settlement provider")
-        return EscrowEngine(escrow_id=request.escrow_id, amount=request.amount,
+        return EscrowEngine(escrow_id=request.escrow_id, amount=amount,
                             currency=request.currency, witness_chain=witness_chain)
 
     def restore_escrow(self, *, escrow_id: str, amount: int, currency: str, state: Dict[str, Any],
                        records: list[Dict[str, Any]], witness_chain: WitnessChain) -> EscrowEngine:
         """Reconstruct an escrow through the external port boundary."""
+        amount = _require_integer_money(amount, field_name="escrow amount")
         if amount <= 0:
             raise ValueError("escrow amount must be a positive integer")
         escrow = EscrowEngine(escrow_id=escrow_id, amount=amount, currency=currency,
