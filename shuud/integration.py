@@ -1,10 +1,15 @@
 """Deprecated SHUUD integration shim.
 
-SHUUD code must use ``nef_gerchain_port`` directly. This module intentionally
-contains no GerChain or NEF imports and remains only as a migration marker.
+Legacy callers are routed through the SHUUD application adapter. This module
+contains no direct EXIM Port, NEF, or GerChain imports and remains only as a
+migration marker while callers move to ``application_adapters``.
 """
 
-from nef_gerchain_port import ExternalPortExport, ExternalPortImport
+from application_adapters import SHUUDApplicationAdapter
 
+
+# Compatibility names only; the application adapter is the controlled boundary.
+ExternalPortImport = SHUUDApplicationAdapter
+ExternalPortExport = SHUUDApplicationAdapter
 
 __all__ = ["ExternalPortImport", "ExternalPortExport"]
