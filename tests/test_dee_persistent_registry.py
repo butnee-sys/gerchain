@@ -1,3 +1,6 @@
+import os
+from concurrent.futures import ThreadPoolExecutor
+
 import pytest
 
 from dee_security.key_management import OwnerKeyRecord, generate_owner_keypair, key_id_from_public_key, public_key_b64
@@ -50,3 +53,45 @@ def test_consecutive_rotations_reject_old_key(tmp_path):
     )
     assert active.key_id == key_id_from_public_key(third_public)
     assert third_private.public_key() is not None
+
+
+def test_postgresql_concurrent_rotation_only_one_wins():
+    database_url = os.getenv("DEE_POSTGRES_URL")
+    if not database_url:
+        pytest.skip("DEE_POSTGRES_URL is not configured")
+
+    old_private, old_public = generate_owner_keypair()
+    _, new_public_a = generate_owner_keypair()
+    _, new_public_b = generate_owner_keypair()
+    owner = "concurrent-owner"
+
+    seed = PersistentKeyRegistry(database_url)
+    # Use a unique owner/key namespace for the test run. Existing rows are
+    # intentionally rejected rather than silently overwritten.
+    if seed.engine.dialect.name == "postgresql":
+        from sqlalchemy import delete
+        from dee_security.persistent_registry import OwnerKeyRow, RotationReplayRow
+        with seed.engine.begin() as connection:
+            connection.execute(delete(RotationReplayRow).where(RotationReplayRow.owner_id == owner))
+            connection.execute(delete(OwnerKeyRow).where(OwnerKeyRow.owner_id == owner))
+
+    seed = PersistentKeyRegistry(database_url, _record(owner, old_public))
+    request_a = build_rotation_request(old_private, owner_id=owner, rotation_id="concurrent-a", new_public_key=new_public_a)
+    request_b = build_rotation_request(old_private, owner_id=owner, rotation_id="concurrent-b", new_public_key=new_public_b)
+
+    def attempt(request, public_key):
+        registry = PersistentKeyRegistry(database_url)
+        try:
+            return ("success", registry.apply_rotation(request, public_key).key_id)
+        except SecurityError:
+            return ("rejected", None)
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        results = list(executor.map(
+            lambda pair: attempt(*pair),
+            ((request_a, old_public), (request_b, old_public)),
+        ))
+
+    assert [status for status, _ in results].count("success") == 1
+    assert [status for status, _ in results].count("rejected") == 1
+    assert seed.active(owner).key_id in {key_id_from_public_key(new_public_a), key_id_from_public_key(new_public_b)}
