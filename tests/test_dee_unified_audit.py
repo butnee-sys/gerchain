@@ -20,3 +20,16 @@ def test_execution_proof_fields_are_hashed_as_audit_context():
     assert verify_chain([first, second, third])
     tampered = third.__class__(**{**vars(third), "settlement_hash": "TAMPERED"})
     assert not verify_chain([first, second, tampered])
+
+
+def test_protected_execution_stages_fail_closed_when_proof_fields_are_missing():
+    for stage, values in (
+        ("SETTLEMENT", {"witness_state_root": "", "settlement_hash": "SETTLE-1"}),
+        ("RECOVERY", {"witness_state_root": "STATE-1", "settlement_hash": "SETTLE-1", "recovery_decision_hash": ""}),
+        ("RELEASE", {"witness_state_root": "STATE-1", "settlement_hash": "SETTLE-1", "recovery_decision_hash": "REC-DEC-1", "execution_chain_hash": ""}),
+    ):
+        try:
+            append_record(sequence=1, event=stage, change_id=f"{stage}-MISSING", owner_id="OWNER-001", decision="ALLOW", stage=stage, trinity={"trust": True, "transparency": True, "performance": True}, **values)
+        except ValueError:
+            continue
+        raise AssertionError(f"{stage} audit must fail closed when proof context is incomplete")
