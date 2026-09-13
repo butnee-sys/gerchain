@@ -28,14 +28,23 @@ def create_app() -> FastAPI:
     app.include_router(shuud_router)
 
     @app.get("/shuud", include_in_schema=False)
+    @app.get("/shuud/web", include_in_schema=False)
     def shuud_home() -> FileResponse:
         return FileResponse(UI_DIR / "index.html")
 
+    @app.get("/shuud/portal", include_in_schema=False)
+    def shuud_portal() -> FileResponse:
+        return FileResponse(UI_DIR / "portal.html")
+
     @app.get("/shuud/app", include_in_schema=False)
+    @app.get("/shuud/driver", include_in_schema=False)
     def shuud_app() -> FileResponse:
         return FileResponse(UI_DIR / "mobile.html")
 
     @app.get("/shuud/management", include_in_schema=False)
+    @app.get("/shuud/operator", include_in_schema=False)
+    @app.get("/shuud/insurer", include_in_schema=False)
+    @app.get("/shuud/investor", include_in_schema=False)
     def shuud_management() -> FileResponse:
         return FileResponse(UI_DIR / "kpi-panel.html")
 
