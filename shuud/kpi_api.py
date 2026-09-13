@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import json
 import os
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from statistics import median
 from typing import Any
 
@@ -20,6 +20,7 @@ from sqlalchemy import select
 from .measurement_summary import build_measurement_summary
 from .metrics import OperationalTiming
 from .persistence import SHUUDPersistence, SHUUDStateRow
+from .sandbox_config import SandboxConfig, SandboxStatus
 
 router = APIRouter(prefix="/api/v1/shuud/sandbox", tags=["SHUUD Sandbox KPI"])
 
@@ -37,6 +38,20 @@ class EconomicMeasurementRequest(BaseModel):
     vehicle_value_per_minute_mnt: float = Field(ge=0)
     insurer_cost_per_minute_mnt: float = Field(default=0.0, ge=0)
     public_road_cost_per_minute_mnt: float = Field(default=0.0, ge=0)
+
+
+class SandboxConfigRequest(BaseModel):
+    name: str = Field(min_length=1)
+    start_date: date
+    end_date: date
+    status: SandboxStatus = SandboxStatus.PLANNED
+    target_seconds: float = Field(default=DEFAULT_TARGET_SECONDS, gt=0)
+    go_clearance_rate: float = Field(default=0.95, ge=0, le=1)
+    conditional_clearance_rate: float = Field(default=0.80, ge=0, le=1)
+    go_economic_coverage: float = Field(default=0.90, ge=0, le=1)
+    conditional_economic_coverage: float = Field(default=0.75, ge=0, le=1)
+    minimum_cases: int = Field(default=30, ge=1)
+    participants: list[str] = Field(default_factory=list)
 
 
 def _rows(start_at: datetime | None = None) -> list[dict[str, Any]]:
@@ -148,6 +163,45 @@ def _aggregate(
     target_seconds: float = DEFAULT_TARGET_SECONDS,
 ) -> dict[str, Any]:
     return aggregate_snapshots(_rows(start_at), target_seconds=target_seconds)
+
+
+@router.put("/config/{sandbox_id}", response_model=dict)
+def save_sandbox_config(sandbox_id: str, payload: SandboxConfigRequest):
+    """Persist the Day-0 sandbox policy used by later command decisions."""
+    config = SandboxConfig(
+        sandbox_id=sandbox_id,
+        name=payload.name,
+        start_date=payload.start_date,
+        end_date=payload.end_date,
+        status=payload.status,
+        target_seconds=payload.target_seconds,
+        go_clearance_rate=payload.go_clearance_rate,
+        conditional_clearance_rate=payload.conditional_clearance_rate,
+        go_economic_coverage=payload.go_economic_coverage,
+        conditional_economic_coverage=payload.conditional_economic_coverage,
+        minimum_cases=payload.minimum_cases,
+        participants=tuple(payload.participants),
+    )
+    _PERSISTENCE.save_sandbox_config(sandbox_id, config.to_dict())
+    return {
+        "status": "success",
+        "sandbox": config.to_dict(),
+        "operational_status": config.operational_status(date.today()),
+        "persisted": True,
+    }
+
+
+@router.get("/config/{sandbox_id}", response_model=dict)
+def get_sandbox_config(sandbox_id: str):
+    value = _PERSISTENCE.load_sandbox_config(sandbox_id)
+    if value is None:
+        raise HTTPException(status_code=404, detail="SANDBOX_NOT_FOUND")
+    config = SandboxConfig.from_dict(value)
+    return {
+        "status": "success",
+        "sandbox": config.to_dict(),
+        "operational_status": config.operational_status(date.today()),
+    }
 
 
 @router.post("/metrics/{incident_id}/economic", response_model=dict)
