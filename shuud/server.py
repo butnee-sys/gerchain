@@ -32,7 +32,7 @@ if not any(getattr(route, "path", None) == "/api/v1/shuud/sandbox/command" for r
     app.include_router(shuud_command_router)
 
 # Serve the SHUUD presentation UIs from the same origin as the API so browser
-demos_can_use_the_real_sandbox_api = True
+# demos can use the real sandbox/API without CORS or a second server.
 prototype_dir = Path(__file__).resolve().parent.parent / "prototype"
 if prototype_dir.is_dir():
     if not any(getattr(route, "path", None) == "/shuud-demo" for route in app.routes):
