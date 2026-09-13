@@ -10,12 +10,14 @@ from .contract import (
     PORT_VERSION,
     AssetImportRequest,
     ContractImportRequest,
+    ContractRequest,
     EvidenceImportRequest,
     EscrowRequest,
     ExportedAudit,
     ExportedSettlement,
     ExportedStatus,
     PaymentRequest,
+    require_integer_money,
 )
 from .export_api import ExternalPortExport
 from .import_api import ExternalPortImport
@@ -25,6 +27,7 @@ __all__ = [
     "PORT_VERSION",
     "AssetImportRequest",
     "ContractImportRequest",
+    "ContractRequest",
     "EvidenceImportRequest",
     "EscrowRequest",
     "ExportedAudit",
@@ -33,4 +36,5 @@ __all__ = [
     "PaymentRequest",
     "ExternalPortImport",
     "ExternalPortExport",
+    "require_integer_money",
 ]
