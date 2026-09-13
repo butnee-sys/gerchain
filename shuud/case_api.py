@@ -54,6 +54,7 @@ def get_shuud_case(incident_id: str):
         "description": incident.get("description"),
         "decision": decision.get("decision"),
         "rule_version": decision.get("rule_version"),
+        "damage_estimate_mnt": decision.get("damage_estimate_mnt"),
         "insurance": "VALID" if decision.get("decision") == "APPROVE" else None,
         "evidence_locked": bool(evidence),
         "escrow_id": escrow.get("escrow_id"),
