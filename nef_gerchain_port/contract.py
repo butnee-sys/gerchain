@@ -95,6 +95,16 @@ class ExportedSettlement:
 
 
 @dataclass(frozen=True)
+class ExportedEvidence:
+    port_version: str
+    evidence_id: str
+    case_id: str
+    evidence_hash: Optional[str] = None
+    status: str = "VERIFIED"
+    data: Dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
 class ExportedAudit:
     port_version: str
     reference_id: str
