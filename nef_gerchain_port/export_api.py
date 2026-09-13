@@ -4,7 +4,9 @@ from typing import Any, Dict, Optional
 
 from .contract import (
     EXIM_PORT_VERSION,
+    ExportedAsset,
     ExportedAudit,
+    ExportedContract,
     ExportedEvidence,
     ExportedSettlement,
     ExportedStatus,
@@ -23,6 +25,38 @@ class ExternalPortExport:
             data=dict(data or {}),
         )
 
+    def asset(
+        self,
+        *,
+        asset_id: str,
+        asset_type: str,
+        value_nef: int,
+        metadata: Optional[Dict[str, Any]] = None,
+    ) -> ExportedAsset:
+        return ExportedAsset(
+            port_version=EXIM_PORT_VERSION,
+            asset_id=asset_id,
+            asset_type=asset_type,
+            value_nef=value_nef,
+            metadata=dict(metadata or {}),
+        )
+
+    def contract(
+        self,
+        *,
+        contract_id: str,
+        parties: tuple[str, ...],
+        terms: Optional[Dict[str, Any]] = None,
+        metadata: Optional[Dict[str, Any]] = None,
+    ) -> ExportedContract:
+        return ExportedContract(
+            port_version=EXIM_PORT_VERSION,
+            contract_id=contract_id,
+            parties=tuple(parties),
+            terms=dict(terms or {}),
+            metadata=dict(metadata or {}),
+        )
+
     def escrow_status(self, escrow: Any) -> ExportedStatus:
         state = escrow.get_state()
         return self.status(
@@ -37,7 +71,7 @@ class ExternalPortExport:
             port_version=EXIM_PORT_VERSION,
             escrow_id=str(state.get("escrow_id", "")),
             status=str(state.get("state", "UNKNOWN")),
-            amount=int(getattr(escrow, "amount", 0)),
+            amount=getattr(escrow, "amount", 0),
             currency=str(getattr(escrow, "currency", "MNT")),
             settlement_provider=str(state.get("settlement_provider", "NEF")),
             reference_id=state.get("escrow_id"),
@@ -52,10 +86,6 @@ class ExternalPortExport:
         evidence_hash: Optional[str] = None,
         metadata: Optional[Dict[str, Any]] = None,
     ) -> ExportedEvidence:
-        if not isinstance(evidence_id, str) or not evidence_id.strip():
-            raise ValueError("evidence_id must be a non-empty string")
-        if not isinstance(case_id, str) or not case_id.strip():
-            raise ValueError("case_id must be a non-empty string")
         return ExportedEvidence(
             port_version=EXIM_PORT_VERSION,
             evidence_id=evidence_id,
