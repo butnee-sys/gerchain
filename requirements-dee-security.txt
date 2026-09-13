@@ -1,0 +1,2 @@
+# DEE Root of Trust / Owner Authorization
+cryptography>=43,<47
