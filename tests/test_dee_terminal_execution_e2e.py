@@ -1,6 +1,7 @@
 import base64
 import hashlib
 
+from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
 from connectors import EXIMConnectorAdapter
@@ -18,7 +19,10 @@ from money.ledger import MoneyLedger
 
 def _root_and_key():
     private_key = Ed25519PrivateKey.generate()
-    public_key = private_key.public_key().public_bytes_raw()
+    public_key = private_key.public_key().public_bytes(
+        encoding=serialization.Encoding.Raw,
+        format=serialization.PublicFormat.Raw,
+    )
     root = RootOfTrust("OWNER-TERMINAL-E2E", base64.b64encode(public_key).decode("ascii"))
     return root, private_key
 
@@ -109,34 +113,19 @@ def test_locked_escrow_to_governed_settlement_and_audit():
     assert money.records[-1] == record
     assert witness.entries
 
-    records = [
-        append_record(
-            sequence=1,
-            event="GATEWAY_AUTHORIZED",
-            change_id="REQ-TERM-WIT",
-            owner_id=root.owner_id,
-            decision="ALLOW",
-            stage="GATEWAY",
-            connector_id="EXIM",
-            request_id="REQ-TERM-WIT",
-            operation="create_witness_chain",
-            trinity=trinity,
-        ),
-        append_record(
-            sequence=2,
-            event="ATOMIC_SETTLEMENT_RELEASED",
-            change_id="TX-TERM-1",
-            owner_id=root.owner_id,
-            decision="ALLOW",
-            stage="SETTLEMENT",
-            connector_id="EXIM",
-            request_id="REQ-TERM-ESC",
-            operation="atomic_settlement",
-            previous_hash="PLACEHOLDER",
-            trinity=trinity,
-        ),
-    ]
-    records[1] = append_record(
+    first = append_record(
+        sequence=1,
+        event="GATEWAY_AUTHORIZED",
+        change_id="REQ-TERM-WIT",
+        owner_id=root.owner_id,
+        decision="ALLOW",
+        stage="GATEWAY",
+        connector_id="EXIM",
+        request_id="REQ-TERM-WIT",
+        operation="create_witness_chain",
+        trinity=trinity,
+    )
+    second = append_record(
         sequence=2,
         event="ATOMIC_SETTLEMENT_RELEASED",
         change_id="TX-TERM-1",
@@ -146,10 +135,10 @@ def test_locked_escrow_to_governed_settlement_and_audit():
         connector_id="EXIM",
         request_id="REQ-TERM-ESC",
         operation="atomic_settlement",
-        previous_hash=records[0].record_hash,
+        previous_hash=first.record_hash,
         trinity=trinity,
     )
-    assert verify_chain(records)
+    assert verify_chain([first, second])
 
 
 def test_governed_release_signature_is_real_and_manifest_bound():
