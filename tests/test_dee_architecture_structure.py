@@ -124,3 +124,60 @@ def test_architecture_baseline_documents_the_three_participant_classes():
 
     assert "SHUUD / SHIID" in baseline_text
     assert "business application prototype" in baseline_text
+
+
+def test_canonical_architecture_freeze_is_explicit_and_enforced():
+    root = Path(__file__).resolve().parents[1]
+    freeze = root / "docs" / "DEE_ARCHITECTURE_FREEZE.md"
+
+    assert freeze.is_file(), "Canonical DEE architecture freeze document is missing"
+    text = freeze.read_text(encoding="utf-8")
+
+    frozen_invariants = (
+        "**CANONICAL / FROZEN**",
+        "Digital Economy → DEE → NEF + GerChain",
+        "DEE GENESIS",
+        "ROOT OF TRUST",
+        "GOVERNANCE",
+        "AUTHORIZATION",
+        "PROTECTION",
+        "EXECUTION",
+        "AUDIT / RECOVERY",
+        "NEF + GERCHAIN",
+        "CORE ADAPTER",
+        "EXIM PORT",
+        "CONNECTOR ADAPTER",
+        "I2B MULTI-CONNECTOR GATEWAY",
+        "ТӨР",
+        "КОМПАНИ",
+        "ХУВЬ ХҮН",
+        "SHUUD / SHIID",
+        "replaceable business application prototype",
+        "No Adapter, Connector, Application, or Release may bypass the DEE Root of Trust or Governance.",
+        "Architecture = түгжээтэй. Implementation = хөгжих боломжтой.",
+    )
+
+    for invariant in frozen_invariants:
+        assert invariant in text, f"Missing frozen architectural invariant: {invariant}"
+
+
+def test_frozen_core_path_has_no_application_bypass():
+    root = Path(__file__).resolve().parents[1]
+    application = (root / "application_adapters" / "shuud.py").read_text(encoding="utf-8")
+    gateway = (root / "gateway" / "open_multi_connector.py").read_text(encoding="utf-8")
+
+    assert "nef_gerchain_port" not in application
+    assert "escrow" not in gateway.lower()
+    assert "nef_engine" not in gateway
+    assert "gerchain_adapter" not in gateway
+
+
+def test_frozen_architecture_keeps_dee_as_the_protected_environment():
+    root = Path(__file__).resolve().parents[1]
+    baseline = (root / "docs" / "DEE_ARCHITECTURE_BASELINE.md").read_text(encoding="utf-8")
+    freeze = (root / "docs" / "DEE_ARCHITECTURE_FREEZE.md").read_text(encoding="utf-8")
+
+    assert "DEE is the protected governance and trust environment" in baseline
+    assert "DEE is the protected governance environment" in freeze
+    assert "No adapter, connector, application, or release may bypass the DEE Root of Trust" in baseline
+    assert "No Adapter, Connector, Application, or Release may bypass the DEE Root of Trust" in freeze
