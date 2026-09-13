@@ -1,6 +1,9 @@
 """Inbound application API for the EXIM Escrow Port."""
 
-from typing import Any, Dict
+from typing import Any, Dict, Mapping
+
+from dee_security import AuthorizationPolicy, RootOfTrust, SignedChange, authorize_release
+from dee_security.signing import SignedRelease
 
 from .contract import AssetImportRequest, ContractImportRequest, EscrowRequest, EvidenceImportRequest
 from .gerchain_adapter import EscrowEngine, EscrowRecord, IndependentVerifier, WitnessChain
@@ -77,6 +80,60 @@ class ExternalPortImport:
             "incident_id": incident_id,
             "authorization_hash": authorization_hash,
             "rule_version": rule_version,
+        }
+        return escrow.transition("RELEASED", timestamp, release_evidence)
+
+    def release_escrow_authorized(
+        self,
+        escrow: EscrowEngine,
+        *,
+        incident_id: str,
+        authorization_hash: str,
+        rule_version: str,
+        timestamp: str,
+        root: RootOfTrust,
+        policy: AuthorizationPolicy,
+        change: SignedChange,
+        manifest: Mapping[str, Any],
+        signed_release: SignedRelease,
+        expected_commit_sha: str,
+        evidence: Any | None = None,
+    ):
+        """Release only after the DEE security gate authorizes the exact release.
+
+        This is the security-hardened release path. The legacy ``release_escrow``
+        remains available for compatibility tests; production callers should use
+        this method so Owner Authorization and signed release verification cannot
+        be skipped.
+        """
+        if not incident_id or not incident_id.strip():
+            raise ValueError("incident_id is required")
+        if not authorization_hash or not authorization_hash.strip():
+            raise ValueError("authorization_hash is required")
+        if not rule_version or not rule_version.strip():
+            raise ValueError("rule_version is required")
+
+        state = escrow.get_state()
+        if state["state"] != "LOCKED":
+            raise ValueError(
+                f"SHUUD release requires LOCKED escrow, got {state['state']}"
+            )
+
+        authorize_release(
+            root=root,
+            policy=policy,
+            change=change,
+            manifest=manifest,
+            signed_release=signed_release,
+            expected_commit_sha=expected_commit_sha,
+        )
+        release_evidence = evidence or {
+            "incident_id": incident_id,
+            "authorization_hash": authorization_hash,
+            "rule_version": rule_version,
+            "release_id": signed_release.release_id,
+            "manifest_hash": signed_release.manifest_hash,
+            "commit_sha": signed_release.commit_sha,
         }
         return escrow.transition("RELEASED", timestamp, release_evidence)
 
