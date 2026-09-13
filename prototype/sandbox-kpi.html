@@ -12,96 +12,17 @@
 <body>
 <main class="shell">
   <header class="topbar">
-    <div>
-      <div class="eyebrow">SHUUD / SHIID • 90-DAY SANDBOX</div>
-      <h1>2 минутын дотор замаа чөлөөл</h1>
-      <p class="muted">Нийслэл, даатгал, замын хөдөлгөөнд оролцогчийн шийдвэрт ашиглах бодит хэмжүүрийн самбар.</p>
-    </div>
+    <div><div class="eyebrow">SHUUD / SHIID • 90-DAY SANDBOX</div><h1>2 минутын дотор замаа чөлөөл</h1><p class="muted">Нийслэл, даатгал, замын хөдөлгөөнд оролцогчийн шийдвэрт ашиглах бодит хэмжүүрийн самбар.</p></div>
     <div class="status-pill" id="status">READY</div>
   </header>
-
-  <section class="kpi-grid">
-    <article class="kpi"><span>Зорилтот хугацаа</span><b>≤ 120 сек</b></article>
-    <article class="kpi"><span>Settlement provider</span><b>NEF</b></article>
-    <article class="kpi"><span>Валют</span><b>MNT</b></article>
-    <article class="kpi"><span>Case scope</span><b>≤ ₮2M</b></article>
-  </section>
-
-  <section class="card" style="margin-bottom:18px">
-    <div class="card-head"><h2>Шийдвэрийн үндсэн хэмжүүр</h2><button class="badge" id="refreshKpi">↻ Шинэчлэх</button></div>
-    <div class="durable-grid">
-      <article class="kpi"><span>Нийт case</span><b id="kpiTotal">—</b></article>
-      <article class="kpi"><span>≤120 сек биелэлт</span><b class="rate" id="kpi120">—</b></article>
-      <article class="kpi"><span>Дундаж clearance</span><b id="kpiAvg">—</b></article>
-      <article class="kpi"><span>Медиан clearance</span><b id="kpiMedian">—</b></article>
-      <article class="kpi"><span>Нийт хэмнэсэн хугацаа</span><b id="kpiSavedMinutes">—</b></article>
-      <article class="kpi"><span>Нийт хэмжигдсэн өгөөж</span><b id="kpiSavings">—</b></article>
-      <article class="kpi"><span>Даатгагчийн хэмнэлт</span><b id="kpiInsurer">—</b></article>
-      <article class="kpi"><span>Замын нийтийн өгөөж</span><b id="kpiRoad">—</b></article>
-    </div>
-    <p class="muted2" id="kpiMeta" style="margin-top:12px">KPI API холболтыг шалгаж байна…</p>
-  </section>
-
-  <section class="card" style="margin-bottom:18px">
-    <div class="card-head"><h2>Шийдвэрийн 3 өнцөг</h2><span class="badge success">EVIDENCE</span></div>
-    <div class="decision-grid">
-      <article class="decision"><h3>Нийслэл</h3><b id="cityBenefit">—</b><p>Зам дээрх саатлыг богиносгож, нийтийн замын хэмжигдсэн эдийн засгийн өгөөжийг харуулна.</p></article>
-      <article class="decision"><h3>Даатгал</h3><b id="insurerBenefit">—</b><p>SHIID approval, escrow release болон даатгагчийн хэмжигдсэн хэмнэлтийг нэг дор харуулна.</p></article>
-      <article class="decision"><h3>Оролцогч</h3><b id="userBenefit">—</b><p>Хэрэг бүр дээр хэмнэсэн хугацаа болон тээврийн хэрэгслийн оролцогчид ногдох хэмжигдсэн өгөөжийг харуулна.</p></article>
-    </div>
-  </section>
-
-  <section class="card" style="margin-bottom:18px">
-    <div class="card-head"><h2>Хугацааны хамрах хүрээ</h2><div class="scope-row"><button class="badge active" data-scope="all">90 хоног / бүх өгөгдөл</button><button class="badge" data-scope="weekly">7 хоног</button><button class="badge" data-scope="daily">Өнөөдөр</button></div></div>
-    <div class="metric-grid">
-      <div><span>Хэмжигдсэн case</span><b id="scopeCases">—</b></div>
-      <div><span>Экономикийн coverage</span><b id="scopeCoverage">—</b></div>
-      <div><span>Нийт хэмнэсэн минут</span><b id="scopeMinutes">—</b></div>
-      <div><span>Нэг economic case-д дундаж өгөөж</span><b id="scopePerCase">—</b></div>
-    </div>
-    <p class="note" style="margin-top:14px">Мөнгөн өгөөжийг GerChain зохиож тооцоолоогүй. Sandbox-д хадгалагдсан economic measurement болон <b>shuud-economic-v1</b> загварын тодорхой оролтуудаас нэгтгэн харуулж байна.</p>
-  </section>
-
-  <section class="hero-grid">
-    <article class="card">
-      <div class="card-head"><h2>Sandbox measurement</h2><span class="badge">OBSERVED</span></div>
-      <div style="margin-bottom:14px"><div class="muted2">2 минутын зорилтын биелэлт</div><div class="bar" style="margin-top:8px"><i id="targetBar" style="width:0%"></i></div></div>
-      <div class="metric-grid">
-        <div><span>Observed clearance</span><b id="clearance">—</b></div>
-        <div><span>Within 120 sec</span><b id="within">—</b></div>
-        <div><span>Economic benefit</span><b id="saved">—</b></div>
-        <div><span>Incident</span><b id="incident">—</b></div>
-      </div>
-      <div style="margin-top:16px;display:flex;gap:10px;flex-wrap:wrap">
-        <button class="primary" id="run">▶ Шинэ sandbox case</button>
-        <a class="badge" href="./operator.html">Operator view →</a>
-        <a class="badge" href="./index.html">Demo →</a>
-      </div>
-    </article>
-
-    <article class="card">
-      <div class="card-head"><h2>90 хоногийн gate</h2><span class="badge success">SCOPE</span></div>
-      <div class="checks">
-        <div class="check"><span>Incident → Evidence</span><b class="ok">LIVE</b></div>
-        <div class="check"><span>Evidence → SHIID</span><b class="ok">LIVE</b></div>
-        <div class="check"><span>SHIID → Clearance</span><b class="ok">LIVE</b></div>
-        <div class="check"><span>Clearance ≤120s</span><b class="ok">MEASURE</b></div>
-        <div class="check"><span>Escrow → Release</span><b class="ok">LIVE</b></div>
-        <div class="check"><span>PostgreSQL restart recovery</span><b class="ok">VERIFIED</b></div>
-      </div>
-    </article>
-  </section>
-
-  <section class="card" style="margin-top:18px">
-    <div class="card-head"><h2>Тухайн session</h2><span class="badge" id="caseState">READY</span></div>
-    <table class="table">
-      <thead><tr><th>Алхам</th><th>Төлөв</th><th>Хэмжүүр</th></tr></thead>
-      <tbody id="events"><tr><td colspan="3" class="muted2">Одоогоор case ажиллуулаагүй.</td></tr></tbody>
-    </table>
-  </section>
-
+  <section class="kpi-grid"><article class="kpi"><span>Зорилтот хугацаа</span><b>≤ 120 сек</b></article><article class="kpi"><span>Settlement provider</span><b>NEF</b></article><article class="kpi"><span>Валют</span><b>MNT</b></article><article class="kpi"><span>Case scope</span><b>≤ ₮2M</b></article></section>
+  <section class="card" style="margin-bottom:18px"><div class="card-head"><h2>Шийдвэрийн үндсэн хэмжүүр</h2><button class="badge" id="refreshKpi">↻ Шинэчлэх</button></div><div class="durable-grid"><article class="kpi"><span>Нийт case</span><b id="kpiTotal">—</b></article><article class="kpi"><span>≤120 сек биелэлт</span><b class="rate" id="kpi120">—</b></article><article class="kpi"><span>Дундаж clearance</span><b id="kpiAvg">—</b></article><article class="kpi"><span>Медиан clearance</span><b id="kpiMedian">—</b></article><article class="kpi"><span>Нийт хэмнэсэн хугацаа</span><b id="kpiSavedMinutes">—</b></article><article class="kpi"><span>Нийт хэмжигдсэн өгөөж</span><b id="kpiSavings">—</b></article><article class="kpi"><span>Даатгагчийн хэмнэлт</span><b id="kpiInsurer">—</b></article><article class="kpi"><span>Замын нийтийн өгөөж</span><b id="kpiRoad">—</b></article></div><p class="muted2" id="kpiMeta" style="margin-top:12px">KPI API холболтыг шалгаж байна…</p></section>
+  <section class="card" style="margin-bottom:18px"><div class="card-head"><h2>Шийдвэрийн 3 өнцөг</h2><span class="badge success">EVIDENCE</span></div><div class="decision-grid"><article class="decision"><h3>Нийслэл</h3><b id="cityBenefit">—</b><p>Зам дээрх саатлыг богиносгож, нийтийн замын хэмжигдсэн эдийн засгийн өгөөжийг харуулна.</p></article><article class="decision"><h3>Даатгал</h3><b id="insurerBenefit">—</b><p>SHIID approval, escrow release болон даатгагчийн хэмжигдсэн хэмнэлтийг нэг дор харуулна.</p></article><article class="decision"><h3>Оролцогч</h3><b id="userBenefit">—</b><p>Хэрэг бүр дээр хэмнэсэн хугацаа болон тээврийн хэрэгслийн оролцогчид ногдох хэмжигдсэн өгөөжийг харуулна.</p></article></div></section>
+  <section class="card" style="margin-bottom:18px"><div class="card-head"><h2>Хугацааны хамрах хүрээ</h2><div class="scope-row"><button class="badge active" data-scope="all">90 хоног / бүх өгөгдөл</button><button class="badge" data-scope="weekly">7 хоног</button><button class="badge" data-scope="daily">Өнөөдөр</button></div></div><div class="metric-grid"><div><span>Хэмжигдсэн case</span><b id="scopeCases">—</b></div><div><span>Экономикийн coverage</span><b id="scopeCoverage">—</b></div><div><span>Нийт хэмнэсэн минут</span><b id="scopeMinutes">—</b></div><div><span>Нэг economic case-д дундаж өгөөж</span><b id="scopePerCase">—</b></div></div><p class="note" style="margin-top:14px">Мөнгөн өгөөжийг GerChain зохиож тооцоолоогүй. Sandbox-д хадгалагдсан economic measurement болон <b>shuud-economic-v1</b> загварын тодорхой оролтуудаас нэгтгэн харуулж байна.</p></section>
+  <section class="hero-grid"><article class="card"><div class="card-head"><h2>Sandbox measurement</h2><span class="badge">OBSERVED</span></div><div style="margin-bottom:14px"><div class="muted2">2 минутын зорилтын биелэлт</div><div class="bar" style="margin-top:8px"><i id="targetBar" style="width:0%"></i></div></div><div class="metric-grid"><div><span>Observed clearance</span><b id="clearance">—</b></div><div><span>Within 120 sec</span><b id="within">—</b></div><div><span>Economic benefit</span><b id="saved">—</b></div><div><span>Incident</span><b id="incident">—</b></div></div><div style="margin-top:16px;display:flex;gap:10px;flex-wrap:wrap"><button class="primary" id="run">▶ Шинэ sandbox case</button><a class="badge" href="./operator.html">Operator view →</a><a class="badge" href="./index.html">Demo →</a></div></article><article class="card"><div class="card-head"><h2>90 хоногийн gate</h2><span class="badge success">SCOPE</span></div><div class="checks"><div class="check"><span>Incident → Evidence</span><b class="ok">LIVE</b></div><div class="check"><span>Evidence → SHIID</span><b class="ok">LIVE</b></div><div class="check"><span>SHIID → Clearance</span><b class="ok">LIVE</b></div><div class="check"><span>Clearance ≤120s</span><b class="ok">MEASURE</b></div><div class="check"><span>Escrow → Release</span><b class="ok">LIVE</b></div><div class="check"><span>PostgreSQL restart recovery</span><b class="ok">VERIFIED</b></div></div></article></section>
+  <section class="card" style="margin-top:18px"><div class="card-head"><h2>Тухайн session</h2><span class="badge" id="caseState">READY</span></div><table class="table"><thead><tr><th>Алхам</th><th>Төлөв</th><th>Хэмжүүр</th></tr></thead><tbody id="events"><tr><td colspan="3" class="muted2">Одоогоор case ажиллуулаагүй.</td></tr></tbody></table></section>
   <footer class="footer"><span>SHUUD Decision Dashboard • durable sandbox evidence</span><span>API: /api/v1/shuud/sandbox/kpi</span></footer>
 </main>
-<script src="./sandbox-decision-dashboard.js"></script>
+<script src="./sandbox-decision-dashboard-v2.js"></script>
 </body>
 </html>
