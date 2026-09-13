@@ -136,8 +136,12 @@ def main() -> int:
         f"{clearance.get('elapsed_seconds')} сек"
     )
 
+    # Economic measurement is a durable sandbox KPI record, so it belongs to
+    # the /sandbox API namespace. The previous smoke test called the non-existent
+    # /api/v1/shuud/metrics/{incident_id}/economic route (404). The canonical
+    # endpoint is /api/v1/shuud/sandbox/metrics/{incident_id}/economic.
     economic = post(
-        f"/metrics/{incident_id}/economic",
+        f"metrics/{incident_id}/economic",
         {
             "baseline_seconds": 600,
             "affected_vehicles": 2,
