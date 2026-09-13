@@ -25,6 +25,7 @@ services:
     environment:
       GERCHAIN_DATABASE_URL: postgresql+psycopg://gerchain:gerchain@postgres:5432/gerchain_sandbox
       SHUUD_PERSISTENCE_URL: postgresql+psycopg://gerchain:gerchain@postgres:5432/gerchain_sandbox
+      SHUUD_EXIM_CREDENTIAL: ${SHUUD_EXIM_CREDENTIAL:?SHUUD_EXIM_CREDENTIAL is required}
     ports:
       - "18000:8000"
     restart: unless-stopped
