@@ -9,8 +9,13 @@ on:
       - 'tests/test_dee_security.py'
       - 'tests/test_dee_key_management.py'
       - 'tests/test_dee_persistent_registry.py'
+      - 'tests/test_dee_runtime_governance.py'
+      - 'tests/test_dee_recovery_governance.py'
       - 'tests/test_nef_gerchain_port.py'
       - 'tests/test_shuud_boundary.py'
+      - 'tests/test_shuud_dee_e2e.py'
+      - 'tests/test_dee_trinity_benchmark.py'
+      - 'tests/test_dee_trinity_invariants.py'
       - 'requirements-dee-security.txt'
       - '.github/workflows/dee-security.yml'
   push:
@@ -18,6 +23,9 @@ on:
       - main
       - fix/ecosystem-separation
       - feat/dee-owner-key-management
+      - feat/shuud-dee-e2e-proof
+      - feat/dee-trinity-benchmark
+      - feat/dee-trinity-invariant-benchmark
     paths:
       - 'dee_security/**'
       - 'nef_gerchain_port/**'
@@ -25,8 +33,13 @@ on:
       - 'tests/test_dee_security.py'
       - 'tests/test_dee_key_management.py'
       - 'tests/test_dee_persistent_registry.py'
+      - 'tests/test_dee_runtime_governance.py'
+      - 'tests/test_dee_recovery_governance.py'
       - 'tests/test_nef_gerchain_port.py'
       - 'tests/test_shuud_boundary.py'
+      - 'tests/test_shuud_dee_e2e.py'
+      - 'tests/test_dee_trinity_benchmark.py'
+      - 'tests/test_dee_trinity_invariants.py'
       - 'requirements-dee-security.txt'
       - '.github/workflows/dee-security.yml'
 
@@ -64,7 +77,17 @@ jobs:
         run: python -m pytest -q tests/test_dee_key_management.py
       - name: Verify persistent DEE owner registry
         run: python -m pytest -q tests/test_dee_persistent_registry.py
+      - name: Verify DEE runtime governance
+        run: python -m pytest -q tests/test_dee_runtime_governance.py
+      - name: Verify DEE recovery governance
+        run: python -m pytest -q tests/test_dee_recovery_governance.py
       - name: Verify EXIM Escrow Port boundary
         run: python -m pytest -q tests/test_nef_gerchain_port.py
       - name: Verify SHUUD ecosystem boundary
         run: python -m pytest -q tests/test_shuud_boundary.py
+      - name: Verify SHUUD DEE E2E proof
+        run: python -m pytest -q tests/test_shuud_dee_e2e.py
+      - name: Benchmark DEE Trinity
+        run: python -m pytest -q -s tests/test_dee_trinity_benchmark.py
+      - name: Verify DEE Trinity invariants
+        run: python -m pytest -q tests/test_dee_trinity_invariants.py
