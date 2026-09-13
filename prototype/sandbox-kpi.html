@@ -3,10 +3,10 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>SHUUD — Sandbox KPI</title>
+  <title>SHUUD — Sandbox Decision Dashboard</title>
   <link rel="stylesheet" href="./styles.css">
   <style>
-    .kpi-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:18px}.kpi{padding:16px;border:1px solid #e4e9e6;border-radius:12px;background:#fff}.kpi span{display:block;font-size:12px;color:#68756e}.kpi b{display:block;font-size:28px;margin-top:6px}.bar{height:10px;background:#edf1ee;border-radius:999px;overflow:hidden}.bar>i{display:block;height:100%;background:#2d6a4f;border-radius:999px}.table{width:100%;border-collapse:collapse;background:#fff}.table th,.table td{text-align:left;padding:10px;border-bottom:1px solid #edf1ee;font-size:13px}.muted2{color:#68756e}.durable-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.durable-grid .kpi{min-height:86px}.rate{font-size:22px!important}@media(max-width:900px){.kpi-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.durable-grid{grid-template-columns:1fr 1fr}}@media(max-width:560px){.kpi-grid,.durable-grid{grid-template-columns:1fr}.table{font-size:12px}}
+    .kpi-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:18px}.kpi{padding:16px;border:1px solid #e4e9e6;border-radius:12px;background:#fff}.kpi span{display:block;font-size:12px;color:#68756e}.kpi b{display:block;font-size:28px;margin-top:6px}.durable-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}.durable-grid .kpi{min-height:86px}.rate{font-size:22px!important}.decision-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.decision{padding:16px;border:1px solid #dce5e8;border-radius:14px;background:#fff}.decision h3{margin:0 0 7px;font-size:15px}.decision p{margin:0;color:#68756e;font-size:13px;line-height:1.5}.decision b{display:block;font-size:22px;margin:10px 0 4px}.scope-row{display:flex;gap:8px;flex-wrap:wrap}.scope-row button{cursor:pointer}.scope-row .active{background:#116b60;color:#fff;border-color:#116b60}.note{padding:11px 13px;border-left:3px solid #116b60;background:#f2f8f6;color:#52636a;font-size:12px;line-height:1.5;border-radius:7px}.table{width:100%;border-collapse:collapse;background:#fff}.table th,.table td{text-align:left;padding:10px;border-bottom:1px solid #edf1ee;font-size:13px}.muted2{color:#68756e}.bar{height:10px;background:#edf1ee;border-radius:999px;overflow:hidden}.bar>i{display:block;height:100%;background:#2d6a4f;border-radius:999px}@media(max-width:900px){.kpi-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.durable-grid,.decision-grid{grid-template-columns:1fr 1fr}}@media(max-width:560px){.kpi-grid,.durable-grid,.decision-grid{grid-template-columns:1fr}.table{font-size:12px}}
   </style>
 </head>
 <body>
@@ -14,40 +14,62 @@
   <header class="topbar">
     <div>
       <div class="eyebrow">SHUUD / SHIID • 90-DAY SANDBOX</div>
-      <h1>Sandbox KPI самбар</h1>
-      <p class="muted">PostgreSQL-д хадгалагдсан SHUUD state snapshot-оос бодит хэмжүүр уншина.</p>
+      <h1>2 минутын дотор замаа чөлөөл</h1>
+      <p class="muted">Нийслэл, даатгал, замын хөдөлгөөнд оролцогчийн шийдвэрт ашиглах бодит хэмжүүрийн самбар.</p>
     </div>
     <div class="status-pill" id="status">READY</div>
   </header>
 
   <section class="kpi-grid">
-    <article class="kpi"><span>Тохиолдлын зорилт</span><b>≤ 120 сек</b></article>
+    <article class="kpi"><span>Зорилтот хугацаа</span><b>≤ 120 сек</b></article>
     <article class="kpi"><span>Settlement provider</span><b>NEF</b></article>
     <article class="kpi"><span>Валют</span><b>MNT</b></article>
-    <article class="kpi"><span>Scope</span><b>≤ ₮2M</b></article>
+    <article class="kpi"><span>Case scope</span><b>≤ ₮2M</b></article>
   </section>
 
   <section class="card" style="margin-bottom:18px">
-    <div class="card-head"><h2>Durable sandbox KPI</h2><button class="badge" id="refreshKpi">↻ Шинэчлэх</button></div>
+    <div class="card-head"><h2>Шийдвэрийн үндсэн хэмжүүр</h2><button class="badge" id="refreshKpi">↻ Шинэчлэх</button></div>
     <div class="durable-grid">
       <article class="kpi"><span>Нийт case</span><b id="kpiTotal">—</b></article>
-      <article class="kpi"><span>≤120 сек</span><b class="rate" id="kpi120">—</b></article>
+      <article class="kpi"><span>≤120 сек биелэлт</span><b class="rate" id="kpi120">—</b></article>
       <article class="kpi"><span>Дундаж clearance</span><b id="kpiAvg">—</b></article>
       <article class="kpi"><span>Медиан clearance</span><b id="kpiMedian">—</b></article>
-      <article class="kpi"><span>SHIID approval</span><b class="rate" id="kpiApproval">—</b></article>
-      <article class="kpi"><span>Escrow release</span><b class="rate" id="kpiRelease">—</b></article>
+      <article class="kpi"><span>Нийт хэмнэсэн хугацаа</span><b id="kpiSavedMinutes">—</b></article>
+      <article class="kpi"><span>Нийт хэмжигдсэн өгөөж</span><b id="kpiSavings">—</b></article>
+      <article class="kpi"><span>Даатгагчийн хэмнэлт</span><b id="kpiInsurer">—</b></article>
+      <article class="kpi"><span>Замын нийтийн өгөөж</span><b id="kpiRoad">—</b></article>
     </div>
     <p class="muted2" id="kpiMeta" style="margin-top:12px">KPI API холболтыг шалгаж байна…</p>
   </section>
 
+  <section class="card" style="margin-bottom:18px">
+    <div class="card-head"><h2>Шийдвэрийн 3 өнцөг</h2><span class="badge success">EVIDENCE</span></div>
+    <div class="decision-grid">
+      <article class="decision"><h3>Нийслэл</h3><b id="cityBenefit">—</b><p>Зам дээрх саатлыг богиносгож, нийтийн замын хэмжигдсэн эдийн засгийн өгөөжийг харуулна.</p></article>
+      <article class="decision"><h3>Даатгал</h3><b id="insurerBenefit">—</b><p>SHIID approval, escrow release болон даатгагчийн хэмжигдсэн хэмнэлтийг нэг дор харуулна.</p></article>
+      <article class="decision"><h3>Оролцогч</h3><b id="userBenefit">—</b><p>Хэрэг бүр дээр хэмнэсэн хугацаа болон тээврийн хэрэгслийн оролцогчид ногдох хэмжигдсэн өгөөжийг харуулна.</p></article>
+    </div>
+  </section>
+
+  <section class="card" style="margin-bottom:18px">
+    <div class="card-head"><h2>Хугацааны хамрах хүрээ</h2><div class="scope-row"><button class="badge active" data-scope="all">90 хоног / бүх өгөгдөл</button><button class="badge" data-scope="weekly">7 хоног</button><button class="badge" data-scope="daily">Өнөөдөр</button></div></div>
+    <div class="metric-grid">
+      <div><span>Хэмжигдсэн case</span><b id="scopeCases">—</b></div>
+      <div><span>Экономикийн coverage</span><b id="scopeCoverage">—</b></div>
+      <div><span>Нийт хэмнэсэн минут</span><b id="scopeMinutes">—</b></div>
+      <div><span>Нэг economic case-д дундаж өгөөж</span><b id="scopePerCase">—</b></div>
+    </div>
+    <p class="note" style="margin-top:14px">Мөнгөн өгөөжийг GerChain зохиож тооцоолоогүй. Sandbox-д хадгалагдсан economic measurement болон <b>shuud-economic-v1</b> загварын тодорхой оролтуудаас нэгтгэн харуулж байна.</p>
+  </section>
+
   <section class="hero-grid">
     <article class="card">
-      <div class="card-head"><h2>Sandbox measurement model</h2><span class="badge">OBSERVED</span></div>
+      <div class="card-head"><h2>Sandbox measurement</h2><span class="badge">OBSERVED</span></div>
       <div style="margin-bottom:14px"><div class="muted2">2 минутын зорилтын биелэлт</div><div class="bar" style="margin-top:8px"><i id="targetBar" style="width:0%"></i></div></div>
       <div class="metric-grid">
         <div><span>Observed clearance</span><b id="clearance">—</b></div>
         <div><span>Within 120 sec</span><b id="within">—</b></div>
-        <div><span>Time saved</span><b id="saved">—</b></div>
+        <div><span>Economic benefit</span><b id="saved">—</b></div>
         <div><span>Incident</span><b id="incident">—</b></div>
       </div>
       <div style="margin-top:16px;display:flex;gap:10px;flex-wrap:wrap">
@@ -78,7 +100,7 @@
     </table>
   </section>
 
-  <footer class="footer"><span>SHUUD Sandbox KPI • durable prototype</span><span>API: /api/v1/shuud/sandbox/kpi</span></footer>
+  <footer class="footer"><span>SHUUD Decision Dashboard • durable sandbox evidence</span><span>API: /api/v1/shuud/sandbox/kpi</span></footer>
 </main>
 <script src="./sandbox-kpi.js"></script>
 </body>
