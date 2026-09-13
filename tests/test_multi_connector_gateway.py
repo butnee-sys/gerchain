@@ -59,6 +59,7 @@ def test_authenticated_gateway_rejects_bad_credential():
             "EXIM", "export_status", credential="WRONG", nonce="N-002",
             status="ACTIVE", reference_id="CASE-3",
         )
+    assert gateway.audit_events()[-1].outcome == "DENIED"
 
 
 def test_authenticated_gateway_rejects_unauthorized_operation():
@@ -67,6 +68,7 @@ def test_authenticated_gateway_rejects_unauthorized_operation():
         gateway.dispatch(
             "EXIM", "release_escrow", credential="EXIM-SANDBOX-SECRET", nonce="N-003",
         )
+    assert gateway.audit_events()[-1].outcome == "DENIED"
 
 
 def test_authenticated_gateway_rejects_replayed_nonce():
@@ -78,6 +80,7 @@ def test_authenticated_gateway_rejects_replayed_nonce():
     gateway.dispatch("EXIM", "export_status", **kwargs)
     with pytest.raises(ValueError, match="already used"):
         gateway.dispatch("EXIM", "export_status", **kwargs)
+    assert gateway.audit_events()[-1].outcome == "REPLAY_DENIED"
 
 
 def test_authenticated_gateway_rejects_revoked_connector():
@@ -88,3 +91,38 @@ def test_authenticated_gateway_rejects_revoked_connector():
             "EXIM", "export_status", credential="EXIM-SANDBOX-SECRET", nonce="N-005",
             status="ACTIVE", reference_id="CASE-5",
         )
+    assert gateway.audit_events()[-1].event == "REVOKE"
+
+
+def test_authenticated_gateway_rotates_credential_and_keeps_authorization():
+    gateway = authenticated_gateway()
+    gateway.rotate_credential("EXIM", credential="EXIM-ROTATED-SECRET")
+    with pytest.raises(ValueError, match="authentication failed"):
+        gateway.dispatch(
+            "EXIM", "export_status", credential="EXIM-SANDBOX-SECRET", nonce="N-006",
+            status="ACTIVE", reference_id="CASE-6",
+        )
+    result = gateway.dispatch(
+        "EXIM", "export_status", credential="EXIM-ROTATED-SECRET", nonce="N-007",
+        status="ACTIVE", reference_id="CASE-7",
+    )
+    assert result.reference_id == "CASE-7"
+    assert gateway.audit_events()[-1].event == "DISPATCH"
+
+
+def test_gateway_audit_never_contains_credential_material():
+    gateway = authenticated_gateway()
+    gateway.dispatch(
+        "EXIM", "export_status", credential="EXIM-SANDBOX-SECRET", nonce="N-008",
+        status="ACTIVE", reference_id="CASE-8",
+    )
+    audit = repr(gateway.audit_events())
+    assert "EXIM-SANDBOX-SECRET" not in audit
+    assert gateway.audit_events()[-1].outcome == "SUCCESS"
+
+
+def test_invalid_authenticated_registration_is_atomic():
+    gateway = OpenMultiConnectorGateway()
+    with pytest.raises(ValueError, match="allowed_operations"):
+        gateway.register(EXIMConnectorAdapter(), credential="SECRET", allowed_operations=set())
+    assert gateway.registered_connectors() == ()
