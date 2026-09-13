@@ -1,5 +1,5 @@
 const API_BASE = window.SHUUD_API_BASE || "/api/v1/shuud";
-const steps = ["incident", "evidence", "decision", "clearance", "escrow", "release", "summary"];
+const steps = ["incident", "evidence", "decision", "insurance", "escrow", "release", "clearance", "summary"];
 const stepEls = [...document.querySelectorAll(".flow-step")];
 const checks = [
   "Даатгал хүчинтэй", "Хоёр тал зөвшөөрсөн", "Хүний гэмтэлгүй",
@@ -137,15 +137,8 @@ async function runCase() {
       throw new Error(`SHIID ${decision.decision}: ${decision.reasons?.join(", ") || "шийдвэрийн шалгуур хангагдсангүй"}`);
     }
 
-    const clearance = await api("/metrics/clearance", {
-      method: "POST",
-      body: JSON.stringify({ incident_id: id })
-    });
-    seconds = Math.max(0, Math.round(clearance.elapsed_seconds));
-    renderElapsed(seconds);
-    setStep("clearance");
-    document.getElementById("clearanceValue").textContent = `${seconds} сек`;
-    logEvent(`Зам чөлөөлөлт: ${seconds} сек`, clearance.within_two_minutes ? "PASS" : "WARN");
+    setStep("insurance");
+    logEvent("Даатгал: хүчинтэй · нөхөн төлбөрийн эх үүсвэр баталгаажив");
 
     const escrowId = `OPERATOR-ESCROW-${id}`;
     const escrow = await api("/escrows", {
@@ -169,6 +162,16 @@ async function runCase() {
     setStep("release");
     document.getElementById("escrowValue").textContent = release.new_state;
     logEvent(`Төлбөр: ${release.new_state} · баталгаажсан`);
+
+    const clearance = await api("/metrics/clearance", {
+      method: "POST",
+      body: JSON.stringify({ incident_id: id })
+    });
+    seconds = Math.max(0, Math.round(clearance.elapsed_seconds));
+    renderElapsed(seconds);
+    setStep("clearance");
+    document.getElementById("clearanceValue").textContent = `${seconds} сек`;
+    logEvent(`Зам чөлөөлөлт: ${seconds} сек`, clearance.within_two_minutes ? "PASS" : "WARN");
 
     const summary = await api(`/metrics/${encodeURIComponent(id)}/summary`, {
       method: "POST",
