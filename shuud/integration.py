@@ -1,19 +1,10 @@
-"""Compatibility shim for the SHUUD application.
+"""Deprecated SHUUD integration shim.
 
-The stable boundary is now ``nef_gerchain_port``.  Keep this module only as a
-short-term compatibility surface while SHUUD callers are migrated.
+SHUUD code must use ``nef_gerchain_port`` directly. This module intentionally
+contains no GerChain or NEF imports and remains only as a migration marker.
 """
 
-from nef_gerchain_port.gerchain_adapter import (
-    EscrowEngine,
-    EscrowRecord,
-    IndependentVerifier,
-    WitnessChain,
-)
+from nef_gerchain_port import ExternalPortExport, ExternalPortImport
 
-__all__ = [
-    "EscrowEngine",
-    "EscrowRecord",
-    "IndependentVerifier",
-    "WitnessChain",
-]
+
+__all__ = ["ExternalPortImport", "ExternalPortExport"]
