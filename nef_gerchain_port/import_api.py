@@ -5,16 +5,16 @@ from typing import Any, Dict, Mapping
 from dee_security import AuthorizationPolicy, ReleaseAuthorization, RootOfTrust
 from dee_security.signing import SignedRelease
 
-from .contract import AssetImportRequest, ContractImportRequest, EscrowRequest, EvidenceImportRequest
+from .contract import (
+    AssetImportRequest,
+    ContractImportRequest,
+    EscrowRequest,
+    EvidenceImportRequest,
+    PaymentRequest,
+    require_integer_money,
+)
 from .gerchain_adapter import EscrowEngine, EscrowRecord, IndependentVerifier, WitnessChain
 from .nef_adapter import NEFStateEngine
-
-
-def _require_integer_money(value: Any, *, field_name: str) -> int:
-    """Enforce the DEE money boundary: amounts must be real integers, not floats/bools."""
-    if isinstance(value, bool) or not isinstance(value, int):
-        raise TypeError(f"{field_name} must be an integer amount")
-    return value
 
 
 class ExternalPortImport:
@@ -32,7 +32,7 @@ class ExternalPortImport:
         return WitnessChain.from_dict(bundle)
 
     def create_escrow(self, request: EscrowRequest, witness_chain: WitnessChain) -> EscrowEngine:
-        amount = _require_integer_money(request.amount, field_name="escrow amount")
+        amount = require_integer_money(request.amount, field_name="escrow amount")
         if amount <= 0:
             raise ValueError("escrow amount must be a positive integer")
         if request.settlement_provider != "NEF":
@@ -43,7 +43,7 @@ class ExternalPortImport:
     def restore_escrow(self, *, escrow_id: str, amount: int, currency: str, state: Dict[str, Any],
                        records: list[Dict[str, Any]], witness_chain: WitnessChain) -> EscrowEngine:
         """Reconstruct an escrow through the external port boundary."""
-        amount = _require_integer_money(amount, field_name="escrow amount")
+        amount = require_integer_money(amount, field_name="escrow amount")
         if amount <= 0:
             raise ValueError("escrow amount must be a positive integer")
         escrow = EscrowEngine(escrow_id=escrow_id, amount=amount, currency=currency,
@@ -62,11 +62,7 @@ class ExternalPortImport:
         timestamp: str,
         evidence: Any | None = None,
     ) -> Any:
-        """Controlled SHUUD release transition through the EXIM Port.
-
-        This compatibility path preserves the existing application contract.
-        Security-sensitive production release must use ``release_escrow_authorized``.
-        """
+        """Controlled SHUUD release transition through the EXIM Port."""
         if not authorization_hash:
             raise ValueError("authorization_hash is required")
         if not incident_id:
@@ -98,12 +94,7 @@ class ExternalPortImport:
         gate: ReleaseAuthorization | None = None,
         evidence: Any | None = None,
     ) -> Any:
-        """Perform LOCKED -> RELEASED only after DEE release authorization.
-
-        The security gate verifies protected paths, manifest integrity, exact
-        commit binding, owner identity, Ed25519 release signature, and replay
-        protection before the authoritative escrow state transition occurs.
-        """
+        """Perform LOCKED -> RELEASED only after DEE release authorization."""
         if not authorization_hash:
             raise ValueError("authorization_hash is required")
         if not incident_id:
@@ -133,13 +124,26 @@ class ExternalPortImport:
         }
         return escrow.transition("RELEASED", timestamp, release_evidence)
 
+    def create_payment(self, request: PaymentRequest) -> PaymentRequest:
+        """Validate and return a canonical payment request at the Port boundary."""
+        require_integer_money(request.amount, field_name="payment amount")
+        if request.amount <= 0:
+            raise ValueError("payment amount must be a positive integer")
+        return request
+
     def verifier(self) -> IndependentVerifier:
         return IndependentVerifier()
 
-    def nef_state_engine(self, *, static_pool: float = 0.0, dynamic_limit: float = 0.0) -> NEFStateEngine:
+    def nef_state_engine(self, *, static_pool: int = 0, dynamic_limit: int = 0) -> NEFStateEngine:
+        """Create a NEF state adapter using integer monetary units only."""
+        static_pool = require_integer_money(static_pool, field_name="static pool")
+        dynamic_limit = require_integer_money(dynamic_limit, field_name="dynamic limit")
+        if static_pool < 0 or dynamic_limit < 0:
+            raise ValueError("NEF pools and limits cannot be negative")
         return NEFStateEngine(static_pool=static_pool, dynamic_limit=dynamic_limit)
 
     def validate_asset(self, request: AssetImportRequest) -> bool:
+        require_integer_money(request.value_nef, field_name="asset value")
         return bool(request.asset_id and request.asset_type and request.value_nef >= 0)
 
     def validate_contract(self, request: ContractImportRequest) -> bool:
