@@ -19,6 +19,16 @@ Each record carries:
 - previous record hash
 - current record hash
 
+For protected execution stages, proof context is first-class audit data rather than text embedded in an operation field:
+
+- `SETTLEMENT` requires `witness_state_root` and `settlement_hash`
+- `RECOVERY` requires `witness_state_root`, `settlement_hash`, and `recovery_decision_hash`
+- `RELEASE` requires all three plus `execution_chain_hash`
+
+The canonical protected execution linkage is:
+
+`Witness State Root → Settlement Hash → Recovery Decision Hash → Execution Chain Hash → Audit Record Hash`
+
 ## Chain rule
 
 `GENESIS → Root of Trust → Governance → Authorization → Protection → Execution → Audit / Recovery`
