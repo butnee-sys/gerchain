@@ -21,6 +21,13 @@ def _require_text(value: str, field_name: str) -> str:
     return value
 
 
+def _require_port_version(value: str) -> str:
+    value = _require_text(value, "port_version")
+    if value != EXIM_PORT_VERSION:
+        raise ValueError(f"unsupported port_version: {value}")
+    return value
+
+
 def _require_integer_money(value: Any, field_name: str) -> int:
     if isinstance(value, bool) or not isinstance(value, int):
         raise TypeError(f"{field_name} must be an integer amount")
@@ -119,6 +126,42 @@ class ExportedStatus:
     reference_id: Optional[str] = None
     data: Dict[str, Any] = field(default_factory=dict)
 
+    def __post_init__(self) -> None:
+        _require_port_version(self.port_version)
+        _require_text(self.status, "status")
+        if self.reference_id is not None:
+            _require_text(self.reference_id, "reference_id")
+
+
+@dataclass(frozen=True)
+class ExportedAsset:
+    port_version: str
+    asset_id: str
+    asset_type: str
+    value_nef: int
+    metadata: Dict[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        _require_port_version(self.port_version)
+        _require_text(self.asset_id, "asset_id")
+        _require_text(self.asset_type, "asset_type")
+        _require_integer_money(self.value_nef, "value_nef")
+
+
+@dataclass(frozen=True)
+class ExportedContract:
+    port_version: str
+    contract_id: str
+    parties: tuple[str, ...]
+    terms: Dict[str, Any] = field(default_factory=dict)
+    metadata: Dict[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        _require_port_version(self.port_version)
+        _require_text(self.contract_id, "contract_id")
+        if not self.parties or any(not isinstance(party, str) or not party.strip() for party in self.parties):
+            raise ValueError("parties must contain at least one non-empty string")
+
 
 @dataclass(frozen=True)
 class ExportedSettlement:
@@ -131,6 +174,16 @@ class ExportedSettlement:
     reference_id: Optional[str] = None
     evidence: Dict[str, Any] = field(default_factory=dict)
 
+    def __post_init__(self) -> None:
+        _require_port_version(self.port_version)
+        _require_text(self.escrow_id, "escrow_id")
+        _require_text(self.status, "status")
+        _require_integer_money(self.amount, "amount")
+        _require_currency(self.currency)
+        _require_provider(self.settlement_provider)
+        if self.reference_id is not None:
+            _require_text(self.reference_id, "reference_id")
+
 
 @dataclass(frozen=True)
 class ExportedEvidence:
@@ -139,6 +192,13 @@ class ExportedEvidence:
     case_id: str
     evidence_hash: Optional[str] = None
     metadata: Dict[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        _require_port_version(self.port_version)
+        _require_text(self.evidence_id, "evidence_id")
+        _require_text(self.case_id, "case_id")
+        if self.evidence_hash is not None:
+            _require_text(self.evidence_hash, "evidence_hash")
 
 
 @dataclass(frozen=True)
@@ -149,3 +209,11 @@ class ExportedAudit:
     timestamp: str
     evidence_hash: Optional[str] = None
     data: Dict[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        _require_port_version(self.port_version)
+        _require_text(self.reference_id, "reference_id")
+        _require_text(self.event_type, "event_type")
+        _require_text(self.timestamp, "timestamp")
+        if self.evidence_hash is not None:
+            _require_text(self.evidence_hash, "evidence_hash")
