@@ -9,8 +9,14 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, Optional
 
 EXIM_PORT_VERSION = "1.0"
-# Compatibility alias for existing callers.
 PORT_VERSION = EXIM_PORT_VERSION
+
+
+def require_integer_money(value: Any, *, field_name: str = "amount") -> int:
+    """Accept only integer monetary units; reject bool and floating point."""
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise TypeError(f"{field_name} must be an integer amount")
+    return value
 
 
 @dataclass(frozen=True)
@@ -37,6 +43,10 @@ class ContractImportRequest:
     metadata: Dict[str, Any] = field(default_factory=dict)
 
 
+# Canonical EXIM name; the Import suffix remains as a compatibility alias.
+ContractRequest = ContractImportRequest
+
+
 @dataclass(frozen=True)
 class EscrowRequest:
     escrow_id: str
@@ -44,6 +54,9 @@ class EscrowRequest:
     currency: str = "MNT"
     settlement_provider: str = "NEF"
     release_condition: str = "VERIFIED_PERFORMANCE"
+
+    def __post_init__(self) -> None:
+        require_integer_money(self.amount, field_name="escrow amount")
 
 
 @dataclass(frozen=True)
@@ -53,6 +66,9 @@ class PaymentRequest:
     currency: str = "MNT"
     settlement_provider: str = "NEF"
     evidence: Any = None
+
+    def __post_init__(self) -> None:
+        require_integer_money(self.amount, field_name="payment amount")
 
 
 @dataclass(frozen=True)
@@ -73,6 +89,9 @@ class ExportedSettlement:
     settlement_provider: str
     reference_id: Optional[str] = None
     evidence: Dict[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        require_integer_money(self.amount, field_name="settlement amount")
 
 
 @dataclass(frozen=True)
