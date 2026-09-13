@@ -13,6 +13,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Configure isolated sandbox connector credential
+        run: echo "SHUUD_EXIM_CREDENTIAL=CI-SHUUD-EXIM-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" >> "$GITHUB_ENV"
+
       - name: Start isolated sandbox
         working-directory: sandbox
         run: docker compose up -d --build
