@@ -35,7 +35,16 @@ _WITNESSES: dict[str, Any] = {}
 _ESCROWS: dict[str, Any] = {}
 _PERSISTENCE = SHUUDPersistence(os.getenv("SHUUD_PERSISTENCE_URL", "sqlite:///./gerchain.db"))
 _RUNTIME_STORE = SHUUDRuntimeStore(_PERSISTENCE)
-_APP_ADAPTER = SHUUDApplicationAdapter()
+
+
+def _gateway_credential() -> str:
+    credential = os.getenv("SHUUD_EXIM_CREDENTIAL", "").strip()
+    if not credential:
+        raise RuntimeError("SHUUD_EXIM_CREDENTIAL is required")
+    return credential
+
+
+_APP_ADAPTER = SHUUDApplicationAdapter(credential=_gateway_credential())
 
 
 class IncidentRequest(BaseModel):
@@ -274,7 +283,7 @@ def release_shuud_escrow(payload: ReleaseRequest):
     release_evidence = {"incident_id": payload.incident_id, "authorization_hash": authorization.authorization_hash,
                         "rule_version": authorization.rule_version, "settlement_provider": "NEF"}
     released_at = _now()
-    record = release_escrow(escrow, authorization, timestamp=released_at.isoformat(), evidence=release_evidence)
+    record = release_escrow(escrow, authorization, credential=_gateway_credential(), timestamp=released_at.isoformat(), evidence=release_evidence)
     timing = _timing_for_snapshot(expected_snapshot, _INCIDENTS[payload.incident_id]).with_milestone("settlement_released_at", released_at)
     new_snapshot = _RUNTIME_STORE.snapshot(incident=_INCIDENTS[payload.incident_id], witness=witness,
         evidence=_EVIDENCE.get(payload.incident_id), decision=decision, authorization=authorization, escrow=escrow,
