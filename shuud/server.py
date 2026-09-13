@@ -1,12 +1,17 @@
 """Integrated SHUUD server entrypoint.
 
 This keeps the existing GerChain dashboard application intact while mounting
-SHUUD routes on the same FastAPI application. It is an integration adapter,
-not a replacement for GerChain's core engines.
+SHUUD routes and the presentation prototype on the same FastAPI application.
+The presentation mount is an integration adapter, not a replacement for
+GerChain's core engines.
 
 Run with:
     python -m uvicorn shuud.server:app --host 0.0.0.0 --port 8000
 """
+
+from pathlib import Path
+
+from fastapi.staticfiles import StaticFiles
 
 from gerchain.web_ui import app as gerchain_app
 
@@ -17,5 +22,18 @@ app = gerchain_app
 # Mount SHUUD only once when this integration entrypoint is imported.
 if not any(getattr(route, "path", None) == "/api/v1/shuud/incidents" for route in app.routes):
     app.include_router(shuud_router)
+
+# Serve the SHUUD presentation UI from the same origin as the API so the
+# browser demo can use the real sandbox/API without CORS or a second server.
+prototype_dir = Path(__file__).resolve().parent.parent / "prototype"
+if prototype_dir.is_dir() and not any(
+    getattr(route, "path", None) == "/shuud-demo"
+    for route in app.routes
+):
+    app.mount(
+        "/shuud-demo",
+        StaticFiles(directory=str(prototype_dir), html=True),
+        name="shuud-demo",
+    )
 
 __all__ = ["app"]
