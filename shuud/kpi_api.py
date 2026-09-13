@@ -51,13 +51,22 @@ def _rows(start_at: datetime | None = None) -> list[dict[str, Any]]:
     return snapshots
 
 
-def _aggregate(start_at: datetime | None = None) -> dict[str, Any]:
-    snapshots = _rows(start_at)
+def aggregate_snapshots(snapshots: list[dict[str, Any]]) -> dict[str, Any]:
+    """Aggregate one canonical snapshot per incident without transient-state input.
+
+    ``shuud_state`` is keyed by incident_id, so each snapshot represents one
+    authoritative case. Economic values are read only from the persisted
+    ``economic_measurement`` object; they are never recomputed here.
+    """
     clearance: list[float] = []
     approved = 0
     released = 0
     within = 0
-    economic = [snapshot["economic_measurement"] for snapshot in snapshots if snapshot.get("economic_measurement")]
+    economic = [
+        snapshot["economic_measurement"]
+        for snapshot in snapshots
+        if isinstance(snapshot.get("economic_measurement"), dict)
+    ]
 
     for snapshot in snapshots:
         timing = snapshot.get("operational_timing") or {}
@@ -67,6 +76,8 @@ def _aggregate(start_at: datetime | None = None) -> dict[str, Any]:
             seconds = (
                 datetime.fromisoformat(cleared) - datetime.fromisoformat(created)
             ).total_seconds()
+            if seconds < 0:
+                continue
             clearance.append(seconds)
             if seconds <= 120:
                 within += 1
@@ -82,6 +93,10 @@ def _aggregate(start_at: datetime | None = None) -> dict[str, Any]:
 
     total = len(snapshots)
     measured = len(clearance)
+    economic_cases = len(economic)
+    total_time_saved_seconds = sum(
+        float(item.get("time_saved_seconds", 0.0)) for item in economic
+    )
     return {
         "status": "success",
         "scope": "90-day-sandbox",
@@ -97,13 +112,27 @@ def _aggregate(start_at: datetime | None = None) -> dict[str, Any]:
         "median_clearance_seconds": median(clearance) if clearance else None,
         "minimum_clearance_seconds": min(clearance) if clearance else None,
         "maximum_clearance_seconds": max(clearance) if clearance else None,
-        "economic_measurement_cases": len(economic),
-        "total_time_saved_seconds": sum(item.get("time_saved_seconds", 0.0) for item in economic),
-        "total_vehicle_user_savings_mnt": sum(item.get("vehicle_user_savings_mnt", 0.0) for item in economic),
-        "total_insurer_savings_mnt": sum(item.get("insurer_savings_mnt", 0.0) for item in economic),
-        "total_public_road_savings_mnt": sum(item.get("public_road_savings_mnt", 0.0) for item in economic),
-        "total_savings_mnt": sum(item.get("total_savings_mnt", 0.0) for item in economic),
+        "economic_measurement_cases": economic_cases,
+        "economic_coverage_rate": economic_cases / total if total else 0.0,
+        "total_time_saved_seconds": total_time_saved_seconds,
+        "total_time_saved_minutes": total_time_saved_seconds / 60.0,
+        "total_vehicle_user_savings_mnt": sum(
+            float(item.get("vehicle_user_savings_mnt", 0.0)) for item in economic
+        ),
+        "total_insurer_savings_mnt": sum(
+            float(item.get("insurer_savings_mnt", 0.0)) for item in economic
+        ),
+        "total_public_road_savings_mnt": sum(
+            float(item.get("public_road_savings_mnt", 0.0)) for item in economic
+        ),
+        "total_savings_mnt": sum(
+            float(item.get("total_savings_mnt", 0.0)) for item in economic
+        ),
     }
+
+
+def _aggregate(start_at: datetime | None = None) -> dict[str, Any]:
+    return aggregate_snapshots(_rows(start_at))
 
 
 @router.post("/metrics/{incident_id}/economic", response_model=dict)
@@ -174,4 +203,4 @@ def get_weekly_sandbox_kpi():
     return _aggregate(datetime.now(timezone.utc) - timedelta(days=7))
 
 
-__all__ = ["router"]
+__all__ = ["aggregate_snapshots", "router"]
