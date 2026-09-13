@@ -17,6 +17,7 @@ from gerchain.web_ui import app as gerchain_app
 
 from .api import router as shuud_router
 from .kpi_api import router as shuud_kpi_router
+from .command_api import router as shuud_command_router
 
 app = gerchain_app
 
@@ -26,6 +27,9 @@ if not any(getattr(route, "path", None) == "/api/v1/shuud/incidents" for route i
 
 if not any(getattr(route, "path", None) == "/api/v1/shuud/sandbox/kpi" for route in app.routes):
     app.include_router(shuud_kpi_router)
+
+if not any(getattr(route, "path", None) == "/api/v1/shuud/sandbox/command" for route in app.routes):
+    app.include_router(shuud_command_router)
 
 # Serve the SHUUD presentation UIs from the same origin as the API so browser
 # demos can use the real sandbox/API without CORS or a second server.
