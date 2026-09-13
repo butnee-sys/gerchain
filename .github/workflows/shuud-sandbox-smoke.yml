@@ -41,7 +41,7 @@ jobs:
           RELEASE_JSON=/tmp/release.json
           SUMMARY_JSON=/tmp/summary.json
 
-          OCCURRED_AT=$(date -u -d '10 seconds ago' +%Y-%m-%dT%H:%M:%SZ)
+          OCCURRED_AT=$(date -u -d '90 seconds ago' +%Y-%m-%dT%H:%M:%SZ)
           curl -fsS -X POST "$API/incidents" -H 'content-type: application/json' \
             -d "{\"location\":\"SANDBOX\",\"vehicle_a\":\"TEST-A\",\"vehicle_b\":\"TEST-B\",\"description\":\"SHUUD Day-0 full lifecycle smoke\",\"occurred_at\":\"$OCCURRED_AT\"}" | tee "$INCIDENT_JSON"
           INCIDENT_ID=$(python - <<'PY'
