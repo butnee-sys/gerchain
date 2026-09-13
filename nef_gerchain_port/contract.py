@@ -9,8 +9,38 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, Optional
 
 EXIM_PORT_VERSION = "1.0"
-# Compatibility alias for existing callers.
 PORT_VERSION = EXIM_PORT_VERSION
+DEFAULT_CURRENCY = "MNT"
+DEFAULT_SETTLEMENT_PROVIDER = "NEF"
+DEFAULT_RELEASE_CONDITION = "VERIFIED_PERFORMANCE"
+
+
+def _require_text(value: str, field_name: str) -> str:
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(f"{field_name} must be a non-empty string")
+    return value
+
+
+def _require_integer_money(value: Any, field_name: str) -> int:
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise TypeError(f"{field_name} must be an integer amount")
+    if value <= 0:
+        raise ValueError(f"{field_name} must be a positive integer")
+    return value
+
+
+def _require_currency(value: str) -> str:
+    value = _require_text(value, "currency").upper()
+    if value != DEFAULT_CURRENCY:
+        raise ValueError(f"unsupported currency: {value}")
+    return value
+
+
+def _require_provider(value: str) -> str:
+    value = _require_text(value, "settlement_provider").upper()
+    if value != DEFAULT_SETTLEMENT_PROVIDER:
+        raise ValueError(f"unsupported settlement provider: {value}")
+    return value
 
 
 @dataclass(frozen=True)
@@ -20,6 +50,11 @@ class AssetImportRequest:
     value_nef: int
     metadata: Dict[str, Any] = field(default_factory=dict)
 
+    def __post_init__(self) -> None:
+        _require_text(self.asset_id, "asset_id")
+        _require_text(self.asset_type, "asset_type")
+        _require_integer_money(self.value_nef, "value_nef")
+
 
 @dataclass(frozen=True)
 class EvidenceImportRequest:
@@ -27,6 +62,10 @@ class EvidenceImportRequest:
     case_id: str
     evidence: Any
     metadata: Dict[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        _require_text(self.evidence_id, "evidence_id")
+        _require_text(self.case_id, "case_id")
 
 
 @dataclass(frozen=True)
@@ -36,23 +75,41 @@ class ContractImportRequest:
     terms: Dict[str, Any] = field(default_factory=dict)
     metadata: Dict[str, Any] = field(default_factory=dict)
 
+    def __post_init__(self) -> None:
+        _require_text(self.contract_id, "contract_id")
+        if not self.parties or any(not isinstance(party, str) or not party.strip() for party in self.parties):
+            raise ValueError("parties must contain at least one non-empty string")
+
 
 @dataclass(frozen=True)
 class EscrowRequest:
     escrow_id: str
     amount: int
-    currency: str = "MNT"
-    settlement_provider: str = "NEF"
-    release_condition: str = "VERIFIED_PERFORMANCE"
+    currency: str = DEFAULT_CURRENCY
+    settlement_provider: str = DEFAULT_SETTLEMENT_PROVIDER
+    release_condition: str = DEFAULT_RELEASE_CONDITION
+
+    def __post_init__(self) -> None:
+        _require_text(self.escrow_id, "escrow_id")
+        _require_integer_money(self.amount, "amount")
+        _require_currency(self.currency)
+        _require_provider(self.settlement_provider)
+        _require_text(self.release_condition, "release_condition")
 
 
 @dataclass(frozen=True)
 class PaymentRequest:
     escrow_id: str
     amount: int
-    currency: str = "MNT"
-    settlement_provider: str = "NEF"
+    currency: str = DEFAULT_CURRENCY
+    settlement_provider: str = DEFAULT_SETTLEMENT_PROVIDER
     evidence: Any = None
+
+    def __post_init__(self) -> None:
+        _require_text(self.escrow_id, "escrow_id")
+        _require_integer_money(self.amount, "amount")
+        _require_currency(self.currency)
+        _require_provider(self.settlement_provider)
 
 
 @dataclass(frozen=True)
@@ -73,6 +130,15 @@ class ExportedSettlement:
     settlement_provider: str
     reference_id: Optional[str] = None
     evidence: Dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class ExportedEvidence:
+    port_version: str
+    evidence_id: str
+    case_id: str
+    evidence_hash: Optional[str] = None
+    metadata: Dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
