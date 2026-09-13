@@ -47,7 +47,7 @@ def _authorized_release_fixture():
         manifest_hash=manifest["manifest_hash"],
         commit_sha=commit_sha,
     )
-    return private, root, manifest, change, signed_release, commit_sha
+    return root, manifest, change, signed_release, commit_sha
 
 
 def _locked_escrow():
@@ -68,12 +68,13 @@ def _locked_escrow():
     )
     escrow.transition("FUNDED", "2026-09-13T16:00:00Z", {"case_id": "CASE-SEC-001"})
     escrow.transition("LOCKED", "2026-09-13T16:00:01Z", {"case_id": "CASE-SEC-001"})
-    return port, escrow
+    return escrow
 
 
 def test_hardened_release_requires_owner_signature_and_exact_commit():
-    _, root, manifest, change, signed_release, commit_sha = _authorized_release_fixture()
-    port, escrow = _locked_escrow()
+    root, manifest, change, signed_release, commit_sha = _authorized_release_fixture()
+    port = ExternalPortImport()
+    escrow = _locked_escrow()
 
     result = port.release_escrow_authorized(
         escrow,
@@ -94,8 +95,9 @@ def test_hardened_release_requires_owner_signature_and_exact_commit():
 
 
 def test_hardened_release_rejects_tampered_signature():
-    _, root, manifest, change, signed_release, commit_sha = _authorized_release_fixture()
-    port, escrow = _locked_escrow()
+    root, manifest, change, signed_release, commit_sha = _authorized_release_fixture()
+    port = ExternalPortImport()
+    escrow = _locked_escrow()
     tampered = signed_release.__class__(**{**signed_release.__dict__, "commit_sha": "tampered"})
 
     with pytest.raises(SecurityError, match="signed release commit SHA mismatch"):
@@ -116,42 +118,26 @@ def test_hardened_release_rejects_tampered_signature():
 
 
 def test_hardened_release_rejects_release_replay():
-    _, root, manifest, change, signed_release, commit_sha = _authorized_release_fixture()
+    root, manifest, change, signed_release, commit_sha = _authorized_release_fixture()
     port = ExternalPortImport()
     policy = AuthorizationPolicy()
 
-    for suffix in ("001", "002"):
-        escrow = _locked_escrow()[1]
-        release = signed_release if suffix == "001" else sign_release(
-            Ed25519PrivateKey.generate(),
-            release_id="release-002",
-            owner_id=root.owner_id,
-            manifest_hash=manifest["manifest_hash"],
-            commit_sha=commit_sha,
-        )
-        if suffix == "002":
-            release = sign_release(
-                _authorized_release_fixture()[0],
-                release_id="release-002",
-                owner_id=root.owner_id,
-                manifest_hash=manifest["manifest_hash"],
-                commit_sha=commit_sha,
-            )
-        port.release_escrow_authorized(
-            escrow,
-            incident_id="CASE-SEC-001",
-            authorization_hash=f"AUTH-SEC-{suffix}",
-            rule_version="SHUUD-1.0",
-            timestamp="2026-09-13T16:00:02Z",
-            root=root,
-            policy=policy,
-            change=change,
-            manifest=manifest,
-            signed_release=release,
-            expected_commit_sha=commit_sha,
-        )
+    first_escrow = _locked_escrow()
+    port.release_escrow_authorized(
+        first_escrow,
+        incident_id="CASE-SEC-001",
+        authorization_hash="AUTH-SEC-001",
+        rule_version="SHUUD-1.0",
+        timestamp="2026-09-13T16:00:02Z",
+        root=root,
+        policy=policy,
+        change=change,
+        manifest=manifest,
+        signed_release=signed_release,
+        expected_commit_sha=commit_sha,
+    )
 
-    replay_escrow = _locked_escrow()[1]
+    replay_escrow = _locked_escrow()
     with pytest.raises(SecurityError, match="replayed release_id"):
         port.release_escrow_authorized(
             replay_escrow,
@@ -166,3 +152,4 @@ def test_hardened_release_rejects_release_replay():
             signed_release=signed_release,
             expected_commit_sha=commit_sha,
         )
+    assert replay_escrow.get_state()["state"] == "LOCKED"
