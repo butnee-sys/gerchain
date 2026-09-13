@@ -12,13 +12,16 @@ from datetime import datetime
 from typing import Mapping
 
 
+# Customer-facing SHUUD flow releases the verified payment source before the
+# road-clearance confirmation. Keep the canonical milestone order aligned with
+# that real service flow so a valid release -> clearance sequence is accepted.
 MILESTONES = (
     "incident_created_at",
     "evidence_locked_at",
     "verification_completed_at",
     "shiid_decided_at",
-    "clearance_confirmed_at",
     "settlement_released_at",
+    "clearance_confirmed_at",
 )
 
 
@@ -84,13 +87,17 @@ class OperationalTiming:
                 "verification_completed_at",
                 "shiid_decided_at",
             ),
+            "shiid_to_settlement_seconds": (
+                "shiid_decided_at",
+                "settlement_released_at",
+            ),
+            "settlement_to_clearance_seconds": (
+                "settlement_released_at",
+                "clearance_confirmed_at",
+            ),
             "shiid_to_clearance_seconds": (
                 "shiid_decided_at",
                 "clearance_confirmed_at",
-            ),
-            "clearance_to_settlement_seconds": (
-                "clearance_confirmed_at",
-                "settlement_released_at",
             ),
             "incident_to_clearance_seconds": (
                 "incident_created_at",
