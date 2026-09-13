@@ -1,0 +1,33 @@
+name: DEE Security Gate
+
+on:
+  pull_request:
+    paths:
+      - 'dee_security/**'
+      - 'tests/test_dee_security.py'
+      - 'requirements-dee-security.txt'
+      - '.github/workflows/dee-security.yml'
+  push:
+    branches:
+      - main
+      - fix/ecosystem-separation
+    paths:
+      - 'dee_security/**'
+      - 'tests/test_dee_security.py'
+      - 'requirements-dee-security.txt'
+      - '.github/workflows/dee-security.yml'
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Install security dependencies
+        run: python -m pip install -r requirements-dee-security.txt pytest
+      - name: Verify DEE security primitives
+        run: python -m pytest -q tests/test_dee_security.py
