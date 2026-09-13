@@ -1,21 +1,17 @@
-"""DEE Root of Trust and Owner Authorization primitives.
-
-The security boundary is intentionally independent from the application layer.
-Private signing keys must never be stored in this repository.
-"""
+"""DEE Root of Trust, owner authorization, and key lifecycle primitives."""
 
 from .root_of_trust import RootOfTrust, SignedChange, SecurityError
 from .authorization import AuthorizationPolicy, authorize_change
 from .manifest import build_manifest, canonical_manifest
 from .release_policy import authorize_release
+from .key_management import OwnerKeyRecord, generate_owner_keypair, key_id_from_public_key, load_private_key, public_key_b64
+from .signing import SignedRelease, sign_change, sign_release, verify_release
+from .rotation import KeyRegistry, KeyRotationRequest, build_rotation_request
 
 __all__ = [
-    "AuthorizationPolicy",
-    "RootOfTrust",
-    "SecurityError",
-    "SignedChange",
-    "authorize_change",
-    "authorize_release",
-    "build_manifest",
-    "canonical_manifest",
+    "AuthorizationPolicy", "RootOfTrust", "SecurityError", "SignedChange",
+    "authorize_change", "authorize_release", "build_manifest", "canonical_manifest",
+    "OwnerKeyRecord", "generate_owner_keypair", "key_id_from_public_key", "load_private_key", "public_key_b64",
+    "SignedRelease", "sign_change", "sign_release", "verify_release",
+    "KeyRegistry", "KeyRotationRequest", "build_rotation_request",
 ]
