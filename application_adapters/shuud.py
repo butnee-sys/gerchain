@@ -8,6 +8,7 @@ fresh request nonce. The application adapter never bypasses gateway governance.
 """
 
 from typing import Any
+from uuid import uuid4
 
 from connectors import EXIMConnectorAdapter
 from gateway import OpenMultiConnectorGateway
@@ -47,50 +48,54 @@ class SHUUDApplicationAdapter:
                 allowed_operations=EXIM_OPERATIONS,
             )
 
-    def _dispatch(self, operation: str, *, nonce: str, **kwargs: Any) -> Any:
+    @staticmethod
+    def _nonce() -> str:
+        return f"SHUUD-{uuid4().hex}"
+
+    def _dispatch(self, operation: str, **kwargs: Any) -> Any:
         return self.gateway.dispatch(
             self.connector_id,
             operation,
             credential=self.credential,
-            nonce=nonce,
+            nonce=self._nonce(),
             **kwargs,
         )
 
-    def create_witness_chain(self, *, nonce: str, initial_state: dict[str, Any], manifest: dict[str, Any], witness_id: str, initial_money_state: dict[str, Any] | None = None) -> Any:
-        return self._dispatch("create_witness_chain", nonce=nonce, initial_state=initial_state, manifest=manifest, witness_id=witness_id, initial_money_state=initial_money_state)
+    def create_witness_chain(self, *, initial_state: dict[str, Any], manifest: dict[str, Any], witness_id: str, initial_money_state: dict[str, Any] | None = None) -> Any:
+        return self._dispatch("create_witness_chain", initial_state=initial_state, manifest=manifest, witness_id=witness_id, initial_money_state=initial_money_state)
 
-    def restore_witness_chain(self, bundle: dict[str, Any], *, nonce: str) -> Any:
-        return self._dispatch("restore_witness_chain", nonce=nonce, bundle=bundle)
+    def restore_witness_chain(self, bundle: dict[str, Any]) -> Any:
+        return self._dispatch("restore_witness_chain", bundle=bundle)
 
-    def create_escrow(self, *, nonce: str, escrow_id: str, amount: int, currency: str, settlement_provider: str, witness_chain: Any) -> Any:
-        return self._dispatch("create_escrow", nonce=nonce, escrow_id=escrow_id, amount=amount, currency=currency, settlement_provider=settlement_provider, witness_chain=witness_chain)
+    def create_escrow(self, *, escrow_id: str, amount: int, currency: str, settlement_provider: str, witness_chain: Any) -> Any:
+        return self._dispatch("create_escrow", escrow_id=escrow_id, amount=amount, currency=currency, settlement_provider=settlement_provider, witness_chain=witness_chain)
 
-    def restore_escrow(self, *, nonce: str, escrow_id: str, amount: int, currency: str, state: dict[str, Any], records: list[dict[str, Any]], witness_chain: Any) -> Any:
-        return self._dispatch("restore_escrow", nonce=nonce, escrow_id=escrow_id, amount=amount, currency=currency, state=state, records=records, witness_chain=witness_chain)
+    def restore_escrow(self, *, escrow_id: str, amount: int, currency: str, state: dict[str, Any], records: list[dict[str, Any]], witness_chain: Any) -> Any:
+        return self._dispatch("restore_escrow", escrow_id=escrow_id, amount=amount, currency=currency, state=state, records=records, witness_chain=witness_chain)
 
-    def verifier(self, *, nonce: str) -> Any:
-        return self._dispatch("verifier", nonce=nonce)
+    def verifier(self) -> Any:
+        return self._dispatch("verifier")
 
-    def release_escrow(self, escrow: Any, *, nonce: str, **kwargs: Any) -> Any:
-        return self._dispatch("release_escrow", nonce=nonce, escrow=escrow, **kwargs)
+    def release_escrow(self, escrow: Any, **kwargs: Any) -> Any:
+        return self._dispatch("release_escrow", escrow=escrow, **kwargs)
 
-    def release_escrow_authorized(self, escrow: Any, *, nonce: str, **kwargs: Any) -> Any:
-        return self._dispatch("release_escrow_authorized", nonce=nonce, escrow=escrow, **kwargs)
+    def release_escrow_authorized(self, escrow: Any, **kwargs: Any) -> Any:
+        return self._dispatch("release_escrow_authorized", escrow=escrow, **kwargs)
 
-    def export_status(self, *, nonce: str, **kwargs: Any) -> Any:
-        return self._dispatch("export_status", nonce=nonce, **kwargs)
+    def export_status(self, **kwargs: Any) -> Any:
+        return self._dispatch("export_status", **kwargs)
 
-    def export_escrow_status(self, *, nonce: str, **kwargs: Any) -> Any:
-        return self._dispatch("export_escrow_status", nonce=nonce, **kwargs)
+    def export_escrow_status(self, **kwargs: Any) -> Any:
+        return self._dispatch("export_escrow_status", **kwargs)
 
-    def export_settlement(self, *, nonce: str, **kwargs: Any) -> Any:
-        return self._dispatch("export_settlement_status", nonce=nonce, **kwargs)
+    def export_settlement(self, **kwargs: Any) -> Any:
+        return self._dispatch("export_settlement_status", **kwargs)
 
-    def export_evidence(self, *, nonce: str, **kwargs: Any) -> Any:
-        return self._dispatch("export_evidence_status", nonce=nonce, **kwargs)
+    def export_evidence(self, **kwargs: Any) -> Any:
+        return self._dispatch("export_evidence_status", **kwargs)
 
-    def export_audit(self, *, nonce: str, **kwargs: Any) -> Any:
-        return self._dispatch("export_audit_event", nonce=nonce, **kwargs)
+    def export_audit(self, **kwargs: Any) -> Any:
+        return self._dispatch("export_audit_event", **kwargs)
 
 
 __all__ = ["EXIM_OPERATIONS", "SHUUDApplicationAdapter"]
