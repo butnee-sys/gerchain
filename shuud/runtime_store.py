@@ -9,15 +9,13 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from escrow.engine import EscrowEngine
-from escrow.record import EscrowRecord
+from .integration import EscrowEngine, EscrowRecord, WitnessChain
 from .evidence import EvidenceEnvelope
 from .incident import Incident
 from .metrics import OperationalTiming
 from .persistence import SHUUDPersistence
 from .release import ReleaseAuthorization
 from .shiid import Decision, SHIIDDecision
-from witness.chain import WitnessChain
 
 
 class SHUUDRuntimeStore:
