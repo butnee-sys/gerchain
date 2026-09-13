@@ -32,11 +32,15 @@ if not any(getattr(route, "path", None) == "/api/v1/shuud/sandbox/kpi" for route
 if not any(getattr(route, "path", None) == "/api/v1/shuud/sandbox/command" for route in app.routes):
     app.include_router(shuud_command_router)
 
-if not any(getattr(route, "path", None) == "/api/v1/shuud/sandbox/config" for route in app.routes):
+if not any(
+    getattr(route, "path", None)
+    == "/api/v1/shuud/sandbox/config/{sandbox_id}/cases/{incident_id}"
+    for route in app.routes
+):
     app.include_router(shuud_case_intake_router)
 
 # Serve the SHUUD presentation UIs from the same origin as the API so browser
-a# demos can use the real sandbox/API without CORS or a second server.
+demos can use the real sandbox/API without CORS or a second server.
 prototype_dir = Path(__file__).resolve().parent.parent / "prototype"
 if prototype_dir.is_dir():
     if not any(getattr(route, "path", None) == "/shuud-demo" for route in app.routes):
