@@ -67,8 +67,10 @@ function reset() {
   document.getElementById("incidentValue").textContent = "—";
   document.getElementById("decisionValue").textContent = "—";
   document.getElementById("escrowValue").textContent = "—";
+  document.getElementById("providerValue").textContent = "—";
   document.getElementById("savedValue").textContent = "—";
-  document.getElementById("incidentLabel").textContent = "Incident: —";
+  document.getElementById("clearanceValue").textContent = "—";
+  document.getElementById("incidentLabel").textContent = "—";
   document.getElementById("systemStatus").textContent = "RUNNING";
   document.getElementById("kpiBadge").textContent = "LIVE";
 }
@@ -81,16 +83,16 @@ async function runCase() {
     const incident = await api("/incidents", {
       method: "POST",
       body: JSON.stringify({
-        location: "SANDBOX",
-        vehicle_a: "TEST-A",
-        vehicle_b: "TEST-B",
-        description: "SHUUD sandbox operator case"
+        location: "СБД / Энхтайвны өргөн чөлөө",
+        vehicle_a: "UB-TEST-A",
+        vehicle_b: "UB-TEST-B",
+        description: "SHUUD minor incident — хүний гэмтэлгүй, маргаангүй"
       })
     });
     const id = incident.incident_id;
     document.getElementById("incidentValue").textContent = id;
     document.getElementById("incidentLabel").textContent = `Incident: ${id}`;
-    logEvent(`Incident ${id} бүртгэгдэв`);
+    logEvent(`Бүртгэл: ${id} үүсэв`);
 
     const evidenceRef = `OPERATOR-${id}`;
     await api("/evidence", {
@@ -100,13 +102,13 @@ async function runCase() {
         evidence_refs: [evidenceRef],
         gps_coordinates: "47.9184,106.9177",
         captured_at: new Date().toISOString(),
-        vehicle_identity_refs: ["TEST-A", "TEST-B"],
+        vehicle_identity_refs: ["UB-TEST-A", "UB-TEST-B"],
         consent_refs: ["CONSENT-A", "CONSENT-B"],
         media_complete: true
       })
     });
     setStep("evidence");
-    logEvent("Evidence locked");
+    logEvent("Баримт, байршил, хоёр талын зөвшөөрөл баталгаажив");
 
     const decision = await api("/decisions", {
       method: "POST",
@@ -129,7 +131,11 @@ async function runCase() {
     });
     setStep("decision");
     document.getElementById("decisionValue").textContent = decision.decision;
-    logEvent(`SHIID: ${decision.decision}`);
+    logEvent(`SHIID: ${decision.decision} · дүрэм ${decision.rule_version}`);
+
+    if (decision.decision !== "APPROVE") {
+      throw new Error(`SHIID ${decision.decision}: ${decision.reasons?.join(", ") || "шийдвэрийн шалгуур хангагдсангүй"}`);
+    }
 
     const clearance = await api("/metrics/clearance", {
       method: "POST",
@@ -138,16 +144,23 @@ async function runCase() {
     seconds = Math.max(0, Math.round(clearance.elapsed_seconds));
     renderElapsed(seconds);
     setStep("clearance");
-    logEvent(`Clearance: ${seconds} сек`, clearance.within_two_minutes ? "PASS" : "WARN");
+    document.getElementById("clearanceValue").textContent = `${seconds} сек`;
+    logEvent(`Зам чөлөөлөлт: ${seconds} сек`, clearance.within_two_minutes ? "PASS" : "WARN");
 
     const escrowId = `OPERATOR-ESCROW-${id}`;
     const escrow = await api("/escrows", {
       method: "POST",
-      body: JSON.stringify({ incident_id: id, escrow_id: escrowId, amount_mnt: 500000, settlement_provider: "NEF" })
+      body: JSON.stringify({
+        incident_id: id,
+        escrow_id: escrowId,
+        amount_mnt: 500000,
+        settlement_provider: "NEF"
+      })
     });
     setStep("escrow");
     document.getElementById("escrowValue").textContent = escrow.state;
-    logEvent(`Escrow: ${escrow.state} / ${escrow.currency}`);
+    document.getElementById("providerValue").textContent = escrow.settlement_provider || "NEF";
+    logEvent(`Эскроу: ₮500,000 · ${escrow.settlement_provider || "NEF"} · ${escrow.state}`);
 
     const release = await api("/release", {
       method: "POST",
@@ -155,7 +168,7 @@ async function runCase() {
     });
     setStep("release");
     document.getElementById("escrowValue").textContent = release.new_state;
-    logEvent(`Release: ${release.new_state}`);
+    logEvent(`Төлбөр: ${release.new_state} · баталгаажсан`);
 
     const summary = await api(`/metrics/${encodeURIComponent(id)}/summary`, {
       method: "POST",
@@ -172,7 +185,7 @@ async function runCase() {
     clearInterval(timer);
     document.getElementById("kpiBadge").textContent = clearance.within_two_minutes ? "PASS ≤ 120s" : "OVER 120s";
     document.getElementById("systemStatus").textContent = "CASE COMPLETE";
-    logEvent(`Measurement: ${summary.economic_impact.total_savings_mnt} MNT savings`);
+    logEvent(`Эдийн засгийн үр нөлөө: ${summary.economic_impact.total_savings_mnt} MNT хэмнэлт`);
   } catch (error) {
     clearInterval(timer);
     document.getElementById("kpiBadge").textContent = "ERROR";
