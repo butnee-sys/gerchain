@@ -8,6 +8,7 @@ NEF–GerChain and of the concrete Port package layout.
 from typing import Any, Mapping
 
 from nef_gerchain_port import ExternalPortExport, ExternalPortImport
+from nef_gerchain_port.contract import EscrowRequest
 
 
 class EXIMConnectorAdapter:
@@ -21,6 +22,19 @@ class EXIMConnectorAdapter:
 
     def create_witness_chain(self, *, initial_state: dict[str, Any], manifest: dict[str, Any], witness_id: str, initial_money_state: dict[str, Any] | None = None) -> Any:
         return self._port_import.create_witness_chain(initial_state=initial_state, manifest=manifest, witness_id=witness_id, initial_money_state=initial_money_state)
+
+    def restore_witness_chain(self, bundle: dict[str, Any]) -> Any:
+        return self._port_import.restore_witness_chain(bundle)
+
+    def create_escrow(self, *, escrow_id: str, amount: int, currency: str, settlement_provider: str, witness_chain: Any) -> Any:
+        request = EscrowRequest(escrow_id=escrow_id, amount=amount, currency=currency, settlement_provider=settlement_provider)
+        return self._port_import.create_escrow(request, witness_chain)
+
+    def restore_escrow(self, *, escrow_id: str, amount: int, currency: str, state: dict[str, Any], records: list[dict[str, Any]], witness_chain: Any) -> Any:
+        return self._port_import.restore_escrow(escrow_id=escrow_id, amount=amount, currency=currency, state=state, records=records, witness_chain=witness_chain)
+
+    def verifier(self) -> Any:
+        return self._port_import.verifier()
 
     def release_escrow(self, escrow: Any, *, authorization_hash: str, incident_id: str, rule_version: str, timestamp: str, evidence: Any | None = None) -> Any:
         return self._port_import.release_escrow(escrow, authorization_hash=authorization_hash, incident_id=incident_id, rule_version=rule_version, timestamp=timestamp, evidence=evidence)
