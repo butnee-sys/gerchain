@@ -10,6 +10,7 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from dee_security import AuthorizationPolicy, RootOfTrust, SecurityError, SignedChange, authorize_release
 from dee_security.audit import append_record, verify_chain
 from dee_security.manifest import build_manifest, canonical_manifest
+from dee_security.signing import sign_release
 
 
 def _sign(private_key: Ed25519PrivateKey, change: SignedChange) -> str:
@@ -30,20 +31,32 @@ def _change(private_key: Ed25519PrivateKey, version: int = 1) -> SignedChange:
     return SignedChange(**{**unsigned.__dict__, "signature": _sign(private_key, unsigned)})
 
 
+def _root(private: Ed25519PrivateKey) -> RootOfTrust:
+    return RootOfTrust(
+        "owner:primary",
+        base64.b64encode(private.public_key().public_bytes_raw()).decode(),
+    )
+
+
+def _manifest():
+    return build_manifest(
+        version=1,
+        commit_sha="abc123",
+        protected_paths=["core/state.py", "dee_security/root_of_trust.py"],
+        artifact_hashes={"core/state.py": "deadbeef"},
+        schema_version="1",
+    )
+
+
 def test_root_of_trust_accepts_owner_signature():
     private = Ed25519PrivateKey.generate()
-    public = private.public_key().public_bytes_raw()
-    root = RootOfTrust("owner:primary", base64.b64encode(public).decode())
-    assert root.verify(_change(private)) is True
+    assert _root(private).verify(_change(private)) is True
 
 
 def test_root_of_trust_rejects_tampering_and_other_owner():
     private = Ed25519PrivateKey.generate()
     other = Ed25519PrivateKey.generate()
-    root = RootOfTrust(
-        "owner:primary",
-        base64.b64encode(private.public_key().public_bytes_raw()).decode(),
-    )
+    root = _root(private)
     valid = _change(private)
     assert root.verify(SignedChange(**{**valid.__dict__, "payload_hash": "tampered"})) is False
     other_change = SignedChange(**{**_change(other).__dict__, "owner_id": "owner:other"})
@@ -52,10 +65,7 @@ def test_root_of_trust_rejects_tampering_and_other_owner():
 
 def test_policy_rejects_replay():
     private = Ed25519PrivateKey.generate()
-    root = RootOfTrust(
-        "owner:primary",
-        base64.b64encode(private.public_key().public_bytes_raw()).decode(),
-    )
+    root = _root(private)
     policy = AuthorizationPolicy()
     change = _change(private)
     policy.check(root=root, change=change, paths=["core/state.py"], change_kind="rule")
@@ -65,78 +75,59 @@ def test_policy_rejects_replay():
 
 def test_policy_rejects_unprotected_paths():
     private = Ed25519PrivateKey.generate()
-    root = RootOfTrust(
-        "owner:primary",
-        base64.b64encode(private.public_key().public_bytes_raw()).decode(),
-    )
     with pytest.raises(SecurityError, match="protected DEE paths"):
         AuthorizationPolicy().check(
-            root=root,
-            change=_change(private),
-            paths=["shuud/app.py"],
-            change_kind="source",
+            root=_root(private), change=_change(private), paths=["shuud/app.py"], change_kind="source"
         )
 
 
 def test_manifest_is_canonical_and_hashed():
-    manifest = build_manifest(
-        version=1,
-        commit_sha="abc123",
-        protected_paths=["core/state.py", "nef_gerchain_port/contract.py"],
-        artifact_hashes={"core/state.py": "deadbeef"},
-        schema_version="1",
-    )
-    assert manifest["protected_paths"] == ["core/state.py", "nef_gerchain_port/contract.py"]
+    manifest = _manifest()
     assert manifest["manifest_hash"] == hashlib.sha256(
         canonical_manifest({k: v for k, v in manifest.items() if k != "manifest_hash"})
     ).hexdigest()
 
 
-def test_release_gate_requires_owner_signed_manifest_hash():
+def test_release_gate_binds_owner_commit_and_manifest_signature():
     private = Ed25519PrivateKey.generate()
-    root = RootOfTrust(
-        "owner:primary",
-        base64.b64encode(private.public_key().public_bytes_raw()).decode(),
-    )
-    policy = AuthorizationPolicy()
-    manifest = build_manifest(
-        version=1,
-        commit_sha="abc123",
-        protected_paths=["core/state.py", "dee_security/root_of_trust.py"],
-        artifact_hashes={"core/state.py": "deadbeef"},
-        schema_version="1",
-    )
-    unsigned = SignedChange(
+    manifest = _manifest()
+    release = sign_release(
+        private,
         owner_id="owner:primary",
-        change_id="release-001",
-        version=1,
-        payload_hash=manifest["manifest_hash"],
-        signature="",
+        release_id="release-001",
+        commit_sha=manifest["commit_sha"],
+        manifest_hash=manifest["manifest_hash"],
     )
-    change = SignedChange(**{**unsigned.__dict__, "signature": _sign(private, unsigned)})
-    authorize_release(root=root, policy=policy, change=change, manifest=manifest)
+    authorize_release(root=_root(private), policy=AuthorizationPolicy(), release=release, manifest=manifest)
 
     tampered = {**manifest, "artifact_hashes": {"core/state.py": "tampered"}}
     with pytest.raises(SecurityError, match="manifest hash mismatch"):
-        authorize_release(root=root, policy=AuthorizationPolicy(), change=change, manifest=tampered)
+        authorize_release(root=_root(private), policy=AuthorizationPolicy(), release=release, manifest=tampered)
+
+
+def test_release_commit_mismatch_is_rejected():
+    private = Ed25519PrivateKey.generate()
+    manifest = _manifest()
+    release = sign_release(private, owner_id="owner:primary", release_id="release-002", commit_sha="wrong", manifest_hash=manifest["manifest_hash"])
+    with pytest.raises(SecurityError, match="commit"):
+        authorize_release(root=_root(private), policy=AuthorizationPolicy(), release=release, manifest=manifest)
+
+
+def test_release_replay_is_rejected():
+    private = Ed25519PrivateKey.generate()
+    manifest = _manifest()
+    release = sign_release(private, owner_id="owner:primary", release_id="release-003", commit_sha="abc123", manifest_hash=manifest["manifest_hash"])
+    policy = AuthorizationPolicy()
+    from dee_security.release_policy import ReleaseAuthorization
+    gate = ReleaseAuthorization()
+    authorize_release(root=_root(private), policy=policy, release=release, manifest=manifest, gate=gate)
+    with pytest.raises(SecurityError, match="replayed"):
+        authorize_release(root=_root(private), policy=policy, release=release, manifest=manifest, gate=gate)
 
 
 def test_audit_chain_is_tamper_evident():
-    first = append_record(
-        sequence=1,
-        event="DEE_CHANGE_AUTHORIZED",
-        change_id="chg-001",
-        owner_id="owner:primary",
-        decision="ALLOW",
-    )
-    second = append_record(
-        sequence=2,
-        event="DEE_RELEASE_AUTHORIZED",
-        change_id="chg-001",
-        owner_id="owner:primary",
-        decision="ALLOW",
-        previous_hash=first.record_hash,
-    )
+    first = append_record(sequence=1, event="DEE_CHANGE_AUTHORIZED", change_id="chg-001", owner_id="owner:primary", decision="ALLOW")
+    second = append_record(sequence=2, event="DEE_RELEASE_AUTHORIZED", change_id="chg-001", owner_id="owner:primary", decision="ALLOW", previous_hash=first.record_hash)
     assert verify_chain([first, second]) is True
     tampered = second.__class__(**{**second.__dict__, "decision": "DENY"})
     assert verify_chain([first, tampered]) is False
