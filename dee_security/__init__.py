@@ -6,6 +6,7 @@ from .identity import ProtectedIdentity, authorize_protected_operation
 from .contract_governance import ContractGovernanceError, ProtectedContract, authorize_contract_change
 from .evidence_governance import EvidenceGovernanceError, ProtectedEvidence, canonical_evidence, evidence_hash, require_protected_evidence
 from .core_access import CoreAccessError, CoreAccessRequest, authorize_core_access
+from .exim_port_security import EXIMPortRequest, EXIMPortSecurityError, authorize_exim_port_request
 from .manifest import build_manifest, canonical_manifest
 from .release_policy import ReleaseAuthorization, authorize_release
 from .key_management import OwnerKeyRecord, generate_owner_keypair, key_id_from_public_key, load_private_key, public_key_b64
@@ -30,6 +31,7 @@ __all__ = [
     "ContractGovernanceError", "ProtectedContract", "authorize_contract_change",
     "EvidenceGovernanceError", "ProtectedEvidence", "canonical_evidence", "evidence_hash", "require_protected_evidence",
     "CoreAccessError", "CoreAccessRequest", "authorize_core_access",
+    "EXIMPortRequest", "EXIMPortSecurityError", "authorize_exim_port_request",
     "authorize_release", "build_manifest", "canonical_manifest", "ReleaseAuthorization",
     "OwnerKeyRecord", "generate_owner_keypair", "key_id_from_public_key", "load_private_key", "public_key_b64",
     "SignedRelease", "sign_change", "sign_release", "verify_release",
