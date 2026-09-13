@@ -1,4 +1,4 @@
-"""DEE Root of Trust, owner authorization, and key lifecycle primitives."""
+"""DEE Root of Trust, governance, protection, and key lifecycle primitives."""
 
 from .root_of_trust import RootOfTrust, SignedChange, SecurityError
 from .authorization import AuthorizationPolicy, authorize_change
@@ -28,6 +28,7 @@ from .recovery import (
     build_recovery_approval,
 )
 from .genesis import GenesisAnchor, GenesisError, build_genesis_anchor, verify_genesis_anchor
+from .trinity import TrinityDecision, TrinityDimension, TrinityError, evaluate_trinity, require_trinity
 
 __all__ = [
     "AuthorizationPolicy", "RootOfTrust", "SecurityError", "SignedChange",
@@ -39,4 +40,5 @@ __all__ = [
     "RecoveryApproval", "RecoveryAuthority", "RecoveryDecision", "RecoveryGovernance", "RecoveryGovernanceError",
     "RecoveryPolicy", "RecoveryRequest", "RecoveryRole", "build_recovery_approval",
     "GenesisAnchor", "GenesisError", "build_genesis_anchor", "verify_genesis_anchor",
+    "TrinityDecision", "TrinityDimension", "TrinityError", "evaluate_trinity", "require_trinity",
 ]
