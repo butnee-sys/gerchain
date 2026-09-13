@@ -49,6 +49,33 @@ class ExternalPortImport:
         escrow.records = [EscrowRecord(**record) for record in records]
         return escrow
 
+    def release_escrow(
+        self,
+        escrow: EscrowEngine,
+        *,
+        authorization_hash: str,
+        incident_id: str,
+        rule_version: str,
+        timestamp: str,
+        evidence: Any | None = None,
+    ) -> Any:
+        """Controlled SHUUD release transition through the EXIM Port."""
+        if not authorization_hash:
+            raise ValueError("authorization_hash is required")
+        if not incident_id:
+            raise ValueError("incident_id is required")
+        if not rule_version:
+            raise ValueError("rule_version is required")
+        state = escrow.get_state()
+        if state.get("state") != "LOCKED":
+            raise ValueError(f"SHUUD release requires LOCKED escrow, got {state.get('state')}")
+        release_evidence = evidence or {
+            "incident_id": incident_id,
+            "authorization_hash": authorization_hash,
+            "rule_version": rule_version,
+        }
+        return escrow.transition("RELEASED", timestamp, release_evidence)
+
     def verifier(self) -> IndependentVerifier:
         return IndependentVerifier()
 
