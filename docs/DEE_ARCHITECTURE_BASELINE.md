@@ -13,6 +13,12 @@ The canonical trust order is:
 
 `DEE Genesis → Root of Trust → Runtime Governance → Authorization → Protection → Execution → Audit/Recovery`
 
+The DEE Protection stage is governed by the cross-cutting **Trinity** principle:
+
+`TRUST + TRANSPARENCY + PERFORMANCE`
+
+Trinity is not an application layer and is not limited to escrow. It is the three-dimensional protection criterion applied across authorization, evidence, execution, settlement, connectors, and audit. Escrow Trinity tests are one concrete enforcement of this broader DEE protection principle.
+
 Owner authority is cryptographically anchored. Protected changes and releases must be attributable to the authorized Owner and verifiable against the DEE Root of Trust. Private signing material is operationally external to the repository; the runtime verifies signatures against the Owner public key.
 
 ## Canonical architecture
@@ -105,6 +111,26 @@ The DEE governance environment governs, at minimum:
 
 These are governance/protection domains of DEE, not separate external architectural layers.
 
+### 3. Trinity protection principle
+
+Trinity is the cross-cutting protection rule for the domains above:
+
+```text
+                    DEE PROTECTION
+                         │
+              ┌──────────┼──────────┐
+              │          │          │
+            TRUST   TRANSPARENCY PERFORMANCE
+              │          │          │
+              ▼          ▼          ▼
+        identity /    evidence /   contract /
+        authorization witness /    escrow /
+        signing       verification money /
+        governance    audit         settlement
+```
+
+A protected operation is allowed only when all three dimensions are satisfied. Missing or failed proof in any dimension is fail-closed.
+
 ## Structural meaning
 
 ### 0. Digital Economy → DEE → NEF + GerChain
@@ -179,6 +205,8 @@ All protected changes, connector approvals, releases, and security-sensitive ope
 7. **DEE governance is the security environment; the architectural boundaries are enforcement points within that environment.**
 8. No adapter, connector, application, or release may bypass the DEE Root of Trust and Runtime Governance.
 9. **Digital Economy → DEE → NEF + GerChain** must remain present in canonical architecture documentation and structural tests.
+10. **Trinity is a cross-cutting DEE protection principle, not a separate application or architecture layer.**
+11. A protected operation must satisfy **TRUST + TRANSPARENCY + PERFORMANCE**; missing proof fails closed.
 
 ## Structural acceptance criteria
 
@@ -193,4 +221,6 @@ The architecture baseline is accepted when tests can demonstrate:
 - I2B Gateway exists independently of SHUUD;
 - SHUUD is treated as an application prototype;
 - the three participant classes are represented as external roles rather than core modules;
-- prohibited direct imports remain blocked.
+- prohibited direct imports remain blocked;
+- Trinity is explicitly defined as the cross-cutting DEE protection principle;
+- Trinity protection is fail-closed when any dimension is missing or invalid.
