@@ -9,6 +9,12 @@ from nef_gerchain_port.contract import (
     ContractImportRequest,
     EscrowRequest,
     EvidenceImportRequest,
+    ExportedAsset,
+    ExportedAudit,
+    ExportedContract,
+    ExportedEvidence,
+    ExportedSettlement,
+    ExportedStatus,
     PaymentRequest,
 )
 from nef_gerchain_port.export_api import ExternalPortExport
@@ -97,6 +103,44 @@ def test_external_port_can_restore_witness_and_escrow():
     assert escrow.get_state()["state"] == "CREATED"
 
 
+def test_external_port_exports_import_contracts():
+    exporter = ExternalPortExport()
+    asset = exporter.asset(
+        asset_id="ASSET-PORT-001", asset_type="LIVESTOCK", value_nef=100_000,
+        metadata={"source": "EXIM"},
+    )
+    contract = exporter.contract(
+        contract_id="CONTRACT-PORT-001", parties=("SELLER", "BUYER"),
+        terms={"delivery": "FOB"}, metadata={"source": "EXIM"},
+    )
+    assert isinstance(asset, ExportedAsset)
+    assert asset.port_version == PORT_VERSION
+    assert asset.value_nef == 100_000
+    assert isinstance(contract, ExportedContract)
+    assert contract.parties == ("SELLER", "BUYER")
+    assert contract.terms["delivery"] == "FOB"
+
+
+def test_exported_dtos_enforce_version_and_invariants():
+    with pytest.raises(ValueError):
+        ExportedStatus(port_version="9.0", status="OK")
+    with pytest.raises(ValueError):
+        ExportedAsset(port_version=PORT_VERSION, asset_id="ASSET", asset_type="LIVESTOCK", value_nef=0)
+    with pytest.raises(ValueError):
+        ExportedContract(port_version=PORT_VERSION, contract_id="CONTRACT", parties=())
+    with pytest.raises(ValueError):
+        ExportedEvidence(port_version=PORT_VERSION, evidence_id="EVID", case_id="CASE", evidence_hash="")
+    with pytest.raises(ValueError):
+        ExportedSettlement(
+            port_version=PORT_VERSION, escrow_id="ESCROW", status="LOCKED", amount=100,
+            currency="USD", settlement_provider="NEF",
+        )
+    with pytest.raises(ValueError):
+        ExportedAudit(
+            port_version=PORT_VERSION, reference_id="REF", event_type="EVENT", timestamp="",
+        )
+
+
 def test_external_port_exports_versioned_evidence():
     exported = ExternalPortExport().evidence(
         evidence_id="EVID-PORT-001",
@@ -111,14 +155,6 @@ def test_external_port_exports_versioned_evidence():
     assert exported.metadata["source"] == "SHUUD"
 
 
-def test_external_port_evidence_export_requires_identifiers():
-    exporter = ExternalPortExport()
-    with pytest.raises(ValueError):
-        exporter.evidence(evidence_id="", case_id="CASE-001")
-    with pytest.raises(ValueError):
-        exporter.evidence(evidence_id="EVID-001", case_id="")
-
-
 def test_external_port_exports_only_port_status():
     port = ExternalPortImport()
     witness = port.create_witness_chain(initial_state={"value": 0}, manifest={"purpose": "external-port-test"},
@@ -127,6 +163,14 @@ def test_external_port_exports_only_port_status():
     assert exported.port_version == PORT_VERSION
     assert exported.reference_id == "WITNESS-PORT-002"
     assert exported.data["entry_count"] == 0
+
+
+def test_external_port_evidence_export_requires_identifiers():
+    exporter = ExternalPortExport()
+    with pytest.raises(ValueError):
+        exporter.evidence(evidence_id="", case_id="CASE-001")
+    with pytest.raises(ValueError):
+        exporter.evidence(evidence_id="EVID-001", case_id="")
 
 
 def test_core_modules_are_not_imported_by_shuud_integration():
