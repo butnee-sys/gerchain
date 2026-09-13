@@ -21,6 +21,7 @@ on:
       - main
       - fix/ecosystem-separation
       - feat/dee-owner-key-management
+      - feat/shuud-dee-e2e-proof
     paths:
       - 'dee_security/**'
       - 'nef_gerchain_port/**'
