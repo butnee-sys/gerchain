@@ -105,7 +105,7 @@ def test_canonical_dee_e2e_proof_is_derived_from_runtime():
     ledger.create_account("ESCROW_POOL", 2_000_000)
     ledger.create_account("BENEFICIARY", 0)
     money = MoneyEngine(ledger, escrow)
-    money.atomic_settlement("TX-CANONICAL-E2E", "RELEASED", "ESCROW_POOL", "BENEFICIARY", 2_000_000, "2026-09-14T03:00:03Z", {"case_id": "CANONICAL-E2E"}, root=root, owner_id=root.owner_id, authorized=True, evidence_verified=evidence_verified, witness_state_root=state_root, trinity_proof=TRINITY)
+    settlement_record = money.atomic_settlement("TX-CANONICAL-E2E", "RELEASED", "ESCROW_POOL", "BENEFICIARY", 2_000_000, "2026-09-14T03:00:03Z", {"case_id": "CANONICAL-E2E"}, root=root, owner_id=root.owner_id, authorized=True, evidence_verified=evidence_verified, witness_state_root=state_root, trinity_proof=TRINITY)
     settlement_verified = ledger.balances["BENEFICIARY"] == 2_000_000 and ledger.balances["ESCROW_POOL"] == 0 and escrow.get_state()["state"] == "RELEASED"
 
     authorize_failure_isolation(root=root, request=FailureIsolationRequest("ESCROW", "INC-CANONICAL-E2E", root.owner_id, "ISOLATE", "NEF_GERCHAIN", "ISOLATE"), trinity_proof=TRINITY)
@@ -117,12 +117,14 @@ def test_canonical_dee_e2e_proof_is_derived_from_runtime():
     protected_path = "dee_security/e2e_governance.py"
     manifest = build_manifest(version=1, commit_sha="CANONICAL-E2E-COMMIT", protected_paths=[protected_path], artifact_hashes={protected_path: hashlib.sha256(b"canonical-e2e").hexdigest()})
     release = sign_release(owner_key, owner_id=root.owner_id, release_id="REL-CANONICAL-E2E", commit_sha=manifest["commit_sha"], manifest_hash=manifest["manifest_hash"])
-    authorize_governed_release(root=root, request=ReleaseGovernanceRequest("REL-CANONICAL-E2E", root.owner_id, "REQ-REL-CANONICAL-E2E"), release_gate=ReleaseAuthorization(), policy=AuthorizationPolicy(), release=release, manifest=manifest, trinity_proof=TRINITY)
+    release_request = ReleaseGovernanceRequest("REL-CANONICAL-E2E", root.owner_id, "REQ-REL-CANONICAL-E2E", witness_state_root=state_root, settlement_hash=settlement_record.transfer_hash, recovery_decision_hash=decision.decision_hash)
+    release_request = ReleaseGovernanceRequest(**{**vars(release_request), "execution_chain_hash": release_request.computed_execution_chain_hash()})
+    authorize_governed_release(root=root, request=release_request, release_gate=ReleaseAuthorization(), policy=AuthorizationPolicy(), release=release, manifest=manifest, trinity_proof=TRINITY)
     release_verified = True
 
-    a1 = append_record(sequence=1, event="CANONICAL_SETTLEMENT", change_id="TX-CANONICAL-E2E", owner_id=root.owner_id, decision="ALLOW", stage="SETTLEMENT", connector_id="EXIM", request_id="TX-CANONICAL-E2E", operation="SETTLE", witness_state_root=state_root, trinity=TRINITY)
-    a2 = append_record(sequence=2, event="CANONICAL_RECOVERY", change_id="REC-CANONICAL-E2E", owner_id=root.owner_id, decision="ALLOW", stage="RECOVERY", connector_id="EXIM", request_id="REC-CANONICAL-E2E", operation="RECOVER", previous_hash=a1.record_hash, trinity=TRINITY)
-    a3 = append_record(sequence=3, event="CANONICAL_RELEASE", change_id="REL-CANONICAL-E2E", owner_id=root.owner_id, decision="ALLOW", stage="RELEASE", connector_id="EXIM", request_id="REQ-REL-CANONICAL-E2E", operation="RELEASE", previous_hash=a2.record_hash, trinity=TRINITY)
+    a1 = append_record(sequence=1, event="CANONICAL_SETTLEMENT", change_id="TX-CANONICAL-E2E", owner_id=root.owner_id, decision="ALLOW", stage="SETTLEMENT", connector_id="EXIM", request_id="TX-CANONICAL-E2E", operation=f"SETTLE:{state_root}", trinity=TRINITY)
+    a2 = append_record(sequence=2, event="CANONICAL_RECOVERY", change_id="REC-CANONICAL-E2E", owner_id=root.owner_id, decision="ALLOW", stage="RECOVERY", connector_id="EXIM", request_id="REC-CANONICAL-E2E", operation=f"RECOVER:{decision.decision_hash}", previous_hash=a1.record_hash, trinity=TRINITY)
+    a3 = append_record(sequence=3, event="CANONICAL_RELEASE", change_id="REL-CANONICAL-E2E", owner_id=root.owner_id, decision="ALLOW", stage="RELEASE", connector_id="EXIM", request_id="REQ-REL-CANONICAL-E2E", operation=f"RELEASE:{release_request.execution_chain_hash}", previous_hash=a2.record_hash, trinity=TRINITY)
     audit_verified = verify_chain([a1, a2, a3])
 
     proof = DEEE2EProof(genesis_verified=genesis_verified, owner_verified=owner_verified, governance_verified=governance_verified, identity_verified=identity_verified, contract_verified=contract_verified, evidence_verified=evidence_verified, gateway_verified=gateway_verified, connector_verified=connector_verified, exim_verified=exim_verified, core_verified=core_verified, escrow_verified=escrow_verified, witness_verified=witness_verified, settlement_verified=settlement_verified, audit_verified=audit_verified, recovery_verified=recovery_verified, release_verified=release_verified)
