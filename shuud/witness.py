@@ -1,19 +1,19 @@
-"""SHUUD adapter to the existing GerChain WitnessChain.
+"""SHUUD application events recorded through the EXIM Escrow Port."""
 
-SHUUD never creates a second witness chain. This adapter only records
-application milestones through the existing append_event contract, while
-marking every application payload with an explicit SHUUD domain.
-"""
+from typing import Any
 
-from .integration import WitnessChain
+from nef_gerchain_port import ExternalPortImport
 from .domain import canonical_shuud_payload
 from .evidence import EvidenceEnvelope
 from .shiid import SHIIDDecision
 from .release import ReleaseAuthorization
 
 
+_PORT_IMPORT = ExternalPortImport()
+
+
 def _append_shuud_event(
-    witness: WitnessChain,
+    witness: Any,
     *,
     event_id: str,
     event_type: str,
@@ -31,7 +31,7 @@ def _append_shuud_event(
     )
 
 
-def record_evidence_locked(witness: WitnessChain, evidence: EvidenceEnvelope, *, timestamp: str):
+def record_evidence_locked(witness: Any, evidence: EvidenceEnvelope, *, timestamp: str):
     return _append_shuud_event(
         witness,
         event_id=f"{evidence.incident_id}-EVIDENCE-LOCKED",
@@ -43,7 +43,7 @@ def record_evidence_locked(witness: WitnessChain, evidence: EvidenceEnvelope, *,
     )
 
 
-def record_shiid_decision(witness: WitnessChain, decision: SHIIDDecision, *, timestamp: str):
+def record_shiid_decision(witness: Any, decision: SHIIDDecision, *, timestamp: str):
     return _append_shuud_event(
         witness,
         event_id=f"{decision.incident_id}-SHIID",
@@ -64,7 +64,7 @@ def record_shiid_decision(witness: WitnessChain, decision: SHIIDDecision, *, tim
     )
 
 
-def record_release_authorized(witness: WitnessChain, authorization: ReleaseAuthorization, *, timestamp: str):
+def record_release_authorized(witness: Any, authorization: ReleaseAuthorization, *, timestamp: str):
     return _append_shuud_event(
         witness,
         event_id=f"{authorization.incident_id}-RELEASE-AUTHORIZED",
