@@ -46,11 +46,20 @@ def authorize_release(decision: SHIIDDecision, *, escrow_id: str) -> ReleaseAuth
     )
 
 
-def release_escrow(escrow: Any, authorization: ReleaseAuthorization, *, timestamp: str | None = None, evidence: Any | None = None):
-    """Delegate LOCKED -> RELEASED through the application adapter."""
-    adapter = SHUUDApplicationAdapter()
+def release_escrow(
+    escrow: Any,
+    authorization: ReleaseAuthorization,
+    *,
+    credential: str,
+    nonce: str,
+    timestamp: str | None = None,
+    evidence: Any | None = None,
+):
+    """Delegate LOCKED -> RELEASED through the authenticated application boundary."""
+    adapter = SHUUDApplicationAdapter(credential=credential)
     return adapter.release_escrow(
         escrow,
+        nonce=nonce,
         authorization_hash=authorization.authorization_hash,
         incident_id=authorization.incident_id,
         rule_version=authorization.rule_version,
