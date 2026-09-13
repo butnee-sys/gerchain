@@ -22,6 +22,29 @@ def test_canonical_dee_layers_exist_without_duplicate_adapter_packages():
     assert not (root / "connector_adapter").exists()
 
 
+def test_digital_economy_dee_nef_gerchain_relationship_is_mandatory():
+    root = Path(__file__).resolve().parents[1]
+    baseline = (root / "docs" / "DEE_ARCHITECTURE_BASELINE.md").read_text(
+        encoding="utf-8"
+    )
+    connector_doc = (root / "docs" / "DEE_CONNECTOR_ARCHITECTURE.md").read_text(
+        encoding="utf-8"
+    )
+
+    required_phrases = (
+        "DIGITAL ECONOMY",
+        "DEE",
+        "NEF + GERCHAIN",
+        "Digital Economy → DEE → NEF + GerChain",
+    )
+    for phrase in required_phrases:
+        assert phrase in baseline, f"Missing mandatory architecture element: {phrase}"
+
+    assert "NEF–GerChain" in connector_doc
+    assert "Digital Economy" in baseline
+    assert "Digital Escrow Ecosystem" in baseline
+
+
 def test_external_participant_classes_are_not_core_implementation_packages():
     root = Path(__file__).resolve().parents[1]
 
