@@ -8,6 +8,7 @@ from nef_gerchain_port import (
     ExportedAudit,
     ExportedEvidence,
     ExportedSettlement,
+    ExportedStatus,
     ExternalPortExport,
     require_integer_money,
 )
@@ -15,7 +16,7 @@ from nef_gerchain_port import (
 
 def test_exim_v1_exported_contract_set_is_complete() -> None:
     assert EXIM_PORT_VERSION == "1.0"
-    assert {ExportedStatus.__name__ if False else "ExportedStatus", ExportedSettlement.__name__, ExportedEvidence.__name__, ExportedAudit.__name__} == {
+    assert {ExportedStatus.__name__, ExportedSettlement.__name__, ExportedEvidence.__name__, ExportedAudit.__name__} == {
         "ExportedStatus",
         "ExportedSettlement",
         "ExportedEvidence",
