@@ -1,5 +1,6 @@
 import base64
 
+from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
 from connectors import EXIMConnectorAdapter
@@ -11,7 +12,10 @@ from gateway import OpenMultiConnectorGateway
 
 def _root() -> RootOfTrust:
     private_key = Ed25519PrivateKey.generate()
-    public_key = private_key.public_key().public_bytes_raw()
+    public_key = private_key.public_key().public_bytes(
+        serialization.Encoding.Raw,
+        serialization.PublicFormat.Raw,
+    )
     return RootOfTrust("OWNER-E2E", base64.b64encode(public_key).decode("ascii"))
 
 
@@ -70,36 +74,19 @@ def test_dee_runtime_path_gateway_to_exim_to_escrow_and_audit():
     escrow.transition("FUNDED", "2026-09-14T00:00:00Z", {"case_id": "CASE-E2E"})
     escrow.transition("LOCKED", "2026-09-14T00:00:01Z", {"case_id": "CASE-E2E"})
 
-    records = [
-        append_record(
-            sequence=1,
-            event="GATEWAY_AUTHORIZED",
-            change_id="REQ-WIT-1",
-            owner_id=root.owner_id,
-            decision="ALLOW",
-            stage="GATEWAY",
-            connector_id="EXIM",
-            request_id="REQ-WIT-1",
-            operation="create_witness_chain",
-            trinity=trinity,
-        ),
-        append_record(
-            sequence=2,
-            event="ESCROW_CREATED_AND_LOCKED",
-            change_id="REQ-ESC-1",
-            owner_id=root.owner_id,
-            decision="ALLOW",
-            stage="ESCROW",
-            connector_id="EXIM",
-            request_id="REQ-ESC-1",
-            operation="create_escrow",
-            previous_hash="PLACEHOLDER",
-            trinity=trinity,
-        ),
-    ]
-    # Rebind the second record to the actual first record hash without weakening
-    # the audit verifier's chained-hash invariant.
-    records[1] = append_record(
+    first = append_record(
+        sequence=1,
+        event="GATEWAY_AUTHORIZED",
+        change_id="REQ-WIT-1",
+        owner_id=root.owner_id,
+        decision="ALLOW",
+        stage="GATEWAY",
+        connector_id="EXIM",
+        request_id="REQ-WIT-1",
+        operation="create_witness_chain",
+        trinity=trinity,
+    )
+    second = append_record(
         sequence=2,
         event="ESCROW_CREATED_AND_LOCKED",
         change_id="REQ-ESC-1",
@@ -109,10 +96,11 @@ def test_dee_runtime_path_gateway_to_exim_to_escrow_and_audit():
         connector_id="EXIM",
         request_id="REQ-ESC-1",
         operation="create_escrow",
-        previous_hash=records[0].record_hash,
+        previous_hash=first.record_hash,
         trinity=trinity,
     )
+
     assert escrow.get_state()["state"] == "LOCKED"
-    assert verify_chain(records)
+    assert verify_chain([first, second])
     assert witness.entries
     assert gateway.audit_events()
