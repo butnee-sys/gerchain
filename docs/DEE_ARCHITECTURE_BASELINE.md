@@ -2,8 +2,18 @@
 
 ## Purpose
 
-This document is the structural baseline for the NEF–GerChain Digital Escrow Ecosystem (DEE).
-It defines the architecture before further identity, authorization, and security expansion.
+This document is the structural and governance baseline for the NEF–GerChain Digital Escrow Ecosystem (DEE).
+It defines the architecture and the protected governance environment before further identity, authorization, connector, and security expansion.
+
+## Foundational principle
+
+**DEE is not merely an escrow feature and not merely a runtime governance module. DEE is the protected governance and trust environment in which the NEF–GerChain digital-economic infrastructure is authorized, changed, connected, executed, audited, and recovered.**
+
+The canonical trust order is:
+
+`DEE Genesis → Root of Trust → Runtime Governance → Authorization → Protection → Execution → Audit/Recovery`
+
+Owner authority is cryptographically anchored. Protected changes and releases must be attributable to the authorized Owner and verifiable against the DEE Root of Trust. Private signing material is operationally external to the repository; the runtime verifies signatures against the Owner public key.
 
 ## Canonical architecture
 
@@ -11,6 +21,19 @@ It defines the architecture before further identity, authorization, and security
                          DIGITAL ECONOMY
                                 │
                                DEE
+                GOVERNANCE + TRUST + PROTECTION
+                                │
+             ┌──────────────────┴──────────────────┐
+             │                                     │
+        DEE GENESIS                         PROTECTED RUNTIME
+             │                                     │
+       ROOT OF TRUST                                │
+             │                                     │
+     RUNTIME GOVERNANCE                              │
+             │                                     │
+        OWNER AUTHORITY                              │
+             │                                     │
+             └──────────────────┬──────────────────┘
                                 │
                         NEF + GERCHAIN
                        CORE INFRASTRUCTURE
@@ -36,15 +59,58 @@ It defines the architecture before further identity, authorization, and security
 ```
 
 **Digital Economy → DEE → NEF + GerChain** is the mandatory upper-to-core relationship.
-DEE is the Digital Escrow Ecosystem that connects the Digital Economy to the NEF–GerChain core infrastructure.
+DEE is the Digital Escrow Ecosystem that provides the protected governance, trust, and coordination environment around the NEF–GerChain core infrastructure.
 NEF + GerChain is therefore not presented as a standalone lower-level system; it is explicitly positioned within the DEE under the Digital Economy.
+
+## DEE Genesis and governance structure
+
+### 0. Root of Trust
+
+DEE Genesis establishes the initial trust anchor for protected DEE operation.
+
+- **Owner Identity** identifies the authoritative owner.
+- **Owner Public Key** is the cryptographic verification anchor.
+- **Genesis Anchor** binds the initial DEE security state.
+- **Policy Version** identifies the governing security policy state.
+- Protected changes and releases are cryptographically signed and verified against the Root of Trust.
+
+### 1. Runtime Governance
+
+The Owner is the highest runtime governance authority for protected DEE changes.
+
+```text
+OWNER
+ ├─ Architecture
+ ├─ Security Policy
+ ├─ Adapter Approval
+ └─ Release Approval
+```
+
+Runtime governance is deny-by-default. Operator and application roles do not inherit Owner powers.
+
+### 2. DEE protection domains
+
+The DEE governance environment governs, at minimum:
+
+- Identity and authorization
+- Security policy
+- Contract governance
+- Evidence governance
+- Escrow state and release governance
+- Witness and verification
+- Audit and traceability
+- Key and recovery governance
+- Connector registration and lifecycle
+- Failure isolation
+
+These are governance/protection domains of DEE, not separate external architectural layers.
 
 ## Structural meaning
 
 ### 0. Digital Economy → DEE → NEF + GerChain
 
 - **Digital Economy** — the broader economic environment and purpose.
-- **DEE** — Digital Escrow Ecosystem, the trusted economic coordination layer between the Digital Economy and the NEF–GerChain core.
+- **DEE** — Digital Escrow Ecosystem; the protected governance, trust, and coordination environment between the Digital Economy and the NEF–GerChain core.
 - **NEF + GerChain** — the core digital-economic infrastructure operating within DEE.
 
 This relationship is mandatory in every canonical architecture representation.
@@ -64,7 +130,7 @@ It prevents the external architecture from depending on the internal package lay
 
 ### 3. EXIM Port
 The principal architectural boundary between the core infrastructure and the external economic world.
-It coordinates and protects both inbound and outbound flows.
+It coordinates and protects both inbound and outbound flows under DEE governance.
 
 ### 4. Connector Adapter
 The controlled protocol/connector boundary immediately outside EXIM Port.
@@ -100,6 +166,8 @@ Outbound:
 
 `NEF–GerChain → Core Adapter → EXIM Port → Connector Adapter → I2B Gateway → Application → Төр/Компани/Хувь хүн`
 
+All protected changes, connector approvals, releases, and security-sensitive operations remain subject to DEE governance and Root-of-Trust verification.
+
 ## Boundary rules
 
 1. External applications never import NEF or GerChain internals directly.
@@ -108,8 +176,9 @@ Outbound:
 4. Core access is isolated behind the Core Adapter.
 5. SHUUD / SHIID is replaceable; it is not a required architectural layer.
 6. New business applications can connect without changing the core infrastructure.
-7. Security mechanisms are layered onto this structure; the structure itself is not treated as the complete security model.
-8. **Digital Economy → DEE → NEF + GerChain** must remain present in canonical architecture documentation and structural tests.
+7. **DEE governance is the security environment; the architectural boundaries are enforcement points within that environment.**
+8. No adapter, connector, application, or release may bypass the DEE Root of Trust and Runtime Governance.
+9. **Digital Economy → DEE → NEF + GerChain** must remain present in canonical architecture documentation and structural tests.
 
 ## Structural acceptance criteria
 
@@ -117,6 +186,8 @@ The architecture baseline is accepted when tests can demonstrate:
 
 - required architectural directories exist;
 - the **Digital Economy → DEE → NEF + GerChain** relationship is explicitly documented;
+- DEE Genesis / Root of Trust / Runtime Governance are explicitly documented;
+- Owner governance covers Architecture, Security Policy, Adapter Approval, and Release Approval;
 - the EXIM Port boundary exists;
 - Connector Adapter exists between Gateway and Port;
 - I2B Gateway exists independently of SHUUD;
