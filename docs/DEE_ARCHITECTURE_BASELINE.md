@@ -35,7 +35,19 @@ It defines the architecture before further identity, authorization, and security
                             prototype
 ```
 
+**Digital Economy → DEE → NEF + GerChain** is the mandatory upper-to-core relationship.
+DEE is the Digital Escrow Ecosystem that connects the Digital Economy to the NEF–GerChain core infrastructure.
+NEF + GerChain is therefore not presented as a standalone lower-level system; it is explicitly positioned within the DEE under the Digital Economy.
+
 ## Structural meaning
+
+### 0. Digital Economy → DEE → NEF + GerChain
+
+- **Digital Economy** — the broader economic environment and purpose.
+- **DEE** — Digital Escrow Ecosystem, the trusted economic coordination layer between the Digital Economy and the NEF–GerChain core.
+- **NEF + GerChain** — the core digital-economic infrastructure operating within DEE.
+
+This relationship is mandatory in every canonical architecture representation.
 
 ### 1. NEF + GerChain
 The core digital-economic infrastructure.
@@ -97,12 +109,14 @@ Outbound:
 5. SHUUD / SHIID is replaceable; it is not a required architectural layer.
 6. New business applications can connect without changing the core infrastructure.
 7. Security mechanisms are layered onto this structure; the structure itself is not treated as the complete security model.
+8. **Digital Economy → DEE → NEF + GerChain** must remain present in canonical architecture documentation and structural tests.
 
 ## Structural acceptance criteria
 
 The architecture baseline is accepted when tests can demonstrate:
 
 - required architectural directories exist;
+- the **Digital Economy → DEE → NEF + GerChain** relationship is explicitly documented;
 - the EXIM Port boundary exists;
 - Connector Adapter exists between Gateway and Port;
 - I2B Gateway exists independently of SHUUD;
