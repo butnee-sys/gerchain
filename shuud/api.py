@@ -1,7 +1,7 @@
 """SHUUD API application-layer orchestration.
 
 SHUUD is an external application. Core NEF–GerChain engines are accessed only
-through the stable external port.
+through the stable EXIM Escrow Port boundary.
 """
 
 from datetime import datetime, timezone
@@ -59,7 +59,7 @@ class EvidenceRequest(BaseModel):
 class DecisionRequest(BaseModel):
     incident_id: str
     evidence_refs: list[str] = Field(min_length=1)
-    damage_estimate_mnt: float
+    damage_estimate_mnt: int = Field(gt=0)
     two_party_consent: GateStatus = GateStatus.UNKNOWN
     vehicle_identity_verified: GateStatus = GateStatus.UNKNOWN
     timestamp_location_verified: GateStatus = GateStatus.UNKNOWN
@@ -76,7 +76,7 @@ class DecisionRequest(BaseModel):
 class EscrowRequest(BaseModel):
     incident_id: str
     escrow_id: str
-    amount_mnt: float = Field(gt=0)
+    amount_mnt: int = Field(gt=0)
     settlement_provider: str = "NEF"
 
 
@@ -234,7 +234,7 @@ def create_shuud_escrow(payload: EscrowRequest):
     if payload.escrow_id in _ESCROWS:
         raise HTTPException(status_code=409, detail="ESCROW_ALREADY_EXISTS")
     witness = _get_witness(payload.incident_id)
-    escrow = _PORT_IMPORT.create_escrow(PortEscrowRequest(escrow_id=payload.escrow_id, amount=int(payload.amount_mnt),
+    escrow = _PORT_IMPORT.create_escrow(PortEscrowRequest(escrow_id=payload.escrow_id, amount=payload.amount_mnt,
                                                           currency="MNT", settlement_provider=payload.settlement_provider), witness)
     now = _now().isoformat()
     escrow.transition("FUNDED", now, {"incident_id": payload.incident_id, "source": "SHUUD_SANDBOX",
