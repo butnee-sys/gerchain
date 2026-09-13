@@ -1,7 +1,8 @@
-"""Durable SHUUD sandbox KPI read API.
+"""Durable SHUUD sandbox KPI and economic measurement read/write API.
 
-This layer is measurement-only. Canonical incident, WitnessChain and EscrowEngine
-state remains owned by the existing SHUUD persistence/runtime paths.
+The economic endpoint persists only explicit caller-supplied assumptions and the
+observed clearance result. Canonical incident, WitnessChain and EscrowEngine state
+remains owned by the existing SHUUD persistence/runtime paths.
 """
 
 from __future__ import annotations
@@ -12,9 +13,12 @@ from datetime import datetime, timedelta, timezone
 from statistics import median
 from typing import Any
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel, Field
 from sqlalchemy import select
 
+from .measurement_summary import build_measurement_summary
+from .metrics import OperationalTiming
 from .persistence import SHUUDPersistence, SHUUDStateRow
 
 router = APIRouter(prefix="/api/v1/shuud/sandbox", tags=["SHUUD Sandbox KPI"])
@@ -22,6 +26,14 @@ router = APIRouter(prefix="/api/v1/shuud/sandbox", tags=["SHUUD Sandbox KPI"])
 _PERSISTENCE = SHUUDPersistence(
     os.getenv("SHUUD_PERSISTENCE_URL", "sqlite:///./gerchain.db")
 )
+
+
+class EconomicMeasurementRequest(BaseModel):
+    baseline_seconds: float = Field(ge=0)
+    affected_vehicles: int = Field(ge=1)
+    vehicle_value_per_minute_mnt: float = Field(ge=0)
+    insurer_cost_per_minute_mnt: float = Field(default=0.0, ge=0)
+    public_road_cost_per_minute_mnt: float = Field(default=0.0, ge=0)
 
 
 def _rows(start_at: datetime | None = None) -> list[dict[str, Any]]:
@@ -45,6 +57,7 @@ def _aggregate(start_at: datetime | None = None) -> dict[str, Any]:
     approved = 0
     released = 0
     within = 0
+    economic = [snapshot["economic_measurement"] for snapshot in snapshots if snapshot.get("economic_measurement")]
 
     for snapshot in snapshots:
         timing = snapshot.get("operational_timing") or {}
@@ -84,6 +97,64 @@ def _aggregate(start_at: datetime | None = None) -> dict[str, Any]:
         "median_clearance_seconds": median(clearance) if clearance else None,
         "minimum_clearance_seconds": min(clearance) if clearance else None,
         "maximum_clearance_seconds": max(clearance) if clearance else None,
+        "economic_measurement_cases": len(economic),
+        "total_time_saved_seconds": sum(item.get("time_saved_seconds", 0.0) for item in economic),
+        "total_vehicle_user_savings_mnt": sum(item.get("vehicle_user_savings_mnt", 0.0) for item in economic),
+        "total_insurer_savings_mnt": sum(item.get("insurer_savings_mnt", 0.0) for item in economic),
+        "total_public_road_savings_mnt": sum(item.get("public_road_savings_mnt", 0.0) for item in economic),
+        "total_savings_mnt": sum(item.get("total_savings_mnt", 0.0) for item in economic),
+    }
+
+
+@router.post("/metrics/{incident_id}/economic", response_model=dict)
+def persist_economic_measurement(
+    incident_id: str,
+    payload: EconomicMeasurementRequest,
+):
+    expected_snapshot = _PERSISTENCE.load_snapshot(incident_id)
+    if expected_snapshot is None:
+        raise HTTPException(status_code=404, detail="INCIDENT_NOT_FOUND")
+
+    timing = OperationalTiming.from_dict(expected_snapshot.get("operational_timing") or {})
+    summary = build_measurement_summary(
+        incident_id=incident_id,
+        timing=timing,
+        baseline_seconds=payload.baseline_seconds,
+        affected_vehicles=payload.affected_vehicles,
+        vehicle_value_per_minute_mnt=payload.vehicle_value_per_minute_mnt,
+        insurer_cost_per_minute_mnt=payload.insurer_cost_per_minute_mnt,
+        public_road_cost_per_minute_mnt=payload.public_road_cost_per_minute_mnt,
+    )
+    economic = summary.economic_impact
+    if economic is None:
+        raise HTTPException(status_code=422, detail="ECONOMIC_MEASUREMENT_REQUIRED")
+
+    record = {
+        "model_version": "shuud-economic-v1",
+        "baseline_seconds": economic.baseline_seconds,
+        "actual_clearance_seconds": economic.actual_seconds,
+        "time_saved_seconds": economic.time_saved_seconds,
+        "affected_vehicles": economic.affected_vehicles,
+        "vehicle_value_per_minute_mnt": economic.vehicle_value_per_minute_mnt,
+        "insurer_cost_per_minute_mnt": economic.insurer_cost_per_minute_mnt,
+        "public_road_cost_per_minute_mnt": economic.public_road_cost_per_minute_mnt,
+        "vehicle_user_savings_mnt": economic.vehicle_user_savings_mnt,
+        "insurer_savings_mnt": economic.insurer_savings_mnt,
+        "public_road_savings_mnt": economic.public_road_savings_mnt,
+        "total_savings_mnt": economic.total_savings_mnt,
+    }
+    if not _PERSISTENCE.save_economic_measurement_if_current(
+        incident_id,
+        expected_snapshot,
+        record,
+    ):
+        raise HTTPException(status_code=409, detail="SHUUD_STATE_CONFLICT")
+
+    return {
+        "status": "success",
+        "incident_id": incident_id,
+        "economic_measurement": record,
+        "persisted": True,
     }
 
 

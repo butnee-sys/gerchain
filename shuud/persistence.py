@@ -104,6 +104,20 @@ class SHUUDPersistence:
             session.commit()
             return True
 
+    def save_economic_measurement_if_current(
+        self,
+        incident_id: str,
+        expected_snapshot: dict[str, Any],
+        economic_measurement: dict[str, Any],
+    ) -> bool:
+        """Atomically persist an economic measurement on the canonical snapshot."""
+        if not isinstance(economic_measurement, dict):
+            raise ValueError("economic_measurement must be a dictionary")
+
+        updated = dict(expected_snapshot)
+        updated["economic_measurement"] = dict(economic_measurement)
+        return self.save_snapshot_if_current(incident_id, expected_snapshot, updated)
+
     def load_snapshot(self, incident_id: str) -> dict[str, Any] | None:
         with self.SessionLocal() as session:
             row = session.get(SHUUDStateRow, incident_id)

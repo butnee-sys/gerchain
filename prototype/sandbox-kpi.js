@@ -30,6 +30,10 @@ function seconds(value) {
   return value == null ? "—" : `${Number(value).toFixed(1)}s`;
 }
 
+function money(value) {
+  return `${Number(value || 0).toFixed(0)} MNT`;
+}
+
 function renderDurableKpi(kpi) {
   document.getElementById("kpiTotal").textContent = kpi.total_cases ?? 0;
   document.getElementById("kpi120").textContent = pct(kpi.within_two_minutes_rate);
@@ -38,7 +42,9 @@ function renderDurableKpi(kpi) {
   document.getElementById("kpiApproval").textContent = pct(kpi.shiid_approval_rate);
   document.getElementById("kpiRelease").textContent = pct(kpi.release_success_rate);
   document.getElementById("kpiMeta").textContent =
-    `Durable: ${kpi.measured_clearance_cases ?? 0} clearance measurement • scope ${kpi.scope || "sandbox"}`;
+    `Durable: ${kpi.measured_clearance_cases ?? 0} clearance measurement • ` +
+    `${kpi.economic_measurement_cases ?? 0} economic measurement • ` +
+    `savings ${money(kpi.total_savings_mnt)} • scope ${kpi.scope || "sandbox"}`;
 }
 
 async function loadDurableKpi() {
@@ -133,7 +139,7 @@ async function runCase() {
     });
     addEvent("Release", release.new_state, "settled");
 
-    const summary = await api(`/metrics/${encodeURIComponent(id)}/summary`, {
+    const economic = await api(`/sandbox/metrics/${encodeURIComponent(id)}/economic`, {
       method: "POST",
       body: JSON.stringify({
         baseline_seconds: 600,
@@ -143,11 +149,11 @@ async function runCase() {
         public_road_cost_per_minute_mnt: 800
       })
     });
-    const savings = summary.economic_impact.total_savings_mnt;
+    const savings = economic.economic_measurement.total_savings_mnt;
     document.getElementById("saved").textContent = `${savings} MNT`;
     document.getElementById("caseState").textContent = "COMPLETE";
     statusEl.textContent = "SANDBOX COMPLETE";
-    addEvent("Measurement", "COMPLETE", `${savings} MNT savings`);
+    addEvent("Measurement", economic.persisted ? "PERSISTED" : "NOT PERSISTED", `${savings} MNT savings`);
 
     await loadDurableKpi();
   } catch (error) {
