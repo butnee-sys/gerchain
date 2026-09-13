@@ -1,6 +1,7 @@
 import base64
 
 import pytest
+from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
 from dee_security import (
@@ -25,7 +26,10 @@ TRINITY = {"trust": True, "transparency": True, "performance": True}
 
 def _root():
     key = Ed25519PrivateKey.generate()
-    public = key.public_key().public_bytes_raw()
+    public = key.public_key().public_bytes(
+        encoding=serialization.Encoding.Raw,
+        format=serialization.PublicFormat.Raw,
+    )
     return key, RootOfTrust("OWNER-E2E", base64.b64encode(public).decode("ascii"))
 
 
@@ -42,7 +46,7 @@ def _locked_escrow():
 
 
 def test_atomic_settlement_rolls_back_money_escrow_and_witness_on_failure():
-    key, root = _root()
+    _, root = _root()
     escrow = _locked_escrow()
     ledger = MoneyLedger("MNT")
     ledger.create_account("ESCROW", 2_000_000)
@@ -103,12 +107,22 @@ def test_failed_execution_can_only_enter_recovery_through_multi_party_governance
         RecoveryAuthority(
             "SEC-1",
             RecoveryRole.SECURITY,
-            base64.b64encode(security_key.public_key().public_bytes_raw()).decode("ascii"),
+            base64.b64encode(
+                security_key.public_key().public_bytes(
+                    encoding=serialization.Encoding.Raw,
+                    format=serialization.PublicFormat.Raw,
+                )
+            ).decode("ascii"),
         ),
         RecoveryAuthority(
             "GOV-1",
             RecoveryRole.GOVERNANCE,
-            base64.b64encode(governance_key.public_key().public_bytes_raw()).decode("ascii"),
+            base64.b64encode(
+                governance_key.public_key().public_bytes(
+                    encoding=serialization.Encoding.Raw,
+                    format=serialization.PublicFormat.Raw,
+                )
+            ).decode("ascii"),
         ),
     )
     governance = RecoveryGovernance(RecoveryPolicy("DEE-RECOVERY-1.0", 2, authorities))
