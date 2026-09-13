@@ -58,9 +58,8 @@ jobs:
           curl -fsS -X POST "$API/decisions" -H 'content-type: application/json' \
             -d "{\"incident_id\":\"$INCIDENT_ID\",\"evidence_refs\":[\"SANDBOX-MEDIA-001\"],\"damage_estimate_mnt\":500000,\"two_party_consent\":\"PASS\",\"vehicle_identity_verified\":\"PASS\",\"timestamp_location_verified\":\"PASS\",\"media_complete\":\"PASS\",\"no_injury\":\"PASS\",\"no_third_party_property_damage\":\"PASS\",\"dispute_present\":\"PASS\",\"fraud_flag\":\"PASS\",\"insurance_valid\":\"PASS\",\"beneficiary_valid\":\"PASS\",\"witness_verified\":\"PASS\"}" | tee "$DECISION_JSON"
 
-          CLEARANCE_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)
           if ! curl -fsS --fail -X POST "$API/metrics/clearance" -H 'content-type: application/json' \
-            -d "{\"incident_id\":\"$INCIDENT_ID\",\"clearance_time\":\"$CLEARANCE_TIME\"}" | tee "$CLEARANCE_JSON"; then
+            -d "{\"incident_id\":\"$INCIDENT_ID\"}" | tee "$CLEARANCE_JSON"; then
             echo "--- CLEARANCE REQUEST FAILED; DUMPING CONTAINER LOGS ---" >&2
             (cd sandbox && docker compose logs --no-color --timestamps app) || true
             exit 1
