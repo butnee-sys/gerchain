@@ -1,0 +1,53 @@
+from fastapi import APIRouter
+from fastapi.responses import HTMLResponse
+
+router = APIRouter(tags=["SHUUD UI"])
+
+_STYLE = """
+:root{font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#10231b;background:#f5f7f5}
+*{box-sizing:border-box}body{margin:0}.shell{max-width:1180px;margin:auto;padding:24px}.top{display:flex;justify-content:space-between;align-items:center;padding:12px 0 28px}.brand{font-weight:900;font-size:25px;letter-spacing:-.04em}.brand span{color:#18a56b}.tag{font-size:12px;color:#65736c}.hero{background:#10231b;color:#fff;border-radius:28px;padding:42px;display:grid;grid-template-columns:1.4fr .8fr;gap:30px;box-shadow:0 20px 50px #10231b22}.hero h1{font-size:52px;line-height:1;margin:0 0 16px;letter-spacing:-.05em}.hero p{font-size:18px;color:#d5e1db;max-width:650px}.btn{border:0;border-radius:14px;padding:13px 18px;font-weight:800;cursor:pointer;background:#18a56b;color:#fff}.btn.secondary{background:#e7eee9;color:#173126}.panel{background:#fff;border:1px solid #e2e9e4;border-radius:22px;padding:24px;box-shadow:0 8px 25px #10231b0b}.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:18px}.metric b{display:block;font-size:30px;margin-top:6px}.muted{color:#718078;font-size:13px}.flow{display:flex;gap:8px;overflow:auto;margin:20px 0}.step{min-width:130px;padding:14px;border-radius:15px;background:#eef3ef;color:#637169;font-size:12px}.step.done{background:#dff5ea;color:#0c8050}.step strong{display:block;color:inherit;margin-top:5px}.form{display:grid;gap:12px}.form input{width:100%;padding:13px;border:1px solid #d9e2dc;border-radius:12px;font-size:15px}.actions{display:flex;gap:10px;flex-wrap:wrap}.case{margin-top:20px}.casehead{display:flex;justify-content:space-between;gap:15px;align-items:center}.pill{background:#dff5ea;color:#087b4d;padding:7px 10px;border-radius:999px;font-weight:800;font-size:12px}.phone{max-width:410px;margin:auto;background:#10231b;border-radius:36px;padding:14px;box-shadow:0 20px 50px #10231b30}.screen{background:#f7faf8;border-radius:26px;padding:22px;min-height:620px}.nav{display:flex;gap:8px;flex-wrap:wrap}.nav a{color:#173126;text-decoration:none;background:#e7eee9;padding:9px 12px;border-radius:10px;font-size:13px;font-weight:700}@media(max-width:800px){.hero{grid-template-columns:1fr}.hero h1{font-size:40px}.grid{grid-template-columns:1fr}.shell{padding:16px}}
+"""
+
+_PAGE_JS = """
+const $=s=>document.querySelector(s);
+const state={incidentId:null};
+function money(v){return new Intl.NumberFormat('mn-MN').format(Math.round(v||0))+' ₮'}
+function show(id){document.querySelectorAll('[data-page]').forEach(x=>x.hidden=x.dataset.page!==id)}
+async function api(path,body){const r=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});const j=await r.json();if(!r.ok)throw new Error(j.detail||'Алдаа');return j}
+async function demo(){
+  try{
+    const i=await api('/api/v1/shuud/incidents',{location:'Улаанбаатар, Сүхбаатар дүүрэг',vehicle_a:'УБА-0001',vehicle_b:'УБА-0002',description:'Бага хэмжээний замын зөрчил'});state.incidentId=i.incident_id;
+    await api('/api/v1/shuud/evidence',{incident_id:i.incident_id,evidence_refs:['PHOTO-01','GPS-01'],gps_coordinates:'47.9184,106.9177',captured_at:new Date().toISOString(),vehicle_identity_refs:['VEH-A','VEH-B'],consent_refs:['CONSENT-A','CONSENT-B'],media_complete:true});
+    const yes='PASS';
+    await api('/api/v1/shuud/decisions',{incident_id:i.incident_id,evidence_refs:['PHOTO-01','GPS-01'],damage_estimate_mnt:850000,two_party_consent:yes,vehicle_identity_verified:yes,timestamp_location_verified:yes,media_complete:yes,no_injury:yes,no_third_party_property_damage:yes,dispute_present:'FAIL',fraud_flag:'FAIL',insurance_valid:yes,beneficiary_valid:yes,witness_verified:yes});
+    await api('/api/v1/shuud/escrows',{incident_id:i.incident_id,escrow_id:'SHUUD-DEMO-'+Date.now(),amount_mnt:850000,settlement_provider:'NEF'});
+    const e=await fetch('/api/v1/shuud/state/'+i.incident_id); const s=await e.json();
+    if(s.escrow_id){await api('/api/v1/shuud/release',{incident_id:i.incident_id,escrow_id:s.escrow_id})}
+    const m=await api('/api/v1/shuud/metrics/clearance',{incident_id:i.incident_id});
+    $('#case-id').textContent=i.incident_id;$('#case-time').textContent=m.elapsed_seconds.toFixed(2)+' сек';$('#case-impact').textContent=money(32994.67);$('#case').hidden=false;document.querySelectorAll('.step').forEach(x=>x.classList.add('done'));show('case');
+  }catch(e){alert(e.message)}
+}
+"""
+
+_HTML = '''<!doctype html><html lang="mn"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>SHUUD — 2 минутанд замаа чөлөөл</title><style>''' + _STYLE + '''</style></head><body><div class="shell"><header class="top"><div><div class="brand">SH<span>U</span>UD</div><div class="tag">Хурдан. Баталгаатай. Зам чөлөөлөлт.</div></div><div class="nav"><a href="/shuud">Иргэн</a><a href="/shuud/app">Ажилтан</a><a href="/shuud/management">Удирдлага</a></div></header>
+<section class="hero"><div><div class="tag">ШУУД шийдэл</div><h1>2 минутанд<br>замаа чөлөөл.</h1><p>Бага хэмжээний замын зөрчлийг баримтаар баталгаажуулж, даатгалын шийдвэр болон төлбөрийг нэг урсгалаар зохицуулна.</p><div class="actions"><button class="btn" onclick="demo()">Шууд турших</button><button class="btn secondary" onclick="show('how')">Яаж ажиллах вэ?</button></div></div><div class="panel"><div class="muted">Зорилтот үзүүлэлт</div><div style="font-size:64px;font-weight:900;margin:10px 0">≤ 2:00</div><div class="muted">Замын чөлөөлөлт</div><div class="grid" style="grid-template-columns:1fr 1fr"><div><b>₮2.0M</b><span class="muted">хүртэл</span></div><div><b>24/7</b><span class="muted">дижитал урсгал</span></div></div></div></section>
+<div class="grid"><div class="panel metric">Баталгаажуулалт<b>1 урсгал</b><span class="muted">Баримт + зөвшөөрөл + шийдвэр</span></div><div class="panel metric">Даатгал<b>Шууд</b><span class="muted">Эх үүсвэрийн баталгаажуулалт</span></div><div class="panel metric">Төлбөр<b>Эскроу</b><span class="muted">Нөхцөл биелмэгц чөлөөлнө</span></div></div>
+<section id="case" class="panel case" hidden><div class="casehead"><div><div class="muted">Идэвхтэй тохиолдол</div><h2 id="case-id">—</h2></div><span class="pill">ЗАМ ЧӨЛӨӨЛӨГДСӨН</span></div><div class="flow"><div class="step"><strong>01 Бүртгэл</strong>Хүлээн авсан</div><div class="step"><strong>02 Баримт</strong>Баталгаажсан</div><div class="step"><strong>03 SHIID</strong>Зөвшөөрсөн</div><div class="step"><strong>04 Даатгал</strong>Баталгаатай</div><div class="step"><strong>05 Эскроу</strong>Түгжсэн</div><div class="step"><strong>06 Төлбөр</strong>Чөлөөлсөн</div><div class="step"><strong>07 Зам</strong>Чөлөөлсөн</div></div><div class="grid"><div><span class="muted">Зам чөлөөлөх хугацаа</span><b id="case-time">—</b></div><div><span class="muted">Тооцоолсон хохирол</span><b>₮850,000</b></div><div><span class="muted">Эдийн засгийн нөлөө</span><b id="case-impact">—</b></div></div></section>
+<section data-page="how" hidden style="margin-top:20px" class="panel"><h2>SHUUD-ийн нэг урсгал</h2><div class="flow"><div class="step done"><strong>Бүртгэл</strong>Тохиолдол</div><div class="step done"><strong>Баталгаажуулалт</strong>Нотолгоо</div><div class="step done"><strong>SHIID</strong>Дүрэмт шийдвэр</div><div class="step done"><strong>Даатгал</strong>Эх үүсвэр</div><div class="step done"><strong>Эскроу</strong>Баталгаа</div><div class="step done"><strong>Төлбөр</strong>Шууд</div><div class="step done"><strong>Зам</strong>Чөлөөлөлт</div></div><button class="btn" onclick="show('case');demo()">Демо эхлүүлэх</button></section>
+</div><script>''' + _PAGE_JS + '''show('case');</script></body></html>'''
+
+_APP_HTML = '''<!doctype html><html lang="mn"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>SHUUD APP</title><style>''' + _STYLE + '''</style></head><body><div class="shell"><header class="top"><div><div class="brand">SH<span>U</span>UD</div><div class="tag">Ажилтны шуурхай дэлгэц</div></div><a class="nav" href="/shuud">Нүүр</a></header><div class="phone"><div class="screen"><div class="pill">ШУУД · ИДЭВХТЭЙ</div><h2>Шинэ тохиолдол</h2><p class="muted">Жолоочийн мэдээллийг бүртгээд баталгаажуулалтыг эхлүүлнэ.</p><div class="form"><input placeholder="Тээврийн хэрэгсэл A — УБА-0001"><input placeholder="Тээврийн хэрэгсэл B — УБА-0002"><input placeholder="Байршил — Сүхбаатар дүүрэг"><button class="btn" onclick="demo()">Бүртгээд үргэлжлүүлэх</button></div><hr style="border:0;border-top:1px solid #e1e8e3;margin:25px 0"><div class="muted">Шийдвэрийн явц</div><div class="flow" style="flex-wrap:wrap"><div class="step done">Бүртгэл</div><div class="step">Баримт</div><div class="step">SHIID</div><div class="step">Даатгал</div><div class="step">Эскроу</div><div class="step">Төлбөр</div><div class="step">Зам</div></div></div></div></div><script>''' + _PAGE_JS + '''</script></body></html>'''
+
+_MGMT_HTML = '''<!doctype html><html lang="mn"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>SHUUD Удирдлага</title><style>''' + _STYLE + '''</style></head><body><div class="shell"><header class="top"><div><div class="brand">SH<span>U</span>UD</div><div class="tag">Нийслэлийн удирдлагын харагдац</div></div><a class="nav" href="/shuud">Иргэн</a></header><h1>Замын шуурхай байдлын хяналт</h1><div class="grid"><div class="panel metric">Өнөөдрийн тохиолдол<b>128</b><span class="muted">Бага хэмжээний тохиолдол</span></div><div class="panel metric">Дундаж зам чөлөөлөлт<b>01:34</b><span class="muted">Зорилт: 02:00</span></div><div class="panel metric">Хэмнэсэн хугацаа<b>426 цаг</b><span class="muted">Замын хөдөлгөөний бүтээмж</span></div></div><div class="panel" style="margin-top:18px"><h2>Эдийн засгийн нөлөө</h2><div class="grid"><div><span class="muted">Иргэдийн цаг</span><b>₮1.42B</b></div><div><span class="muted">Даатгалын үйл ажиллагаа</span><b>₮380M</b></div><div><span class="muted">Нийт тооцоолол</span><b>₮1.80B</b></div></div><p class="muted">Эдгээр нь танилцуулгын демо үзүүлэлт; бодит sandbox хэмжилтээр шинэчлэгдэнэ.</p></div></div></body></html>'''
+
+@router.get("/shuud", response_class=HTMLResponse, include_in_schema=False)
+def shuud_home():
+    return _HTML
+
+@router.get("/shuud/app", response_class=HTMLResponse, include_in_schema=False)
+def shuud_app():
+    return _APP_HTML
+
+@router.get("/shuud/management", response_class=HTMLResponse, include_in_schema=False)
+def shuud_management():
+    return _MGMT_HTML
