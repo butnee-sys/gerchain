@@ -21,6 +21,7 @@ from .metrics import OperationalTiming, measure_clearance
 from .policy import GateStatus, PolicyInput
 from .persistence import SHUUDPersistence
 from .runtime_store import SHUUDRuntimeStore
+from .sandbox_kpi_store import SandboxKpiRecord, SHUUDSandboxKpiStore
 from .release import ReleaseAuthorization, authorize_release, release_escrow
 from .shiid import Decision, SHIIDDecision, decide
 from .verify import verify_incident
@@ -45,6 +46,9 @@ _PERSISTENCE = SHUUDPersistence(
     os.getenv("SHUUD_PERSISTENCE_URL", "sqlite:///./gerchain.db")
 )
 _RUNTIME_STORE = SHUUDRuntimeStore(_PERSISTENCE)
+_KPI_STORE = SHUUDSandboxKpiStore(
+    os.getenv("SHUUD_PERSISTENCE_URL", "sqlite:///./gerchain.db")
+)
 
 
 class IncidentRequest(BaseModel):
@@ -100,6 +104,14 @@ class ClearanceRequest(BaseModel):
     # Explicit timestamp remains supported for deterministic sandbox tests.
     # Production callers should omit it so the server records the event time.
     clearance_time: datetime | None = None
+
+
+class SandboxKpiSummaryRequest(BaseModel):
+    baseline_seconds: float = Field(gt=0)
+    affected_vehicles: int = Field(ge=1)
+    vehicle_value_per_minute_mnt: float = Field(ge=0)
+    insurer_cost_per_minute_mnt: float = Field(ge=0)
+    public_road_cost_per_minute_mnt: float = Field(ge=0)
 
 
 def _now() -> datetime:
@@ -479,7 +491,37 @@ def get_measurement_summary(incident_id: str, payload: MeasurementSummaryRequest
         insurer_cost_per_minute_mnt=payload.insurer_cost_per_minute_mnt,
         public_road_cost_per_minute_mnt=payload.public_road_cost_per_minute_mnt,
     )
-    return {"status": "success", **summary.as_dict()}
+    record = SandboxKpiRecord(
+        incident_id=incident_id,
+        recorded_at=_now().isoformat(),
+        clearance_seconds=float(summary.operational_timing.clearance_seconds()),
+        within_two_minutes=summary.operational_timing.within_two_minutes(),
+        shiid_approved=_DECISIONS.get(incident_id) is not None
+        and _DECISIONS[incident_id].decision is Decision.APPROVE,
+        release_succeeded=_ESCROWS.get(next(iter([key for key, value in _ESCROWS.items() if incident_id in str(value.get_state())]), "")) is not None,
+        total_savings_mnt=float(summary.economic_impact.total_savings_mnt),
+    )
+    _KPI_STORE.record(record)
+    return {"status": "success", **summary.as_dict(), "sandbox_kpi_recorded": True}
+
+
+@router.get("/sandbox/kpi", response_model=dict)
+def get_sandbox_kpi():
+    return _KPI_STORE.aggregate()
+
+
+@router.get("/sandbox/kpi/daily", response_model=dict)
+def get_sandbox_kpi_daily():
+    today = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+    return _KPI_STORE.aggregate(start_at=today)
+
+
+@router.get("/sandbox/kpi/weekly", response_model=dict)
+def get_sandbox_kpi_weekly():
+    from datetime import timedelta
+
+    start = datetime.now(timezone.utc) - timedelta(days=7)
+    return _KPI_STORE.aggregate(start_at=start)
 
 
 __all__ = ["router"]
