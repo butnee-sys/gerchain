@@ -156,7 +156,7 @@ def build_command_summary(
         },
         "one_line": (
             f"{total_cases} case → "
-            f"{within_two_minutes_rate:.1%} ≤120 сек → "
+            f"{within_two_minutes_rate:.1%} ≤{t.target_seconds:g} сек → "
             f"{total_time_saved_minutes:.1f} минут хэмнэв → "
             f"{total_savings_mnt:,.0f} ₮ хэмжигдсэн өгөөж → "
             f"{decision.value}"
