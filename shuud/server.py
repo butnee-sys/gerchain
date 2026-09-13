@@ -16,12 +16,16 @@ from fastapi.staticfiles import StaticFiles
 from gerchain.web_ui import app as gerchain_app
 
 from .api import router as shuud_router
+from .kpi_api import router as shuud_kpi_router
 
 app = gerchain_app
 
 # Mount SHUUD only once when this integration entrypoint is imported.
 if not any(getattr(route, "path", None) == "/api/v1/shuud/incidents" for route in app.routes):
     app.include_router(shuud_router)
+
+if not any(getattr(route, "path", None) == "/api/v1/shuud/sandbox/kpi" for route in app.routes):
+    app.include_router(shuud_kpi_router)
 
 # Serve the SHUUD presentation UIs from the same origin as the API so browser
 # demos can use the real sandbox/API without CORS or a second server.
