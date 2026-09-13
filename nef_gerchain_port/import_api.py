@@ -1,6 +1,9 @@
 """Inbound application API for the EXIM Escrow Port."""
 
-from typing import Any, Dict
+from typing import Any, Dict, Mapping
+
+from dee_security import AuthorizationPolicy, ReleaseAuthorization, RootOfTrust
+from dee_security.signing import SignedRelease
 
 from .contract import AssetImportRequest, ContractImportRequest, EscrowRequest, EvidenceImportRequest
 from .gerchain_adapter import EscrowEngine, EscrowRecord, IndependentVerifier, WitnessChain
@@ -59,7 +62,11 @@ class ExternalPortImport:
         timestamp: str,
         evidence: Any | None = None,
     ) -> Any:
-        """Controlled SHUUD release transition through the EXIM Port."""
+        """Controlled SHUUD release transition through the EXIM Port.
+
+        This compatibility path preserves the existing application contract.
+        Security-sensitive production release must use ``release_escrow_authorized``.
+        """
         if not authorization_hash:
             raise ValueError("authorization_hash is required")
         if not incident_id:
@@ -73,6 +80,56 @@ class ExternalPortImport:
             "incident_id": incident_id,
             "authorization_hash": authorization_hash,
             "rule_version": rule_version,
+        }
+        return escrow.transition("RELEASED", timestamp, release_evidence)
+
+    def release_escrow_authorized(
+        self,
+        escrow: EscrowEngine,
+        *,
+        incident_id: str,
+        authorization_hash: str,
+        rule_version: str,
+        timestamp: str,
+        root: RootOfTrust,
+        policy: AuthorizationPolicy,
+        release: SignedRelease,
+        manifest: Mapping[str, Any],
+        gate: ReleaseAuthorization | None = None,
+        evidence: Any | None = None,
+    ) -> Any:
+        """Perform LOCKED -> RELEASED only after DEE release authorization.
+
+        The security gate verifies protected paths, manifest integrity, exact
+        commit binding, owner identity, Ed25519 release signature, and replay
+        protection before the authoritative escrow state transition occurs.
+        """
+        if not authorization_hash:
+            raise ValueError("authorization_hash is required")
+        if not incident_id:
+            raise ValueError("incident_id is required")
+        if not rule_version:
+            raise ValueError("rule_version is required")
+        state = escrow.get_state()
+        if state.get("state") != "LOCKED":
+            raise ValueError(f"SHUUD release requires LOCKED escrow, got {state.get('state')}")
+
+        from dee_security import authorize_release
+
+        authorize_release(
+            root=root,
+            policy=policy,
+            release=release,
+            manifest=manifest,
+            gate=gate,
+        )
+        release_evidence = evidence or {
+            "incident_id": incident_id,
+            "authorization_hash": authorization_hash,
+            "rule_version": rule_version,
+            "release_id": release.release_id,
+            "manifest_hash": release.manifest_hash,
+            "commit_sha": release.commit_sha,
         }
         return escrow.transition("RELEASED", timestamp, release_evidence)
 
