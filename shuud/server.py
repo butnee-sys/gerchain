@@ -2,7 +2,7 @@
 
 This keeps the existing GerChain dashboard application intact while mounting
 SHUUD routes and the presentation prototype on the same FastAPI application.
-The presentation mount is an integration adapter, not a replacement for
+The presentation mounts are integration adapters, not replacements for
 GerChain's core engines.
 
 Run with:
@@ -23,17 +23,21 @@ app = gerchain_app
 if not any(getattr(route, "path", None) == "/api/v1/shuud/incidents" for route in app.routes):
     app.include_router(shuud_router)
 
-# Serve the SHUUD presentation UI from the same origin as the API so the
-# browser demo can use the real sandbox/API without CORS or a second server.
+# Serve the SHUUD presentation UIs from the same origin as the API so browser
+# demos can use the real sandbox/API without CORS or a second server.
 prototype_dir = Path(__file__).resolve().parent.parent / "prototype"
-if prototype_dir.is_dir() and not any(
-    getattr(route, "path", None) == "/shuud-demo"
-    for route in app.routes
-):
-    app.mount(
-        "/shuud-demo",
-        StaticFiles(directory=str(prototype_dir), html=True),
-        name="shuud-demo",
-    )
+if prototype_dir.is_dir():
+    if not any(getattr(route, "path", None) == "/shuud-demo" for route in app.routes):
+        app.mount(
+            "/shuud-demo",
+            StaticFiles(directory=str(prototype_dir), html=True),
+            name="shuud-demo",
+        )
+    if not any(getattr(route, "path", None) == "/shuud-ops" for route in app.routes):
+        app.mount(
+            "/shuud-ops",
+            StaticFiles(directory=str(prototype_dir), html=True),
+            name="shuud-ops",
+        )
 
 __all__ = ["app"]
