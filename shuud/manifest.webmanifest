@@ -1,0 +1,11 @@
+{
+  "name": "SHUUD",
+  "short_name": "SHUUD",
+  "description": "2 минутын дотор замаа чөлөөл",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#07111f",
+  "theme_color": "#0b1220",
+  "lang": "mn",
+  "icons": []
+}
