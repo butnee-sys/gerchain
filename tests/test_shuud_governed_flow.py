@@ -1,6 +1,6 @@
 from architecture.contracts import ActorType, BoundaryRequest, BoundaryResponse
 from architecture.governed_flow_adapters import DEEToG3BoundaryAdapter, G3ToCoreBoundaryAdapter
-from services.shuud_governed_flow import SHUUDGovernedFlow
+from apps.shuud.integration.shuud_governed_flow import SHUUDGovernedFlow
 
 
 class Stub:
