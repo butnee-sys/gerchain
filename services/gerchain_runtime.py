@@ -18,7 +18,12 @@ from witness.chain import WitnessChain
 
 
 class GerchainRuntime:
-    """GerChain Core-ийн нэг authoritative runtime."""
+    """GerChain Core-ийн authoritative runtime.
+
+    Default construction remains an in-memory test harness. Production code
+    must use ``ProductionRuntimeFactory`` so PostgreSQL is explicitly attached
+    as the durable release authority.
+    """
 
     def __init__(self, *, escrow_id: str, amount: int, currency: str, witness_id: str, initial_state: Optional[Dict[str, Any]] = None, manifest: Optional[Dict[str, Any]] = None, initial_money_state: Optional[Dict[str, Any]] = None):
         if not escrow_id:
@@ -29,6 +34,7 @@ class GerchainRuntime:
             raise ValueError("currency is required")
         if not witness_id:
             raise ValueError("witness_id is required")
+        self.runtime_mode = "test-memory"
         if initial_state is None:
             initial_state = {"escrow_id": escrow_id, "state": "CREATED", "amount": amount, "currency": currency, "transition_counter": 0}
         if manifest is None:
@@ -43,25 +49,29 @@ class GerchainRuntime:
         self.escrow_engine = EscrowEngine(escrow_id=escrow_id, amount=amount, currency=currency, witness_chain=self.witness_chain)
         self.money_engine = MoneyEngine(ledger=self.money_ledger, escrow=self.escrow_engine)
         self.verifier = V80IndependentVerifier()
-
-        # One authoritative mutation-boundary guard shared by all escrow operations.
         self.idempotency = IdempotencyEngine()
         self.escrow_service = AuthoritativeEscrowService(escrow_engine=self.escrow_engine, money_engine=self.money_engine, verifier=self.verifier, idempotency=self.idempotency)
         self._postgres_release: PostgreSQLReleaseAdapter | None = None
-
         self.holds = HoldEngine()
         self.limits = LimitEngine()
         self._transactions: dict[str, TransactionStateMachine] = {}
 
     def configure_postgres_release(self, session_factory) -> PostgreSQLReleaseAdapter:
-        """Attach the durable PostgreSQL release boundary without replacing in-memory mode."""
         from persistence.atomic_release import PostgreSQLAtomicRelease
         self._postgres_release = PostgreSQLReleaseAdapter(PostgreSQLAtomicRelease(session_factory))
+        self.runtime_mode = "production-postgresql"
         return self._postgres_release
 
+    @property
+    def is_postgresql_authoritative(self) -> bool:
+        return self.runtime_mode == "production-postgresql" and self._postgres_release is not None
+
+    def require_postgresql_authority(self) -> None:
+        if not self.is_postgresql_authoritative:
+            raise RuntimeError("PostgreSQL authoritative runtime is required for production value flow")
+
     def release_postgres(self, request: ReleaseRequest):
-        if self._postgres_release is None:
-            raise RuntimeError("PostgreSQL release boundary is not configured")
+        self.require_postgresql_authority()
         return self._postgres_release.execute(request)
 
     def create_transaction(self, transaction_id: str) -> TransactionStateMachine:
