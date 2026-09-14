@@ -3,7 +3,7 @@ import uuid
 
 import pytest
 
-from shuud.persistence import SHUUDPersistence
+from apps.shuud.persistence import SHUUDPersistence
 from witness.chain import WitnessChain
 
 
