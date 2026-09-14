@@ -8,7 +8,6 @@ Connector registration belongs to the composition/bootstrap boundary. The
 application adapter only consumes an already-governed gateway.
 """
 
-import os
 from typing import Any
 from uuid import uuid4
 
@@ -21,14 +20,10 @@ class SHUUDApplicationAdapter:
     application_id = "SHUUD"
     connector_id = "EXIM"
 
-    def __init__(self, gateway: OpenMultiConnectorGateway | None = None, *, credential: str | None = None) -> None:
-        resolved_credential = (credential if credential is not None else os.getenv("SHUUD_EXIM_CREDENTIAL", "")).strip()
+    def __init__(self, gateway: OpenMultiConnectorGateway, *, credential: str) -> None:
+        resolved_credential = str(credential).strip()
         if not resolved_credential:
             raise ValueError("SHUUD gateway credential is required")
-        if gateway is None:
-            from composition.shuud import build_shuud_application_adapter
-            composed = build_shuud_application_adapter(credential=resolved_credential)
-            gateway = composed.gateway
         self.gateway = gateway
         self.credential = resolved_credential
         if self.connector_id not in self.gateway.registered_connectors():
