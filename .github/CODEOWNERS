@@ -1,0 +1,15 @@
+# GerChain CORE ownership
+
+* @OWNER
+
+# CORE persistence / transaction integrity
+/persistence/ @OWNER
+
+# CORE tests
+/tests/ @OWNER
+
+# CI and repository governance
+/.github/ @OWNER
+
+# Audit and control evidence
+/docs/ @OWNER
