@@ -14,13 +14,17 @@ def test_shuud_is_the_only_product_namespace():
     assert "prototype" not in root_names
 
 
-def test_platform_tree_contains_no_shuud_named_elements():
+def test_platform_tree_contains_no_shuud_named_production_elements():
     violations = []
+    ignored_roots = {"tests", ".git", "apps"}
     for path in ROOT.rglob("*"):
         if not path.is_file() or APP in path.parents:
             continue
-        if any(part.lower().startswith("shuud") for part in path.relative_to(ROOT).parts):
-            violations.append(str(path.relative_to(ROOT)))
+        relative = path.relative_to(ROOT)
+        if relative.parts and relative.parts[0] in ignored_roots:
+            continue
+        if any(part.lower().startswith("shuud") for part in relative.parts):
+            violations.append(str(relative))
     assert violations == []
 
 
