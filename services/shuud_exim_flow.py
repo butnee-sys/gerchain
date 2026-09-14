@@ -3,7 +3,6 @@ from __future__ import annotations
 from architecture.contracts import BoundaryRequest, BoundaryResponse
 from services.exim_gateway import EXIMGateway
 from services.i2b_service_center import ServiceCenter
-from services.shuud_service import SHUUDService
 
 
 class SHUUDEximFlow:
@@ -14,7 +13,7 @@ class SHUUDEximFlow:
         self.service_center = service_center
 
     def handle(self, request: BoundaryRequest) -> BoundaryResponse:
-        local = SHUUDService().handle(request)
+        local = self.service_center.dispatch(request)
         if not local.accepted:
             return local
         return self.exim.handle(request)
