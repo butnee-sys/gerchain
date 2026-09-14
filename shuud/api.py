@@ -12,6 +12,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from application_adapters import SHUUDApplicationAdapter
+from composition.shuud import build_shuud_application_adapter
 from .evidence import EvidenceEnvelope, create_evidence_envelope
 from .incident import Incident, create_incident
 from .measurement_api import MeasurementSummaryRequest
@@ -20,7 +21,7 @@ from .metrics import OperationalTiming, measure_clearance
 from .policy import GateStatus, PolicyInput
 from .persistence import SHUUDPersistence
 from .runtime_store import SHUUDRuntimeStore
-from .release import ReleaseAuthorization, authorize_release, release_escrow
+from .release import ReleaseAuthorization, authorize_release
 from .shiid import Decision, SHIIDDecision, decide
 from .verify import verify_incident
 from .witness import record_evidence_locked, record_release_authorized, record_shiid_decision
@@ -37,14 +38,7 @@ _PERSISTENCE = SHUUDPersistence(os.getenv("SHUUD_PERSISTENCE_URL", "sqlite:///./
 _RUNTIME_STORE = SHUUDRuntimeStore(_PERSISTENCE)
 
 
-def _gateway_credential() -> str:
-    credential = os.getenv("SHUUD_EXIM_CREDENTIAL", "").strip()
-    if not credential:
-        raise RuntimeError("SHUUD_EXIM_CREDENTIAL is required")
-    return credential
-
-
-_APP_ADAPTER = SHUUDApplicationAdapter(credential=_gateway_credential())
+_APP_ADAPTER: SHUUDApplicationAdapter = build_shuud_application_adapter()
 
 
 class IncidentRequest(BaseModel):
@@ -283,7 +277,14 @@ def release_shuud_escrow(payload: ReleaseRequest):
     release_evidence = {"incident_id": payload.incident_id, "authorization_hash": authorization.authorization_hash,
                         "rule_version": authorization.rule_version, "settlement_provider": "NEF"}
     released_at = _now()
-    record = release_escrow(escrow, authorization, credential=_gateway_credential(), timestamp=released_at.isoformat(), evidence=release_evidence)
+    record = _APP_ADAPTER.release_escrow(
+        escrow,
+        authorization_hash=authorization.authorization_hash,
+        incident_id=payload.incident_id,
+        rule_version=authorization.rule_version,
+        timestamp=released_at.isoformat(),
+        evidence=release_evidence,
+    )
     timing = _timing_for_snapshot(expected_snapshot, _INCIDENTS[payload.incident_id]).with_milestone("settlement_released_at", released_at)
     new_snapshot = _RUNTIME_STORE.snapshot(incident=_INCIDENTS[payload.incident_id], witness=witness,
         evidence=_EVIDENCE.get(payload.incident_id), decision=decision, authorization=authorization, escrow=escrow,
