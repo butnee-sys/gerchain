@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Mapping
 
 from sqlalchemy import DateTime, Integer, String, Text, UniqueConstraint, select
@@ -70,8 +70,11 @@ class AtomicReleaseResult:
 class PostgreSQLAtomicRelease:
     """One DB transaction for governed release, value movement, witness and outbox."""
 
-    def __init__(self, session_factory):
+    def __init__(self, session_factory, processing_lease_seconds: int = 300):
+        if processing_lease_seconds <= 0:
+            raise ValueError("processing_lease_seconds must be positive")
         self.session_factory = session_factory
+        self.processing_lease_seconds = processing_lease_seconds
 
     @staticmethod
     def _governance_passed(*, decision_status: str, authorization_status: str, trinity_proof: Mapping[str, bool], evidence_verified: bool) -> None:
@@ -83,6 +86,50 @@ class PostgreSQLAtomicRelease:
             raise PermissionError("release denied: G-3 Trinity is not PASS")
         if evidence_verified is not True:
             raise PermissionError("release denied: evidence verification is not PASS")
+
+    @staticmethod
+    def _processing_expired(op: ReleaseOperation, now: datetime, lease_seconds: int) -> bool:
+        return op.state == "PROCESSING" and op.updated_at <= now - timedelta(seconds=lease_seconds)
+
+    @staticmethod
+    def _recover_stale_operation(session, op: ReleaseOperation, now: datetime) -> bool:
+        """Reconcile a committed PROCESSING row without ever repeating value movement.
+
+        Returns True when the operation is safely finalized as COMPLETED. A LOCKED
+        escrow with no release evidence is returned to PROCESSING so the caller can
+        execute the normal atomic release path. Ambiguous state is rejected closed.
+        """
+        escrow = session.execute(
+            select(ReleaseEscrow).where(ReleaseEscrow.escrow_id == op.escrow_id).with_for_update()
+        ).scalar_one()
+        witness = session.execute(
+            select(ReleaseWitness).where(ReleaseWitness.transaction_id == op.transaction_id).with_for_update()
+        ).scalar_one_or_none()
+        event_id = f"release:{op.transaction_id}"
+        event = session.execute(
+            select(OutboxEvent).where(OutboxEvent.event_id == event_id).with_for_update()
+        ).scalar_one_or_none()
+
+        if escrow.state == "RELEASED":
+            if witness is None or witness.amount != op.amount or event is None:
+                raise RuntimeError("ambiguous abandoned release: RELEASED escrow lacks complete evidence")
+            op.state = "COMPLETED"
+            op.result_json = json.dumps(
+                {"state": "RELEASED", "event_id": event_id, "recovered": True},
+                sort_keys=True,
+                separators=(",", ":"),
+            )
+            op.updated_at = now
+            session.commit()
+            return True
+
+        if escrow.state == "LOCKED":
+            if witness is not None or event is not None:
+                raise RuntimeError("ambiguous abandoned release: LOCKED escrow has release evidence")
+            op.updated_at = now
+            return False
+
+        raise RuntimeError(f"ambiguous abandoned release: unsupported escrow state {escrow.state}")
 
     def release(self, *, idempotency_key: str, transaction_id: str, escrow_id: str, source: str, destination: str, amount: int, decision_status: str, authorization_status: str, trinity_proof: Mapping[str, bool], evidence_verified: bool) -> AtomicReleaseResult:
         if not idempotency_key or not transaction_id or not escrow_id:
@@ -105,29 +152,43 @@ class PostgreSQLAtomicRelease:
                         raise IdempotencyConflictError(f"release idempotency conflict: {idempotency_key}")
                     if op.state == "COMPLETED":
                         return AtomicReleaseResult(transaction_id, escrow_id, destination, amount, replay=True)
-                    raise RuntimeError(f"release already processing: {idempotency_key}")
+                    now = datetime.now(timezone.utc)
+                    if op.state == "PROCESSING":
+                        if not self._processing_expired(op, now, self.processing_lease_seconds):
+                            raise RuntimeError(f"release already processing: {idempotency_key}")
+                        if self._recover_stale_operation(session, op, now):
+                            return AtomicReleaseResult(transaction_id, escrow_id, destination, amount, replay=True)
+                        # The stale row is known to have no release evidence and
+                        # its escrow is still LOCKED. Reuse the same idempotency
+                        # record and perform one normal atomic release.
+                    else:
+                        raise RuntimeError(f"release operation is not recoverable: {op.state}")
+                else:
+                    now = datetime.now(timezone.utc)
+                    op = ReleaseOperation(
+                        idempotency_key=idempotency_key,
+                        fingerprint=fingerprint,
+                        transaction_id=transaction_id,
+                        escrow_id=escrow_id,
+                        destination=destination,
+                        amount=amount,
+                        state="PROCESSING",
+                        created_at=now,
+                        updated_at=now,
+                    )
+                    session.add(op)
+                    try:
+                        # Concurrent callers can both observe no row. The unique
+                        # idempotency key is the DB serialization point; a loser
+                        # rolls back its speculative insert and re-reads the winner.
+                        session.flush()
+                    except IntegrityError:
+                        session.rollback()
+                        continue
 
                 now = datetime.now(timezone.utc)
-                op = ReleaseOperation(
-                    idempotency_key=idempotency_key,
-                    fingerprint=fingerprint,
-                    transaction_id=transaction_id,
-                    escrow_id=escrow_id,
-                    destination=destination,
-                    amount=amount,
-                    state="PROCESSING",
-                    created_at=now,
-                    updated_at=now,
-                )
-                session.add(op)
-                try:
-                    # Concurrent callers can both observe no row. The unique
-                    # idempotency key is the DB serialization point; a loser
-                    # rolls back its speculative insert and re-reads the winner.
-                    session.flush()
-                except IntegrityError:
-                    session.rollback()
-                    continue
+                op.state = "PROCESSING"
+                op.updated_at = now
 
                 escrow = session.execute(select(ReleaseEscrow).where(ReleaseEscrow.escrow_id == escrow_id).with_for_update()).scalar_one()
                 if escrow.state != "LOCKED":
