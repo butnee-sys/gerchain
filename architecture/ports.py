@@ -1,8 +1,4 @@
-"""Explicit adapters and ports for the frozen DE architecture.
-
-Adapters contain boundary routing only. They do not implement or duplicate
-ledger, escrow, release, settlement, witness, or authoritative asset truth.
-"""
+"""Explicit adapters and ports for the frozen DE architecture."""
 
 from __future__ import annotations
 
@@ -37,8 +33,12 @@ class EXIMToI2BAdapter(AdapterContract):
     """Adapter from EXIM Port into the I2B business boundary."""
 
 
+class I2BToEXIMAdapter(AdapterContract):
+    """Adapter from I2B business boundary into EXIM Port."""
+
+
 class I2BGateway(AdapterContract):
-    """Infrastructure-to-business boundary."""
+    """Infrastructure-to-business connection gateway."""
 
 
 class I2BToMultiConnectorAdapter(AdapterContract):
@@ -76,17 +76,8 @@ class PersonConnector(AdapterContract):
 
 
 __all__ = [
-    "DEAdapter",
-    "DEEToG3Adapter",
-    "G3ToCoreAdapter",
-    "CoreAdapter",
-    "CoreToEXIMAdapter",
-    "EXIMPort",
-    "EXIMToI2BAdapter",
-    "I2BGateway",
-    "I2BToMultiConnectorAdapter",
-    "MultiConnectorAdapter",
-    "StateConnector",
-    "CompanyConnector",
-    "PersonConnector",
+    "DEAdapter", "DEEToG3Adapter", "G3ToCoreAdapter", "CoreAdapter",
+    "CoreToEXIMAdapter", "EXIMPort", "EXIMToI2BAdapter", "I2BToEXIMAdapter",
+    "I2BGateway", "I2BToMultiConnectorAdapter", "MultiConnectorAdapter",
+    "StateConnector", "CompanyConnector", "PersonConnector",
 ]
