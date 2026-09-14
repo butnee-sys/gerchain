@@ -1,7 +1,7 @@
 """Durable SHUUD state persistence adapter.
 
 Keeps storage concerns in SHUUD while authoritative GerChain reconstruction
-is delegated through the SHUUD application boundary.
+is delegated through the injected SHUUD application boundary.
 """
 
 from __future__ import annotations
@@ -33,12 +33,12 @@ class SHUUDSandboxConfigRow(Base):
 class SHUUDPersistence:
     """Durable SHUUD persistence with verification-first recovery."""
 
-    def __init__(self, database_url: str = "sqlite:///./gerchain.db") -> None:
+    def __init__(self, database_url: str = "sqlite:///./gerchain.db", *, app_adapter: SHUUDApplicationAdapter) -> None:
         connect_args = {"check_same_thread": False} if database_url.startswith("sqlite") else {}
         self.engine = create_engine(database_url, connect_args=connect_args)
         self.SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=self.engine)
         Base.metadata.create_all(bind=self.engine)
-        self._app_adapter = SHUUDApplicationAdapter()
+        self._app_adapter = app_adapter
 
     @staticmethod
     def _canonical_snapshot(snapshot: dict[str, Any]) -> str:
