@@ -11,7 +11,7 @@ def store():
     url = os.getenv("GERCHAIN_TEST_DATABASE_URL")
     if not url:
         pytest.skip("GERCHAIN_TEST_DATABASE_URL is required for PostgreSQL integration tests")
-    return PostgreSQLIdempotencyStore(build_postgres_session_factory(url))
+    return PostgreSQLIdempotencyStore(build_postgres_session_factory(url), lease_seconds=1)
 
 
 def test_same_key_same_payload_replays(store):
@@ -29,3 +29,12 @@ def test_same_key_different_payload_is_denied(store):
     store.begin("release", "release:TX-PG-002", first)
     with pytest.raises(IdempotencyConflictError):
         store.begin("release", "release:TX-PG-002", second)
+
+
+def test_expired_processing_lease_can_be_recovered(store):
+    payload = {"transaction_id": "TX-PG-003", "destination": "BENEFICIARY", "amount": 2_000_000}
+    assert store.begin("release", "release:TX-PG-003", payload) is None
+    import time
+    time.sleep(1.1)
+    assert store.recover_expired() == 1
+    assert store.begin("release", "release:TX-PG-003", payload) is None
