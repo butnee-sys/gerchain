@@ -7,7 +7,7 @@ from dee_security.settlement_governance import (
 
 def _root():
     from dee_security.root_of_trust import RootOfTrust
-    return RootOfTrust(owner_id="owner-1", genesis_hash="genesis-1", policy_version=1)
+    return RootOfTrust(owner_id="owner-1", public_key_b64="AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=")
 
 
 def _authorization(**overrides):
