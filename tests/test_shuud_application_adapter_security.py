@@ -1,18 +1,48 @@
 import pytest
 
 from application_adapters import SHUUDApplicationAdapter
+from connectors import EXIMConnectorAdapter
 from gateway import OpenMultiConnectorGateway
 
 
-def test_shuud_application_adapter_requires_credential():
+def build_gateway(credential: str) -> OpenMultiConnectorGateway:
     gateway = OpenMultiConnectorGateway()
+    gateway.register(
+        EXIMConnectorAdapter(),
+        credential=credential,
+        allowed_operations={
+            "create_witness_chain",
+            "restore_witness_chain",
+            "create_escrow",
+            "restore_escrow",
+            "verifier",
+            "release_escrow",
+            "release_escrow_authorized",
+            "export_status",
+            "export_escrow_status",
+            "export_settlement_status",
+            "export_evidence_status",
+            "export_audit_event",
+        },
+    )
+    return gateway
+
+
+def test_shuud_application_adapter_requires_credential():
+    gateway = build_gateway("SHUUD-SECRET")
     with pytest.raises(ValueError, match="credential is required"):
         SHUUDApplicationAdapter(gateway=gateway, credential="")
+
+
+def test_shuud_application_adapter_requires_pre_registered_connector():
+    gateway = OpenMultiConnectorGateway()
+    with pytest.raises(ValueError, match="connector is not registered"):
+        SHUUDApplicationAdapter(gateway=gateway, credential="SHUUD-SECRET")
     assert gateway.registered_connectors() == ()
 
 
-def test_shuud_application_adapter_registers_authenticated_connector():
-    gateway = OpenMultiConnectorGateway()
+def test_shuud_application_adapter_uses_pre_registered_connector():
+    gateway = build_gateway("SHUUD-SECRET")
     adapter = SHUUDApplicationAdapter(gateway=gateway, credential="SHUUD-SECRET")
 
     assert adapter.connector_id == "EXIM"
@@ -20,7 +50,7 @@ def test_shuud_application_adapter_registers_authenticated_connector():
 
 
 def test_shuud_application_adapter_generates_fresh_nonce_for_each_dispatch(monkeypatch):
-    gateway = OpenMultiConnectorGateway()
+    gateway = build_gateway("SHUUD-SECRET")
     adapter = SHUUDApplicationAdapter(gateway=gateway, credential="SHUUD-SECRET")
     captured = []
     original_dispatch = gateway.dispatch
@@ -49,7 +79,7 @@ def test_shuud_application_adapter_generates_fresh_nonce_for_each_dispatch(monke
 
 
 def test_shuud_application_adapter_wrong_credential_is_denied():
-    gateway = OpenMultiConnectorGateway()
+    gateway = build_gateway("SHUUD-SECRET")
     adapter = SHUUDApplicationAdapter(gateway=gateway, credential="SHUUD-SECRET")
     adapter.credential = "WRONG-SECRET"
 
@@ -58,7 +88,7 @@ def test_shuud_application_adapter_wrong_credential_is_denied():
 
 
 def test_shuud_application_adapter_does_not_rebind_existing_connector_with_new_credential():
-    gateway = OpenMultiConnectorGateway()
+    gateway = build_gateway("SHUUD-FIRST")
     first = SHUUDApplicationAdapter(gateway=gateway, credential="SHUUD-FIRST")
     second = SHUUDApplicationAdapter(gateway=gateway, credential="SHUUD-SECOND")
 
