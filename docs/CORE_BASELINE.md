@@ -6,7 +6,7 @@ This is the completion gate for the **GerChain base structure**. SHUUD work is d
 
 > **Core first. SHUUD second.**
 
-The core is complete only when the following **layers** are structurally present and connected without bypasses:
+The core is complete only when the following **layers** are structurally present and connected without bypasses. Every connection follows **Layer → Adapter → Layer**.
 
 ```text
 DE
@@ -65,7 +65,7 @@ Failure or UNKNOWN is fail-closed to DENY/HOLD.
 
 ## PostgreSQL test isolation
 
-The PostgreSQL integration gate uses a single CI database instance. Tests must isolate their authoritative tables before each test so that one test's release, outbox, idempotency or witness rows cannot contaminate another test. This is test-environment isolation only; production atomicity remains database-transactional and is never implemented by deleting or resetting authoritative production state.
+The PostgreSQL integration gate uses a single CI database instance. Tests isolate their authoritative tables before each test so that one test's release, outbox, idempotency or witness rows cannot contaminate another test. This is test-environment isolation only; production atomicity remains database-transactional and is never implemented by deleting or resetting authoritative production state.
 
 ## Completion criteria
 
