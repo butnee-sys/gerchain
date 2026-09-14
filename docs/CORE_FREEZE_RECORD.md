@@ -2,6 +2,7 @@
 
 **Decision:** CORE FROZEN — SHUUD real E2E may begin only after this gate remains green.
 **Date:** 2026-09-14
+**Final verification:** this record is carried on the final pre-SHUUD verification head; the CORE gate must be green on the exact merged head.
 
 ## Verified controls
 
