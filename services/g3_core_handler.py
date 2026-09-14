@@ -45,11 +45,14 @@ class G3CoreRuntimeHandler:
             return self._deny(request, "Core release requires valid DEE root and owner")
 
         destination = payload.get("destination")
+        source = payload.get("source")
         transaction_id = payload.get("transaction_id")
         timestamp = payload.get("timestamp")
         evidence = payload.get("evidence")
         if not destination or not transaction_id or not timestamp:
             raise BoundaryError("release requires transaction_id, destination and timestamp")
+        if self._runtime.is_postgresql_authoritative and not source:
+            raise BoundaryError("production release requires source account")
 
         trinity_proof = {key: policy.get(key) == "PASS" for key in ("trust", "transparency", "performance")}
         evidence_verified = (
@@ -61,6 +64,8 @@ class G3CoreRuntimeHandler:
         result = self._runtime.release(
             transaction_id=str(transaction_id),
             destination=str(destination),
+            source=str(source) if source else None,
+            idempotency_key=str(payload.get("idempotency_key")) if payload.get("idempotency_key") else None,
             timestamp=str(timestamp),
             evidence=evidence or {
                 "type": "G3_AUTHORIZED_RELEASE",
