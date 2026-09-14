@@ -8,6 +8,7 @@ Connector registration belongs to the composition/bootstrap boundary. The
 application adapter only consumes an already-governed gateway.
 """
 
+import os
 from typing import Any
 from uuid import uuid4
 
@@ -20,28 +21,25 @@ class SHUUDApplicationAdapter:
     application_id = "SHUUD"
     connector_id = "EXIM"
 
-    def __init__(self, gateway: OpenMultiConnectorGateway, *, credential: str) -> None:
-        if not str(credential).strip():
+    def __init__(self, gateway: OpenMultiConnectorGateway | None = None, *, credential: str | None = None) -> None:
+        resolved_credential = (credential if credential is not None else os.getenv("SHUUD_EXIM_CREDENTIAL", "")).strip()
+        if not resolved_credential:
             raise ValueError("SHUUD gateway credential is required")
+        if gateway is None:
+            from composition.shuud import build_shuud_application_adapter
+            composed = build_shuud_application_adapter(credential=resolved_credential)
+            gateway = composed.gateway
         self.gateway = gateway
-        self.credential = credential
+        self.credential = resolved_credential
         if self.connector_id not in self.gateway.registered_connectors():
-            raise ValueError(
-                f"connector must be registered at the composition boundary: {self.connector_id}"
-            )
+            raise ValueError(f"connector must be registered at the composition boundary: {self.connector_id}")
 
     @staticmethod
     def _nonce() -> str:
         return f"SHUUD-{uuid4().hex}"
 
     def _dispatch(self, operation: str, **kwargs: Any) -> Any:
-        return self.gateway.dispatch(
-            self.connector_id,
-            operation,
-            credential=self.credential,
-            nonce=self._nonce(),
-            **kwargs,
-        )
+        return self.gateway.dispatch(self.connector_id, operation, credential=self.credential, nonce=self._nonce(), **kwargs)
 
     def create_witness_chain(self, *, initial_state: dict[str, Any], manifest: dict[str, Any], witness_id: str, initial_money_state: dict[str, Any] | None = None) -> Any:
         return self._dispatch("create_witness_chain", initial_state=initial_state, manifest=manifest, witness_id=witness_id, initial_money_state=initial_money_state)
