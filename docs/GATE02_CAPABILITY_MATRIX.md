@@ -16,6 +16,16 @@ be explicit.
 - MISSING — required behavior has no authoritative owner.
 - DUPLICATE — multiple components claim the same authority.
 
+## Reconciliation invariant
+
+The current GATE-02 capability reconciliation must finish with:
+
+- `MISSING = 0`
+- `DUPLICATE = 0`
+
+These are gate invariants, not a claim that every conceptual capability is an
+independent engine.
+
 ## Freeze rule
 
 `MISSING` and `DUPLICATE` block CORE freeze.
