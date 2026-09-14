@@ -1,7 +1,7 @@
 from pathlib import Path
 import ast
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[3]
 APP = ROOT / "apps" / "shuud"
 FORBIDDEN_PREFIXES = ("core", "money", "escrow", "witness", "verifier", "services.gerchain_runtime", "services.authoritative_escrow")
 
