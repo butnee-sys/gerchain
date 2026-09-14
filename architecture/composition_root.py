@@ -4,33 +4,14 @@ from architecture.contracts import AdapterContract, BoundaryRequest, BoundaryRes
 from architecture.governed_flow_adapters import (
     DEToDEEBoundaryAdapter,
     DEEToG3BoundaryAdapter,
-    G3ToCoreBoundaryAdapter as GovernedG3ToCoreBoundaryAdapter,
+    G3ToCoreBoundaryAdapter,
     CoreToEXIMBoundaryAdapter,
     EXIMToI2BBoundaryAdapter,
-    I2BToEXIMBoundaryAdapter,
 )
-from architecture.ports import I2BToMultiConnectorAdapter
-
-
-class _Endpoint(AdapterContract):
-    """Small composition endpoint used only to terminate a boundary chain."""
-
-    def __init__(self, handler):
-        self._handler = handler
-
-    def handle(self, request: BoundaryRequest) -> BoundaryResponse:
-        response = self._handler(request)
-        if not isinstance(response, BoundaryResponse):
-            raise TypeError("composition endpoint must return BoundaryResponse")
-        return response
 
 
 class CanonicalComposition:
-    """Single composition root for the frozen DE -> ... -> I2B topology.
-
-    This object wires boundaries only. It does not create ledger, escrow,
-    witness, authorization, release, settlement, or asset-truth engines.
-    """
+    """Single composition root for the frozen DE -> ... -> I2B topology."""
 
     def __init__(
         self,
@@ -41,20 +22,21 @@ class CanonicalComposition:
         exim: AdapterContract,
         i2b: AdapterContract,
     ) -> None:
-        i2b_adapter = EXIMToI2BBoundaryAdapter(i2b)
-        core_to_exim = CoreToEXIMBoundaryAdapter(exim)
-        g3_to_core = GovernedG3ToCoreBoundaryAdapter(core)
-        dee_to_g3 = DEEToG3BoundaryAdapter(g3)
+        # Compose backwards from the destination so every layer is reached
+        # through exactly one explicit adapter.
+        self.exim_to_i2b = EXIMToI2BBoundaryAdapter(i2b)
+        self.core_to_exim = CoreToEXIMBoundaryAdapter(self.exim_to_i2b)
+        self.g3_to_core = G3ToCoreBoundaryAdapter(self.core_to_exim)
+        self.dee_to_g3 = DEEToG3BoundaryAdapter(self.g3_to_core)
+        self.de_to_dee = DEToDEEBoundaryAdapter(self.dee_to_g3)
 
-        self.de_to_dee = DEToDEEBoundaryAdapter(dee)
-        self.dee_to_g3 = dee_to_g3
-        self.g3_to_core = g3_to_core
-        self.core_to_exim = core_to_exim
-        self.exim_to_i2b = i2b_adapter
-
-        # The public entry point is deliberately the first adapter, not a
-        # layer implementation. Each layer is therefore reachable only via
-        # its explicit boundary adapter.
+        # Retain injected endpoints for inspection/testing. They are not
+        # called directly by the public entry point.
+        self.dee = dee
+        self.g3 = g3
+        self.core = core
+        self.exim = exim
+        self.i2b = i2b
         self.entry = self.de_to_dee
 
     def handle(self, request: BoundaryRequest) -> BoundaryResponse:
