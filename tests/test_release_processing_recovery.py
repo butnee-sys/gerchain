@@ -7,6 +7,7 @@ import pytest
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
 
+from core.idempotency import IdempotencyEngine
 from persistence.atomic_release import (
     ReleaseAccount,
     ReleaseEscrow,
@@ -40,32 +41,22 @@ def test_abandoned_processing_is_reclaimed_without_double_movement():
             ReleaseAccount(account_id="REC-SRC", balance=1000, updated_at=now),
             ReleaseAccount(account_id="REC-DST", balance=0, updated_at=now),
             ReleaseEscrow(escrow_id="REC-ESC", state="LOCKED", amount=1000, updated_at=now),
-            ReleaseOperation(
-                idempotency_key="REC-KEY",
-                fingerprint="PLACEHOLDER",
-                transaction_id="REC-TX",
-                escrow_id="REC-ESC",
-                destination="REC-DST",
-                amount=1000,
-                state="PROCESSING",
-                created_at=stale,
-                updated_at=stale,
-            ),
         ])
+        payload = {"transaction_id": "REC-TX", "escrow_id": "REC-ESC", "source": "REC-SRC", "destination": "REC-DST", "amount": 1000}
+        session.add(ReleaseOperation(
+            idempotency_key="REC-KEY",
+            fingerprint=IdempotencyEngine.fingerprint(payload),
+            transaction_id="REC-TX",
+            escrow_id="REC-ESC",
+            destination="REC-DST",
+            amount=1000,
+            state="PROCESSING",
+            created_at=stale,
+            updated_at=stale,
+        ))
         session.commit()
 
     release = PostgreSQLAtomicRelease(lambda: Session(engine), processing_lease_seconds=60)
-    payload = {"transaction_id": "REC-TX", "escrow_id": "REC-ESC", "source": "REC-SRC", "destination": "REC-DST", "amount": 1000}
-    from core.idempotency import IdempotencyEngine
-    fingerprint = IdempotencyEngine.fingerprint(payload)
-    with Session(engine) as session:
-        session.execute(
-            ReleaseOperation.__table__.update()
-            .where(ReleaseOperation.idempotency_key == "REC-KEY")
-            .values(fingerprint=fingerprint)
-        )
-        session.commit()
-
     result = release.release(
         idempotency_key="REC-KEY",
         transaction_id="REC-TX",
@@ -84,7 +75,8 @@ def test_abandoned_processing_is_reclaimed_without_double_movement():
         assert session.get(ReleaseAccount, "REC-SRC").balance == 0
         assert session.get(ReleaseAccount, "REC-DST").balance == 1000
         assert session.get(ReleaseEscrow, "REC-ESC").state == "RELEASED"
-        assert session.get(ReleaseOperation, 1).state == "COMPLETED"
+        op = session.execute(select(ReleaseOperation).where(ReleaseOperation.idempotency_key == "REC-KEY")).scalar_one()
+        assert op.state == "COMPLETED"
         assert len(session.execute(select(ReleaseWitness)).scalars().all()) == 1
         assert len(session.execute(select(OutboxEvent)).scalars().all()) == 1
 
@@ -123,15 +115,11 @@ def test_abandoned_processing_with_release_evidence_is_reconciled_as_replay():
             ),
         ])
         session.commit()
-
-    payload = {"transaction_id": "REC2-TX", "escrow_id": "REC2-ESC", "source": "REC2-SRC", "destination": "REC2-DST", "amount": 1000}
-    from core.idempotency import IdempotencyEngine
-    fingerprint = IdempotencyEngine.fingerprint(payload)
-    with Session(engine) as session:
+        payload = {"transaction_id": "REC2-TX", "escrow_id": "REC2-ESC", "source": "REC2-SRC", "destination": "REC2-DST", "amount": 1000}
         session.execute(
             ReleaseOperation.__table__.update()
             .where(ReleaseOperation.idempotency_key == "REC2-KEY")
-            .values(fingerprint=fingerprint)
+            .values(fingerprint=IdempotencyEngine.fingerprint(payload))
         )
         session.commit()
 
