@@ -11,7 +11,8 @@ RUN pip install --no-cache-dir \
     "uvicorn>=0.30,<1" \
     "sqlalchemy>=2,<3" \
     "psycopg[binary]>=3.2,<4" \
-    "pydantic>=2,<3"
+    "pydantic>=2,<3" \
+    "cryptography>=43,<47"
 
 EXPOSE 8000
 
