@@ -25,19 +25,40 @@ Each row must eventually point to an exact, reproducible artifact. Use the follo
 | EV-ARCH-002 | GC-ARCH-001, GC-BOUND-001 | SRC | `architecture/governed_flow_adapters.py` | FOUND | Architecture | inspect adapter contract and fail-closed behavior |
 | EV-ARCH-003 | GC-BOUND-002, GC-BOUND-003, GC-I2B-001 | SRC | `architecture/ports.py` | FOUND | Architecture | trace ports and actor routing |
 | EV-NEF-001 | GC-NEF-001, GC-NEF-002 | SRC | `architecture/nef_gerchain.py` | FOUND | NEF | re-perform validation and boundary assertions |
-| EV-ESC-001 | GC-ESC-001, GC-ESC-002, GC-ESC-003 | SRC | CORE escrow/release implementation — exact path to be indexed | PENDING | CORE | identify authoritative implementation at frozen SHA |
-| EV-WIT-001 | GC-WIT-001 | SRC/TEST | witness/verifier implementation and tests — exact path to be indexed | PENDING | CORE | identify source and test artifacts |
-| EV-PG-001 | GC-ESC-003, GC-RES-001 | SRC/TEST/CI | PostgreSQL release authority and concurrency/recovery artifacts — exact path to be indexed | PENDING | CORE | inspect atomicity, replay and crash evidence |
-| EV-MNY-001 | GC-MNY-001, GC-MNY-002 | SRC/TEST | Money Ledger/Engine — exact path to be indexed | PENDING | CORE | trace single authoritative ownership |
-| EV-HLD-001 | GC-HLD-001 | SRC/TEST | Hold Engine — exact path to be indexed | PENDING | CORE | inspect reservation invariants |
-| EV-LIM-001 | GC-LIM-001 | SRC/TEST | Limit Engine — exact path to be indexed | PENDING | CORE | inspect limit enforcement |
-| EV-TXN-001 | GC-TXN-001 | SRC/TEST | Transaction State Machine — exact path to be indexed | PENDING | CORE | inspect legal transitions |
+| EV-MNY-001 | GC-MNY-001 | SRC | `money/ledger.py` | FOUND | CORE | inspect single authoritative ledger ownership |
+| EV-MNY-002 | GC-MNY-002 | SRC | `money/engine.py` | FOUND | CORE | trace authorized value movement into ledger |
+| EV-ESC-001 | GC-ESC-001 | SRC | `escrow/state.py` | FOUND | CORE | inspect legal escrow state transitions |
+| EV-ESC-002 | GC-ESC-002 | SRC | `escrow/engine.py` | FOUND | CORE | inspect escrow lifecycle authority |
+| EV-ESC-003 | GC-ESC-003 | SRC/TEST | `persistence/atomic_release.py`; `tests/test_authoritative_fund_atomicity.py` | FOUND + TEST | CORE | re-perform atomic release and rollback invariants |
+| EV-IDM-001 | GC-IDM-001 | SRC/TEST | `persistence/atomic_release.py`; `tests/test_authoritative_release_idempotency.py` | FOUND + TEST | CORE | re-perform replay and same-key conflict behavior |
+| EV-WIT-001 | GC-WIT-001 | SRC | `witness/chain.py` | FOUND | CORE | inspect witness-chain integrity and append authority |
+| EV-WIT-002 | GC-WIT-002 | SRC | `witness/independent_multi.py` | FOUND | CORE | inspect independent witness verification path |
+| EV-PG-001 | GC-ESC-003, GC-RES-001 | SRC | `persistence/atomic_release.py` | FOUND | CORE/DB | inspect transaction boundary, row locks and commit/rollback behavior |
+| EV-PG-002 | GC-RES-001 | DOC | `docs/POSTGRES_ATOMIC_RELEASE.md` | FOUND | CORE/DB | verify documented PostgreSQL atomic boundary |
+| EV-PG-003 | GC-IDM-001, GC-RES-001 | DOC | `docs/POSTGRES_IDEMPOTENCY.md` | FOUND | CORE/DB | verify idempotency and transaction-boundary requirements |
+| EV-PG-004 | GC-RES-002 | SRC | `persistence/recovery_outbox.py` | FOUND | CORE/DB | inspect lease, claim, heartbeat and completion controls |
+| EV-PG-005 | GC-RES-001, GC-RES-002 | DOC/TEST | `docs/GATE_05_CRASH_RECOVERY.md`; `tests/test_release_crash_recovery_contract.py` | FOUND + TEST | CORE/DB | re-perform replay and expired-outbox recovery |
+| EV-PG-006 | GC-RES-001, GC-RES-002 | TEST | `tests/test_release_crash_recovery_contract.py` | FOUND | CORE/DB | execute against PostgreSQL test database and retain result |
+| EV-PG-007 | GC-RES-002 | DOC | `docs/POSTGRES_RECOVERY_OUTBOX.md` | FOUND | CORE/DB | inspect recovery contract and at-least-once boundary |
+| EV-PG-008 | GC-RES-003 | DOC | `docs/RELEASE_FAILURE_RECOVERY_CONTRACT.md` | FOUND | CORE/DB | verify failure-state contract |
+| EV-PG-009 | GC-IDM-002, GC-RES-003 | DOC | `docs/GATE_04_IDEMPOTENCY_CONCURRENCY.md` | FOUND | CORE/DB | inspect concurrency/idempotency invariants |
+| EV-HLD-001 | GC-HLD-001 | SRC | `core/hold.py` | FOUND | CORE | inspect hold/reservation invariants |
+| EV-LIM-001 | GC-LIM-001 | SRC | `core/limit.py` | FOUND | CORE | inspect limit enforcement |
+| EV-TXN-001 | GC-TXN-001 | SRC | `core/transaction_lifecycle.py` | FOUND | CORE | inspect legal transaction transitions |
+| EV-RES-001 | GC-RES-001 | TEST/REP | PostgreSQL execution and independent crash/recovery re-performance package | MISSING | CORE/DB | execute on controlled PostgreSQL environment and retain raw evidence |
+| EV-RES-002 | GC-RES-003 | TEST/DB | Abandoned `ReleaseOperation` in `PROCESSING` recovery/lease policy | MISSING | CORE/DB | implement or formally evidence recovery before audit assertion |
 | EV-SEC-001 | GC-SEC-001 | CFG/LOG | IAM, privileged access, access review, MFA evidence — external evidence required | MISSING | Security | obtain operating-period evidence |
-| EV-SEC-002 | GC-SEC-002 | CI | CI/security/dependency evidence — exact runs to be indexed | PENDING | SDLC | map workflows to controls |
+| EV-SEC-002 | GC-SEC-002 | CI | CI/security/dependency evidence — exact runs to be indexed | PENDING | SDLC | map workflows to controls and frozen-SHA results |
 | EV-DATA-001 | GC-DATA-001 | TEST/DB | reconciliation, migration, completeness/accuracy evidence — exact artifact required | MISSING | Data | define reproducible population test |
-| EV-RES-001 | GC-RES-001 | TEST/REP | crash/recovery/replay re-performance — exact artifact required | MISSING | CORE/DB | execute and retain evidence |
 | EV-AUD-001 | GC-AUD-001 | LOG/DB | witness/event/outbox/audit records — exact artifact required | MISSING | Audit | produce sample and full-population evidence |
-| EV-CHG-001 | GC-CHG-001 | CI/DOC | audited SHA + corresponding green CI + approval record | PENDING | SDLC | bind evidence to exact baseline |
+| EV-CHG-001 | GC-CHG-001 | CI/DOC | audited SHA + corresponding green CI + approval record | PENDING | SDLC | bind evidence to exact baseline and approval |
+| EV-IND-001 | GC-IND-001 | REP | independent re-performance by auditor/independent reviewer | MISSING | Independent Assurance | execute using clean environment and preserve result |
+
+## Audit-status interpretation
+
+`FOUND` means the repository contains the referenced artifact. `FOUND + TEST` means a corresponding automated test artifact is also indexed. Neither status means the control is independently assured or operating effectively.
+
+A control should progress through: `DESIGNED → IMPLEMENTED → TESTED → EVIDENCED → OPERATING EFFECTIVE → INDEPENDENTLY ASSURED`.
 
 ## Auditor evidence packet requirements
 
@@ -56,10 +77,11 @@ For every critical control, retain:
 
 ## Evidence gaps to close first
 
-1. Exact authoritative CORE implementation paths for money, escrow, witness, verifier and PostgreSQL release authority.
-2. Exact automated test and CI evidence linked to the frozen SHA.
-3. Operating-period database/reconciliation evidence.
-4. Access-control and privileged-operation evidence.
-5. Independent re-performance package.
+1. Execute the indexed PostgreSQL atomic-release/recovery tests against a controlled database and retain raw run evidence.
+2. Resolve the abandoned `ReleaseOperation` `PROCESSING` recovery/lease gap.
+3. Produce operating-period database/reconciliation evidence.
+4. Produce IAM, privileged-access and MFA evidence.
+5. Bind green CI results and approval evidence to the exact audit baseline.
+6. Complete independent re-performance.
 
 **Rule:** `PENDING` means the control may exist but the audit evidence has not yet been indexed. `MISSING` means the required evidence artifact is not yet established. Neither may be represented as audited PASS.
