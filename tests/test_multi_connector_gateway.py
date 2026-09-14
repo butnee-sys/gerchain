@@ -1,7 +1,7 @@
 import pytest
 
 from connectors import EXIMConnectorAdapter
-from gateway import OpenMultiConnectorGateway
+from gateway import MultiConnectorAdapter, OpenMultiConnectorGateway
 
 
 READ_OPS = {"export_status"}
@@ -11,6 +11,11 @@ def authenticated_gateway():
     gateway = OpenMultiConnectorGateway()
     gateway.register(EXIMConnectorAdapter(), credential="EXIM-SANDBOX-SECRET", allowed_operations=READ_OPS)
     return gateway
+
+
+def test_gateway_has_explicit_multi_connector_adapter_boundary():
+    gateway = OpenMultiConnectorGateway()
+    assert isinstance(gateway.adapter, MultiConnectorAdapter)
 
 
 def test_gateway_registers_and_dispatches_named_connector():
