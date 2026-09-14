@@ -4,6 +4,8 @@ import copy
 from dataclasses import dataclass
 from typing import Any
 
+from core.idempotency import IdempotencyEngine
+
 
 @dataclass(frozen=True)
 class EscrowTransaction:
@@ -27,6 +29,7 @@ class AuthoritativeEscrowService:
     шууд өөрчлөхгүй.
 
     Бүх mutation Core engine-ээр хийгдэнэ.
+    Idempotency нь mutation boundary дээр давхар хөдөлгөөнөөс хамгаална.
     """
 
     def __init__(
@@ -34,10 +37,12 @@ class AuthoritativeEscrowService:
         escrow_engine,
         money_engine,
         verifier,
+        idempotency: IdempotencyEngine | None = None,
     ):
         self.escrow = escrow_engine
         self.money = money_engine
         self.verifier = verifier
+        self.idempotency = idempotency or IdempotencyEngine()
 
     def get_state(self) -> dict[str, Any]:
         return dict(self.escrow.state)
@@ -52,16 +57,24 @@ class AuthoritativeEscrowService:
         timestamp: str,
         evidence: Any,
     ) -> EscrowTransaction:
-
         if not transaction_id:
             raise ValueError("transaction_id is required")
 
-        state = self.escrow.state["state"]
+        key = f"fund:{transaction_id}"
+        payload = {
+            "operation": "fund",
+            "transaction_id": transaction_id,
+            "source": source,
+            "timestamp": timestamp,
+            "evidence": evidence,
+        }
+        replay = self.idempotency.begin(key, payload)
+        if replay is not None:
+            return replay
 
+        state = self.escrow.state["state"]
         if state != "CREATED":
-            raise ValueError(
-                f"Funding requires CREATED escrow, got {state}"
-            )
+            raise ValueError(f"Funding requires CREATED escrow, got {state}")
 
         amount = self.escrow.amount
         escrow_account = self.escrow.escrow_id
@@ -95,7 +108,8 @@ class AuthoritativeEscrowService:
                 evidence=evidence,
             )
 
-            return self._snapshot(transaction_id)
+            result = self._snapshot(transaction_id)
+            return self.idempotency.complete(key, payload, result)
 
         except Exception:
             self.money.ledger.balances = dict(ledger_checkpoint)
@@ -111,13 +125,23 @@ class AuthoritativeEscrowService:
         timestamp: str,
         evidence: Any,
     ) -> EscrowTransaction:
+        if not transaction_id:
+            raise ValueError("transaction_id is required")
+
+        key = f"lock:{transaction_id}"
+        payload = {
+            "operation": "lock",
+            "transaction_id": transaction_id,
+            "timestamp": timestamp,
+            "evidence": evidence,
+        }
+        replay = self.idempotency.begin(key, payload)
+        if replay is not None:
+            return replay
 
         state = self.escrow.state["state"]
-
         if state != "FUNDED":
-            raise ValueError(
-                f"Lock requires FUNDED escrow, got {state}"
-            )
+            raise ValueError(f"Lock requires FUNDED escrow, got {state}")
 
         self.escrow.transition(
             target_state="LOCKED",
@@ -125,7 +149,8 @@ class AuthoritativeEscrowService:
             evidence=evidence,
         )
 
-        return self._snapshot(transaction_id)
+        result = self._snapshot(transaction_id)
+        return self.idempotency.complete(key, payload, result)
 
     def release(
         self,
@@ -134,16 +159,24 @@ class AuthoritativeEscrowService:
         timestamp: str,
         evidence: Any,
     ) -> EscrowTransaction:
-
         if not transaction_id:
             raise ValueError("transaction_id is required")
 
-        state = self.escrow.state["state"]
+        key = f"release:{transaction_id}"
+        payload = {
+            "operation": "release",
+            "transaction_id": transaction_id,
+            "destination": destination,
+            "timestamp": timestamp,
+            "evidence": evidence,
+        }
+        replay = self.idempotency.begin(key, payload)
+        if replay is not None:
+            return replay
 
+        state = self.escrow.state["state"]
         if state != "LOCKED":
-            raise ValueError(
-                f"Release requires LOCKED escrow, got {state}"
-            )
+            raise ValueError(f"Release requires LOCKED escrow, got {state}")
 
         amount = self.escrow.amount
         escrow_account = self.escrow.escrow_id
@@ -158,7 +191,7 @@ class AuthoritativeEscrowService:
             evidence=evidence,
         )
 
-        return EscrowTransaction(
+        result = EscrowTransaction(
             transaction_id=transaction_id,
             escrow_id=self.escrow.escrow_id,
             source=escrow_account,
@@ -170,6 +203,7 @@ class AuthoritativeEscrowService:
             event_hash=record.transfer_hash,
             witness_event_hash=record.witness_event_hash,
         )
+        return self.idempotency.complete(key, payload, result)
 
     def refund(
         self,
@@ -178,16 +212,24 @@ class AuthoritativeEscrowService:
         timestamp: str,
         evidence: Any,
     ) -> EscrowTransaction:
-
         if not transaction_id:
             raise ValueError("transaction_id is required")
 
-        state = self.escrow.state["state"]
+        key = f"refund:{transaction_id}"
+        payload = {
+            "operation": "refund",
+            "transaction_id": transaction_id,
+            "destination": destination,
+            "timestamp": timestamp,
+            "evidence": evidence,
+        }
+        replay = self.idempotency.begin(key, payload)
+        if replay is not None:
+            return replay
 
+        state = self.escrow.state["state"]
         if state != "LOCKED":
-            raise ValueError(
-                f"Refund requires LOCKED escrow, got {state}"
-            )
+            raise ValueError(f"Refund requires LOCKED escrow, got {state}")
 
         amount = self.escrow.amount
         escrow_account = self.escrow.escrow_id
@@ -202,7 +244,7 @@ class AuthoritativeEscrowService:
             evidence=evidence,
         )
 
-        return EscrowTransaction(
+        result = EscrowTransaction(
             transaction_id=transaction_id,
             escrow_id=self.escrow.escrow_id,
             source=escrow_account,
@@ -214,21 +256,15 @@ class AuthoritativeEscrowService:
             event_hash=record.transfer_hash,
             witness_event_hash=record.witness_event_hash,
         )
+        return self.idempotency.complete(key, payload, result)
 
     def verify_bundle(
         self,
         bundle: dict[str, Any],
     ) -> bool:
+        return bool(self.verifier.verify_bundle(bundle))
 
-        return bool(
-            self.verifier.verify_bundle(bundle)
-        )
-
-    def _snapshot(
-        self,
-        transaction_id: str,
-    ) -> EscrowTransaction:
-
+    def _snapshot(self, transaction_id: str) -> EscrowTransaction:
         return EscrowTransaction(
             transaction_id=transaction_id,
             escrow_id=self.escrow.escrow_id,
