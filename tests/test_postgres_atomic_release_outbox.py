@@ -19,6 +19,10 @@ def release_service():
     return now_service, engine
 
 
+def governance():
+    return dict(decision_status="APPROVE", authorization_status="AUTHORIZED", trinity_proof={"trust": True, "transparency": True, "performance": True}, evidence_verified=True)
+
+
 def test_release_and_outbox_commit_together(release_service):
     service, engine = release_service
     now = __import__("datetime").datetime.now(__import__("datetime").timezone.utc)
@@ -30,7 +34,7 @@ def test_release_and_outbox_commit_together(release_service):
         ])
         session.commit()
 
-    result = service.release(idempotency_key="OUTBOX-RELEASE-1", transaction_id="TX-OUTBOX-1", escrow_id="ESC-OUTBOX", source="SRC-OUTBOX", destination="DST-OUTBOX", amount=2_000_000)
+    result = service.release(idempotency_key="OUTBOX-RELEASE-1", transaction_id="TX-OUTBOX-1", escrow_id="ESC-OUTBOX", source="SRC-OUTBOX", destination="DST-OUTBOX", amount=2_000_000, **governance())
     assert result.replay is False
 
     with Session(engine) as session:
@@ -56,7 +60,19 @@ def test_release_rollback_does_not_publish_outbox(release_service):
         session.commit()
 
     with pytest.raises(ValueError):
-        service.release(idempotency_key="ROLLBACK-1", transaction_id="TX-ROLLBACK-1", escrow_id="ESC-ROLLBACK", source="SRC-ROLLBACK", destination="DST-ROLLBACK", amount=2)
+        service.release(idempotency_key="ROLLBACK-1", transaction_id="TX-ROLLBACK-1", escrow_id="ESC-ROLLBACK", source="SRC-ROLLBACK", destination="DST-ROLLBACK", amount=2, **governance())
 
     with Session(engine) as session:
         assert session.execute(select(OutboxEvent).where(OutboxEvent.event_id == "release:TX-ROLLBACK-1")).scalar_one_or_none() is None
+
+
+def test_release_fails_closed_without_dee_authorization(release_service):
+    service, engine = release_service
+    with pytest.raises(PermissionError):
+        service.release(idempotency_key="DENY-1", transaction_id="TX-DENY-1", escrow_id="ESC-MISSING", source="SRC", destination="DST", amount=1, decision_status="APPROVE", authorization_status="DENIED", trinity_proof={"trust": True, "transparency": True, "performance": True}, evidence_verified=True)
+
+
+def test_release_fails_closed_when_g3_trinity_is_not_passed(release_service):
+    service, engine = release_service
+    with pytest.raises(PermissionError):
+        service.release(idempotency_key="DENY-2", transaction_id="TX-DENY-2", escrow_id="ESC-MISSING", source="SRC", destination="DST", amount=1, decision_status="APPROVE", authorization_status="AUTHORIZED", trinity_proof={"trust": True, "transparency": False, "performance": True}, evidence_verified=True)
