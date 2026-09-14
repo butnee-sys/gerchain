@@ -140,6 +140,10 @@ class GerchainRuntime:
     def get_balance(self, account_id: str) -> int:
         return self.money_ledger.get_balance(account_id)
 
+    def get_escrow_state(self) -> Dict[str, Any]:
+        """Return the authoritative runtime escrow lifecycle state."""
+        return self.escrow_service.get_state()
+
     def fund(self, transaction_id: str, source: str, timestamp: str, evidence: Any):
         return self.escrow_service.fund(transaction_id=transaction_id, source=source, timestamp=timestamp, evidence=evidence)
 
