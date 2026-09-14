@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Mapping
 
 from persistence.atomic_release import AtomicReleaseResult, PostgreSQLAtomicRelease
 
@@ -25,7 +24,7 @@ class ReleaseGovernance:
         if self.authorization != "AUTHORIZED":
             raise ReleaseGovernanceError("release authorization is not AUTHORIZED")
         if any(value != "PASS" for value in (self.trust, self.transparency, self.performance)):
-            raise ReleaseGovernanceError("G-3 escrow trinity is not PASS")
+            raise ReleaseGovernanceError("G-3 escrow Trinity is not PASS")
         if not self.evidence_verified:
             raise ReleaseGovernanceError("release evidence is not verified")
 
@@ -36,7 +35,17 @@ class GovernedAtomicRelease:
     def __init__(self, release: PostgreSQLAtomicRelease):
         self._release = release
 
-    def release(self, *, governance: ReleaseGovernance, idempotency_key: str, transaction_id: str, escrow_id: str, source: str, destination: str, amount: int) -> AtomicReleaseResult:
+    def release(
+        self,
+        *,
+        governance: ReleaseGovernance,
+        idempotency_key: str,
+        transaction_id: str,
+        escrow_id: str,
+        source: str,
+        destination: str,
+        amount: int,
+    ) -> AtomicReleaseResult:
         governance.require_pass()
         return self._release.release(
             idempotency_key=idempotency_key,
@@ -45,6 +54,14 @@ class GovernedAtomicRelease:
             source=source,
             destination=destination,
             amount=amount,
+            decision_status=governance.decision,
+            authorization_status=governance.authorization,
+            trinity_proof={
+                "trust": governance.trust == "PASS",
+                "transparency": governance.transparency == "PASS",
+                "performance": governance.performance == "PASS",
+            },
+            evidence_verified=governance.evidence_verified,
         )
 
 
