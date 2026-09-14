@@ -1,49 +1,52 @@
 # GerChain CORE — Audit Lock Status
 
-**Document status:** Working audit record
-**Scope:** GerChain CORE only
-**SHUUD:** Explicitly out of CORE assurance scope
-**Frozen PwC baseline:** `274f45c83ce088e2229a2628e3a80403a68503df`
-**Current main commit under audit:** `62594d16e926aa084c73f326eb77445d57fd4267`
+**Document status:** Working audit record  
+**Scope:** GerChain CORE only  
+**SHUUD:** Explicitly out of CORE assurance scope  
+**Frozen PwC baseline:** `274f45c83ce088e2229a2628e3a80403a68503df`  
+**Current main commit under audit:** `621e7e2acefe243d4c72e783970e1eb833c60b96`
 
-## 1. Purpose
-
-This document establishes the controlled starting point for the GerChain CORE audit evidence package. It does **not** declare all controls closed. A control is marked GREEN/CLOSED only when supporting evidence is independently identifiable and retained.
-
-## 2. Current disposition
+## 1. Current disposition
 
 | Control / area | Status | Basis |
 |---|---|---|
-| Atomic release / idempotency | GREEN | CORE test and PostgreSQL evidence retained in repository history |
-| PostgreSQL concurrency | GREEN | CORE-only PostgreSQL concurrency workflow and successful run evidence |
-| `GC-RES-003` abandoned PROCESSING recovery | GREEN | PR #63 merged; dedicated recovery tests and CORE gates |
-| Operating DB reconciliation | GREEN | PR #64 merged; reconciliation tests and dedicated workflow |
-| CORE/SHUUD scope boundary | GREEN | CORE-only PostgreSQL workflow + scope-boundary evidence; PR #67 merged |
+| Atomic release / idempotency | GREEN | CORE test and PostgreSQL evidence retained |
+| PostgreSQL concurrency | GREEN | CORE-only PostgreSQL workflow and successful evidence |
+| `GC-RES-003` abandoned PROCESSING recovery | GREEN | PR #63 merged; dedicated recovery tests |
+| Operating DB reconciliation | GREEN | PR #64 merged; reconciliation tests and workflow |
+| CORE/SHUUD scope boundary | GREEN | CORE-only PostgreSQL workflow + scope-boundary evidence; PR #67 |
 | DEE cryptographic controls | GREEN | Key-management and security test evidence retained |
-| CodeQL | GREEN | Successful CORE security workflow evidence |
+| CodeQL | GREEN | Successful security workflow evidence |
+| Post-merge main CORE CI | GREEN | Main commit `621e7e2...` has successful CORE workflow evidence |
+| Main branch governance | GREEN / VERIFIED | Active `CORE-main-protection` ruleset, ID `23342561`; required CORE checks configured |
 | PwC evidence baseline | FROZEN | Baseline SHA retained; no false promotion |
-| IAM / MFA organizational evidence (`GC-IDM-001/002`) | MISSING | Organizational MFA, privileged-access and review evidence not independently available |
-| Main branch protection governance | MISSING / UNVERIFIED | Administrative verification is still required |
-| Post-merge main workflow evidence | UNVERIFIED | New main merge commit `62594d16...` currently has no commit-associated workflow result visible through the available endpoint |
+| `GC-IDM-001` IAM/MFA organizational evidence | MISSING | Organizational IAM/MFA evidence is not independently retained |
+| `GC-IDM-002` privileged access governance | MISSING | Role assignment/review/access-governance evidence is not independently retained |
+| `GC-IND-001` independent re-performance | OPEN | Independent reviewer re-performance record not yet retained |
+
+## 2. Remaining closure gates
+
+### GC-IDM-001 — IAM/MFA
+
+Obtain dated, organization-level evidence showing privileged-account inventory and MFA enforcement. Source-code security tests, CODEOWNERS, or a ruleset do not substitute for this evidence.
+
+### GC-IDM-002 — Privileged access governance
+
+Obtain privileged-role assignment/approval, periodic access review, joiner-mover-leaver or equivalent removal evidence, and administrative access traceability.
+
+### GC-IND-001 — Independent re-performance
+
+An independent reviewer must reproduce the material CORE controls against the frozen audited commit, retain raw output, and sign/date the conclusion with their independence identified.
 
 ## 3. Lock rule
 
-The CORE implementation may be treated as a **technical baseline**, but the formal audit lock is not declared until the remaining governance/evidence gaps are either closed or explicitly accepted as audit exceptions by the responsible authority.
+The technical CORE baseline is verified, but the **formal CORE audit lock is NOT declared** until `GC-IDM-001`, `GC-IDM-002`, and `GC-IND-001` are GREEN, or formally accepted as audit exceptions by the responsible authority.
 
-## 4. Non-negotiable audit principles
+## 4. Non-negotiable principles
 
 1. Source-code presence is not organizational control evidence.
-2. A test PASS is not evidence that an organizational policy exists.
+2. A test PASS is not proof of organizational IAM/MFA governance.
 3. SHUUD is not included in CORE control conclusions.
 4. Frozen PwC documents are not silently rewritten to claim later evidence.
-5. Every final conclusion must identify the exact audited commit or retained evidence artifact.
+5. Final conclusions must identify the exact audited commit or retained evidence artifact.
 6. Ambiguous states remain OPEN/MISSING rather than being promoted to PASS.
-
-## 5. Next closure sequence
-
-1. Verify current `main` CI evidence independently.
-2. Complete the CORE evidence index and control matrix.
-3. Obtain/retain organizational IAM/MFA and privileged-access evidence.
-4. Resolve branch-governance evidence (protection/ruleset/review authority).
-5. Produce final CORE LOCK record tied to an immutable commit SHA.
-6. Only after CORE LOCK, resume SHUUD work.
