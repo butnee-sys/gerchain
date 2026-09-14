@@ -1,7 +1,14 @@
 from __future__ import annotations
 
 from architecture.contracts import AdapterContract, BoundaryRequest, BoundaryResponse
-from architecture.ports import DEEToG3Adapter, G3ToCoreAdapter, CoreToEXIMAdapter, EXIMToI2BAdapter, I2BToEXIMAdapter
+from architecture.ports import (
+    DEAdapter,
+    DEEToG3Adapter,
+    G3ToCoreAdapter,
+    CoreToEXIMAdapter,
+    EXIMToI2BAdapter,
+    I2BToEXIMAdapter,
+)
 
 
 class GovernedBoundaryAdapter(AdapterContract):
@@ -18,6 +25,13 @@ class GovernedBoundaryAdapter(AdapterContract):
         if not isinstance(response, BoundaryResponse):
             raise TypeError(f"{self.name} downstream must return BoundaryResponse")
         return response
+
+
+class DEToDEEBoundaryAdapter(GovernedBoundaryAdapter, DEAdapter):
+    """Concrete top-level DE -> DEE boundary adapter."""
+
+    def __init__(self, downstream: AdapterContract):
+        super().__init__(downstream, "DE_TO_DEE")
 
 
 class DEEToG3BoundaryAdapter(GovernedBoundaryAdapter, DEEToG3Adapter):
@@ -47,6 +61,7 @@ class I2BToEXIMBoundaryAdapter(GovernedBoundaryAdapter, I2BToEXIMAdapter):
 
 __all__ = [
     "GovernedBoundaryAdapter",
+    "DEToDEEBoundaryAdapter",
     "DEEToG3BoundaryAdapter",
     "G3ToCoreBoundaryAdapter",
     "CoreToEXIMBoundaryAdapter",
