@@ -72,6 +72,12 @@ def test_external_port_exports_only_port_status():
 
 def test_core_modules_are_not_imported_by_shuud_integration():
     root = Path(__file__).resolve().parents[1]
-    integration = (root / "shuud" / "integration.py").read_text(encoding="utf-8")
+    integration_files = (
+        root / "apps" / "shuud" / "integration" / "shuud_exim_flow.py",
+        root / "apps" / "shuud" / "integration" / "shuud_governed_flow.py",
+    )
     forbidden = ("from escrow", "from witness", "from verifier", "from network.nef")
-    assert not any(token in integration for token in forbidden)
+    for integration in integration_files:
+        assert integration.is_file()
+        content = integration.read_text(encoding="utf-8")
+        assert not any(token in content for token in forbidden)
