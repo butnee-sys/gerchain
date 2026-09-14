@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Any
+from typing import Mapping
 
 from sqlalchemy import DateTime, Integer, String, Text, UniqueConstraint, select
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
@@ -67,16 +67,28 @@ class AtomicReleaseResult:
 
 
 class PostgreSQLAtomicRelease:
-    """One DB transaction for release, witness and durable outbox publication."""
+    """One DB transaction for governed release, value movement, witness and outbox."""
 
     def __init__(self, session_factory):
         self.session_factory = session_factory
 
-    def release(self, *, idempotency_key: str, transaction_id: str, escrow_id: str, source: str, destination: str, amount: int) -> AtomicReleaseResult:
+    @staticmethod
+    def _governance_passed(*, decision_status: str, authorization_status: str, trinity_proof: Mapping[str, bool], evidence_verified: bool) -> None:
+        if decision_status != "APPROVE":
+            raise PermissionError("release denied: decision is not APPROVE")
+        if authorization_status != "AUTHORIZED":
+            raise PermissionError("release denied: DEE authorization is not AUTHORIZED")
+        if not all(trinity_proof.get(key) is True for key in ("trust", "transparency", "performance")):
+            raise PermissionError("release denied: G-3 Trinity is not PASS")
+        if evidence_verified is not True:
+            raise PermissionError("release denied: evidence verification is not PASS")
+
+    def release(self, *, idempotency_key: str, transaction_id: str, escrow_id: str, source: str, destination: str, amount: int, decision_status: str, authorization_status: str, trinity_proof: Mapping[str, bool], evidence_verified: bool) -> AtomicReleaseResult:
         if not idempotency_key or not transaction_id or not escrow_id:
             raise ValueError("idempotency_key, transaction_id and escrow_id are required")
         if amount <= 0:
             raise ValueError("amount must be positive")
+        self._governance_passed(decision_status=decision_status, authorization_status=authorization_status, trinity_proof=trinity_proof, evidence_verified=evidence_verified)
         payload = {"transaction_id": transaction_id, "escrow_id": escrow_id, "source": source, "destination": destination, "amount": amount}
         fingerprint = IdempotencyEngine.fingerprint(payload)
         with self.session_factory() as session:
@@ -92,30 +104,25 @@ class PostgreSQLAtomicRelease:
             op = ReleaseOperation(idempotency_key=idempotency_key, fingerprint=fingerprint, transaction_id=transaction_id, escrow_id=escrow_id, destination=destination, amount=amount, state="PROCESSING", created_at=now, updated_at=now)
             session.add(op)
             session.flush()
-
             escrow = session.execute(select(ReleaseEscrow).where(ReleaseEscrow.escrow_id == escrow_id).with_for_update()).scalar_one()
             if escrow.state != "LOCKED":
                 raise ValueError(f"escrow is not releasable: {escrow.state}")
             if escrow.amount != amount:
                 raise ValueError("release amount does not match escrow amount")
-
             accounts = {}
             for account_id in sorted({source, destination}):
                 accounts[account_id] = session.execute(select(ReleaseAccount).where(ReleaseAccount.account_id == account_id).with_for_update()).scalar_one()
             if accounts[source].balance < amount:
                 raise ValueError("insufficient source balance")
-
             accounts[source].balance -= amount
             accounts[destination].balance += amount
             escrow.state = "RELEASED"
             escrow.updated_at = now
             session.add(ReleaseWitness(transaction_id=transaction_id, event_type="RELEASED", amount=amount, created_at=now))
-
             event_id = f"release:{transaction_id}"
             existing_event = session.execute(select(OutboxEvent).where(OutboxEvent.event_id == event_id).with_for_update()).scalar_one_or_none()
             if existing_event is None:
                 session.add(OutboxEvent(event_id=event_id, event_type="GERCHAIN_RELEASED", aggregate_id=transaction_id, payload_json=json.dumps(payload, sort_keys=True, separators=(",", ":")), state="PENDING", lease_until=None, attempts=0, created_at=now, updated_at=now))
-
             op.state = "COMPLETED"
             op.result_json = json.dumps({"state": "RELEASED", "event_id": event_id}, sort_keys=True, separators=(",", ":"))
             op.updated_at = now
