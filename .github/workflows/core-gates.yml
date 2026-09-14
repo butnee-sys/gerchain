@@ -2,7 +2,7 @@ name: core-gates
 
 on:
   push:
-    branches: ["feat/de-dee-gate01", "feat/gerchain-flow-hardening", "main"]
+    branches: ["feat/de-dee-gate01", "feat/gerchain-flow-hardening", "feat/core-gate02-capability-audit", "main"]
   pull_request:
 
 jobs:
@@ -68,6 +68,7 @@ jobs:
             tests/test_limit.py \
             tests/test_transaction_lifecycle.py \
             tests/test_gerchain_runtime.py \
+            tests/test_gerchain_capability_ownership.py \
             tests/test_governed_atomic_release.py \
             tests/test_nef_audit_pipeline.py \
             tests/test_nef_consensus_integration.py \
