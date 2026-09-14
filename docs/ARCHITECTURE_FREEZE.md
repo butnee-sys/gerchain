@@ -1,9 +1,11 @@
 # GerChain Architecture Freeze
 
-**Status:** Pre-freeze baseline
+**Status:** FROZEN — CORE VERIFIED BEFORE SHUUD
 **Date:** 2026-09-14
 
 This document defines the protected core architecture before SHUUD real E2E work.
+
+This status was reached only after the protected CORE baseline and capability ownership gates passed on the merged main ancestry. SHUUD is downstream of this freeze and must consume the core rather than redesign it.
 
 ## Canonical topology
 
@@ -54,4 +56,6 @@ I2B Connection Gateway
 
 A change to this topology, ownership model or mandatory invariant requires an explicit architecture change proposal and corresponding tests. Product-specific applications, including SHUUD, must consume the frozen core rather than redesign it.
 
-**Core is not declared frozen until the CORE_BASELINE completion criteria are green on the exact head commit.**
+## CORE verification rule
+
+The core is considered frozen only when the `CORE_BASELINE` completion criteria and capability reconciliation are green on the final commit being declared frozen. SHUUD real E2E is not a CORE acceptance criterion.
