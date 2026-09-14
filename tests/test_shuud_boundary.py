@@ -17,16 +17,9 @@ def test_shuud_does_not_import_core_or_exim_port_directly():
     root = Path(__file__).resolve().parents[1]
     shuud_dir = root / "shuud"
     forbidden = (
-        "from escrow",
-        "import escrow",
-        "from witness",
-        "import witness",
-        "from verifier",
-        "import verifier",
-        "from network",
-        "import network",
-        "from nef_gerchain_port",
-        "import nef_gerchain_port",
+        "from escrow", "import escrow", "from witness", "import witness",
+        "from verifier", "import verifier", "from network", "import network",
+        "from nef_gerchain_port", "import nef_gerchain_port",
     )
     offenders = []
     for path in shuud_dir.rglob("*.py"):
@@ -36,22 +29,17 @@ def test_shuud_does_not_import_core_or_exim_port_directly():
     assert offenders == [], f"SHUUD must use the application adapter boundary: {offenders}"
 
 
-def test_application_adapter_is_the_only_shuud_to_gateway_boundary():
+def test_composition_root_is_the_only_concrete_connector_wiring_boundary():
     root = Path(__file__).resolve().parents[1]
-    adapter_dir = root / "application_adapters"
-    connector_dir = root / "connectors"
-    gateway_dir = root / "gateway"
-    assert (adapter_dir / "shuud.py").exists()
-    assert (connector_dir / "exim_adapter.py").exists()
-    assert (gateway_dir / "open_multi_connector.py").exists()
-
-    adapter_text = (adapter_dir / "shuud.py").read_text(encoding="utf-8")
-    connector_text = (connector_dir / "exim_adapter.py").read_text(encoding="utf-8")
-    gateway_text = (gateway_dir / "open_multi_connector.py").read_text(encoding="utf-8")
-    assert "from connectors" in adapter_text
-    assert "from gateway" in adapter_text
-    assert "from nef_gerchain_port" in connector_text
-    assert "nef_gerchain_port" not in gateway_text
+    composition = (root / "composition" / "shuud.py").read_text(encoding="utf-8")
+    adapter = (root / "application_adapters" / "shuud.py").read_text(encoding="utf-8")
+    connector = (root / "connectors" / "exim_adapter.py").read_text(encoding="utf-8")
+    gateway = (root / "gateway" / "open_multi_connector.py").read_text(encoding="utf-8")
+    assert "EXIMConnectorAdapter" in composition
+    assert "EXIMConnectorAdapter" not in adapter
+    assert "from connectors" not in adapter
+    assert "from nef_gerchain_port" in connector
+    assert "nef_gerchain_port" not in gateway
 
 
 def test_port_adapters_are_the_only_core_import_boundary():
