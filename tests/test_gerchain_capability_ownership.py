@@ -15,8 +15,8 @@ def test_runtime_has_one_authoritative_value_flow_stack():
 
     assert runtime.money_engine.ledger is runtime.money_ledger
     assert runtime.money_engine.escrow is runtime.escrow_engine
-    assert runtime.escrow_service.escrow_engine is runtime.escrow_engine
-    assert runtime.escrow_service.money_engine is runtime.money_engine
+    assert runtime.escrow_service.escrow is runtime.escrow_engine
+    assert runtime.escrow_service.money is runtime.money_engine
     assert runtime.escrow_service.verifier is runtime.verifier
     assert runtime.escrow_service.idempotency is runtime.idempotency
 
