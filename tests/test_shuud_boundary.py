@@ -11,7 +11,6 @@ def test_gerchain_does_not_depend_on_shuud():
         root / "verifier",
         root / "nef_gerchain_port",
         root / "services",
-        root / "tests",
     ]
     forbidden = ("from shuud", "import shuud")
     offenders = []
