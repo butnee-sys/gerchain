@@ -18,6 +18,12 @@ from .contracts import (
 )
 from .digital_asset_record import DigitalAssetRecordEngine
 from .ownership import OwnershipRightsEngine
+from .revaluation import Revaluation, RevaluationEngine
+from .valuation import Valuation, ValuationBasis, ValuationEngine
+from .valuation_evidence import (
+    ValuationEvidence,
+    ValuationEvidenceEngine,
+)
 
 __all__ = [
     "Asset",
@@ -34,4 +40,11 @@ __all__ = [
     "OwnershipRight",
     "OwnershipRightsEngine",
     "OwnershipType",
+    "Revaluation",
+    "RevaluationEngine",
+    "Valuation",
+    "ValuationBasis",
+    "ValuationEngine",
+    "ValuationEvidence",
+    "ValuationEvidenceEngine",
 ]
