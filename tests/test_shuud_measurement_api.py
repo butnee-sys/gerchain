@@ -6,7 +6,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from pytest import approx
 
-from shuud.api import _PERSISTENCE, router
+from apps.shuud.api import _PERSISTENCE, router
 
 
 def _client() -> TestClient:
