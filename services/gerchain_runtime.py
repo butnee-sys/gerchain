@@ -11,6 +11,7 @@ from dee_security.root_of_trust import RootOfTrust
 from escrow.engine import EscrowEngine
 from money.engine import MoneyEngine
 from money.ledger import MoneyLedger
+from persistence.release_adapter import PostgreSQLReleaseAdapter, ReleaseRequest
 from services.authoritative_escrow import AuthoritativeEscrowService
 from verifier.v80_independent_verifier import V80IndependentVerifier
 from witness.chain import WitnessChain
@@ -46,10 +47,22 @@ class GerchainRuntime:
         # One authoritative mutation-boundary guard shared by all escrow operations.
         self.idempotency = IdempotencyEngine()
         self.escrow_service = AuthoritativeEscrowService(escrow_engine=self.escrow_engine, money_engine=self.money_engine, verifier=self.verifier, idempotency=self.idempotency)
+        self._postgres_release: PostgreSQLReleaseAdapter | None = None
 
         self.holds = HoldEngine()
         self.limits = LimitEngine()
         self._transactions: dict[str, TransactionStateMachine] = {}
+
+    def configure_postgres_release(self, session_factory) -> PostgreSQLReleaseAdapter:
+        """Attach the durable PostgreSQL release boundary without replacing in-memory mode."""
+        from persistence.atomic_release import PostgreSQLAtomicRelease
+        self._postgres_release = PostgreSQLReleaseAdapter(PostgreSQLAtomicRelease(session_factory))
+        return self._postgres_release
+
+    def release_postgres(self, request: ReleaseRequest):
+        if self._postgres_release is None:
+            raise RuntimeError("PostgreSQL release boundary is not configured")
+        return self._postgres_release.execute(request)
 
     def create_transaction(self, transaction_id: str) -> TransactionStateMachine:
         if not transaction_id:
