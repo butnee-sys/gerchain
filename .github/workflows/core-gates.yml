@@ -40,6 +40,7 @@ jobs:
           pytest -q \
             tests/test_core_structure.py \
             tests/test_production_runtime_factory.py \
+            tests/test_nef_core_structure.py \
             tests/test_boundary_adapters.py \
             tests/test_de_dee_adapter.py \
             tests/test_composition_root.py \
