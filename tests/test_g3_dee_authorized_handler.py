@@ -1,5 +1,6 @@
 import base64
 
+from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
 from architecture.contracts import ActorType, BoundaryRequest
@@ -37,7 +38,10 @@ def prepare_locked(runtime):
 
 def build_signed_release():
     private = Ed25519PrivateKey.generate()
-    public = private.public_key().public_bytes_raw()
+    public = private.public_key().public_bytes(
+        serialization.Encoding.Raw,
+        serialization.PublicFormat.Raw,
+    )
     root = RootOfTrust("DEE-OWNER-001", base64.b64encode(public).decode("ascii"))
     manifest = build_manifest(
         version=1,
@@ -56,7 +60,7 @@ def build_signed_release():
     return root, manifest, release
 
 
-def request(root, manifest, release):
+def request(manifest, release):
     return BoundaryRequest(
         actor_type=ActorType.COMPANY,
         actor_id="INSURER-001",
@@ -87,10 +91,14 @@ def test_signed_dee_release_reaches_authoritative_core():
     runtime = build_runtime()
     prepare_locked(runtime)
     root, manifest, release = build_signed_release()
-    core = G3CoreRuntimeHandler(runtime)
-    handler = G3DEEAuthorizedHandler(core, root=root, policy=AuthorizationPolicy(), gate=ReleaseAuthorization())
+    handler = G3DEEAuthorizedHandler(
+        G3CoreRuntimeHandler(runtime),
+        root=root,
+        policy=AuthorizationPolicy(),
+        gate=ReleaseAuthorization(),
+    )
 
-    response = handler(request(root, manifest, release))
+    response = handler(request(manifest, release))
 
     assert response.accepted is True
     assert runtime.get_escrow_state()["state"] == "RELEASED"
@@ -103,11 +111,15 @@ def test_tampered_manifest_is_denied_before_core_release():
     prepare_locked(runtime)
     root, manifest, release = build_signed_release()
     manifest["commit_sha"] = "tampered"
-    core = G3CoreRuntimeHandler(runtime)
-    handler = G3DEEAuthorizedHandler(core, root=root, policy=AuthorizationPolicy(), gate=ReleaseAuthorization())
+    handler = G3DEEAuthorizedHandler(
+        G3CoreRuntimeHandler(runtime),
+        root=root,
+        policy=AuthorizationPolicy(),
+        gate=ReleaseAuthorization(),
+    )
 
     try:
-        handler(request(root, manifest, release))
+        handler(request(manifest, release))
     except Exception as exc:
         assert "authorization failed" in str(exc)
     else:
@@ -122,14 +134,18 @@ def test_replayed_release_id_is_denied():
     prepare_locked(runtime)
     root, manifest, release = build_signed_release()
     gate = ReleaseAuthorization()
-    handler = G3DEEAuthorizedHandler(G3CoreRuntimeHandler(runtime), root=root, policy=AuthorizationPolicy(), gate=gate)
+    handler = G3DEEAuthorizedHandler(
+        G3CoreRuntimeHandler(runtime),
+        root=root,
+        policy=AuthorizationPolicy(),
+        gate=gate,
+    )
 
-    handler(request(root, manifest, release))
+    handler(request(manifest, release))
     assert runtime.get_balance("BENEFICIARY") == AMOUNT
 
-    # A replay is rejected by DEE before the Core runtime can move value again.
     try:
-        handler(request(root, manifest, release))
+        handler(request(manifest, release))
     except Exception as exc:
         assert "replayed release_id" in str(exc)
     else:
