@@ -1,8 +1,8 @@
 from architecture.contracts import ActorType, BoundaryRequest, BoundaryResponse
 from services.exim_gateway import EXIMGateway
 from services.i2b_service_center import ServiceCenter
-from services.shuud_exim_flow import SHUUDEximFlow
-from services.shuud_service import SHUUDService
+from apps.shuud.integration.shuud_exim_flow import SHUUDEximFlow
+from apps.shuud.service import SHUUDService
 
 
 def make_request(**payload):
