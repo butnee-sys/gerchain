@@ -10,8 +10,22 @@ from architecture.governed_flow_adapters import (
 )
 
 
+class _LayerEndpoint(AdapterContract):
+    """A layer endpoint whose only downstream path is its boundary adapter."""
+
+    def __init__(self, downstream: AdapterContract) -> None:
+        self._downstream = downstream
+
+    def handle(self, request: BoundaryRequest) -> BoundaryResponse:
+        return self._downstream.handle(request)
+
+
 class CanonicalComposition:
-    """Single composition root for the frozen DE -> ... -> I2B topology."""
+    """Single composition root for the frozen DE -> ... -> I2B topology.
+
+    The root wires layer endpoints to their explicit boundary adapters. It
+    never constructs or duplicates an operational engine.
+    """
 
     def __init__(
         self,
@@ -22,16 +36,19 @@ class CanonicalComposition:
         exim: AdapterContract,
         i2b: AdapterContract,
     ) -> None:
-        # Compose backwards from the destination so every layer is reached
-        # through exactly one explicit adapter.
-        self.exim_to_i2b = EXIMToI2BBoundaryAdapter(i2b)
-        self.core_to_exim = CoreToEXIMBoundaryAdapter(self.exim_to_i2b)
-        self.g3_to_core = G3ToCoreBoundaryAdapter(self.core_to_exim)
-        self.dee_to_g3 = DEEToG3BoundaryAdapter(self.g3_to_core)
-        self.de_to_dee = DEToDEEBoundaryAdapter(self.dee_to_g3)
+        # Build the chain from the last boundary backwards. The supplied
+        # endpoints represent the actual layer implementations; each layer
+        # crosses its next boundary only through the corresponding adapter.
+        exim_to_i2b = EXIMToI2BBoundaryAdapter(i2b)
+        exim_endpoint = _LayerEndpoint(exim_to_i2b)
+        core_to_exim = CoreToEXIMBoundaryAdapter(exim_endpoint)
+        core_endpoint = _LayerEndpoint(core_to_exim)
+        g3_to_core = G3ToCoreBoundaryAdapter(core_endpoint)
+        g3_endpoint = _LayerEndpoint(g3_to_core)
+        dee_to_g3 = DEEToG3BoundaryAdapter(g3_endpoint)
+        dee_endpoint = _LayerEndpoint(dee_to_g3)
 
-        # Retain injected endpoints for inspection/testing. They are not
-        # called directly by the public entry point.
+        self.de_to_dee = DEToDEEBoundaryAdapter(dee_endpoint)
         self.dee = dee
         self.g3 = g3
         self.core = core
