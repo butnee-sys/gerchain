@@ -97,13 +97,28 @@ class PostgreSQLIdempotencyStore:
             return result
 
     def recover_expired(self, limit: int = 100) -> int:
+        """Release expired worker leases without falsely extending them.
+
+        Recovery only makes the operation claimable again. It does not assert
+        that an underlying value movement was undone or completed; callers must
+        reconcile the authoritative operation before replaying value flow.
+        """
         now = datetime.now(timezone.utc)
         recovered = 0
         with self.session_factory() as session:
-            rows = session.execute(select(IdempotencyRecordModel).where(IdempotencyRecordModel.state == "PROCESSING", IdempotencyRecordModel.lease_until.is_not(None), IdempotencyRecordModel.lease_until <= now).with_for_update(skip_locked=True).limit(limit)).scalars().all()
+            rows = session.execute(
+                select(IdempotencyRecordModel)
+                .where(
+                    IdempotencyRecordModel.state == "PROCESSING",
+                    IdempotencyRecordModel.lease_until.is_not(None),
+                    IdempotencyRecordModel.lease_until <= now,
+                )
+                .with_for_update(skip_locked=True)
+                .limit(limit)
+            ).scalars().all()
             for row in rows:
                 row.state = "PROCESSING"
-                row.lease_until = now + timedelta(seconds=self.lease_seconds)
+                row.lease_until = None
                 row.updated_at = now
                 recovered += 1
             session.commit()
