@@ -10,13 +10,13 @@ from dee_security import AuthorizationPolicy, RootOfTrust
 from dee_security.manifest import build_manifest
 from dee_security.signing import sign_release
 from nef_gerchain_port import EscrowRequest, ExternalPortExport, ExternalPortImport
-from shuud.evidence import create_evidence_envelope
-from shuud.incident import create_incident
-from shuud.policy import GateStatus, PolicyInput
-from shuud.release import authorize_release
-from shuud.shiid import Decision, decide
-from shuud.verify import verify_incident
-from shuud.witness import record_evidence_locked, record_release_authorized, record_shiid_decision
+from apps.shuud.evidence import create_evidence_envelope
+from apps.shuud.incident import create_incident
+from apps.shuud.policy import GateStatus, PolicyInput
+from apps.shuud.release import authorize_release
+from apps.shuud.shiid import Decision, decide
+from apps.shuud.verify import verify_incident
+from apps.shuud.witness import record_evidence_locked, record_release_authorized, record_shiid_decision
 
 ITERATIONS = 10
 AMOUNT_MNT = 1_250_000
