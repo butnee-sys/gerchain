@@ -8,13 +8,13 @@ from dee_security import AuthorizationPolicy, RootOfTrust
 from dee_security.manifest import build_manifest
 from dee_security.signing import sign_release
 from nef_gerchain_port import EscrowRequest, ExternalPortExport, ExternalPortImport
-from shuud.evidence import create_evidence_envelope
-from shuud.incident import create_incident
-from shuud.policy import GateStatus, PolicyInput
-from shuud.release import authorize_release
-from shuud.shiid import Decision, decide
-from shuud.verify import verify_incident
-from shuud.witness import record_evidence_locked, record_release_authorized, record_shiid_decision
+from apps.shuud.evidence import create_evidence_envelope
+from apps.shuud.incident import create_incident
+from apps.shuud.policy import GateStatus, PolicyInput
+from apps.shuud.release import authorize_release
+from apps.shuud.shiid import Decision, decide
+from apps.shuud.verify import verify_incident
+from apps.shuud.witness import record_evidence_locked, record_release_authorized, record_shiid_decision
 
 
 def _root(private_key: Ed25519PrivateKey) -> RootOfTrust:
@@ -76,7 +76,7 @@ def test_shuud_full_dee_flow_through_exim_port():
 
     escrow = port.create_escrow(
         EscrowRequest(
-            escrow_id="ESCROW-SHUUD-E2E-001",
+            escrow_id="ESCROW-SHUUD-DEE-E2E-001",
             amount=1_250_000,
             currency="MNT",
             settlement_provider="NEF",
@@ -86,7 +86,7 @@ def test_shuud_full_dee_flow_through_exim_port():
     escrow.transition("FUNDED", "2026-09-13T16:00:08Z", {"incident_id": incident.incident_id})
     escrow.transition("LOCKED", "2026-09-13T16:00:09Z", {"incident_id": incident.incident_id})
 
-    authorization = authorize_release(decision, escrow_id="ESCROW-SHUUD-E2E-001")
+    authorization = authorize_release(decision, escrow_id="ESCROW-SHUUD-DEE-E2E-001")
     record_release_authorized(witness, authorization, timestamp="2026-09-13T16:00:10Z")
 
     private = Ed25519PrivateKey.generate()
