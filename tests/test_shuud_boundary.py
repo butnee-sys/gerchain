@@ -38,6 +38,7 @@ def test_composition_root_is_the_only_concrete_connector_wiring_boundary():
     assert "EXIMConnectorAdapter" in composition
     assert "EXIMConnectorAdapter" not in adapter
     assert "from connectors" not in adapter
+    assert "from composition" not in adapter
     assert "from nef_gerchain_port" in connector
     assert "nef_gerchain_port" not in gateway
 
