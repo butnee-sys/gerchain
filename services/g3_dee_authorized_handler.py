@@ -8,15 +8,25 @@ calling the authoritative GerChain runtime.
 
 from __future__ import annotations
 
-from typing import Any, Mapping
+from typing import Mapping
 
-from architecture.contracts import BoundaryError, BoundaryRequest, BoundaryResponse
-from dee_security import AuthorizationPolicy, ReleaseAuthorization, RootOfTrust, authorize_release
+from architecture.contracts import (
+    AdapterContract,
+    BoundaryError,
+    BoundaryRequest,
+    BoundaryResponse,
+)
+from dee_security import (
+    AuthorizationPolicy,
+    ReleaseAuthorization,
+    RootOfTrust,
+    authorize_release,
+)
 from dee_security.signing import SignedRelease
 from services.g3_core_handler import G3CoreRuntimeHandler
 
 
-class G3DEEAuthorizedHandler:
+class G3DEEAuthorizedHandler(AdapterContract):
     """Require DEE signed release authorization before Core value movement."""
 
     def __init__(
@@ -33,6 +43,9 @@ class G3DEEAuthorizedHandler:
         self._root = root
         self._policy = policy
         self._gate = gate
+
+    def handle(self, request: BoundaryRequest) -> BoundaryResponse:
+        return self.__call__(request)
 
     def __call__(self, request: BoundaryRequest) -> BoundaryResponse:
         if not isinstance(request, BoundaryRequest):
@@ -67,8 +80,6 @@ class G3DEEAuthorizedHandler:
             raise BoundaryError(f"DEE release authorization failed: {exc}") from exc
 
         authorized_payload = dict(payload)
-        # Compatibility field for the existing Core handler. The actual
-        # authority is the cryptographically verified DEE release above.
         authorized_payload["authorization"] = {
             "status": "AUTHORIZED",
             "release_id": release.release_id,
