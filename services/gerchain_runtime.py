@@ -149,9 +149,24 @@ class GerchainRuntime:
     def lock(self, *, transaction_id: str, timestamp: str, evidence: Any):
         return self.escrow_service.lock(transaction_id=transaction_id, timestamp=timestamp, evidence=evidence)
 
-    def release(self, *, transaction_id: str, destination: str, timestamp: str, evidence: Any, root: RootOfTrust | None = None, owner_id: str | None = None, authorized: bool = False, evidence_verified: bool = False, trinity_proof: Mapping[str, bool] | None = None):
+    def release(self, *, transaction_id: str, destination: str, timestamp: str, evidence: Any, root: RootOfTrust | None = None, owner_id: str | None = None, authorized: bool = False, evidence_verified: bool = False, trinity_proof: Mapping[str, bool] | None = None, source: str | None = None, idempotency_key: str | None = None):
         if root is None or owner_id is None or trinity_proof is None:
             raise ValueError("DEE authorization context is required for release")
+        if self.is_postgresql_authoritative:
+            if not source:
+                raise ValueError("source is required for PostgreSQL authoritative release")
+            return self.release_postgres(ReleaseRequest(
+                idempotency_key=idempotency_key or transaction_id,
+                transaction_id=transaction_id,
+                escrow_id=self.escrow_engine.escrow_id,
+                source=source,
+                destination=destination,
+                amount=self.escrow_engine.amount,
+                decision_status="APPROVE",
+                authorization_status="AUTHORIZED" if authorized else "DENIED",
+                trinity_proof=trinity_proof,
+                evidence_verified=evidence_verified,
+            ))
         return self.escrow_service.release(transaction_id=transaction_id, destination=destination, timestamp=timestamp, evidence=evidence, root=root, owner_id=owner_id, authorized=authorized, evidence_verified=evidence_verified, trinity_proof=trinity_proof)
 
     def refund(self, *, transaction_id: str, destination: str, timestamp: str, evidence: Any, root: RootOfTrust | None = None, owner_id: str | None = None, authorized: bool = False, evidence_verified: bool = False, trinity_proof: Mapping[str, bool] | None = None):
