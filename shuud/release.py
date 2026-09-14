@@ -4,7 +4,6 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 import hashlib
 import json
-import os
 from typing import Any
 
 from application_adapters import SHUUDApplicationAdapter
@@ -32,40 +31,13 @@ def authorize_release(decision: SHIIDDecision, *, escrow_id: str) -> ReleaseAuth
     if not escrow_id or not escrow_id.strip():
         raise ValueError("escrow_id is required")
 
-    payload = {
-        "incident_id": decision.incident_id,
-        "escrow_id": escrow_id.strip(),
-        "rule_version": decision.rule_version,
-        "decision": decision.decision.value,
-        "reasons": list(decision.reasons),
-    }
-    return ReleaseAuthorization(
-        incident_id=decision.incident_id,
-        escrow_id=escrow_id.strip(),
-        rule_version=decision.rule_version,
-        authorization_hash=_authorization_hash(payload),
-    )
+    payload = {"incident_id": decision.incident_id, "escrow_id": escrow_id.strip(), "rule_version": decision.rule_version, "decision": decision.decision.value, "reasons": list(decision.reasons)}
+    return ReleaseAuthorization(incident_id=decision.incident_id, escrow_id=escrow_id.strip(), rule_version=decision.rule_version, authorization_hash=_authorization_hash(payload))
 
 
-def release_escrow(
-    escrow: Any,
-    authorization: ReleaseAuthorization,
-    *,
-    credential: str | None = None,
-    timestamp: str | None = None,
-    evidence: Any | None = None,
-):
-    """Delegate LOCKED -> RELEASED through the authenticated application boundary."""
-    gateway_credential = credential or os.getenv("SHUUD_EXIM_CREDENTIAL", "")
-    adapter = SHUUDApplicationAdapter(credential=gateway_credential)
-    return adapter.release_escrow(
-        escrow,
-        authorization_hash=authorization.authorization_hash,
-        incident_id=authorization.incident_id,
-        rule_version=authorization.rule_version,
-        timestamp=timestamp or datetime.now(timezone.utc).isoformat(),
-        evidence=evidence,
-    )
+def release_escrow(escrow: Any, authorization: ReleaseAuthorization, *, app_adapter: SHUUDApplicationAdapter, timestamp: str | None = None, evidence: Any | None = None):
+    """Delegate LOCKED -> RELEASED through the already-composed application boundary."""
+    return app_adapter.release_escrow(escrow, authorization_hash=authorization.authorization_hash, incident_id=authorization.incident_id, rule_version=authorization.rule_version, timestamp=timestamp or datetime.now(timezone.utc).isoformat(), evidence=evidence)
 
 
 __all__ = ["ReleaseAuthorization", "authorize_release", "release_escrow"]
