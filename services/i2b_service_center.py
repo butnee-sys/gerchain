@@ -3,7 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Callable, Mapping
 
-from architecture.contracts import BoundaryRequest, BoundaryResponse
+from architecture.contracts import ActorType, BoundaryRequest, BoundaryResponse
+from architecture.ports import MultiConnectorAdapter
 
 
 @dataclass(frozen=True)
@@ -36,41 +37,41 @@ class ServiceCenter:
     def dispatch(self, request: BoundaryRequest) -> BoundaryResponse:
         service = self._services.get(request.activity)
         if service is None:
-            return BoundaryResponse(
-                accepted=False,
-                activity=request.activity,
-                correlation_id=request.correlation_id,
-                reason=f"Service not registered: {request.activity}",
-            )
+            return BoundaryResponse(False, request.activity, request.correlation_id, reason=f"Service not registered: {request.activity}")
         result = service.handler(request)
         if isinstance(result, BoundaryResponse):
             return result
-        return BoundaryResponse(
-            accepted=True,
-            activity=request.activity,
-            correlation_id=request.correlation_id,
-            data=dict(result),
-        )
+        return BoundaryResponse(True, request.activity, request.correlation_id, data=dict(result))
 
 
 class I2BConnectionGateway:
-    """I2B-ийн нэг цэгийн холболт: ServiceCenter + actor connectors."""
+    """I2B-ийн нэг цэгийн холболт: ServiceCenter + actor connectors.
 
-    def __init__(self, *, service_center: ServiceCenter, connector: Any | None = None) -> None:
+    ServiceCenter нь gateway-ийн дотор байна. Connector routing нь
+    State/Company/Person actor type-аар MultiConnectorAdapter-ээр хийгдэнэ.
+    ``connector=`` нь хуучин нэг connector хэрэглээтэй нийцүүлэх нөөц зам.
+    """
+
+    def __init__(
+        self,
+        *,
+        service_center: ServiceCenter,
+        connector: Any | None = None,
+        connectors: Mapping[ActorType, Any] | None = None,
+    ) -> None:
         self.service_center = service_center
         self.connector = connector
+        self.connectors = dict(connectors or {})
+        self.multi_connector = MultiConnectorAdapter(self.connectors) if self.connectors else None
 
     def handle(self, request: BoundaryRequest) -> BoundaryResponse:
         if request.activity in self.service_center.names():
             return self.service_center.dispatch(request)
+        if self.multi_connector is not None:
+            return self.multi_connector.handle(request)
         if self.connector is not None:
             return self.connector.handle(request)
-        return BoundaryResponse(
-            accepted=False,
-            activity=request.activity,
-            correlation_id=request.correlation_id,
-            reason="No service or connector registered for activity",
-        )
+        return BoundaryResponse(False, request.activity, request.correlation_id, reason="No service or connector registered for activity")
 
 
 __all__ = ["ServiceDefinition", "ServiceCenter", "I2BConnectionGateway"]

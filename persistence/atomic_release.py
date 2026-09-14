@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from typing import Mapping
 
 from sqlalchemy import DateTime, Integer, String, Text, UniqueConstraint, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 from core.idempotency import IdempotencyConflictError, IdempotencyEngine
@@ -91,43 +92,83 @@ class PostgreSQLAtomicRelease:
         self._governance_passed(decision_status=decision_status, authorization_status=authorization_status, trinity_proof=trinity_proof, evidence_verified=evidence_verified)
         payload = {"transaction_id": transaction_id, "escrow_id": escrow_id, "source": source, "destination": destination, "amount": amount}
         fingerprint = IdempotencyEngine.fingerprint(payload)
-        with self.session_factory() as session:
-            op = session.execute(select(ReleaseOperation).where(ReleaseOperation.idempotency_key == idempotency_key).with_for_update()).scalar_one_or_none()
-            if op is not None:
-                if op.fingerprint != fingerprint:
-                    raise IdempotencyConflictError(f"release idempotency conflict: {idempotency_key}")
-                if op.state == "COMPLETED":
-                    return AtomicReleaseResult(transaction_id, escrow_id, destination, amount, replay=True)
-                raise RuntimeError(f"release already processing: {idempotency_key}")
 
-            now = datetime.now(timezone.utc)
-            op = ReleaseOperation(idempotency_key=idempotency_key, fingerprint=fingerprint, transaction_id=transaction_id, escrow_id=escrow_id, destination=destination, amount=amount, state="PROCESSING", created_at=now, updated_at=now)
-            session.add(op)
-            session.flush()
-            escrow = session.execute(select(ReleaseEscrow).where(ReleaseEscrow.escrow_id == escrow_id).with_for_update()).scalar_one()
-            if escrow.state != "LOCKED":
-                raise ValueError(f"escrow is not releasable: {escrow.state}")
-            if escrow.amount != amount:
-                raise ValueError("release amount does not match escrow amount")
-            accounts = {}
-            for account_id in sorted({source, destination}):
-                accounts[account_id] = session.execute(select(ReleaseAccount).where(ReleaseAccount.account_id == account_id).with_for_update()).scalar_one()
-            if accounts[source].balance < amount:
-                raise ValueError("insufficient source balance")
-            accounts[source].balance -= amount
-            accounts[destination].balance += amount
-            escrow.state = "RELEASED"
-            escrow.updated_at = now
-            session.add(ReleaseWitness(transaction_id=transaction_id, event_type="RELEASED", amount=amount, created_at=now))
-            event_id = f"release:{transaction_id}"
-            existing_event = session.execute(select(OutboxEvent).where(OutboxEvent.event_id == event_id).with_for_update()).scalar_one_or_none()
-            if existing_event is None:
-                session.add(OutboxEvent(event_id=event_id, event_type="GERCHAIN_RELEASED", aggregate_id=transaction_id, payload_json=json.dumps(payload, sort_keys=True, separators=(",", ":")), state="PENDING", lease_until=None, attempts=0, created_at=now, updated_at=now))
-            op.state = "COMPLETED"
-            op.result_json = json.dumps({"state": "RELEASED", "event_id": event_id}, sort_keys=True, separators=(",", ":"))
-            op.updated_at = now
-            session.commit()
-            return AtomicReleaseResult(transaction_id, escrow_id, destination, amount)
+        with self.session_factory() as session:
+            while True:
+                op = session.execute(
+                    select(ReleaseOperation)
+                    .where(ReleaseOperation.idempotency_key == idempotency_key)
+                    .with_for_update()
+                ).scalar_one_or_none()
+                if op is not None:
+                    if op.fingerprint != fingerprint:
+                        raise IdempotencyConflictError(f"release idempotency conflict: {idempotency_key}")
+                    if op.state == "COMPLETED":
+                        return AtomicReleaseResult(transaction_id, escrow_id, destination, amount, replay=True)
+                    raise RuntimeError(f"release already processing: {idempotency_key}")
+
+                now = datetime.now(timezone.utc)
+                op = ReleaseOperation(
+                    idempotency_key=idempotency_key,
+                    fingerprint=fingerprint,
+                    transaction_id=transaction_id,
+                    escrow_id=escrow_id,
+                    destination=destination,
+                    amount=amount,
+                    state="PROCESSING",
+                    created_at=now,
+                    updated_at=now,
+                )
+                session.add(op)
+                try:
+                    # Concurrent callers can both observe no row. The unique
+                    # idempotency key is the DB serialization point; a loser
+                    # rolls back its speculative insert and re-reads the winner.
+                    session.flush()
+                except IntegrityError:
+                    session.rollback()
+                    continue
+
+                escrow = session.execute(select(ReleaseEscrow).where(ReleaseEscrow.escrow_id == escrow_id).with_for_update()).scalar_one()
+                if escrow.state != "LOCKED":
+                    raise ValueError(f"escrow is not releasable: {escrow.state}")
+                if escrow.amount != amount:
+                    raise ValueError("release amount does not match escrow amount")
+
+                accounts = {}
+                for account_id in sorted({source, destination}):
+                    accounts[account_id] = session.execute(
+                        select(ReleaseAccount).where(ReleaseAccount.account_id == account_id).with_for_update()
+                    ).scalar_one()
+                if accounts[source].balance < amount:
+                    raise ValueError("insufficient source balance")
+
+                accounts[source].balance -= amount
+                accounts[destination].balance += amount
+                escrow.state = "RELEASED"
+                escrow.updated_at = now
+                session.add(ReleaseWitness(transaction_id=transaction_id, event_type="RELEASED", amount=amount, created_at=now))
+
+                event_id = f"release:{transaction_id}"
+                existing_event = session.execute(select(OutboxEvent).where(OutboxEvent.event_id == event_id).with_for_update()).scalar_one_or_none()
+                if existing_event is None:
+                    session.add(OutboxEvent(
+                        event_id=event_id,
+                        event_type="GERCHAIN_RELEASED",
+                        aggregate_id=transaction_id,
+                        payload_json=json.dumps(payload, sort_keys=True, separators=(",", ":")),
+                        state="PENDING",
+                        lease_until=None,
+                        attempts=0,
+                        created_at=now,
+                        updated_at=now,
+                    ))
+
+                op.state = "COMPLETED"
+                op.result_json = json.dumps({"state": "RELEASED", "event_id": event_id}, sort_keys=True, separators=(",", ":"))
+                op.updated_at = now
+                session.commit()
+                return AtomicReleaseResult(transaction_id, escrow_id, destination, amount)
 
 
 def initialize_atomic_release_schema(engine) -> None:

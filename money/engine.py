@@ -170,16 +170,9 @@ class MoneyEngine:
                 evidence=evidence,
             )
             self.ledger.transfer(source, destination, amount)
-            self.escrow.transition(
-                target_state,
-                timestamp,
-                evidence,
-                root=root,
-                owner_id=owner_id,
-                authorized=authorized,
-                evidence_verified=evidence_verified,
-                trinity_proof=trinity_proof,
-            )
+            # DEE/G-3 authorization is already the governing boundary above.
+            # EscrowEngine owns only the deterministic lifecycle transition.
+            self.escrow.transition(target_state, timestamp, evidence)
             record = MoneyRecord(
                 transaction_id=transaction_id,
                 sequence=sequence,

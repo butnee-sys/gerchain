@@ -6,14 +6,7 @@ import pytest
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
 
-from persistence.atomic_release import (
-    ReleaseAccount,
-    ReleaseEscrow,
-    ReleaseOperation,
-    ReleaseWitness,
-    PostgreSQLAtomicRelease,
-    initialize_atomic_release_schema,
-)
+from persistence.atomic_release import ReleaseAccount, ReleaseEscrow, ReleaseOperation, ReleaseWitness, PostgreSQLAtomicRelease, initialize_atomic_release_schema
 from persistence.governed_atomic_release import GovernedAtomicRelease, ReleaseGovernance
 from persistence.recovery_outbox import OutboxEvent
 
@@ -43,29 +36,14 @@ def release_fixture():
 
 
 def governance():
-    return ReleaseGovernance(
-        decision="APPROVE",
-        authorization="AUTHORIZED",
-        trust="PASS",
-        transparency="PASS",
-        performance="PASS",
-        evidence_verified=True,
-    )
+    return ReleaseGovernance(decision="APPROVE", authorization="AUTHORIZED", trust="PASS", transparency="PASS", performance="PASS", evidence_verified=True)
 
 
 def test_100_concurrent_same_release_moves_value_once(release_fixture):
     engine, governed, source, destination, escrow_id, transaction_id = release_fixture
 
-    def invoke(index):
-        return governed.release(
-            governance=governance(),
-            idempotency_key="CONC-SAME-KEY",
-            transaction_id=transaction_id,
-            escrow_id=escrow_id,
-            source=source,
-            destination=destination,
-            amount=2_000_000,
-        )
+    def invoke(_index):
+        return governed.release(governance=governance(), idempotency_key="CONC-SAME-KEY", transaction_id=transaction_id, escrow_id=escrow_id, source=source, destination=destination, amount=2_000_000)
 
     results = []
     errors = []
@@ -97,3 +75,11 @@ def test_100_concurrent_same_release_moves_value_once(release_fixture):
     assert len(witnesses) == 1
     assert len(events) == 1
     assert events[0].state == "PENDING"
+
+
+def test_same_idempotency_key_with_different_transaction_is_conflict(release_fixture):
+    engine, governed, source, destination, escrow_id, transaction_id = release_fixture
+    governed.release(governance=governance(), idempotency_key="CONC-CONFLICT-KEY", transaction_id=transaction_id, escrow_id=escrow_id, source=source, destination=destination, amount=2_000_000)
+
+    with pytest.raises(Exception, match="idempotency conflict"):
+        governed.release(governance=governance(), idempotency_key="CONC-CONFLICT-KEY", transaction_id=f"{transaction_id}-OTHER", escrow_id=escrow_id, source=source, destination=destination, amount=2_000_000)

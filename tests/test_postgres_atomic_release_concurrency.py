@@ -6,14 +6,15 @@ import pytest
 from sqlalchemy import create_engine, func, select
 from sqlalchemy.orm import Session
 
-from persistence.atomic_release import (
-    PostgreSQLAtomicRelease,
-    ReleaseAccount,
-    ReleaseEscrow,
-    ReleaseOperation,
-    ReleaseWitness,
-    initialize_atomic_release_schema,
-)
+from persistence.atomic_release import PostgreSQLAtomicRelease, ReleaseAccount, ReleaseEscrow, ReleaseOperation, ReleaseWitness, initialize_atomic_release_schema
+
+
+GOVERNANCE = {
+    "decision_status": "APPROVE",
+    "authorization_status": "AUTHORIZED",
+    "trinity_proof": {"trust": True, "transparency": True, "performance": True},
+    "evidence_verified": True,
+}
 
 
 @pytest.mark.integration
@@ -24,7 +25,6 @@ def test_100_concurrent_releases_exactly_one_wins():
 
     engine = create_engine(url, pool_pre_ping=True, pool_size=20, max_overflow=80)
     initialize_atomic_release_schema(engine)
-
     now = datetime.now(timezone.utc)
     with Session(engine) as session:
         session.merge(ReleaseAccount(account_id="CONC-SRC", balance=2_000_000, updated_at=now))
@@ -42,8 +42,9 @@ def test_100_concurrent_releases_exactly_one_wins():
                 source="CONC-SRC",
                 destination="CONC-DST",
                 amount=2_000_000,
+                **GOVERNANCE,
             )
-        except Exception as exc:  # competing requests may observe processing/terminal state
+        except Exception as exc:
             return exc
 
     with ThreadPoolExecutor(max_workers=100) as pool:
@@ -57,7 +58,9 @@ def test_100_concurrent_releases_exactly_one_wins():
         witnesses = session.execute(select(func.count(ReleaseWitness.id)).where(ReleaseWitness.transaction_id == "CONC-TX-001")).scalar_one()
 
     successes = [r for r in results if not isinstance(r, Exception) and not r.replay]
+    replays = [r for r in results if not isinstance(r, Exception) and r.replay]
     assert len(successes) == 1
+    assert len(replays) == 99
     assert source.balance == 0
     assert destination.balance == 2_000_000
     assert escrow.state == "RELEASED"
