@@ -1,14 +1,25 @@
 # GATE-02 Status
 
-Gate-01 is merged and green. Gate-02 now audits GerChain capability ownership
-before CORE freeze.
+**Status: CLOSED — capability ownership reconciliation complete.**
+**Final pre-SHUUD main head:** `9f952000dc66e52508d36a428d58224681a39aa9`
 
-Current exact head under audit:
+Gate-01 and Gate-02 are merged and verified before SHUUD work.
 
-`d60c895f250454bcbf1b160c9bc5faa73caa6ff3`
+## Reconciliation contract
 
-The gate intentionally adds no new financial or asset-truth engine. It adds
-only an ownership audit, classification contract, and CI enforcement.
+- Every conceptual GerChain capability has one authoritative owner or an explicit non-engine classification.
+- `MISSING = 0`.
+- `DUPLICATE = 0`.
+- No new operational engine was introduced merely to satisfy a conceptual capability.
 
-Next action: run the complete core gate and reconcile any concrete failure
-before merging Gate-02.
+## Protected ownership
+
+- NEF owns authoritative asset truth.
+- GerChain owns authoritative operational value flow.
+- DEE owns governance/security/trust/authorization/recovery controls.
+- G-3 remains policy/condition/governance and is not a second operational escrow engine.
+- EXIM and I2B remain boundary layers.
+
+## Freeze consequence
+
+GATE-02 is closed. Any future CORE ownership, topology, or authoritative-engine change requires a separate architecture-change proposal and a new CORE gate cycle. SHUUD must consume the frozen CORE and may not modify it.
