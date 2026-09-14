@@ -1,5 +1,5 @@
 from architecture.contracts import ActorType, BoundaryRequest
-from services.shuud_service import SHUUDService
+from apps.shuud.service import SHUUDService
 
 
 def request(**payload):
