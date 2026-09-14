@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This is the completion gate for the **GerChain base structure**. SHUUD work must not become the acceptance criterion for the core.
+This is the completion gate for the **GerChain base structure**. SHUUD work is downstream and is not a criterion for core completion.
 
 > **Core first. SHUUD second.**
 
