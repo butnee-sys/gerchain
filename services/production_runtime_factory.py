@@ -22,13 +22,17 @@ class ProductionRuntimeConfig:
 
 
 class ProductionRuntimeFactory:
-    """Creates a GerchainRuntime whose authoritative release path is PostgreSQL."""
+    """Create a GerChain runtime whose authoritative release path is PostgreSQL."""
 
     def __init__(self, config: ProductionRuntimeConfig, *, engine: Engine | None = None) -> None:
         if not config.database_url:
             raise ValueError("database_url is required")
+        if not config.database_url.startswith(("postgresql://", "postgresql+psycopg://", "postgresql+psycopg2://")):
+            raise ValueError("ProductionRuntimeFactory requires a PostgreSQL database URL")
         self.config = config
         self.engine = engine or create_engine(config.database_url, future=True)
+        if self.engine.dialect.name != "postgresql":
+            raise ValueError("ProductionRuntimeFactory requires a PostgreSQL engine")
         self.session_factory: Callable[[], Any] = sessionmaker(bind=self.engine, expire_on_commit=False)
 
     def initialize(self) -> None:
