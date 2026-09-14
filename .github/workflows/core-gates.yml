@@ -1,0 +1,98 @@
+name: core-gates
+
+on:
+  push:
+    branches: ["feat/de-dee-gate01", "feat/gerchain-flow-hardening", "feat/core-gate02-capability-audit", "main"]
+  pull_request:
+
+jobs:
+  core-gates:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: gerchain
+          POSTGRES_PASSWORD: gerchain
+          POSTGRES_DB: gerchain_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U gerchain -d gerchain_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      GERCHAIN_TEST_DATABASE_URL: postgresql+psycopg://gerchain:gerchain@127.0.0.1:5432/gerchain_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements-dee-security.txt ]; then pip install -r requirements-dee-security.txt; fi
+          if [ -f postgres/requirements-test.txt ]; then pip install -r postgres/requirements-test.txt; fi
+          pip install "sqlalchemy>=2" "psycopg[binary]" fastapi uvicorn httpx pytest
+      - name: Run core structure and boundary tests
+        run: |
+          pytest -q \
+            tests/test_core_structure.py \
+            tests/test_production_runtime_factory.py \
+            tests/test_production_runtime_factory_postgres.py \
+            tests/test_nef_core_structure.py \
+            tests/test_boundary_adapters.py \
+            tests/test_de_dee_adapter.py \
+            tests/test_composition_root.py \
+            tests/test_governed_flow_adapters.py \
+            tests/test_g3_core_boundary.py \
+            tests/test_g3_core_runtime_e2e.py \
+            tests/test_g3_dee_authorized_handler.py \
+            tests/test_dee_genesis.py \
+            tests/test_dee_key_management.py \
+            tests/test_dee_persistent_registry.py \
+            tests/test_dee_recovery_governance.py \
+            tests/test_dee_runtime_governance.py \
+            tests/test_dee_security.py \
+            tests/test_dee_settlement_governance.py \
+            tests/test_dee_trinity_benchmark.py \
+            tests/test_dee_trinity_invariants.py \
+            tests/test_exim_contract_integer_money.py \
+            tests/test_exim_gateway.py \
+            tests/test_exim_port_v1_contracts.py \
+            tests/test_i2b_service_center.py \
+            tests/test_i2b_services.py \
+            tests/test_hold.py \
+            tests/test_idempotency.py \
+            tests/test_limit.py \
+            tests/test_transaction_lifecycle.py \
+            tests/test_gerchain_runtime.py \
+            tests/test_gerchain_capability_ownership.py \
+            tests/test_gate02_capability_contract.py \
+            tests/test_governed_atomic_release.py \
+            tests/test_nef_audit_pipeline.py \
+            tests/test_nef_consensus_integration.py \
+            tests/test_nef_end_to_end.py \
+            tests/test_nef_fault_tolerance.py \
+            tests/test_nef_g3_dee_gerchain_e2e.py \
+            tests/test_nef_gerchain_boundary.py \
+            tests/test_nef_gerchain_port.py \
+            tests/test_nef_state_engine.py \
+            tests/test_nef_state_recovery.py \
+            tests/test_nef_state_transition.py \
+            tests/test_nef_triple_entry_escrow.py \
+            tests/test_postgres_atomic_ledger.py \
+            tests/test_postgres_atomic_release.py \
+            tests/test_postgres_atomic_release_concurrency.py \
+            tests/test_postgres_atomic_release_outbox.py \
+            tests/test_postgres_idempotency_store.py \
+            tests/test_postgres_outbox_recovery.py \
+            tests/test_postgres_release_concurrency.py \
+            tests/test_postgresql_runtime_authority.py \
+            tests/test_release_adapter.py \
+            tests/test_release_crash_recovery_contract.py \
+            tests/test_release_failure_recovery_contract.py \
+            tests/test_runtime_postgres_release.py \
+            tests/test_post_commit_replay_contract.py \
+            tests/test_self_maintainer.py
