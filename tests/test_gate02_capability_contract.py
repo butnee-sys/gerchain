@@ -19,3 +19,5 @@ def test_gate02_capability_contract_exists():
 def test_gate02_blocks_missing_or_duplicate_capabilities():
     text = Path("docs/GATE02_CAPABILITY_MATRIX.md").read_text(encoding="utf-8")
     assert "`MISSING` and `DUPLICATE` block CORE freeze." in text
+    assert "MISSING = 0" in text
+    assert "DUPLICATE = 0" in text
