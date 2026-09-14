@@ -1,58 +1,103 @@
-# DEE / G-3 / NEF / GerChain / I2B Architecture Freeze
+# DE / DEE / G-3 / NEF / GerChain / EXIM / I2B Architecture Freeze
 
 **Status:** FROZEN — Canonical Digital Economy Architecture
 **Freeze date:** 2026-09-14
 **Repository:** `butnee-sys/gerchain`
 
-## 1. Purpose
+## 1. Purpose and top-level DE
 
-This document is the single authoritative architectural reference for the Digital Economy Ecosystem and its core value infrastructure.
+This document is the single authoritative architectural reference for the Digital Economy and its core value infrastructure.
 
-The canonical architecture is:
+**DE = DIGITAL ECONOMY** and is the mandatory top-level economic space. DE is not an optional heading and must not be bypassed. Future international digital-economy connections may attach at the DE level without changing the NEF + GerChain core.
+
+The locked architecture is:
 
 ```text
-DIGITAL ECONOMY
-        │
-        ▼
+DE — DIGITAL ECONOMY
+ │
+ ▼
+DE ADAPTER
+ │
+ ▼
 DEE — DIGITAL ECONOMY ECOSYSTEM
-        │
-     ADAPTER
-        │
-        ▼
+ │
+ ▼
+DEE ↔ G-3 ADAPTER
+ │
+ ▼
 G-3 ESCROW FOUNDATION
-        │
-     ADAPTER
-        │
-        ▼
+ │
+ ▼
+G-3 ↔ CORE ADAPTER
+ │
+ ▼
 NEF + GERCHAIN CORE INFRASTRUCTURE
-        │
-     ADAPTER
-        │
-        ▼
+ │
+ ▼
+CORE ↔ EXIM ADAPTER
+ │
+ ▼
 EXIM PORT
-        │
-     ADAPTER
-        │
-        ▼
-I2B — INFRASTRUCTURE TO BUSINESS GATEWAY
-        │
-MULTI-CONNECTOR ADAPTER
-        │
-   ┌────┼────┐
-   ▼    ▼    ▼
- STATE COMPANY PERSON
-        │
-        ▼
+ │
+ ▼
+EXIM ↔ I2B ADAPTER
+ │
+ ▼
+I2B — INFRASTRUCTURE TO BUSINESS
+ │
+ ▼
+I2B ↔ MULTI-CONNECTOR ADAPTER
+ │
+ ▼
+MULTI-CONNECTOR
+ ├── STATE
+ ├── COMPANY
+ └── PERSON
+ │
+ ▼
 DIGITAL ECONOMY ACTIVITIES
 ```
 
-The architecture is frozen. Implementation may be added, repaired, refactored, or moved to conform to this document, but implementation work must not silently change the architectural roles below.
+**DE and EXIM are different boundaries:**
 
-## 2. DEE — Digital Economy Ecosystem
+- **DE** is the top-level Digital Economy space and future international connection level.
+- **EXIM Port** is the core infrastructure boundary for external institutional/system environments.
+- EXIM must not be treated as a replacement for DE or as the international DE boundary.
+
+The architecture is frozen. Implementation may be added, repaired, refactored, or moved only to conform to this document unless an explicit architecture-change proposal is approved.
+
+## 2. Adapter principle
+
+Every layer-to-layer connection shown in the canonical path is an explicit adapter boundary.
+
+Adapters provide contract translation, authorization/context propagation, boundary validation, and dependency isolation. They do **not** create new authoritative truth or duplicate operational engines.
+
+Locked adapter sequence:
+
+```text
+DE
+→ DE Adapter
+→ DEE
+→ DEE ↔ G-3 Adapter
+→ G-3
+→ G-3 ↔ Core Adapter
+→ NEF + GerChain Core
+→ Core ↔ EXIM Adapter
+→ EXIM Port
+→ EXIM ↔ I2B Adapter
+→ I2B
+→ I2B ↔ Multi-Connector Adapter
+→ State / Company / Person
+→ Digital Economy Activities
+```
+
+No layer may bypass its defined adapter boundary to reach another layer's internal implementation.
+
+## 3. DEE — Digital Economy Ecosystem
 
 **DEE = DIGITAL ECONOMY ECOSYSTEM.**
 
-DEE is the ecosystem-level governance, protection, trust, policy, security, and coordination environment. Existing governance and protection mechanisms already preserved in the repository belong to DEE and must not be duplicated unnecessarily in lower layers.
+DEE is the ecosystem-level governance, protection, trust, policy, security, and coordination environment.
 
 DEE includes, as applicable:
 
@@ -76,32 +121,7 @@ DEE answers:
 
 > **HOW IS THE DIGITAL ECONOMY ECOSYSTEM GOVERNED AND PROTECTED?**
 
-DEE is an ecosystem layer, not a duplicate operational ledger, money, escrow, or settlement engine.
-
-## 3. Adapter Principle
-
-Adapters are explicit architectural boundaries. A layer must not bypass its defined adapter boundary to reach another layer's internal implementation.
-
-Canonical path:
-
-```text
-DE
-→ ADAPTER
-→ DEE
-→ ADAPTER
-→ G-3
-→ ADAPTER
-→ NEF + GERCHAIN CORE
-→ ADAPTER
-→ EXIM PORT
-→ ADAPTER
-→ I2B GATEWAY
-→ MULTI-CONNECTOR ADAPTER
-→ STATE / COMPANY / PERSON
-→ DIGITAL ECONOMY ACTIVITIES
-```
-
-Adapters isolate contracts, credentials, authorization, external dependencies, and implementation details.
+DEE is not a duplicate operational ledger, money, escrow, release, or settlement engine.
 
 ## 4. G-3 Escrow Foundation
 
@@ -110,7 +130,7 @@ G-3 is the foundation for escrow as infrastructure.
 G-3 contains:
 
 1. **Condition Policy** — what must be true before value may move.
-2. **Escrow Policy** — allowed escrow states and transitions: lock, hold, release, partial release, refund, expiry, cancellation, dispute hold.
+2. **Escrow Policy** — allowed escrow states and transitions.
 3. **Governance Policy** — who may decide, authorize, sign, and release, including limits and fail-closed rules.
 4. **Escrow Trinity** — Trust + Transparency + Performance.
 
@@ -118,11 +138,9 @@ G-3 answers:
 
 > **WHAT MUST BE TRUE FOR A CONDITIONAL VALUE FLOW?**
 
-G-3 is **not** a second operational Escrow Engine and does not own the operational ledger, money movement, release execution, or settlement engines.
+G-3 is **not** a second operational Escrow Engine and does not own operational ledger, money movement, release execution, or settlement engines.
 
-## 5. Escrow Benchmark
-
-Escrow has three benchmark levels:
+### Escrow benchmark
 
 ```text
 G1 = ESCROW AS TOOL
@@ -130,27 +148,13 @@ G2 = ESCROW AS SERVICE
 G3 = ESCROW AS INFRASTRUCTURE
 ```
 
-- **G1** protects a transaction: `LOCK → CONDITION → RELEASE`.
-- **G2** provides reusable escrow service.
-- **G3** governs conditional value flows across assets, organizations, transactions, and applications.
+- G1 protects a transaction: `LOCK → CONDITION → RELEASE`.
+- G2 provides reusable escrow service.
+- G3 governs conditional value flows across assets, organizations, transactions, and applications.
 
-**G3 is the target architecture.**
+## 5. NEF — Asset Registration, Valuation and Verification
 
-## 6. NEF — Asset Registration, Valuation and Verification
-
-**NEF = the authoritative asset/wealth foundation.**
-
-NEF's locked role is:
-
-```text
-NEF
-=
-ХӨРӨНГИЙН БҮРТГЭЛ
-+
-ҮНЭЛГЭЭ
-+
-БАТАЛГААЖУУЛАЛТ
-```
+**NEF = ХӨРӨНГИЙН БҮРТГЭЛ + ҮНЭЛГЭЭ + БАТАЛГААЖУУЛАЛТ.**
 
 NEF owns authoritative asset truth, including:
 
@@ -168,37 +172,15 @@ NEF owns authoritative asset truth, including:
 
 NEF answers:
 
-> **ЭНЭ ЯМАР ХӨРӨНГӨ ВЭ? ХЭНИЙХ ВЭ? ЯМАР ЭРХТЭЙ ВЭ? ЯМАР ҮНЭ ЦЭНТЭЙ ВЭ? БАТАЛГААТАЙ ЮУ?**
+> **ЭНЭ ЯМАР ХӨРӨНГӨ ВЭ? ХЭНИЙХ ВЭ? ЯМАР ЭРХТЭЙ ВЭ? ЯМАР ҮНЭ ЦЭНЭТЭЙ ВЭ? БАТАЛГААТАЙ ЮУ?**
 
 NEF does not become the operational money or value-flow ledger.
 
-## 7. GerChain — All Asset Value Flows
+## 6. GerChain — All Asset Value Flows
 
-**GerChain = the operational infrastructure for all types of asset value flows.**
+**GerChain = ХӨРӨНГИЙН БҮХ ТӨРЛИЙН УРСГАЛ.**
 
-The locked role is:
-
-```text
-GERCHAIN
-=
-ХӨРӨНГИЙН БҮХ ТӨРЛИЙН УРСГАЛ
-```
-
-This includes, as applicable:
-
-- ownership/right transfer flows;
-- sale and purchase flows;
-- lease flows;
-- collateral and financing flows;
-- escrow flows;
-- investment flows;
-- payment flows;
-- return/yield flows;
-- distribution flows;
-- refund flows;
-- settlement flows;
-- conditional value flows;
-- other governed asset-related value flows.
+GerChain is the operational infrastructure for asset value flows, including ownership/right transfer, sale and purchase, lease, collateral, financing, escrow, investment, payment, return/yield, distribution, refund, settlement, conditional value, and other governed asset-related flows.
 
 GerChain operational engines include:
 
@@ -216,15 +198,9 @@ GerChain operational engines include:
 12. Consensus Engine
 13. Recovery Engine
 
-GerChain answers:
-
-> **БАТАЛГААЖСАН ХӨРӨНГИЙН ҮНЭ ЦЭНИЙН УРСГАЛ ХЭРХЭН ЯВАХ ВЭ, ЯМАР ЭРХИЙН ДАГУУ ЯВАХ ВЭ, ЭЦСИЙН ҮР ДҮН ЮУ ВЭ?**
-
 GerChain does not become the authoritative asset registry.
 
-## 8. NEF + GerChain Core Infrastructure
-
-NEF and GerChain form the core infrastructure as two complementary truths:
+## 7. NEF + GerChain Core
 
 ```text
 NEF
@@ -240,39 +216,15 @@ ASSET VALUE-FLOW TRUTH
 ХӨРӨНГИЙН БҮХ ТӨРЛИЙН УРСГАЛ
 ```
 
-Therefore:
-
 > **NEF хөрөнгийг бүртгэнэ, үнэлнэ, баталгаажуулна. GerChain баталгаатай хөрөнгийн үнэ цэнийн бүх төрлийн урсгалыг удирдана.**
 
-## 9. Escrow Trinity
-
-Escrow Trinity is a cross-cutting invariant, not a fourth engine and not a new duplicate architecture layer.
+## 8. Escrow Trinity
 
 ```text
 TRUST + TRANSPARENCY + PERFORMANCE
                  ↓
             RELEASE GATE
 ```
-
-### TRUST — Итгэл
-
-Answers:
-
-> **WHO / AUTH — Хэн? Ямар эрхээр?**
-
-### TRANSPARENCY — Ил тод байдал
-
-Answers:
-
-> **WHAT / PROOF — Юу болсон? Ямар нотолгоотой? Хэн гэрчилсэн?**
-
-### PERFORMANCE — Гүйцэтгэл
-
-Answers:
-
-> **DID / RESULT — Ямар үр дүн гарсан?**
-
-Release invariant:
 
 ```text
 TRUST = PASS
@@ -288,9 +240,9 @@ If any required component is `FAIL` or `UNKNOWN`:
 RELEASE = DENY / HOLD
 ```
 
-The system is **fail-closed**.
+The system is **fail-closed**. Trust answers who/authority, Transparency answers proof/evidence, and Performance answers result/outcome.
 
-## 10. Canonical Operational Lifecycle
+## 9. Canonical operational lifecycle
 
 ```text
 CREATE
@@ -311,127 +263,98 @@ CREATE
 → COMPLETE
 ```
 
-## 11. Engine Boundaries
+## 10. Engine boundaries
 
-### Escrow Engine ≠ Decision Engine
+- Escrow Engine ≠ Decision Engine.
+- Decision Engine ≠ Authorization Engine.
+- Authorization Engine ≠ Release Engine.
+- Release Engine ≠ Settlement Engine.
+- Settlement Engine ≠ Reconciliation Engine.
+- No second Escrow Engine.
+- No second authoritative Witness Chain.
+- No second authoritative Ledger.
+- No direct release.
 
-- Escrow Engine executes escrow mechanics.
-- Decision Engine evaluates whether release conditions are satisfied.
+All release follows:
 
-### Decision Engine ≠ Authorization Engine
+```text
+DECISION → AUTHORIZATION → RELEASE
+```
 
-- Decision Engine answers: **May this action proceed under the conditions?**
-- Authorization Engine answers: **Is this actor/credential/policy authorized to perform it?**
+## 11. EXIM Port
 
-### Authorization Engine ≠ Release Engine
-
-- Authorization validates the governed permission.
-- Release executes only an authorized release.
-
-### Release Engine ≠ Settlement Engine
-
-- Release performs governed release.
-- Settlement finalizes the resulting value state.
-
-### Settlement Engine ≠ Reconciliation Engine
-
-- Settlement finalizes the transaction.
-- Reconciliation verifies expected versus actual state.
-
-## 12. EXIM Port
-
-EXIM Port is the external-system boundary between the core infrastructure and external institutional or system environments.
+EXIM Port is the external-system boundary between NEF + GerChain core infrastructure and external institutional/system environments.
 
 ```text
 NEF + GERCHAIN CORE
         ↓
-     ADAPTER
+CORE ↔ EXIM ADAPTER
         ↓
     EXIM PORT
         ↓
-     ADAPTER
+EXIM ↔ I2B ADAPTER
 ```
 
-External systems must not bypass the port boundary to reach core internals.
+External systems must not bypass EXIM to reach core internals.
 
-## 13. I2B — Infrastructure to Business Gateway
-
-I2B means **Infrastructure to Business**.
+## 12. I2B — Infrastructure to Business
 
 I2B converts governed infrastructure capabilities into reusable business activity interfaces without moving authoritative truth into applications.
 
 ```text
-CORE INFRASTRUCTURE
-        ↓
-    EXIM PORT
-        ↓
-  I2B GATEWAY
-        ↓
-BUSINESS ACTIVITY
+CORE → EXIM → I2B → BUSINESS ACTIVITY
 ```
 
-## 14. Multi-Connector Adapter
-
-I2B connects the core ecosystem to the principal economic actors through a multi-connector boundary:
+## 13. Multi-Connector Adapter
 
 ```text
-                 I2B GATEWAY
-                      │
-             MULTI-CONNECTOR ADAPTER
-                      │
-       ┌──────────────┼──────────────┐
-       ▼              ▼              ▼
-     STATE          COMPANY         PERSON
-       │              │              │
-       └──────────────┼──────────────┘
-                      ▼
-           DIGITAL ECONOMY ACTIVITIES
+                 I2B
+                  │
+       I2B ↔ MULTI-CONNECTOR ADAPTER
+                  │
+       ┌──────────┼──────────┐
+       ▼          ▼          ▼
+     STATE      COMPANY     PERSON
+       └──────────┼──────────┘
+                  ▼
+       DIGITAL ECONOMY ACTIVITIES
 ```
 
 State, companies, and persons consume the infrastructure through defined connectors and do not create parallel authoritative infrastructure truth.
 
-## 15. Application and Activity Rule
+## 14. Application and activity rule
 
-Applications and digital economy activities sit outside the core infrastructure.
+Applications and Digital Economy Activities sit outside the core infrastructure. They may consume governed NEF, GerChain, G-3, DEE, EXIM, and I2B capabilities but must not bypass the canonical path or create competing authoritative ledgers, witness chains, escrow truth, release truth, settlement truth, or asset registries.
 
-They may consume:
+Existing `nef_gerchain_port` remains compatible with this architecture and may be refactored behind the canonical adapters; it must not be used to bypass them.
 
-- NEF asset registration/valuation/verification;
-- GerChain value-flow capabilities;
-- G-3 escrow rules;
-- DEE governance and protection policies;
-- EXIM ports;
-- I2B gateways.
+## 15. Hard rules
 
-They must not bypass governed core paths or create competing authoritative ledgers, witness chains, escrow truth, release truth, or asset registries.
+1. **DE is mandatory and top-level.**
+2. **DE is distinct from EXIM.** DE is the top-level Digital Economy space; EXIM is the core external-system boundary.
+3. **Every shown layer-to-layer connection uses an explicit adapter.**
+4. **No direct release.** Decision → Authorization → Release is mandatory.
+5. **No second Escrow Engine.** G-3 does not duplicate GerChain's operational Escrow Engine.
+6. **No second authoritative Witness Chain.**
+7. **No second authoritative Ledger.**
+8. **No application-owned infrastructure truth.**
+9. **Trust, Transparency, and Performance are mandatory release conditions.**
+10. **Unknown is not pass.** Required unresolved conditions result in deny/hold.
+11. **Database-level atomicity is mandatory for one-time release invariants.**
+12. **Outbox processing must support lease/recovery semantics where asynchronous delivery is used.**
+13. **Recovery must not create duplicate value movement.**
+14. **NEF remains authoritative for asset registration, valuation, and verification truth.**
+15. **GerChain remains authoritative for operational asset value-flow truth.**
+16. **G-3 defines escrow conditions and governance; it does not become a third operational core.**
+17. **DEE governs and protects the ecosystem; it does not duplicate lower-level operational engines.**
+18. **EXIM is the external boundary. External systems do not bypass it.**
+19. **I2B is the infrastructure-to-business gateway.**
+20. **New products may use the core without redesigning the core.**
+21. **Implementation changes must conform to this document unless an explicit architecture-change proposal is approved.**
 
-## 16. Hard Rules
+## 16. Change governance
 
-1. **No direct release.** All value release must pass Decision → Authorization → Release.
-2. **No second Escrow Engine.** G-3 does not duplicate GerChain's operational Escrow Engine.
-3. **No second authoritative Witness Chain.** Existing witness infrastructure remains authoritative.
-4. **No second authoritative Ledger.** Existing GerChain ledger remains authoritative for value-flow records.
-5. **No application-owned infrastructure truth.** Applications cannot create competing authoritative escrow, release, settlement, ledger, or asset truth.
-6. **Trust, Transparency, and Performance are mandatory release conditions.**
-7. **Unknown is not pass.** Any unresolved required condition results in deny/hold.
-8. **Database-level atomicity is mandatory for one-time release invariants.**
-9. **Outbox processing must support lease/recovery semantics where asynchronous delivery is used.**
-10. **Recovery must not create duplicate value movement.**
-11. **NEF remains authoritative for asset registration, valuation, and verification truth.**
-12. **GerChain remains authoritative for operational asset value-flow truth.**
-13. **G-3 defines escrow conditions and governance; it does not become a third operational core.**
-14. **DEE governs and protects the ecosystem; it does not duplicate lower-level operational engines.**
-15. **EXIM is the external boundary. External systems do not bypass it.**
-16. **I2B is the infrastructure-to-business gateway.**
-17. **Adapters are mandatory architectural boundaries where shown in the canonical path.**
-18. **New products may use the core without redesigning the core.**
-19. **Implementation changes must conform to this document unless an explicit architecture-change proposal is approved.**
-
-## 17. Change Governance
-
-This document is the canonical architecture.
-
-A normal feature, bug fix, test, refactor, database migration, connector, application change, or implementation repair must not silently change the architecture.
+This document is the canonical architecture. A normal feature, bug fix, test, refactor, database migration, connector, application change, or implementation repair must not silently change the architecture.
 
 An architecture change requires an explicit proposal identifying:
 
