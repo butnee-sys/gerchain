@@ -1,33 +1,17 @@
 """SHUUD application adapter.
 
 SHUUD talks to the controlled gateway only. It has no dependency on the
-EXIM Port package, NEF, GerChain engines, or their internal DTOs.
+EXIM Port package, connector implementations, NEF, GerChain engines, or
+internal DTOs.
 
-Every application-to-gateway operation carries the connector credential and a
-fresh request nonce. The application adapter never bypasses gateway governance.
+Connector registration belongs to the composition/bootstrap boundary. The
+application adapter only consumes an already-governed gateway.
 """
 
 from typing import Any
 from uuid import uuid4
 
-from connectors import EXIMConnectorAdapter
 from gateway import OpenMultiConnectorGateway
-
-
-EXIM_OPERATIONS = frozenset({
-    "create_witness_chain",
-    "restore_witness_chain",
-    "create_escrow",
-    "restore_escrow",
-    "verifier",
-    "release_escrow",
-    "release_escrow_authorized",
-    "export_status",
-    "export_escrow_status",
-    "export_settlement_status",
-    "export_evidence_status",
-    "export_audit_event",
-})
 
 
 class SHUUDApplicationAdapter:
@@ -36,16 +20,14 @@ class SHUUDApplicationAdapter:
     application_id = "SHUUD"
     connector_id = "EXIM"
 
-    def __init__(self, gateway: OpenMultiConnectorGateway | None = None, *, credential: str) -> None:
+    def __init__(self, gateway: OpenMultiConnectorGateway, *, credential: str) -> None:
         if not str(credential).strip():
             raise ValueError("SHUUD gateway credential is required")
-        self.gateway = gateway or OpenMultiConnectorGateway()
+        self.gateway = gateway
         self.credential = credential
         if self.connector_id not in self.gateway.registered_connectors():
-            self.gateway.register(
-                EXIMConnectorAdapter(),
-                credential=credential,
-                allowed_operations=EXIM_OPERATIONS,
+            raise ValueError(
+                f"connector must be registered at the composition boundary: {self.connector_id}"
             )
 
     @staticmethod
@@ -98,4 +80,4 @@ class SHUUDApplicationAdapter:
         return self._dispatch("export_audit_event", **kwargs)
 
 
-__all__ = ["EXIM_OPERATIONS", "SHUUDApplicationAdapter"]
+__all__ = ["SHUUDApplicationAdapter"]
