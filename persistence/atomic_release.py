@@ -1,13 +1,15 @@
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
 
 from sqlalchemy import DateTime, Integer, String, Text, UniqueConstraint, select
-from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 from core.idempotency import IdempotencyConflictError, IdempotencyEngine
+from persistence.recovery_outbox import OutboxEvent
 
 
 class AtomicReleaseBase(DeclarativeBase):
@@ -65,7 +67,7 @@ class AtomicReleaseResult:
 
 
 class PostgreSQLAtomicRelease:
-    """One DB transaction for idempotency, escrow, value movement and witness."""
+    """One DB transaction for release, witness and durable outbox publication."""
 
     def __init__(self, session_factory):
         self.session_factory = session_factory
@@ -97,9 +99,8 @@ class PostgreSQLAtomicRelease:
             if escrow.amount != amount:
                 raise ValueError("release amount does not match escrow amount")
 
-            account_ids = sorted({source, destination})
             accounts = {}
-            for account_id in account_ids:
+            for account_id in sorted({source, destination}):
                 accounts[account_id] = session.execute(select(ReleaseAccount).where(ReleaseAccount.account_id == account_id).with_for_update()).scalar_one()
             if accounts[source].balance < amount:
                 raise ValueError("insufficient source balance")
@@ -109,8 +110,14 @@ class PostgreSQLAtomicRelease:
             escrow.state = "RELEASED"
             escrow.updated_at = now
             session.add(ReleaseWitness(transaction_id=transaction_id, event_type="RELEASED", amount=amount, created_at=now))
+
+            event_id = f"release:{transaction_id}"
+            existing_event = session.execute(select(OutboxEvent).where(OutboxEvent.event_id == event_id).with_for_update()).scalar_one_or_none()
+            if existing_event is None:
+                session.add(OutboxEvent(event_id=event_id, event_type="GERCHAIN_RELEASED", aggregate_id=transaction_id, payload_json=json.dumps(payload, sort_keys=True, separators=(",", ":")), state="PENDING", lease_until=None, attempts=0, created_at=now, updated_at=now))
+
             op.state = "COMPLETED"
-            op.result_json = "{\"state\":\"RELEASED\"}"
+            op.result_json = json.dumps({"state": "RELEASED", "event_id": event_id}, sort_keys=True, separators=(",", ":"))
             op.updated_at = now
             session.commit()
             return AtomicReleaseResult(transaction_id, escrow_id, destination, amount)
@@ -118,6 +125,7 @@ class PostgreSQLAtomicRelease:
 
 def initialize_atomic_release_schema(engine) -> None:
     AtomicReleaseBase.metadata.create_all(engine)
+    OutboxEvent.__table__.create(engine, checkfirst=True)
 
 
 __all__ = ["ReleaseAccount", "ReleaseEscrow", "ReleaseOperation", "ReleaseWitness", "AtomicReleaseResult", "PostgreSQLAtomicRelease", "initialize_atomic_release_schema"]
