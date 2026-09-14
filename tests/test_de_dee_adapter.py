@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 
 from architecture.contracts import ActorType, AdapterContract, BoundaryRequest, BoundaryResponse
-from architecture.de_dee_adapter import DEToDEEAdapter
+from architecture.governed_flow_adapters import DEToDEEBoundaryAdapter
 
 
 class RecordingDEE(AdapterContract):
@@ -27,7 +27,7 @@ class InvalidDEE(AdapterContract):
 
 def test_de_to_dee_routes_only_through_boundary_contract() -> None:
     dee = RecordingDEE()
-    adapter = DEToDEEAdapter(dee)
+    adapter = DEToDEEBoundaryAdapter(dee)
     request = BoundaryRequest(
         actor_type=ActorType.COMPANY,
         actor_id="company-001",
@@ -44,14 +44,14 @@ def test_de_to_dee_routes_only_through_boundary_contract() -> None:
 
 
 def test_de_to_dee_rejects_invalid_request() -> None:
-    adapter = DEToDEEAdapter(RecordingDEE())
+    adapter = DEToDEEBoundaryAdapter(RecordingDEE())
 
-    with pytest.raises(TypeError, match="BoundaryRequest"):
+    with pytest.raises(TypeError, match="DE_TO_DEE requires BoundaryRequest"):
         adapter.handle("not-a-boundary-request")  # type: ignore[arg-type]
 
 
 def test_de_to_dee_fails_closed_on_invalid_downstream_response() -> None:
-    adapter = DEToDEEAdapter(InvalidDEE())
+    adapter = DEToDEEBoundaryAdapter(InvalidDEE())
     request = BoundaryRequest(
         actor_type=ActorType.STATE,
         actor_id="state-001",
@@ -59,5 +59,5 @@ def test_de_to_dee_fails_closed_on_invalid_downstream_response() -> None:
         correlation_id="corr-002",
     )
 
-    with pytest.raises(TypeError, match="BoundaryResponse"):
+    with pytest.raises(TypeError, match="DE_TO_DEE downstream must return BoundaryResponse"):
         adapter.handle(request)
