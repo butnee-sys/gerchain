@@ -69,6 +69,7 @@ jobs:
             tests/test_transaction_lifecycle.py \
             tests/test_gerchain_runtime.py \
             tests/test_gerchain_capability_ownership.py \
+            tests/test_gate02_capability_contract.py \
             tests/test_governed_atomic_release.py \
             tests/test_nef_audit_pipeline.py \
             tests/test_nef_consensus_integration.py \
