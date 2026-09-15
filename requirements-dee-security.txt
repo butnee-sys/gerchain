@@ -1,5 +1,6 @@
 # DEE Root of Trust / Owner Authorization
 cryptography>=48,<51
+msgpack>=1.2.1,<2
 sqlalchemy>=2,<3
 psycopg[binary]>=3.2,<4
-setuptools>=78.1.1
+setuptools>=83.0.0,<84
