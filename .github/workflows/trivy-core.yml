@@ -24,22 +24,6 @@ jobs:
       - name: Build CORE container
         run: docker build --pull -t gerchain-core:trivy .
 
-      - name: Run Trivy image scan (SARIF)
-        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # pinned action
-        with:
-          image-ref: gerchain-core:trivy
-          format: sarif
-          output: trivy-image.sarif
-          severity: CRITICAL,HIGH,MEDIUM
-          ignore-unfixed: false
-          scanners: vuln,secret,misconfig
-
-      - name: Upload image scan results
-        uses: github/codeql-action/upload-sarif@v3
-        if: always()
-        with:
-          sarif_file: trivy-image.sarif
-
       - name: Print CORE image findings
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # pinned action
         with:
@@ -58,6 +42,23 @@ jobs:
           severity: CRITICAL,HIGH,MEDIUM
           ignore-unfixed: false
           scanners: vuln,secret,misconfig
+
+      - name: Run Trivy image scan (SARIF)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # pinned action
+        with:
+          image-ref: gerchain-core:trivy
+          format: sarif
+          output: trivy-image.sarif
+          severity: CRITICAL,HIGH,MEDIUM
+          ignore-unfixed: false
+          scanners: vuln,secret,misconfig
+
+      - name: Upload image scan results
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        continue-on-error: true
+        with:
+          sarif_file: trivy-image.sarif
 
       - name: Upload CORE image report
         uses: actions/upload-artifact@v4
