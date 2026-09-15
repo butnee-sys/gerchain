@@ -1,0 +1,20 @@
+name: OSV CORE Candidate Scan
+
+on:
+  push:
+    branches:
+      - assurance/osv-core-candidate
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  security-events: write
+  contents: read
+
+jobs:
+  osv-core:
+    name: OSV CORE dependency scan
+    uses: google/osv-scanner-action/.github/workflows/osv-scanner-reusable.yml@0c58c542420dfd23fcac08dd9c8ca3cca9c36f1a
+    with:
+      scan-args: |-
+        --lockfile=requirements.txt:./requirements-dee-security.txt
