@@ -6,14 +6,9 @@ This scan covers **GerChain CORE only**. SHUUD is frozen and explicitly out of s
 
 ## Purpose
 
-Trivy provides a second independent automated technical signal alongside the locked Snyk container baseline. It scans:
+Trivy provides an additional independent automated technical signal alongside the locked Snyk container baseline. It scans the built CORE Docker image and the repository filesystem for vulnerabilities, secrets, and misconfiguration.
 
-1. the built CORE Docker image for vulnerabilities, secrets, and misconfiguration;
-2. the repository filesystem for vulnerabilities, secrets, and misconfiguration.
-
-## Baseline
-
-Snyk baseline recorded before remediation:
+## Locked Snyk baseline
 
 - Critical: 4
 - High: 14
@@ -21,10 +16,22 @@ Snyk baseline recorded before remediation:
 - Low: 130
 - Total: 152
 
-The Snyk baseline remains immutable evidence. Trivy results are a separate evidence source and must not be substituted for the original Snyk result.
+The Snyk baseline remains immutable evidence. Trivy results are separate evidence and do not replace Snyk.
 
-## Acceptance rule
+## Candidate result
 
-This gate is GREEN only when the Trivy workflow completes successfully and the resulting findings are reviewed. A successful workflow alone does not mean that all vulnerabilities are absent; findings must be compared against the Snyk baseline and remediation status.
+Candidate: `7f051b4dc742553198173f551196ca9d43e757fd`
 
-No certification or full-conformance claim is made from this scan.
+Trivy CORE image report:
+
+- Critical: **0**
+- High: **0**
+- Medium: **0**
+
+The Trivy workflow completed successfully. The candidate uses a clean Alpine 3.22 multi-stage runtime and excludes `sandbox/` from the CORE filesystem scan because SHUUD is frozen and out of scope.
+
+## Gate status
+
+**Automated Trivy gate: GREEN.**
+
+This does not by itself constitute certification or final security approval. Candidate-specific external verification and independent technical re-performance remain required before merge.
