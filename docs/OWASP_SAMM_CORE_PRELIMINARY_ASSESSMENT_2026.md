@@ -60,7 +60,7 @@ For each official SAMM activity question and quality criterion:
 4. Keep independent assessment evidence separate from self-assessment evidence.
 5. Preserve the assessment against a fixed candidate baseline so later changes do not silently alter the result.
 
-This follows the purpose of the official SAMM toolbox: review security activities against defined quality criteria and calculate the maturity score from the completed assessment. citeturn0search0
+This follows the purpose of the official SAMM toolbox: review security activities against defined quality criteria and calculate the maturity score from the completed assessment.
 
 ## Preliminary maturity interpretation
 
@@ -100,13 +100,13 @@ The principal maturity gaps are Governance evidence, Education & Guidance, forma
 
 ## International benchmark context
 
-OWASP publishes a benchmark initiative intended to help organizations compare maturity with peers. The currently published benchmark dataset is limited, so benchmark comparisons should be treated as contextual rather than definitive. The latest published benchmark report states an average SAMM score of 1.44/3.0 across its dataset, with most data coming from large organizations and more than 80% of the dataset coming from independent third-party SAMM practitioners. citeturn1search0
+OWASP publishes a benchmark initiative intended to help organizations compare maturity with peers. The currently published benchmark dataset is limited, so benchmark comparisons should be treated as contextual rather than definitive. The latest published benchmark report states an average SAMM score of 1.44/3.0 across its dataset, with most data coming from large organizations and more than 80% of the dataset coming from independent third-party SAMM practitioners.
 
 GerChain should **not** compare itself numerically to this benchmark until its own official SAMM assessment is completed. A later comparison can be made by business function and practice, with scope and organization size stated explicitly.
 
 ## Next assessment step
 
-Use the official OWASP SAMM Assessment Toolbox to answer every activity question and quality criterion with responsible stakeholders. OWASP provides both spreadsheet toolboxes and online assessment options; the Scorecard updates as the questions are completed. citeturn0search0turn0search1
+Use the official OWASP SAMM Assessment Toolbox to answer every activity question and quality criterion with responsible stakeholders. OWASP provides both spreadsheet toolboxes and online assessment options; the Scorecard updates as the questions are completed.
 
 The resulting SAMM score should be stored separately from this preliminary mapping and labelled **self-assessment**. It should not be represented as an independent audit or certification.
 
