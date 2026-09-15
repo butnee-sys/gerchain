@@ -1,0 +1,84 @@
+name: Trivy CORE Security Scan
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  trivy:
+    name: Trivy CORE scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Build CORE container
+        run: docker build --pull -t gerchain-core:trivy .
+
+      - name: Print CORE image findings
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # pinned action
+        with:
+          image-ref: gerchain-core:trivy
+          format: table
+          severity: CRITICAL,HIGH,MEDIUM
+          ignore-unfixed: false
+          scanners: vuln,secret,misconfig
+          version: v0.74.0
+
+      - name: Export CORE image report
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # pinned action
+        with:
+          image-ref: gerchain-core:trivy
+          format: json
+          output: trivy-image.json
+          severity: CRITICAL,HIGH,MEDIUM
+          ignore-unfixed: false
+          scanners: vuln,secret,misconfig
+          version: v0.74.0
+
+      - name: Run Trivy image scan (SARIF)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # pinned action
+        with:
+          image-ref: gerchain-core:trivy
+          format: sarif
+          output: trivy-image.sarif
+          severity: CRITICAL,HIGH,MEDIUM
+          ignore-unfixed: false
+          scanners: vuln,secret,misconfig
+          version: v0.74.0
+
+      - name: Upload image scan results
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        continue-on-error: true
+        with:
+          sarif_file: trivy-image.sarif
+
+      - name: Upload CORE image report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: trivy-core-image-report
+          path: trivy-image.json
+          if-no-files-found: error
+
+      - name: Run Trivy filesystem scan
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # pinned action
+        with:
+          scan-type: fs
+          scan-ref: .
+          format: table
+          severity: CRITICAL,HIGH,MEDIUM
+          ignore-unfixed: false
+          scanners: vuln,secret,misconfig
+          skip-dirs: sandbox
+          version: v0.74.0

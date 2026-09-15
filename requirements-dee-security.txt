@@ -1,4 +1,4 @@
 # DEE Root of Trust / Owner Authorization
-cryptography>=43,<47
+cryptography>=48,<51
 sqlalchemy>=2,<3
 psycopg[binary]>=3.2,<4
