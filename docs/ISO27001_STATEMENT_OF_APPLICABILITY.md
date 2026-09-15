@@ -1,7 +1,7 @@
 # NEF–G-3–GerChain — Statement of Applicability (SoA)
 
 **Document status:** Draft for controlled review  
-**Version:** 0.1  
+**Version:** 0.2  
 **ISMS scope:** NEF–G-3–GerChain core infrastructure  
 **Technical baseline:** `621e7e2acefe243d4c72e783970e1eb833c60b96`
 
@@ -23,7 +23,9 @@ The following statuses are used:
 
 No item is marked final GREEN solely from source-code presence.
 
-## 3. Control applicability register
+## 3. Control applicability register — 93/93 controls addressed
+
+The register below addresses all 93 Annex A controls: A.5 (37), A.6 (8), A.7 (14), A.8 (34). Applicability and implementation decisions remain subject to risk treatment, scope confirmation and management approval.
 
 | Ref | Control area | Applicability | Current status | Main evidence / action |
 |---|---|---|---|---|
@@ -31,6 +33,8 @@ No item is marked final GREEN solely from source-code presence.
 | A.5.2 | Security roles and responsibilities | Yes | OPEN | Named owners and responsibilities required |
 | A.5.3 | Segregation of duties | Yes | OPEN | Role matrix and conflict review required |
 | A.5.4 | Management responsibilities | Yes | PLANNED | Management governance evidence required |
+| A.5.5 | Contact with authorities | Yes | GAP | Authority/contact register and notification responsibilities required |
+| A.5.6 | Contact with special interest groups | Conditional | GAP | Relevant professional/security-group contacts and rationale required |
 | A.5.7 | Threat intelligence | Yes | OPEN | Threat-monitoring process required |
 | A.5.8 | Security in project management | Yes | PARTIALLY IMPLEMENTED | PR/branch/change governance exists; formal ISMS process required |
 | A.5.9 | Information and asset inventory | Yes | PARTIALLY IMPLEMENTED | Asset register created; ownership verification pending |
@@ -45,6 +49,8 @@ No item is marked final GREEN solely from source-code presence.
 | A.5.18 | Access rights | Yes | OPEN | Periodic access review required |
 | A.5.19 | Supplier security | Yes | PLANNED | Supplier register/assessment required |
 | A.5.20 | Supplier agreements | Yes | PLANNED | Security clauses and review required |
+| A.5.21 | Information security in ICT supply chain | Yes | GAP | ICT supplier-chain risk, requirements and monitoring required |
+| A.5.22 | Monitoring/change management of supplier services | Yes | GAP | Supplier-service review, performance/security monitoring and change process required |
 | A.5.23 | Cloud service security | Yes/conditional | OPEN | Actual service inventory and responsibility model required |
 | A.5.24 | Incident planning | Yes | PLANNED | Incident response procedure required |
 | A.5.25 | Incident assessment/decision | Yes | PLANNED | Incident triage process required |
@@ -117,16 +123,26 @@ No item is marked final GREEN solely from source-code presence.
 | A.8.33 | Test information | Yes | OPEN | Test-data classification and handling required |
 | A.8.34 | Protection during audit testing | Yes | OPEN | Audit-test procedure and authorization required |
 
-## 4. Key interpretation
+## 4. Three-state interpretation for CORE comparison
 
-The technical GerChain CORE controls provide meaningful evidence for several technological and integrity-related areas. However, the SoA remains largely **OPEN/PARTIALLY IMPLEMENTED** because ISO/IEC 27001 conformity is an organizational ISMS matter.
+For management reporting, the detailed statuses above are normalized as follows:
+
+- **GREEN:** objective evidence shows the control is operating within the defined ISMS scope, with no material evidence gap identified at the current review stage.
+- **PARTIAL:** meaningful technical and/or organizational implementation exists, but required governance, evidence, coverage or operating effectiveness is incomplete.
+- **GAP:** no sufficient implementation/evidence has been verified, or a required organizational process has not yet been established.
+
+This three-state view is an assessment aid; it does not replace the formal SoA decision, risk treatment, management approval or independent assessment.
+
+## 5. Key interpretation
+
+The technical GerChain CORE controls provide meaningful evidence for several technological and integrity-related areas. However, the SoA remains largely **OPEN/PARTIALLY IMPLEMENTED/GAP** because ISO/IEC 27001 conformity is an organizational ISMS matter.
 
 The following are specifically not declared GREEN until evidence exists:
 
 - organizational IAM/MFA;
 - privileged access governance;
 - personnel security;
-- supplier security;
+- supplier security and ICT supply-chain controls;
 - physical security;
 - backup/restore governance;
 - incident management;
@@ -134,11 +150,11 @@ The following are specifically not declared GREEN until evidence exists:
 - management review;
 - independent assurance.
 
-## 5. Applicability principle
+## 6. Applicability principle
 
-Applicability is determined by risk, scope, legal/contractual requirements and organizational context. A control is not marked applicable merely because it appears in a generic checklist, and it is not marked not-applicable merely because evidence is currently missing.
+Applicability is determined by risk, scope, legal/contractual requirements and organizational context. Annex A is a normative reference set used with the risk treatment process; it is not a blind checklist requiring every control to be implemented identically. Necessary controls must be included in the SoA, while exclusions require justification and approval.
 
-## 6. SoA approval requirements
+## 7. SoA approval requirements
 
 Before the SoA becomes final, management shall confirm:
 
@@ -150,8 +166,8 @@ Before the SoA becomes final, management shall confirm:
 6. control implementation responsibilities;
 7. evidence requirements.
 
-## 7. Gate
+## 8. Gate
 
 **G4 — Statement of Applicability: OPEN.**
 
-The SoA is structurally established but is not yet a final approved organizational SoA.
+The SoA now addresses all **93/93 Annex A control references**, but it is **not yet a final approved organizational SoA**. The next closure work is to validate each control's applicability, evidence, owner, implementation status and residual risk, then obtain management approval.
