@@ -9,12 +9,12 @@ RUN apt-get update \
 
 COPY . /app
 
-# Install the CORE security/runtime dependencies in the container itself.
-# Force-reinstall the externally flagged Python packages so an older copy
-# cannot remain in the final image after the base-image refresh.
+# Remove stale Python distribution metadata from the base image before
+# installing the remediated packages. This prevents Trivy from reporting an
+# obsolete package metadata record after the runtime package is upgraded.
 RUN python -m pip install --no-cache-dir --upgrade pip \
-    && python -m pip uninstall -y msgpack setuptools || true \
-    && python -m pip install --no-cache-dir --force-reinstall 'msgpack>=1.2.1,<2' 'setuptools>=83.0.0,<84' \
+    && python -c "import glob, shutil; [shutil.rmtree(p, ignore_errors=True) for p in glob.glob('/usr/local/lib/python*/site-packages/msgpack-*.dist-info') + glob.glob('/usr/local/lib/python*/site-packages/setuptools-*.dist-info')]" \
+    && python -m pip install --no-cache-dir --ignore-installed 'msgpack>=1.2.1,<2' 'setuptools>=83.0.0,<84' \
     && python -m pip install --no-cache-dir --upgrade -r requirements-dee-security.txt \
     && python -c "import msgpack, setuptools; assert tuple(map(int, msgpack.__version__.split('.')[:2])) >= (1,2); assert tuple(map(int, setuptools.__version__.split('.')[:2])) >= (83,0)"
 
