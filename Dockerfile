@@ -1,6 +1,12 @@
 FROM python:3.13-slim
 WORKDIR /app
 
+# Refresh the Debian base packages before installing application dependencies.
+# This is a CORE container-security control; SHUUD images are out of scope.
+RUN apt-get update \
+    && apt-get upgrade -y \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY . /app
 
 # Install the CORE security/runtime dependencies in the container itself.
