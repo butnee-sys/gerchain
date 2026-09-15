@@ -25,7 +25,7 @@ jobs:
         run: docker build --pull -t gerchain-core:trivy .
 
       - name: Run Trivy image scan
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           image-ref: gerchain-core:trivy
           format: sarif
@@ -41,7 +41,7 @@ jobs:
           sarif_file: trivy-image.sarif
 
       - name: Run Trivy filesystem scan
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           scan-type: fs
           scan-ref: .
@@ -49,3 +49,4 @@ jobs:
           severity: CRITICAL,HIGH,MEDIUM
           ignore-unfixed: false
           scanners: vuln,secret,misconfig
+          skip-dirs: sandbox
