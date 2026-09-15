@@ -24,8 +24,8 @@ jobs:
       - name: Build CORE container
         run: docker build --pull -t gerchain-core:trivy .
 
-      - name: Run Trivy image scan
-        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+      - name: Run Trivy image scan (SARIF)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # pinned action
         with:
           image-ref: gerchain-core:trivy
           format: sarif
@@ -40,8 +40,35 @@ jobs:
         with:
           sarif_file: trivy-image.sarif
 
+      - name: Print CORE image findings
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # pinned action
+        with:
+          image-ref: gerchain-core:trivy
+          format: table
+          severity: CRITICAL,HIGH,MEDIUM
+          ignore-unfixed: false
+          scanners: vuln,secret,misconfig
+
+      - name: Export CORE image report
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # pinned action
+        with:
+          image-ref: gerchain-core:trivy
+          format: json
+          output: trivy-image.json
+          severity: CRITICAL,HIGH,MEDIUM
+          ignore-unfixed: false
+          scanners: vuln,secret,misconfig
+
+      - name: Upload CORE image report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: trivy-core-image-report
+          path: trivy-image.json
+          if-no-files-found: error
+
       - name: Run Trivy filesystem scan
-        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # pinned action
         with:
           scan-type: fs
           scan-ref: .
