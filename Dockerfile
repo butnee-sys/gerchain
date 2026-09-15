@@ -9,11 +9,12 @@ RUN apk update \
 COPY requirements-dee-security.txt /build/requirements-dee-security.txt
 
 # Build the application Python environment from Alpine's own Python runtime.
-# This avoids inheriting the Python distribution metadata from the official
-# python:* base image layers that Trivy previously reported.
+# Build-time packaging tools are removed before the runtime image is assembled.
 RUN python3 -m venv /opt/venv \
     && /opt/venv/bin/python -m pip install --no-cache-dir --upgrade pip \
-    && /opt/venv/bin/python -m pip install --no-cache-dir --upgrade -r /build/requirements-dee-security.txt
+    && /opt/venv/bin/python -m pip install --no-cache-dir --upgrade -r /build/requirements-dee-security.txt \
+    && /opt/venv/bin/python -m pip uninstall -y msgpack setuptools pip \
+    && /opt/venv/bin/python -c "import cryptography, sqlalchemy, psycopg"
 
 FROM alpine:3.22
 WORKDIR /app
