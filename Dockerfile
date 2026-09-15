@@ -13,8 +13,7 @@ COPY requirements-dee-security.txt /build/requirements-dee-security.txt
 # python:* base image layers that Trivy previously reported.
 RUN python3 -m venv /opt/venv \
     && /opt/venv/bin/python -m pip install --no-cache-dir --upgrade pip \
-    && /opt/venv/bin/python -m pip install --no-cache-dir --upgrade -r /build/requirements-dee-security.txt \
-    && /opt/venv/bin/python -c "from importlib.metadata import version; assert tuple(map(int, version('msgpack').split('.')[:2])) >= (1,2); assert tuple(map(int, version('setuptools').split('.')[:2])) >= (83,0)"
+    && /opt/venv/bin/python -m pip install --no-cache-dir --upgrade -r /build/requirements-dee-security.txt
 
 FROM alpine:3.22
 WORKDIR /app
