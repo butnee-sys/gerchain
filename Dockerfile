@@ -7,11 +7,14 @@ RUN apk update \
 
 COPY . /app
 
-# Keep the CORE runtime on a current stable Alpine base and explicitly install
-# the remediated Python dependencies. SHUUD images remain out of scope.
+# Remove any Python package files/metadata inherited from the base image,
+# then install exact remediated versions. This prevents layer scanners from
+# retaining obsolete distribution records.
 RUN python -m pip install --no-cache-dir --upgrade pip \
+    && python -c "import glob, shutil; paths=[]; paths += glob.glob('/usr/local/lib/python*/site-packages/msgpack'); paths += glob.glob('/usr/local/lib/python*/site-packages/msgpack-*.dist-info'); paths += glob.glob('/usr/local/lib/python*/site-packages/setuptools'); paths += glob.glob('/usr/local/lib/python*/site-packages/setuptools-*.dist-info'); [shutil.rmtree(p, ignore_errors=True) for p in paths]" \
+    && python -m pip install --no-cache-dir --force-reinstall --no-deps 'msgpack==1.2.1' 'setuptools==83.0.0' \
     && python -m pip install --no-cache-dir --upgrade -r requirements-dee-security.txt \
-    && python -c "import msgpack, setuptools; assert tuple(map(int, msgpack.__version__.split('.')[:2])) >= (1,2); assert tuple(map(int, setuptools.__version__.split('.')[:2])) >= (83,0)"
+    && python -c "from importlib.metadata import version; assert version('msgpack') == '1.2.1'; assert version('setuptools') == '83.0.0'"
 
 RUN addgroup -S gerchain \
     && adduser -S -D -H -G gerchain gerchain \
