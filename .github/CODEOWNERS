@@ -1,0 +1,14 @@
+# GerChain CORE ownership
+* @butnee-sys
+
+# CORE persistence / transaction integrity
+/persistence/ @butnee-sys
+
+# CORE tests
+/tests/ @butnee-sys
+
+# CI and repository governance
+/.github/ @butnee-sys
+
+# Audit and control evidence
+/docs/ @butnee-sys
