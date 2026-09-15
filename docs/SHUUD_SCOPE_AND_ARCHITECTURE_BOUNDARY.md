@@ -60,14 +60,20 @@ CORE assurance remains based on:
 
 SHUUD assurance is evaluated independently against its own product risks and acceptance criteria.
 
-## 6. Change-control rule
+## 6. CORE interface boundary
+
+SHUUD may consume approved CORE capabilities only through defined interfaces. SHUUD must not directly manipulate CORE persistence structures or bypass CORE integrity controls.
+
+If SHUUD requires a capability that does not exist, the request enters the CORE change-control process rather than being implemented by bypassing CORE.
+
+## 7. Change-control rule
 
 SHUUD changes must not modify GerChain CORE solely to satisfy SHUUD application requirements. CORE changes require the existing protected-branch governance and CORE evidence gates.
 
-## 7. Claims policy
+## 8. Claims policy
 
 SHUUD is a product implementation using GerChain infrastructure. It is not evidence that GerChain CORE itself is certified, independently audited, or compliant with any external standard.
 
-## 8. Future integration
+## 9. Future integration
 
 If SHUUD or another application requires additional CORE capability, that requirement is treated as a separately reviewed CORE change. Scope expansion must be explicitly approved and recorded; it must never occur implicitly through application development.
