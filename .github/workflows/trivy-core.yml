@@ -32,6 +32,7 @@ jobs:
           severity: CRITICAL,HIGH,MEDIUM
           ignore-unfixed: false
           scanners: vuln,secret,misconfig
+          version: v0.74.0
 
       - name: Export CORE image report
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # pinned action
@@ -42,6 +43,7 @@ jobs:
           severity: CRITICAL,HIGH,MEDIUM
           ignore-unfixed: false
           scanners: vuln,secret,misconfig
+          version: v0.74.0
 
       - name: Run Trivy image scan (SARIF)
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # pinned action
@@ -52,6 +54,7 @@ jobs:
           severity: CRITICAL,HIGH,MEDIUM
           ignore-unfixed: false
           scanners: vuln,secret,misconfig
+          version: v0.74.0
 
       - name: Upload image scan results
         uses: github/codeql-action/upload-sarif@v3
@@ -78,3 +81,4 @@ jobs:
           ignore-unfixed: false
           scanners: vuln,secret,misconfig
           skip-dirs: sandbox
+          version: v0.74.0
