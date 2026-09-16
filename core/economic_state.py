@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-import hashlib
-import json
 from dataclasses import dataclass
 from typing import Any, Mapping
+
+from core.hashing import domain_hash
 
 
 @dataclass(frozen=True)
@@ -17,14 +17,10 @@ class EconomicStateFingerprint:
 def fingerprint_relevant_state(*, version: str, state: Mapping[str, Any]) -> EconomicStateFingerprint:
     if not version:
         raise ValueError("state version is required")
-    canonical = json.dumps(
-        state,
-        sort_keys=True,
-        separators=(",", ":"),
-        default=str,
-    ).encode("utf-8")
-    digest = hashlib.sha256(canonical).hexdigest()
-    return EconomicStateFingerprint(version=version, digest=digest)
+    return EconomicStateFingerprint(
+        version=version,
+        digest=domain_hash("GERCHAIN:ECONOMIC-STATE", state),
+    )
 
 
 def state_matches(*, decision: EconomicStateFingerprint, current: EconomicStateFingerprint) -> bool:
