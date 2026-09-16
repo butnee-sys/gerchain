@@ -48,12 +48,7 @@ class _ReusedSessionContext:
 
 
 class DecisionBoundPostgreSQLRelease:
-    """Thin decision-validity guard over the existing atomic release engine.
-
-    The guard locks the relevant rows, verifies the decision fingerprint, then
-    invokes the existing PostgreSQLAtomicRelease using the same SQLAlchemy
-    session. No second value-movement implementation is introduced.
-    """
+    """Thin decision-validity guard over the existing atomic release engine."""
 
     def __init__(self, release: PostgreSQLAtomicRelease):
         self._release = release
@@ -89,23 +84,22 @@ class DecisionBoundPostgreSQLRelease:
             if not state_matches(decision=decision_state, current=current):
                 raise StaleDecisionError("release decision is stale: relevant economic state changed")
 
-            original_factory = self._release.session_factory
-            self._release.session_factory = lambda: _ReusedSessionContext(session)
-            try:
-                return self._release.release(
-                    idempotency_key=idempotency_key,
-                    transaction_id=transaction_id,
-                    escrow_id=escrow_id,
-                    source=source,
-                    destination=destination,
-                    amount=amount,
-                    decision_status=decision_status,
-                    authorization_status=authorization_status,
-                    trinity_proof=trinity_proof,
-                    evidence_verified=evidence_verified,
-                )
-            finally:
-                self._release.session_factory = original_factory
+            guarded_release = PostgreSQLAtomicRelease(
+                lambda: _ReusedSessionContext(session),
+                processing_lease_seconds=self._release.processing_lease_seconds,
+            )
+            return guarded_release.release(
+                idempotency_key=idempotency_key,
+                transaction_id=transaction_id,
+                escrow_id=escrow_id,
+                source=source,
+                destination=destination,
+                amount=amount,
+                decision_status=decision_status,
+                authorization_status=authorization_status,
+                trinity_proof=trinity_proof,
+                evidence_verified=evidence_verified,
+            )
 
 
 __all__ = [
