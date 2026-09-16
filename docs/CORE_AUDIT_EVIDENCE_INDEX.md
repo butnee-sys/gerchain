@@ -3,7 +3,7 @@
 **Audit scope:** GerChain CORE  
 **Frozen baseline:** `274f45c83ce088e2229a2628e3a80403a68503df`  
 **Main baseline:** `621e7e2acefe243d4c72e783970e1eb833c60b96`  
-**Current CORE revalidation/evidence commit:** `b6179013c3c9d56778e051fe1f99bf46c2f9d7c9`
+**Current CORE revalidation/evidence commit:** `ce39dc9886af4a2da6bdc3d6d7e6407bac5f8eb7`
 
 ## Evidence register
 
@@ -22,13 +22,13 @@
 | E-CORE-011 | W3 schema/version authority | `docs/evidence/W3_CLOSURE_2026-09-16.md` + current CORE gates | GREEN (bounded) |
 | E-GOV-001 | IAM / MFA | `GC-IDM-001/002` evidence package | MISSING |
 | E-GOV-002 | Privileged access review | Organizational access inventory/review records | MISSING |
-| E-GOV-003 | Main branch governance | Branch protection/ruleset evidence | UNVERIFIED |
+| E-GOV-003 | Main branch governance | Active repository ruleset `CORE-main-protection` | VERIFIED (bounded) |
 | E-CI-001 | Post-merge main CI | To be captured after final merge | PENDING |
 | E-W3-ARCH-001 | Production DDL migration execution | Migration executor assurance package | OPEN |
 
 ## Current CORE revalidation evidence
 
-The W3 execution commit `3654060db520e5493c23a6203c6ab29eef60f314` passed CORE gates, PostgreSQL concurrency, operating reconciliation, CodeQL and Snyk checks; W3 production tests, independent oracle/deterministic reproduction, and independent PostgreSQL re-performance passed in the CORE gate chain. The evidence-record refresh is carried by `b6179013c3c9d56778e051fe1f99bf46c2f9d7c9` on the same W3 branch.
+The W3 execution commit `3654060db520e5493c23a6203c6ab29eef60f314` passed CORE gates, PostgreSQL concurrency, operating reconciliation, CodeQL and Snyk checks; W3 production tests, independent oracle/deterministic reproduction, and independent PostgreSQL re-performance passed in the CORE gate chain. The evidence-record refresh is carried by the subsequent evidence commits on the same W3 branch.
 
 W3 closure is bounded to canonical schema/version authority and concurrency transition semantics. Complete production DDL migration execution remains a separately declared architectural assurance concern.
 
