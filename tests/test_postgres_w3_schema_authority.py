@@ -5,7 +5,7 @@ import threading
 from concurrent.futures import ThreadPoolExecutor
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker
 
 from core.schema_authority import SchemaUpgrade
@@ -18,7 +18,6 @@ from persistence.schema_authority import (
     create_schema_authority_tables,
     initialize_schema,
 )
-from database import get_database_engine
 
 
 DB_URL = os.getenv("GERCHAIN_TEST_DATABASE_URL")
@@ -26,7 +25,7 @@ pytestmark = pytest.mark.skipif(not DB_URL, reason="GERCHAIN_TEST_DATABASE_URL i
 
 
 def _engine():
-    return get_database_engine(DB_URL)
+    return create_engine(DB_URL, pool_pre_ping=True)
 
 
 def _upgrade(upgrade_id: str, from_version: int = 1, to_version: int = 2) -> SchemaUpgrade:
