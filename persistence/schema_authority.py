@@ -89,7 +89,7 @@ def create_schema_authority_tables(engine) -> None:
 
 
 def initialize_schema(session: Session, schema_id: str, version: int, state_hash: str) -> None:
-    """Insert the sole canonical schema row.  Re-initialization is rejected."""
+    """Insert the sole canonical schema row. Re-initialization is rejected."""
     if session.get(CoreSchemaStateModel, schema_id) is not None:
         raise SchemaUpgradeConflict(f"schema already initialized: {schema_id}")
     session.add(
@@ -104,6 +104,22 @@ def initialize_schema(session: Session, schema_id: str, version: int, state_hash
     session.flush()
 
 
+def _existing_upgrade(session: Session, upgrade_id: str):
+    return session.get(CoreSchemaUpgradeModel, upgrade_id)
+
+
+def _result_from_existing(existing: CoreSchemaUpgradeModel) -> UpgradeResult:
+    if existing.status == UpgradeStatus.APPLIED.value:
+        return UpgradeResult(
+            existing.upgrade_id,
+            existing.schema_id,
+            existing.from_version,
+            existing.to_version,
+            UpgradeStatus.APPLIED,
+        )
+    raise SchemaUpgradeConflict(f"upgrade identity exists with status={existing.status}")
+
+
 def apply_upgrade_transaction(
     session: Session,
     upgrade: SchemaUpgrade,
@@ -112,20 +128,13 @@ def apply_upgrade_transaction(
     """Atomically apply one schema upgrade under the canonical-row lock.
 
     PostgreSQL ``FOR UPDATE`` serializes all upgrades for the same schema.
-    The upgrade identity is checked before mutation, so a retry is idempotent.
-    A predecessor mismatch is rejected without changing the canonical state.
+    The upgrade identity is checked both before and after the lock so a
+    concurrent retry can resolve to the already committed authoritative
+    upgrade rather than being mistaken for a stale distinct upgrade.
     """
-    existing = session.get(CoreSchemaUpgradeModel, upgrade.upgrade_id)
+    existing = _existing_upgrade(session, upgrade.upgrade_id)
     if existing is not None:
-        if existing.status == UpgradeStatus.APPLIED.value:
-            return UpgradeResult(
-                existing.upgrade_id,
-                existing.schema_id,
-                existing.from_version,
-                existing.to_version,
-                UpgradeStatus.APPLIED,
-            )
-        raise SchemaUpgradeConflict(f"upgrade identity exists with status={existing.status}")
+        return _result_from_existing(existing)
 
     current_model = (
         session.query(CoreSchemaStateModel)
@@ -135,6 +144,13 @@ def apply_upgrade_transaction(
     )
     if current_model is None:
         raise SchemaUpgradeRejected(f"unknown schema: {upgrade.schema_id}")
+
+    # A concurrent transaction may have inserted the same upgrade identity
+    # while this transaction waited on the canonical schema row. Re-read after
+    # acquiring the lock; READ COMMITTED makes the committed retry visible.
+    existing = _existing_upgrade(session, upgrade.upgrade_id)
+    if existing is not None:
+        return _result_from_existing(existing)
 
     current = _state(current_model)
     try:
