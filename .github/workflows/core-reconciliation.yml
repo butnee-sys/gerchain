@@ -1,6 +1,8 @@
 name: CORE Operating Reconciliation
 
 on:
+  push:
+    branches: ["feat/canonical-protection-architecture"]
   pull_request:
   workflow_dispatch:
 
