@@ -20,22 +20,23 @@ def evaluate_concurrent_upgrades(
     Each tuple is (upgrade_id, from_version, to_version). Upgrades compete
     against one canonical predecessor. At most one distinct upgrade may move
     the state from the supplied predecessor; a repeated upgrade ID is an
-    idempotent retry rather than a second authoritative transition.
+    idempotent retry only when its transition payload is identical.
     """
     accepted: list[str] = []
-    seen_ids: set[str] = set()
-    duplicate_retry_ids: set[str] = set()
-    accepted_duplicate_ids: set[str] = set()
+    seen: dict[str, tuple[int, int]] = {}
     version = current_version
     lost_upgrade = False
+    idempotent_retry_safe = True
 
     for upgrade_id, from_version, to_version in upgrades:
-        if upgrade_id in seen_ids:
-            duplicate_retry_ids.add(upgrade_id)
-            if upgrade_id in accepted:
-                accepted_duplicate_ids.add(upgrade_id)
+        transition = (from_version, to_version)
+        if upgrade_id in seen:
+            # Same identity + same transition is a safe retry; a changed
+            # transition under the same identity is not idempotent-safe.
+            if seen[upgrade_id] != transition:
+                idempotent_retry_safe = False
             continue
-        seen_ids.add(upgrade_id)
+        seen[upgrade_id] = transition
         if from_version == version and to_version > from_version:
             accepted.append(upgrade_id)
             version = to_version
@@ -50,8 +51,7 @@ def evaluate_concurrent_upgrades(
             for _, from_version, _ in upgrades
         ),
         lost_upgrade=lost_upgrade and len(accepted) == 0,
-        idempotent_retry_safe=not accepted_duplicate_ids
-        and duplicate_retry_ids.issubset(seen_ids),
+        idempotent_retry_safe=idempotent_retry_safe,
     )
 
 
