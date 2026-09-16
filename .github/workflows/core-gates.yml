@@ -109,3 +109,6 @@ jobs:
       - name: Run independent PostgreSQL W2 re-performance
         run: |
           python tests/independent/w2_postgres_reperformance.py
+      - name: Run CORE W3 schema authority tests
+        run: |
+          pytest -q tests/test_schema_authority.py tests/test_postgres_w3_schema_authority.py
