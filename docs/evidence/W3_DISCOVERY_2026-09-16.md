@@ -10,43 +10,32 @@ CORE only. SHUUD excluded.
 
 ## Discovery result
 
-The current repository does not expose a dedicated schema-version authority or migration subsystem under the expected names searched during W3 discovery (`schema_version`, `migration`, `upgrade`, or Alembic configuration).
+The initial discovery found no dedicated schema-version authority or migration subsystem under the expected names. The inspected `database.py` and test fixtures used `Base.metadata.create_all`, which was correctly classified as insufficient evidence for concurrent schema/version authority.
 
-The inspected `database.py` defines SQLAlchemy models for `gerchain_escrow_states` and `gerchain_chain_tips`, creates an engine, and initializes tables through `Base.metadata.create_all(engine)`. No schema-version state machine, predecessor-version check, migration journal, or concurrent upgrade protocol is present in that file.
+## Superseding implementation evidence
 
-The repository test fixture similarly initializes the database through `Base.metadata.create_all(bind=engine)` and later drops metadata. This establishes table creation for tests, but it is not evidence of a concurrent schema migration/version authority.
+The discovery finding is superseded for the declared W3 capability by the implementation and closure evidence on execution commit `46f9443a6a4e14e91807f75a7dd9fae619ad7131`.
 
-## W3 consequence
+The W3 implementation now defines:
 
-W3 cannot be marked GREEN from the current implementation evidence.
+- canonical schema identity and current version;
+- atomic predecessor-to-successor transition semantics;
+- migration identity and idempotency;
+- PostgreSQL row-lock serialization and transaction boundary;
+- stale predecessor rejection;
+- reader committed-state boundary;
+- rollback preservation;
+- independent oracle and deterministic reproduction;
+- independent PostgreSQL re-performance.
 
-The current evidence is insufficient to establish:
+## Final status
 
-- single authoritative schema version;
-- atomic version transition;
-- predecessor/version compare-and-set semantics;
-- concurrent migration conflict isolation;
-- reader safety during migration;
-- migration rollback/recovery;
-- schema upgrade idempotency.
+**W3 = GREEN (bounded technical/scientific validation domain)**
 
-## Status
+See `docs/evidence/W3_CLOSURE_2026-09-16.md` for the reconciled closure record.
 
-**W3 = INCONCLUSIVE / IMPLEMENTATION GAP**
+## Remaining boundary
 
-This is not a claim that the whole CORE is RED. It is a gate-local finding: the declared W3 schema-concurrency capability has not yet been demonstrated by an identifiable production implementation.
+The complete production DDL migration executor and its integration with this authority layer remain a separately declared concern. This does not invalidate the bounded W3 closure, but it limits the claim to schema/version authority and concurrency transition semantics.
 
-## Required next step
-
-Before W3 tests are treated as implementation validation, define and implement (or explicitly identify an existing authoritative mechanism for):
-
-1. canonical schema identity;
-2. current schema version;
-3. atomic predecessor-to-successor transition;
-4. migration identity and idempotency;
-5. concurrent upgrade serialization/conflict handling;
-6. reader compatibility boundary;
-7. rollback/recovery semantics;
-8. independent oracle and reproduction contract.
-
-Only after these are explicit should adversarial PostgreSQL tests be promoted to W3 closure evidence.
+W3 GREEN does not imply final CORE GREEN or CORE LOCK.
