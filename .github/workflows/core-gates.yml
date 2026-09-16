@@ -114,7 +114,8 @@ jobs:
           pytest -q \
             tests/test_schema_authority.py \
             tests/test_postgres_w3_schema_authority.py \
-            tests/test_w3_independent_oracle.py
+            tests/test_w3_independent_oracle.py \
+            tests/test_w3_independent_reproduction.py
       - name: Run independent PostgreSQL W3 re-performance
         run: |
           python tests/independent/w3_postgres_reperformance.py
