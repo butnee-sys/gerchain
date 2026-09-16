@@ -106,3 +106,6 @@ jobs:
             tests/test_w2_independent_oracle.py \
             tests/test_w2_oracle_agreement.py \
             tests/test_w2_independent_reproduction.py
+      - name: Run independent PostgreSQL W2 re-performance
+        run: |
+          python tests/independent/w2_postgres_reperformance.py
