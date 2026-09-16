@@ -97,3 +97,11 @@ jobs:
             tests/test_runtime_postgres_release.py \
             tests/test_post_commit_replay_contract.py \
             tests/test_self_maintainer.py
+      - name: Run CORE W2 C2/C6 and independent oracle tests
+        run: |
+          pytest -q \
+            tests/test_economic_state_fingerprint.py \
+            tests/test_postgres_w2_shared_liquidity.py \
+            tests/test_postgres_w2_stale_decision.py \
+            tests/test_w2_independent_oracle.py \
+            tests/test_w2_oracle_agreement.py
