@@ -104,4 +104,5 @@ jobs:
             tests/test_postgres_w2_shared_liquidity.py \
             tests/test_postgres_w2_stale_decision.py \
             tests/test_w2_independent_oracle.py \
-            tests/test_w2_oracle_agreement.py
+            tests/test_w2_oracle_agreement.py \
+            tests/test_w2_independent_reproduction.py
