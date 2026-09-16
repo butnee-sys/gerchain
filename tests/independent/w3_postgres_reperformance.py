@@ -35,6 +35,14 @@ def setup(conn, suffix: str) -> str:
     return table
 
 
+def reset_to_v1(conn_url: str, table: str) -> None:
+    with psycopg.connect(conn_url, autocommit=True) as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                f"UPDATE {table} SET current_version=1, state_hash='v1', status='ACTIVE' WHERE schema_id='CORE'"
+            )
+
+
 def upgrade(conn_url: str, table: str, upgrade_id: str, barrier: Barrier) -> str:
     with psycopg.connect(conn_url, autocommit=False) as conn:
         with conn.cursor() as cur:
@@ -47,7 +55,6 @@ def upgrade(conn_url: str, table: str, upgrade_id: str, barrier: Barrier) -> str
             cur.execute(
                 f"UPDATE {table} SET current_version=2, state_hash='v2', status='ACTIVE' WHERE schema_id='CORE' AND current_version=1"
             )
-            cur.execute("SELECT 1")
         conn.commit()
         return "APPLIED:" + upgrade_id
 
@@ -67,6 +74,7 @@ def same_id_upgrade(conn_url: str, table: str, barrier: Barrier) -> str:
 
 
 def run_distinct(conn_url: str, table: str) -> None:
+    reset_to_v1(conn_url, table)
     barrier = Barrier(2)
     with ThreadPoolExecutor(max_workers=2) as pool:
         futures = [
@@ -82,9 +90,7 @@ def run_distinct(conn_url: str, table: str) -> None:
 
 
 def run_same_id(conn_url: str, table: str) -> None:
-    with psycopg.connect(conn_url, autocommit=True) as conn:
-        with conn.cursor() as cur:
-            cur.execute(f"UPDATE {table} SET current_version=1, state_hash='v1' WHERE schema_id='CORE'")
+    reset_to_v1(conn_url, table)
     barrier = Barrier(2)
     with ThreadPoolExecutor(max_workers=2) as pool:
         futures = [pool.submit(same_id_upgrade, conn_url, table, barrier) for _ in range(2)]
@@ -93,10 +99,11 @@ def run_same_id(conn_url: str, table: str) -> None:
 
 
 def run_rollback(conn_url: str, table: str) -> None:
+    reset_to_v1(conn_url, table)
     with psycopg.connect(conn_url, autocommit=False) as conn:
         with conn.cursor() as cur:
             cur.execute(f"UPDATE {table} SET current_version=2, state_hash='v2' WHERE schema_id='CORE'")
-            conn.rollback()
+        conn.rollback()
     with psycopg.connect(conn_url, autocommit=True) as conn:
         with conn.cursor() as cur:
             cur.execute(f"SELECT current_version, state_hash FROM {table} WHERE schema_id='CORE'")
