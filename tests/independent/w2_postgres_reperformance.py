@@ -21,6 +21,7 @@ import psycopg
 DB_URL = os.environ.get("GERCHAIN_TEST_DATABASE_URL")
 if not DB_URL:
     raise SystemExit("GERCHAIN_TEST_DATABASE_URL is required")
+PSYCOPG_DB_URL = DB_URL.replace("postgresql+psycopg://", "postgresql://", 1)
 
 
 def digest(state: dict) -> str:
@@ -29,7 +30,7 @@ def digest(state: dict) -> str:
 
 
 def connect():
-    return psycopg.connect(DB_URL, autocommit=False)
+    return psycopg.connect(PSYCOPG_DB_URL, autocommit=False)
 
 
 def setup(conn, suffix: str) -> tuple[str, str]:
@@ -129,8 +130,8 @@ def main() -> None:
         table, ledger = setup(conn, suffix)
 
     try:
-        run_c2(DB_URL, table, ledger, suffix)
-        run_c6(DB_URL, table, suffix)
+        run_c2(PSYCOPG_DB_URL, table, ledger, suffix)
+        run_c6(PSYCOPG_DB_URL, table, suffix)
         print("W2 independent PostgreSQL re-performance: PASS")
         print("C2: concurrent distinct consumers -> one commit, total=1500000, over-allocation=False")
         print("C6: changed PostgreSQL state -> stale decision rejected before mutation")
