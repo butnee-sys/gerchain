@@ -85,6 +85,38 @@ def test_w3_concurrent_distinct_upgrades_single_authority():
         engine.dispose()
 
 
+def test_w3_concurrent_same_upgrade_id_is_idempotent():
+    engine, Session = _fresh_db()
+    barrier = threading.Barrier(2)
+
+    def worker():
+        session = Session()
+        try:
+            barrier.wait(timeout=10)
+            result = apply_upgrade_transaction(session, _upgrade("same-concurrent"), "state-v2")
+            session.commit()
+            return result.status
+        except Exception:
+            session.rollback()
+            return "REJECTED"
+        finally:
+            session.close()
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        results = list(pool.map(lambda _: worker(), range(2)))
+
+    session = Session()
+    try:
+        state = session.get(CoreSchemaStateModel, "w3-test-schema")
+        upgrades = session.scalars(select(CoreSchemaUpgradeModel)).all()
+        assert results == [UpgradeStatus.APPLIED, UpgradeStatus.APPLIED]
+        assert state.current_version == 2
+        assert len(upgrades) == 1
+    finally:
+        session.close()
+        engine.dispose()
+
+
 def test_w3_same_upgrade_id_is_idempotent():
     engine, Session = _fresh_db()
     session = Session()
