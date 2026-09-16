@@ -64,7 +64,8 @@ def test_distinct_concurrent_operations_share_one_canonical_liquidity_capacity()
             return exc
 
     with ThreadPoolExecutor(max_workers=2) as pool:
-        results = [future.result() for future in as_completed([pool.submit(attempt, i) for i in range(2)])]
+        futures = [pool.submit(attempt, i) for i in range(2)]
+        results = [future.result() for future in as_completed(futures)]
 
     successes = [result for result in results if not isinstance(result, Exception) and not result.replay]
     failures = [result for result in results if isinstance(result, Exception)]
@@ -86,6 +87,6 @@ def test_distinct_concurrent_operations_share_one_canonical_liquidity_capacity()
     assert committed <= capacity
     assert source_row.balance == capacity - committed
     assert sum(escrow.state == "RELEASED" for escrow in released_escrows) == 1
-    assert len(operations) == 2
+    assert len(operations) == 1
     assert len(witnesses) == 1
-    assert committed in {0, amount}
+    assert committed == amount
