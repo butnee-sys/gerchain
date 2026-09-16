@@ -24,11 +24,16 @@ def evaluate_concurrent_upgrades(
     """
     accepted: list[str] = []
     seen_ids: set[str] = set()
+    duplicate_retry_ids: set[str] = set()
+    accepted_duplicate_ids: set[str] = set()
     version = current_version
     lost_upgrade = False
 
     for upgrade_id, from_version, to_version in upgrades:
         if upgrade_id in seen_ids:
+            duplicate_retry_ids.add(upgrade_id)
+            if upgrade_id in accepted:
+                accepted_duplicate_ids.add(upgrade_id)
             continue
         seen_ids.add(upgrade_id)
         if from_version == version and to_version > from_version:
@@ -45,8 +50,8 @@ def evaluate_concurrent_upgrades(
             for _, from_version, _ in upgrades
         ),
         lost_upgrade=lost_upgrade and len(accepted) == 0,
-        idempotent_retry_safe=len(accepted)
-        == len({upgrade_id for upgrade_id, _, _ in upgrades}),
+        idempotent_retry_safe=not accepted_duplicate_ids
+        and duplicate_retry_ids.issubset(seen_ids),
     )
 
 
