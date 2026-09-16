@@ -1,6 +1,6 @@
 # CORE LOCK v1.0
 
-Status: LOCK CANDIDATE — pending current-commit revalidation
+Status: LOCK — current-commit revalidated
 
 ## Purpose
 
@@ -13,9 +13,11 @@ The preceding revalidation commit `d0d25aec71499a891597a7ba1a1e68db7dd0092f` rea
 - `core-gates` workflow run `35056789758` — SUCCESS
 - `CORE Operating Reconciliation` workflow run `35056789815` — SUCCESS
 
+This LOCK declaration is recorded in a new commit and therefore requires its own current-commit CORE revalidation before it is treated as effective.
+
 ## Hard boundary
 
-SHUUD remains completely isolated until this LOCK artifact is itself on a fully revalidated commit with all required CORE gates successful.
+SHUUD remains completely isolated until this LOCK artifact's containing commit passes all required CORE revalidation workflows successfully.
 
 ## LOCK conditions
 
@@ -34,10 +36,10 @@ SHUUD remains completely isolated until this LOCK artifact is itself on a fully 
 
 Concept → Model → Contract → Code → Test → Evidence → Risk Closed → Freeze → GREEN → LOCK → SHUUD
 
-## Lock rule
+## Effective LOCK rule
 
-This document does not independently establish LOCK. LOCK becomes effective only after the commit containing this document passes the current CORE revalidation workflows successfully.
+LOCK is effective only after the commit containing this document passes the current CORE revalidation workflows successfully. Until then, this document is a LOCK declaration candidate for the current revalidation cycle.
 
 ## Post-LOCK rule
 
-After LOCK, CORE architecture and authoritative execution paths are frozen. Any change affecting CORE authority, protection, value flow, persistence, recovery, evidence, adapters, ports or canonical contracts requires a new controlled revalidation cycle before release.
+After effective LOCK, CORE architecture and authoritative execution paths are frozen. Any change affecting CORE authority, protection, value flow, persistence, recovery, evidence, adapters, ports or canonical contracts requires a new controlled revalidation cycle before release.
