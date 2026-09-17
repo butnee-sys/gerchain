@@ -88,7 +88,7 @@ def test_transactional_success_updates_physical_and_authority(engine):
     assert state.current_version == 2
     assert len(upgrades) == 1
     with engine.connect() as conn:
-        assert conn.execute(text("SELECT 1 FROM core.migration_target")).scalar() == 1
+        assert conn.execute(text("SELECT to_regclass('core.migration_target')")).scalar() == 'core.migration_target'
 
 
 def test_same_id_committed_retry_does_not_execute_ddl_twice(engine):
