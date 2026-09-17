@@ -129,4 +129,5 @@ jobs:
           pytest -q \
             tests/test_migration_identity.py \
             tests/test_migration_executor.py \
-            tests/test_postgres_migration_executor.py
+            tests/test_postgres_migration_executor.py \
+            tests/test_postgres_migration_executor_recovery.py
