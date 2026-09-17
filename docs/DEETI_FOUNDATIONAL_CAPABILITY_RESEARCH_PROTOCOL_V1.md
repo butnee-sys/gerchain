@@ -19,7 +19,7 @@ The research question is:
 
 > Does the Escrow Trinity constitute a foundational capability for Digital Economy activity, such that higher ET capability is associated with and/or causally contributes to more reliable, lower-friction, more verifiable digital economic transactions?
 
-This is a research hypothesis, not an established scientific law. A scientific hypothesis must generate predictions that can be contradicted by evidence; reproducibility, robustness, and independent replication are also required for stronger credibility.
+This is a research hypothesis, not an established scientific law.
 
 ## 2. Conceptual definitions
 
@@ -45,7 +45,7 @@ where:
 - `Tr` = **Transparency** — ил тод, шалгагдах боломж;
 - `Tf` = **Triumph**, operationalized as **verified fulfilment** — тохиролцсон нөхцөл биелсэн бөгөөд биелэлт нь нотлогдох боломж.
 
-The use of verified fulfilment as the measurable definition of Triumph prevents Triumph from becoming a subjective success judgement.
+The operationalization of Triumph as verified fulfilment prevents the term from becoming a subjective success judgement.
 
 ### 2.3 Foundational capability
 
@@ -53,47 +53,41 @@ A capability is considered **foundational** only if removing or materially weake
 
 Thus “foundational” is an empirical claim, not a rhetorical label.
 
-## 3. Main hypothesis
+## 3. Main hypotheses
 
 ### H1 — Foundational capability hypothesis
 
 > Digital economic transaction environments with higher measurable ET capability exhibit superior transaction reliability and/or lower transaction friction than otherwise comparable environments with lower ET capability.
 
-A stronger causal version is:
-
-> Increasing ET capability causes measurable improvement in pre-specified Digital Economy outcomes, relative to an appropriate counterfactual or control condition.
-
 ### H0 — Null hypothesis
 
 > After controlling for relevant confounders and baseline system characteristics, ET capability has no practically meaningful effect on the pre-specified Digital Economy outcomes.
 
-### H2 — Component necessity hypothesis
+### H2 — Component necessity
 
 Removing any one of Trust, Transparency, or verified Fulfilment materially weakens the combined capability.
 
-### H3 — Complementarity hypothesis
+### H3 — Complementarity
 
 The combined ET capability produces an effect greater than the independent contribution of any single component, after accounting for interaction effects.
 
 ## 4. Falsification conditions
 
-The hypothesis must be treated as **not supported** if one or more of the following pre-specified results occur:
+The foundational hypothesis is **not supported** if one or more pre-specified results occur:
 
 1. ET capability has no statistically or practically meaningful relationship with the primary outcome across adequately powered tests.
 2. The relationship disappears after reasonable controls for transaction complexity, participant risk, institutional quality, technology maturity, and market structure.
 3. A credible alternative model explains the observed outcome equally well or better without ET.
 4. Removing one ET component produces no measurable degradation where H2 predicts degradation.
-5. ET improves transparency/trust perceptions but does not improve actual transaction reliability or friction.
+5. ET improves trust/transparency measures but does not improve actual transaction reliability or friction.
 6. Results fail in independent datasets, domains, or jurisdictions.
 7. Results are highly sensitive to reasonable changes in measurement, weighting, missing-data treatment, or model specification.
 
-A positive association alone is therefore insufficient to establish the foundational claim.
+A positive association alone is insufficient to establish the foundational claim.
 
 ## 5. Operational measurement model
 
 ### 5.1 ET capability index
-
-The primary index should be constructed before outcome testing:
 
 ```text
 ETI = wT·T + wTr·Tr + wTf·Tf
@@ -105,17 +99,17 @@ with:
 wT + wTr + wTf = 1
 ```
 
-The primary specification should use equal weights unless a pre-registered empirical weighting procedure is justified. Alternative weighting schemes must be tested as robustness checks.
+Primary specification: equal weights unless a pre-registered empirical weighting procedure is justified. Alternative weighting schemes are robustness tests.
 
-All components must be normalized to a common scale, preferably `[0,1]`.
+All components are normalized to `[0,1]`.
 
 ### 5.2 Trust indicators
 
-Candidate measurable indicators include identity/authority verification success, dispute incidence, counterparty trust score, unauthorized-action rate, verified-authority coverage, repeat participation attributable to trust, and failed authorization rate.
+Candidate indicators include identity/authority verification success, dispute incidence, counterparty reliability, unauthorized-action rate, verified-authority coverage, repeat participation attributable to trust, and failed authorization rate.
 
 ### 5.3 Transparency indicators
 
-Candidate indicators include transaction-trace completeness, evidence availability, condition visibility, auditability, provenance completeness, decision explainability, and the proportion of material events with independently reconstructable evidence.
+Candidate indicators include transaction-trace completeness, evidence availability, condition visibility, auditability, provenance completeness, decision explainability, and independently reconstructable material events.
 
 ### 5.4 Triumph / verified fulfilment indicators
 
@@ -124,8 +118,6 @@ Candidate indicators include condition-fulfilment verification rate, successful 
 ## 6. Digital Economy outcome variables
 
 The primary outcome must be selected before observing final results.
-
-Candidate primary outcomes:
 
 ### O1 — Transaction reliability
 
@@ -155,23 +147,21 @@ O4 = transactions with complete reconstructable evidence / total transactions
 O5 = verified conditions followed by correct authorized settlement / eligible conditions
 ```
 
-The primary endpoint should be selected from O1–O5 before confirmatory analysis. The remaining outcomes are secondary endpoints.
+The primary endpoint is selected from O1–O5 before confirmatory analysis; remaining outcomes are secondary endpoints.
 
 ## 7. Comparative design
 
 A comparative design is mandatory because the proposition concerns capability, not merely correlation.
 
-### Comparison A — ET-enabled vs non-ET
+### A — ET-enabled vs non-ET
 
-Compare otherwise similar transaction environments with different levels of ET implementation.
+Compare otherwise similar transaction environments with different ET implementation levels.
 
-### Comparison B — High vs low ET capability
+### B — High vs low ET capability
 
 Use continuous ETI rather than an arbitrary binary classification.
 
-### Comparison C — Component ablation
-
-Test:
+### C — Component ablation
 
 ```text
 T + Tr + Tf
@@ -183,21 +173,21 @@ Tr only
 Tf only
 ```
 
-This tests whether the three components are jointly necessary or merely correlated.
+This tests whether the components are jointly necessary or merely correlated.
 
-### Comparison D — Before vs after
+### D — Before vs after
 
 Where a real system introduces an ET intervention, compare pre-intervention and post-intervention outcomes with an appropriate control group or interrupted-time-series design.
 
-### Comparison E — Cross-domain replication
+### E — Cross-domain replication
 
-Test across materially different transaction domains, such as peer-to-peer digital transactions, insurance/escrow transactions, asset transactions, supply-chain transactions, and public-sector digital transactions.
+Test across materially different transaction domains such as peer-to-peer digital transactions, insurance/escrow transactions, asset transactions, supply-chain transactions, and public-sector digital transactions.
 
 ## 8. Causal identification
 
 Where observational data are used, association must not be presented as causation.
 
-Preferred designs, in descending evidentiary strength:
+Preferred designs:
 
 1. randomized or controlled experiment;
 2. quasi-experimental intervention;
@@ -213,7 +203,7 @@ The design must specify the estimand, treatment/exposure definition, counterfact
 
 At minimum, models should consider transaction value, transaction complexity, participant count, participant experience, institutional/regulatory environment, technology maturity, transaction volume, dispute exposure, identity-verification requirements, settlement mechanism, market concentration, time period, and jurisdiction/domain.
 
-Controls must be selected based on a pre-specified causal model rather than chosen after observing the outcome.
+Controls must be selected from a pre-specified causal model rather than chosen after observing the outcome.
 
 ## 10. Statistical analysis
 
@@ -256,35 +246,17 @@ No GREEN, validated, causal, universal-law, or scientifically established status
 
 ## 13. Reproducibility requirements
 
-The research record must preserve:
-
-- protocol version;
-- hypothesis version;
-- dataset versions/vintages;
-- code commit SHA;
-- environment/dependency lock;
-- data dictionary;
-- variable transformations;
-- analysis scripts;
-- model specifications;
-- random seeds where applicable;
-- raw and derived-data hashes where legally possible;
-- complete result tables;
-- negative results;
-- deviations from protocol;
-- independent replication records.
+The research record must preserve protocol version, hypothesis version, dataset versions, code commit SHA, environment/dependency lock, data dictionary, transformations, analysis scripts, model specifications, random seeds where applicable, raw/derived-data hashes where legally possible, complete result tables, negative results, deviations from protocol, and independent replication records.
 
 ## 14. Current evidence status
 
-Existing research provides relevant but **not sufficient** evidence for the proposed DEETI hypothesis. Empirical work in digital transaction environments links transparency and trust to platform participation, while data-trust research identifies transparency as important to governance and adoption. These findings motivate the hypothesis but do not establish that the Escrow Trinity is foundational to the entire Digital Economy.
-
-Research on digital platforms also describes escrow as a mechanism for addressing trust problems between participants and as a central feature of some platform business models.
+Existing research provides relevant but **not sufficient** evidence for the proposed DEETI hypothesis. Empirical work linking transparency, trust, and digital participation motivates the hypothesis, but does not establish that the Escrow Trinity is foundational to the entire Digital Economy.
 
 ## 15. Research contribution claim
 
 The intended scientific contribution is **not** the claim that trust, transparency, or escrow are individually new concepts.
 
-The proposed contribution is the testable proposition that:
+The proposed contribution is the testable proposition:
 
 ```text
 Escrow Trinity
@@ -294,7 +266,7 @@ foundational capability
 Digital Economy transaction reliability / verifiability / fulfilment
 ```
 
-and, if supported by evidence, the resulting **DEETI infrastructure model** that operationalizes this relationship.
+If supported by evidence, the resulting DEETI infrastructure model becomes the engineering expression of that relationship.
 
 The claim becomes scientifically stronger only as it survives increasingly difficult falsification attempts, robustness tests, and independent replication.
 
