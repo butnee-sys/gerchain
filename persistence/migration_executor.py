@@ -116,13 +116,28 @@ def _authority_upgrade(definition: MigrationDefinition) -> SchemaUpgrade:
     )
 
 
+def _verify_physical_state(session: Session, definition: MigrationDefinition) -> None:
+    descriptor, actual_hash = reconcile(
+        session.connection(),
+        definition.identity.schema_id,
+        definition.expected_schema_hash,
+        definition.namespaces,
+    )
+    if descriptor.descriptor_version != definition.descriptor_version:
+        raise MigrationSchemaMismatch("descriptor version mismatch")
+    if actual_hash != definition.expected_schema_hash:
+        raise MigrationSchemaMismatch(
+            f"actual schema fingerprint mismatch: expected={definition.expected_schema_hash} actual={actual_hash}"
+        )
+
+
 def execute_migration(session: Session, definition: MigrationDefinition) -> UpgradeResult:
     """Execute one W3.1-B migration inside the caller's transaction.
 
-    The caller must commit the SQLAlchemy transaction after this function
-    returns. Any exception raised here must cause rollback. A committed retry
-    is resolved before executing DDL, so a successful migration is not run a
-    second time.
+    PostgreSQL DDL and W3 authority advancement are deliberately kept in the
+    same transaction. A committed retry is accepted only after the physical
+    schema is re-verified; an externally pre-applied but otherwise matching
+    schema may be reconciled and then committed to W3 without replaying DDL.
     """
     definition.validate()
 
@@ -130,6 +145,7 @@ def execute_migration(session: Session, definition: MigrationDefinition) -> Upgr
 
     existing = session.get(CoreSchemaUpgradeModel, definition.identity.migration_id)
     if existing is not None:
+        _verify_physical_state(session, definition)
         return apply_upgrade_transaction(session, _authority_upgrade(definition), definition.expected_schema_hash)
 
     connection = session.connection()
@@ -146,6 +162,7 @@ def execute_migration(session: Session, definition: MigrationDefinition) -> Upgr
     # request may have committed while this transaction was waiting.
     existing = session.get(CoreSchemaUpgradeModel, definition.identity.migration_id)
     if existing is not None:
+        _verify_physical_state(session, definition)
         return apply_upgrade_transaction(session, _authority_upgrade(definition), definition.expected_schema_hash)
 
     if state.current_version != definition.identity.from_version:
@@ -153,22 +170,22 @@ def execute_migration(session: Session, definition: MigrationDefinition) -> Upgr
     if state.status != "ACTIVE":
         raise MigrationExecutionError("schema is not available for migration")
 
-    for statement in definition.statements:
-        connection.execute(text(_normalize_sql(statement)))
+    # Recovery path for a physical DDL change that exists without a committed
+    # W3 authority record. This is safe only when the complete declared
+    # physical schema exactly matches the immutable expected fingerprint.
+    try:
+        _verify_physical_state(session, definition)
+    except MigrationSchemaMismatch:
+        for statement in definition.statements:
+            connection.execute(text(_normalize_sql(statement)))
+        _verify_physical_state(session, definition)
 
-    descriptor, actual_hash = reconcile(
+    descriptor, _ = reconcile(
         connection,
         definition.identity.schema_id,
         definition.expected_schema_hash,
         definition.namespaces,
     )
-    if descriptor.descriptor_version != definition.descriptor_version:
-        raise MigrationSchemaMismatch("descriptor version mismatch")
-    if actual_hash != definition.expected_schema_hash:
-        raise MigrationSchemaMismatch(
-            f"actual schema fingerprint mismatch: expected={definition.expected_schema_hash} actual={actual_hash}"
-        )
-
     return apply_upgrade_transaction(
         session,
         _authority_upgrade(definition),
