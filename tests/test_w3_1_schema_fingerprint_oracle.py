@@ -1,12 +1,14 @@
 """W3.1 independent logical-schema oracle contract tests."""
 
 import importlib.util
+import sys
 from pathlib import Path
 
 _MODULE_PATH = Path(__file__).parent / "independent" / "w3_1_schema_fingerprint_oracle.py"
 _SPEC = importlib.util.spec_from_file_location("w31_oracle", _MODULE_PATH)
 assert _SPEC and _SPEC.loader
 _ORACLE = importlib.util.module_from_spec(_SPEC)
+sys.modules[_SPEC.name] = _ORACLE
 _SPEC.loader.exec_module(_ORACLE)
 
 
