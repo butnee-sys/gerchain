@@ -7,9 +7,9 @@ import pytest
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session
 
-from persistence.migration_executor import MigrationExecutionError, MigrationSchemaMismatch, execute_migration
+from persistence.migration_executor import MigrationSchemaMismatch, execute_migration
 from persistence.schema_authority import CoreSchemaStateModel, CoreSchemaUpgradeModel, create_schema_authority_tables, initialize_schema
-from persistence.schema_reconciler import Descriptor, physical_schema_fingerprint
+from persistence.schema_reconciler import Descriptor, physical_schema_fingerprint, observe
 from tests.test_postgres_migration_executor import _authority, _definition
 
 pytestmark = pytest.mark.skipif(not os.getenv("GERCHAIN_TEST_DATABASE_URL"), reason="GERCHAIN_TEST_DATABASE_URL is required")
@@ -27,6 +27,16 @@ def engine():
     with engine.begin() as conn:
         conn.execute(text("DROP SCHEMA IF EXISTS core CASCADE")); conn.execute(text("DROP TABLE IF EXISTS core_schema_upgrade CASCADE")); conn.execute(text("DROP TABLE IF EXISTS core_schema_state CASCADE"))
     engine.dispose()
+
+def _expected_hash_for_sql(engine, statement: str) -> str:
+    """Derive the expected successor fingerprint from the exact migration DDL."""
+    with engine.begin() as conn:
+        conn.execute(text(statement))
+        descriptor = observe(conn, "CORE")
+        expected = physical_schema_fingerprint(descriptor)
+        table_name = statement.split("core.", 1)[1].split(" ", 1)[0]
+        conn.execute(text(f'DROP TABLE core."{table_name}"'))
+    return expected
 
 def test_reader_sees_only_committed_migration_state(engine):
     definition = _definition(engine)
@@ -51,14 +61,18 @@ def test_committed_authority_without_physical_schema_is_not_accepted(engine):
             with session.begin(): execute_migration(session, definition)
 
 def test_failed_migration_preserves_predecessor_and_corrected_retry_uses_new_identity(engine):
-    bad = _definition(engine, migration_id="m-retry-bad", sql=("CREATE TABLE core.retry_target (id bigint PRIMARY KEY)", "CREATE TABLE core.retry_target (id bigint PRIMARY KEY)"), expected_hash="f" * 64)
+    bad_sql = ("CREATE TABLE core.retry_target (id bigint PRIMARY KEY)", "CREATE TABLE core.retry_target (id bigint PRIMARY KEY)")
+    bad = _definition(engine, migration_id="m-retry-bad", sql=bad_sql, expected_hash="f" * 64)
     with Session(engine) as session:
         with pytest.raises(Exception):
             with session.begin(): execute_migration(session, bad)
     state, upgrades = _authority(engine)
     assert state.current_version == 1 and upgrades == []
+    with engine.connect() as conn:
+        assert conn.execute(text("SELECT to_regclass('core.retry_target')")).scalar() is None
 
-    good = _definition(engine, migration_id="m-retry-good", sql=("CREATE TABLE core.retry_target (id bigint PRIMARY KEY)",))
+    good_sql = ("CREATE TABLE core.retry_target (id bigint PRIMARY KEY)",)
+    good = _definition(engine, migration_id="m-retry-good", sql=good_sql, expected_hash=_expected_hash_for_sql(engine, good_sql[0]))
     with Session(engine) as session:
         with session.begin(): result = execute_migration(session, good)
     assert result.status.value == "APPLIED"
@@ -66,11 +80,13 @@ def test_failed_migration_preserves_predecessor_and_corrected_retry_uses_new_ide
     assert state.current_version == 2 and len(upgrades) == 1
 
 def test_same_identity_after_failed_transaction_cannot_change_payload(engine):
-    bad = _definition(engine, migration_id="m-conflict", sql=("CREATE TABLE core.retry_conflict (id bigint PRIMARY KEY)", "CREATE TABLE core.retry_conflict (id bigint PRIMARY KEY)"), expected_hash="f" * 64)
+    bad_sql = ("CREATE TABLE core.retry_conflict (id bigint PRIMARY KEY)", "CREATE TABLE core.retry_conflict (id bigint PRIMARY KEY)")
+    bad = _definition(engine, migration_id="m-conflict", sql=bad_sql, expected_hash="f" * 64)
     with Session(engine) as session:
         with pytest.raises(Exception):
             with session.begin(): execute_migration(session, bad)
-    good = _definition(engine, migration_id="m-conflict", sql=("CREATE TABLE core.retry_conflict (id bigint PRIMARY KEY)",))
+    good_sql = ("CREATE TABLE core.retry_conflict (id bigint PRIMARY KEY)",)
+    good = _definition(engine, migration_id="m-conflict", sql=good_sql, expected_hash=_expected_hash_for_sql(engine, good_sql[0]))
     with Session(engine) as session:
         with session.begin():
             with pytest.raises(Exception): execute_migration(session, good)
