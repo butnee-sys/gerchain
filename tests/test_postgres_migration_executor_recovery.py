@@ -8,9 +8,13 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session
 
 from persistence.migration_executor import MigrationSchemaMismatch, execute_migration
-from persistence.schema_authority import CoreSchemaStateModel, CoreSchemaUpgradeModel, create_schema_authority_tables, initialize_schema
-from persistence.schema_reconciler import Descriptor, physical_schema_fingerprint
-
+from persistence.schema_authority import (
+    CoreSchemaStateModel,
+    CoreSchemaUpgradeModel,
+    create_schema_authority_tables,
+    initialize_schema,
+)
+from persistence.schema_reconciler import Descriptor, observe, physical_schema_fingerprint
 from tests.test_postgres_migration_executor import _authority, _definition
 
 
@@ -26,18 +30,34 @@ def engine():
     with engine.begin() as conn:
         conn.execute(text("DROP SCHEMA IF EXISTS core CASCADE"))
         conn.execute(text("CREATE SCHEMA core"))
+        conn.execute(text("DROP TABLE IF EXISTS core_migration_identity CASCADE"))
         conn.execute(text("DROP TABLE IF EXISTS core_schema_upgrade CASCADE"))
         conn.execute(text("DROP TABLE IF EXISTS core_schema_state CASCADE"))
     create_schema_authority_tables(engine)
     with Session(engine) as session:
         with session.begin():
-            initialize_schema(session, "CORE", 1, physical_schema_fingerprint(Descriptor("w3.1-v1.1", "CORE", ())))
+            initialize_schema(
+                session,
+                "CORE",
+                1,
+                physical_schema_fingerprint(Descriptor("w3.1-v1.1", "CORE", ())),
+            )
     yield engine
     with engine.begin() as conn:
         conn.execute(text("DROP SCHEMA IF EXISTS core CASCADE"))
+        conn.execute(text("DROP TABLE IF EXISTS core_migration_identity CASCADE"))
         conn.execute(text("DROP TABLE IF EXISTS core_schema_upgrade CASCADE"))
         conn.execute(text("DROP TABLE IF EXISTS core_schema_state CASCADE"))
     engine.dispose()
+
+
+def _expected_hash_for_sql(engine, statement):
+    with engine.begin() as conn:
+        conn.execute(text(statement))
+        expected = physical_schema_fingerprint(observe(conn, "CORE"))
+        table_name = statement.split("core.", 1)[1].split(" ", 1)[0]
+        conn.execute(text(f'DROP TABLE core."{table_name}"'))
+    return expected
 
 
 def test_reader_sees_only_committed_migration_state(engine):
@@ -46,12 +66,20 @@ def test_reader_sees_only_committed_migration_state(engine):
         tx = session.begin()
         execute_migration(session, definition)
         with engine.connect() as reader:
-            assert reader.execute(text("SELECT current_version FROM core_schema_state WHERE schema_id='CORE'")).scalar() == 1
-            assert reader.execute(text("SELECT to_regclass('core.migration_target')")).scalar() is None
+            assert reader.execute(
+                text("SELECT current_version FROM core_schema_state WHERE schema_id='CORE'")
+            ).scalar() == 1
+            assert reader.execute(
+                text("SELECT to_regclass('core.migration_target')")
+            ).scalar() is None
         tx.commit()
     with engine.connect() as reader:
-        assert reader.execute(text("SELECT current_version FROM core_schema_state WHERE schema_id='CORE'")).scalar() == 2
-        assert reader.execute(text("SELECT to_regclass('core.migration_target')")).scalar() == 'core.migration_target'
+        assert reader.execute(
+            text("SELECT current_version FROM core_schema_state WHERE schema_id='CORE'")
+        ).scalar() == 2
+        assert reader.execute(
+            text("SELECT to_regclass('core.migration_target')")
+        ).scalar() == "core.migration_target"
 
 
 def test_committed_authority_without_physical_schema_is_not_accepted(engine):
@@ -79,14 +107,15 @@ def test_committed_authority_without_physical_schema_is_not_accepted(engine):
                 execute_migration(session, definition)
 
 
-def test_failed_migration_can_be_retried_from_intact_predecessor(engine):
+def test_failed_migration_preserves_predecessor_and_corrected_retry_uses_new_identity(engine):
+    bad_sql = (
+        "CREATE TABLE core.retry_target (id bigint PRIMARY KEY)",
+        "CREATE TABLE core.retry_target (id bigint PRIMARY KEY)",
+    )
     bad = _definition(
         engine,
-        migration_id="m-retry",
-        sql=(
-            "CREATE TABLE core.retry_target (id bigint PRIMARY KEY)",
-            "CREATE TABLE core.retry_target (id bigint PRIMARY KEY)",
-        ),
+        migration_id="m-retry-bad",
+        sql=bad_sql,
         expected_hash="f" * 64,
     )
     with Session(engine) as session:
@@ -94,18 +123,61 @@ def test_failed_migration_can_be_retried_from_intact_predecessor(engine):
             with session.begin():
                 execute_migration(session, bad)
 
+    state, upgrades = _authority(engine)
+    assert state.current_version == 1 and upgrades == []
+    with engine.connect() as conn:
+        assert conn.execute(text("SELECT to_regclass('core.retry_target')")).scalar() is None
+
+    good_sql = ("CREATE TABLE core.retry_target (id bigint PRIMARY KEY)",)
     good = _definition(
         engine,
-        migration_id="m-retry",
-        sql=("CREATE TABLE core.retry_target (id bigint PRIMARY KEY)",),
+        migration_id="m-retry-good",
+        sql=good_sql,
+        expected_hash=_expected_hash_for_sql(engine, good_sql[0]),
     )
     with Session(engine) as session:
         with session.begin():
             result = execute_migration(session, good)
     assert result.status.value == "APPLIED"
     state, upgrades = _authority(engine)
-    assert state.current_version == 2
-    assert len(upgrades) == 1
+    assert state.current_version == 2 and len(upgrades) == 1
+
+
+def test_same_migration_id_changed_payload_after_failed_transaction_is_not_authority_conflict(engine):
+    """A failed transaction leaves no committed identity record.
+
+    Migration identity is the immutable tuple including migration_hash. A new
+    hash is therefore a distinct request when the earlier request never
+    committed. Conflict-on-same-ID is enforced once an identity is durable;
+    this test documents that boundary rather than asserting impossible
+    post-rollback memory.
+    """
+    bad_sql = (
+        "CREATE TABLE core.retry_conflict (id bigint PRIMARY KEY)",
+        "CREATE TABLE core.retry_conflict (id bigint PRIMARY KEY)",
+    )
+    bad = _definition(
+        engine,
+        migration_id="m-conflict",
+        sql=bad_sql,
+        expected_hash="f" * 64,
+    )
+    with Session(engine) as session:
+        with pytest.raises(Exception):
+            with session.begin():
+                execute_migration(session, bad)
+
+    good_sql = ("CREATE TABLE core.retry_conflict (id bigint PRIMARY KEY)",)
+    good = _definition(
+        engine,
+        migration_id="m-conflict",
+        sql=good_sql,
+        expected_hash=_expected_hash_for_sql(engine, good_sql[0]),
+    )
+    with Session(engine) as session:
+        with session.begin():
+            result = execute_migration(session, good)
+    assert result.status.value == "APPLIED"
 
 
 def test_physical_ddl_without_authority_is_rejected_not_adopted(engine):
@@ -117,10 +189,9 @@ def test_physical_ddl_without_authority_is_rejected_not_adopted(engine):
             with session.begin():
                 execute_migration(session, definition)
     state, upgrades = _authority(engine)
-    assert state.current_version == 1
-    assert upgrades == []
+    assert state.current_version == 1 and upgrades == []
     with engine.connect() as conn:
-        assert conn.execute(text("SELECT to_regclass('core.migration_target')")).scalar() == 'core.migration_target'
+        assert conn.execute(text("SELECT to_regclass('core.migration_target')")).scalar() == "core.migration_target"
 
 
 def test_external_unexpected_schema_does_not_get_silently_authorized(engine):
@@ -132,5 +203,4 @@ def test_external_unexpected_schema_does_not_get_silently_authorized(engine):
             with session.begin():
                 execute_migration(session, definition)
     state, upgrades = _authority(engine)
-    assert state.current_version == 1
-    assert upgrades == []
+    assert state.current_version == 1 and upgrades == []
