@@ -15,7 +15,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from core.migration_identity import MigrationIdentity, MigrationIdentityError
-from core.schema_authority import SchemaUpgrade, UpgradeStatus
+from core.schema_authority import SchemaUpgrade
 from persistence.schema_authority import UpgradeResult, apply_upgrade_transaction
 from persistence.schema_reconciler import DESCRIPTOR_VERSION, physical_schema_fingerprint, reconcile
 
@@ -126,22 +126,13 @@ def execute_migration(session: Session, definition: MigrationDefinition) -> Upgr
     """
     definition.validate()
 
-    existing = session.get(
-        # Local import keeps this module's public surface small and avoids
-        # making MigrationDefinition depend on the ORM model at import time.
-        __import__("persistence.schema_authority", fromlist=["CoreSchemaUpgradeModel"]).CoreSchemaUpgradeModel,
-        definition.identity.migration_id,
-    )
+    from persistence.schema_authority import CoreSchemaStateModel, CoreSchemaUpgradeModel
+
+    existing = session.get(CoreSchemaUpgradeModel, definition.identity.migration_id)
     if existing is not None:
-        # Reuse the canonical W3 identity validation; no DDL is executed.
-        result = apply_upgrade_transaction(session, _authority_upgrade(definition), definition.expected_schema_hash)
-        return result
+        return apply_upgrade_transaction(session, _authority_upgrade(definition), definition.expected_schema_hash)
 
     connection = session.connection()
-    # Lock and validate the W3 predecessor before touching physical schema.
-    # This is the same canonical row used by apply_upgrade_transaction.
-    from persistence.schema_authority import CoreSchemaStateModel
-
     state = (
         session.query(CoreSchemaStateModel)
         .filter(CoreSchemaStateModel.schema_id == definition.identity.schema_id)
@@ -150,12 +141,18 @@ def execute_migration(session: Session, definition: MigrationDefinition) -> Upgr
     )
     if state is None:
         raise MigrationExecutionError(f"unknown schema: {definition.identity.schema_id}")
+
+    # Re-read after acquiring the canonical W3 lock. A concurrent identical
+    # request may have committed while this transaction was waiting.
+    existing = session.get(CoreSchemaUpgradeModel, definition.identity.migration_id)
+    if existing is not None:
+        return apply_upgrade_transaction(session, _authority_upgrade(definition), definition.expected_schema_hash)
+
     if state.current_version != definition.identity.from_version:
         raise MigrationExecutionError("stale schema predecessor")
     if state.status != "ACTIVE":
         raise MigrationExecutionError("schema is not available for migration")
 
-    # DDL is executed only after the canonical W3 lock is held.
     for statement in definition.statements:
         connection.execute(text(_normalize_sql(statement)))
 
@@ -172,7 +169,6 @@ def execute_migration(session: Session, definition: MigrationDefinition) -> Upgr
             f"actual schema fingerprint mismatch: expected={definition.expected_schema_hash} actual={actual_hash}"
         )
 
-    # Only after physical truth matches does W3 advance its authoritative state.
     return apply_upgrade_transaction(
         session,
         _authority_upgrade(definition),
