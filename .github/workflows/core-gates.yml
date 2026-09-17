@@ -2,7 +2,7 @@ name: core-gates
 
 on:
   push:
-    branches: ["feat/de-dee-gate01", "feat/gerchain-flow-hardening", "feat/core-gate02-capability-audit", "main"]
+    branches: ["feat/de-dee-gate01", "feat/gerchain-flow-hardening", "feat/core-gate02-capability-audit", "feat/core-w3-1-ddl-authority", "main"]
   pull_request:
 
 jobs:
@@ -119,3 +119,10 @@ jobs:
       - name: Run independent PostgreSQL W3 re-performance
         run: |
           python tests/independent/w3_postgres_reperformance.py
+      - name: Run CORE W3.1 logical schema oracle tests
+        run: |
+          pytest -q tests/test_w3_1_schema_fingerprint_oracle.py
+          python tests/independent/w3_1_schema_fingerprint_oracle.py
+      - name: Run independent PostgreSQL W3.1 schema re-performance
+        run: |
+          python tests/independent/w3_1_postgres_schema_reperformance.py
