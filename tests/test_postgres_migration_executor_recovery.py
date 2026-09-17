@@ -79,14 +79,58 @@ def test_committed_authority_without_physical_schema_is_not_accepted(engine):
                 execute_migration(session, definition)
 
 
-def test_preapplied_matching_ddl_is_reconciled_and_authorized(engine):
+def test_failed_migration_can_be_retried_from_intact_predecessor(engine):
+    bad = _definition(
+        engine,
+        migration_id="m-retry",
+        sql=(
+            "CREATE TABLE core.retry_target (id bigint PRIMARY KEY)",
+            "CREATE TABLE core.retry_target (id bigint PRIMARY KEY)",
+        ),
+        expected_hash="f" * 64,
+    )
+    with Session(engine) as session:
+        with pytest.raises(Exception):
+            with session.begin():
+                execute_migration(session, bad)
+
+    good = _definition(
+        engine,
+        migration_id="m-retry",
+        sql=("CREATE TABLE core.retry_target (id bigint PRIMARY KEY)",),
+    )
+    with Session(engine) as session:
+        with session.begin():
+            result = execute_migration(session, good)
+    assert result.status.value == "APPLIED"
+    state, upgrades = _authority(engine)
+    assert state.current_version == 2
+    assert len(upgrades) == 1
+
+
+def test_physical_ddl_without_authority_is_rejected_not_adopted(engine):
     definition = _definition(engine)
     with engine.begin() as conn:
         conn.execute(text("CREATE TABLE core.migration_target (id bigint PRIMARY KEY, value text NOT NULL)"))
     with Session(engine) as session:
-        with session.begin():
-            result = execute_migration(session, definition)
+        with pytest.raises(MigrationSchemaMismatch, match="recorded predecessor mismatch"):
+            with session.begin():
+                execute_migration(session, definition)
     state, upgrades = _authority(engine)
-    assert result.status.value == "APPLIED"
-    assert state.current_version == 2
-    assert len(upgrades) == 1
+    assert state.current_version == 1
+    assert upgrades == []
+    with engine.connect() as conn:
+        assert conn.execute(text("SELECT to_regclass('core.migration_target')")).scalar() == 'core.migration_target'
+
+
+def test_external_unexpected_schema_does_not_get_silently_authorized(engine):
+    definition = _definition(engine)
+    with engine.begin() as conn:
+        conn.execute(text("CREATE TABLE core.unexpected (id bigint PRIMARY KEY)"))
+    with Session(engine) as session:
+        with pytest.raises(MigrationSchemaMismatch, match="recorded predecessor mismatch"):
+            with session.begin():
+                execute_migration(session, definition)
+    state, upgrades = _authority(engine)
+    assert state.current_version == 1
+    assert upgrades == []
