@@ -27,9 +27,13 @@
 ## D. Analysis definition
 
 - [x] Primary estimand specified
+- [x] Default design hierarchy and identification assumptions registered
+- [ ] Actual comparison design frozen for the empirical dataset
 - [ ] Primary model family frozen for the selected comparison design
 - [ ] Covariates frozen
 - [ ] Practical-effect threshold frozen
+- [ ] Alpha level frozen
+- [ ] Sample-size/power rule frozen
 - [ ] Missing-data rule frozen
 - [ ] Robustness set frozen
 
@@ -64,9 +68,10 @@ R1 is a measurement-readiness gate only. Passing R1 does **not** support H1. H1 
 
 ## Current blockers
 
-1. Freeze the actual comparison design.
+1. Freeze the actual comparison design for the selected evidence source.
 2. Freeze the practical minimum effect threshold before inspecting confirmatory outcomes.
-3. Freeze the design-specific sample-size/power rule.
+3. Freeze alpha and the design-specific sample-size/power rule.
 4. Execute measurement validation.
 5. Implement and verify complete provenance fields.
-6. Validate the analysis code against separated synthetic fixtures.
+6. Validate analysis code against separated synthetic fixtures.
+7. Obtain and version real empirical observations.
