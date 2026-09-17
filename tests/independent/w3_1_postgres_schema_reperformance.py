@@ -214,15 +214,21 @@ def main() -> None:
             assert owner["unique_constraints"]
             assert any(i["name"] == "accounts_code_idx" for i in observed["indexes"])
             assert not any(i["name"].endswith("_pkey") for i in observed["indexes"])
-            assert d == fingerprint(conn, schema)
+
+            # The schema has changed through E1-E5 after D. Capture the current
+            # state before the scope-isolation mutation; comparing to D here
+            # would incorrectly compare two different schema states.
+            before_scope_fingerprint = fingerprint(conn, schema)
 
             outside = schema + "_outside"
             conn.execute(f'CREATE SCHEMA "{outside}"')
             try:
                 conn.execute(f'CREATE TABLE "{outside}".ignored (id bigint PRIMARY KEY)')
-                assert d == fingerprint(conn, schema)
+                assert fingerprint(conn, schema) == before_scope_fingerprint
             finally:
                 conn.execute(f'DROP SCHEMA "{outside}" CASCADE')
+
+            assert fingerprint(conn, schema) == before_scope_fingerprint
 
             print("W3.1 independent PostgreSQL logical-schema re-performance: PASS")
             for label in ("A baseline", "B column", "C nullability", "D type",
@@ -231,7 +237,7 @@ def main() -> None:
                 print(label + ": PASS")
             print(json.dumps({"schema": schema, "descriptor": observed,
                               "baseline_fingerprint": baseline,
-                              "actual_fingerprint": d}, sort_keys=True))
+                              "actual_fingerprint": before_scope_fingerprint}, sort_keys=True))
         finally:
             conn.execute(f'DROP SCHEMA "{schema}" CASCADE')
 
