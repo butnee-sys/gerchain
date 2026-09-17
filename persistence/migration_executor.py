@@ -1,10 +1,4 @@
-"""CORE-owned transactional PostgreSQL migration executor for W3.1-B.
-
-There is deliberately no second schema/version authority here. W3 owns the
-canonical version transition; this module only executes an immutable DDL
-payload, observes the resulting PostgreSQL schema, and asks W3 to commit the
-successor authority after physical-schema verification.
-"""
+"""CORE-owned transactional PostgreSQL migration executor for W3.1-B."""
 from __future__ import annotations
 
 import hashlib
@@ -67,9 +61,9 @@ def migration_hash(statements: tuple[str, ...]) -> str:
 
 _ALLOWED_PREFIXES = (
     "CREATE TABLE ",
-    "ALTER TABLE ",
     "CREATE INDEX ",
     "CREATE UNIQUE INDEX ",
+    "ALTER TABLE ",
 )
 _FORBIDDEN_TOKENS = (
     "BEGIN",
@@ -82,6 +76,24 @@ _FORBIDDEN_TOKENS = (
     "CREATE EXTENSION",
     "ALTER SYSTEM",
     "COPY ",
+    "CONCURRENTLY",
+)
+_FORBIDDEN_CREATE_TABLE_TOKENS = (
+    " CREATE TABLE AS ",
+    "CREATE TABLE IF NOT EXISTS ",
+    " PARTITION ",
+    " INHERITS ",
+    " LIKE ",
+)
+_FORBIDDEN_ALTER_TOKENS = (
+    " DROP ",
+    " RENAME ",
+    " SET SCHEMA ",
+    " OWNER TO ",
+    " ENABLE ",
+    " DISABLE ",
+    " NO INHERIT ",
+    " CLUSTER ON ",
 )
 
 
@@ -103,6 +115,27 @@ def _validate_statement(statement: str) -> None:
         raise MigrationBypassError("DDL statement is outside W3.1-B supported migration class")
     if ";" in normalized:
         raise MigrationBypassError("multiple SQL statements in one migration item are rejected")
+    if upper.startswith("CREATE TABLE "):
+        if any(token in f" {upper} " for token in _FORBIDDEN_CREATE_TABLE_TOKENS):
+            raise MigrationBypassError("unsupported CREATE TABLE form")
+    elif upper.startswith("CREATE INDEX ") or upper.startswith("CREATE UNIQUE INDEX "):
+        if " WHERE " in f" {upper} " or " USING " in f" {upper} " and " USING BTREE " not in f" {upper} ":
+            raise MigrationBypassError("unsupported index form")
+    elif upper.startswith("ALTER TABLE "):
+        if any(token in f" {upper} " for token in _FORBIDDEN_ALTER_TOKENS):
+            raise MigrationBypassError("unsupported ALTER TABLE operation")
+        allowed = (
+            " ADD COLUMN ",
+            " ALTER COLUMN ",
+            " ADD CONSTRAINT ",
+        )
+        if not any(token in f" {upper} " for token in allowed):
+            raise MigrationBypassError("ALTER TABLE operation is outside W3.1-B supported class")
+        if "ALTER COLUMN" in upper:
+            if not any(op in f" {upper} " for op in (" TYPE ", " SET NOT NULL", " DROP NOT NULL", " SET DEFAULT ", " DROP DEFAULT")):
+                raise MigrationBypassError("unsupported ALTER COLUMN operation")
+        if "ADD CONSTRAINT" in upper and not any(kind in upper for kind in (" PRIMARY KEY", " UNIQUE", " CHECK ", " FOREIGN KEY")):
+            raise MigrationBypassError("unsupported constraint type")
 
 
 def _authority_upgrade(definition: MigrationDefinition) -> SchemaUpgrade:
@@ -148,14 +181,7 @@ def _verify_recorded_predecessor(session: Session, state, definition: MigrationD
 
 
 def execute_migration(session: Session, definition: MigrationDefinition) -> UpgradeResult:
-    """Execute one W3.1-B migration inside the caller's transaction.
-
-    PostgreSQL DDL and W3 authority advancement are deliberately kept in the
-    same transaction. A committed retry is accepted only after the physical
-    schema is re-verified. A physically pre-applied target without a committed
-    W3 record is never adopted: recovery must first prove the recorded
-    predecessor and then retry the immutable DDL.
-    """
+    """Execute one W3.1-B migration inside the caller's transaction."""
     definition.validate()
 
     from persistence.schema_authority import CoreSchemaStateModel, CoreSchemaUpgradeModel
@@ -175,8 +201,6 @@ def execute_migration(session: Session, definition: MigrationDefinition) -> Upgr
     if state is None:
         raise MigrationExecutionError(f"unknown schema: {definition.identity.schema_id}")
 
-    # Re-read after acquiring the canonical W3 lock. A concurrent identical
-    # request may have committed while this transaction was waiting.
     existing = session.get(CoreSchemaUpgradeModel, definition.identity.migration_id)
     if existing is not None:
         _verify_physical_state(session, definition)
@@ -187,9 +211,7 @@ def execute_migration(session: Session, definition: MigrationDefinition) -> Upgr
     if state.status != "ACTIVE":
         raise MigrationExecutionError("schema is not available for migration")
 
-    # Recovery is predecessor-based, never target-adoption based. An external
-    # DDL change makes the recorded predecessor unverifiable and therefore
-    # blocks this migration rather than silently converting it into authority.
+    # Recovery is predecessor-based, never target-adoption based.
     _verify_recorded_predecessor(session, state, definition)
 
     for statement in definition.statements:
