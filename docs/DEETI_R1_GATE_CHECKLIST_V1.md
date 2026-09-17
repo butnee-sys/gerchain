@@ -20,14 +20,14 @@
 
 ## C. Outcome definition
 
-- [ ] One primary outcome selected and frozen
-- [ ] O1–O5 secondary/exploratory status explicitly recorded
+- [x] One primary outcome selected and frozen: O1 — transaction reliability
+- [x] O1–O5 secondary/exploratory status explicitly recorded
 - [ ] Outcome coding rules frozen
 
 ## D. Analysis definition
 
-- [ ] Primary estimand frozen
-- [ ] Primary model family frozen
+- [x] Primary estimand specified
+- [ ] Primary model family frozen for the selected comparison design
 - [ ] Covariates frozen
 - [ ] Practical-effect threshold frozen
 - [ ] Missing-data rule frozen
@@ -35,30 +35,38 @@
 
 ## E. Evidence integrity
 
-- [ ] Source identifier required
-- [ ] Source version required
-- [ ] Collection timestamp required
-- [ ] Transformation version required
-- [ ] Measurement version required
+- [ ] Source identifier required and implemented
+- [ ] Source version required and implemented
+- [ ] Collection timestamp required and implemented
+- [ ] Transformation version required and implemented
+- [ ] Measurement version required and implemented
 - [ ] Exclusion log retained
 - [ ] Negative/contradictory observations retained
 
 ## F. Reproducibility
 
-- [ ] Dataset validator passes
+- [ ] Dataset validator passes against the complete empirical dataset
 - [ ] ETI is recomputable from components
-- [ ] No synthetic data in empirical dataset
+- [x] No synthetic data in empirical dataset
 - [ ] Analysis can be rerun from versioned inputs
 
 ## Gate predicate
 
 ```text
-R1 =
-A ∧ B ∧ C ∧ D ∧ E ∧ F
+R1 = A ∧ B ∧ C ∧ D ∧ E ∧ F
 ```
 
 If any item is unchecked, status remains **R0**.
 
 ## Scientific decision rule
 
-R1 is a measurement readiness gate only. Passing R1 does **not** support H1. H1 can only be evaluated after empirical testing and falsification analysis.
+R1 is a measurement-readiness gate only. Passing R1 does **not** support H1. H1 can only be evaluated after empirical testing and falsification analysis.
+
+## Current blockers
+
+1. Freeze the actual comparison design.
+2. Freeze the practical minimum effect threshold before inspecting confirmatory outcomes.
+3. Freeze the design-specific sample-size/power rule.
+4. Execute measurement validation.
+5. Implement and verify complete provenance fields.
+6. Validate the analysis code against separated synthetic fixtures.
