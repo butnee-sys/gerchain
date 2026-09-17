@@ -1,259 +1,220 @@
-# CORE W3.1 — Canonical Schema Fingerprint Test Vectors
+# CORE W3.1 — Canonical Schema Fingerprint Test Vectors v1.1
 
 ## Status
 
-Design/test-vector specification only. No production source code is modified by this document.
+Assurance test-vector specification for the bounded W3.1 logical PostgreSQL schema domain.
 
-## Purpose
+## 1. Identity separation
 
-This document defines deterministic test vectors for the actual PostgreSQL schema fingerprint used by W3.1 reconciliation.
-
-The objective is to ensure that CORE and an independent oracle can calculate the same identity for the same actual schema without sharing implementation code.
-
-## 1. Separation of identities
-
-Three identities must remain distinct:
+Three identities remain distinct:
 
 `MigrationIdentity = (MigrationID, SchemaID, FromVersion, ToVersion, MigrationHash)`
 
-`RecordedSchemaIdentity = (SchemaID, Version, StateHash)`
+`RecordedSchemaIdentity = (SchemaID, Version, DescriptorVersion, StateHash)`
 
-`ActualSchemaFingerprint = Hash(CanonicalSchemaDescriptor)`
+`PhysicalSchemaFingerprint = SHA256(CanonicalSerialize(LogicalSchema))`
 
 Therefore:
 
-`MigrationHash != ActualSchemaFingerprint`
+`MigrationHash != PhysicalSchemaFingerprint`
 
-A migration describes an intended transition. The actual fingerprint describes the resulting physical schema.
+and:
 
-## 2. Canonical schema descriptor
+`AuthorityIdentity != PhysicalSchemaFingerprint`
 
-The descriptor must be deterministic and independent of PostgreSQL catalog row ordering.
+## 2. Validated domain
 
-The canonical descriptor contains, at minimum:
+v1.1 includes:
 
-- schema namespace
-- table name
-- column ordinal
-- column name
-- normalized data type
-- nullability
-- default expression in canonical textual form
-- primary-key membership and ordinal
-- unique constraints
-- foreign-key target and actions
-- check constraints
-- index identity, uniqueness, method, and ordered key definition
+`TABLE, COLUMN, TYPE, NULLABILITY, DEFAULT, PRIMARY KEY, UNIQUE, CHECK, FOREIGN KEY, STANDARD STANDALONE INDEX`
 
-Objects outside the declared W3.1 domain must be excluded explicitly rather than silently included.
+Out of domain unless explicitly added by a later descriptor version:
 
-## 3. Canonicalization rules
+`TRIGGER, VIEW, MATERIALIZED VIEW, FUNCTION, PROCEDURE, SEQUENCE, EXTENSION, PARTITIONING, RLS POLICY, EXPRESSION INDEX, PARTIAL INDEX, CUSTOM OPERATOR CLASS, ADVANCED INDEX OPTIONS`
 
-1. Names are encoded as UTF-8.
-2. Identifiers are represented exactly as PostgreSQL resolves them after identifier normalization.
-3. Catalog rows are sorted lexicographically by object type and fully qualified object identity.
-4. Column order is preserved by ordinal position.
-5. Constraint members are sorted only where membership is mathematically unordered; ordered key positions remain ordered.
-6. Null values use an explicit sentinel representation.
-7. Whitespace that is not semantically meaningful in normalized expressions is canonicalized.
-8. Equivalent catalog representations must normalize to one descriptor.
-9. No timestamps, backend PIDs, transaction IDs, or physical object identifiers are included.
-10. The serialization format and field order are versioned.
+## 3. Canonical logical descriptor
 
-## 4. Fingerprint algorithm
+`LogicalSchema = Projection(PostgreSQLCatalog, DeclaredScope)`
 
-For a canonical descriptor `D`:
+`Table = (Namespace, Name, Columns, PrimaryKeys, UniqueConstraints, Checks, ForeignKeys)`
 
-`ActualSchemaFingerprint = SHA256(UTF8(CanonicalSerialize(D)))`
+`Column = (Ordinal, Name, Type, Nullable, DefaultExpression)`
 
-The fingerprint algorithm version is part of the schema assurance contract. Changing canonicalization rules creates a new fingerprint specification version and requires revalidation.
+`Type = (TypeSchema, TypeName, Parameters, ArrayDimensions)`
 
-## 5. Test vector A — baseline
+`PK/UNIQUE/FK` preserve declared composite column order.
 
-Schema:
+`Index = (Namespace, Name, Table, Unique, Method, KeyColumns, IncludedColumns)` for standard column indexes.
+
+PK/UNIQUE backing indexes are implementation artifacts and are excluded from standalone index semantics.
+
+## 4. Canonicalization rules
+
+1. UTF-8 deterministic serialization.
+2. PostgreSQL-resolved identifier identity.
+3. Independent collections sorted deterministically.
+4. Column ordinals preserved.
+5. Composite key order preserved.
+6. Explicit null representation.
+7. Descriptor serialization versioned.
+8. Physical IDs, timestamps, PIDs and transaction IDs excluded.
+9. Bounded type representation normalized deterministically.
+10. Default/check expression normalization is limited to the supported PostgreSQL semantic representation; unsupported forms are OUT_OF_DOMAIN.
+
+## 5. Vector A — baseline
 
 ```text
 core.accounts
-  id         bigint       NOT NULL
-  owner_id   text         NOT NULL
-  balance    bigint       NOT NULL
+  id         bigint NOT NULL
+  owner_id   text   NOT NULL
+  balance    bigint NOT NULL
   PRIMARY KEY (id)
 ```
 
-Expected properties:
+A establishes the baseline fingerprint.
 
-- one table
-- three columns
-- primary key on `id`
-- no nullable columns
-- no secondary indexes
+A primary-key backing index is NOT a standalone secondary index for this descriptor.
 
-The exact SHA-256 value is intentionally generated by the implementation/oracle test harness rather than hand-entered here. This prevents a prose document from becoming an authority for implementation output.
+## 6. Vector B — additive column
 
-## 6. Test vector B — additive column
+Add:
 
-Starting from A, add:
+`status text NOT NULL DEFAULT 'ACTIVE'`
 
-```text
-status text NOT NULL DEFAULT 'ACTIVE'
-```
-
-Required result:
+Required:
 
 `Fingerprint(B) != Fingerprint(A)`
 
-The recorded migration hash and actual fingerprint must both change, but they remain different identities.
+## 7. Vector C — nullability mutation
 
-## 7. Test vector C — nullability mutation
+Change `balance bigint NOT NULL` to `balance bigint NULL`.
 
-Starting from A, change:
-
-`balance bigint NOT NULL`
-
-to:
-
-`balance bigint NULL`
-
-Required result:
+Required:
 
 `Fingerprint(C) != Fingerprint(A)`
 
-This is a semantic schema mutation and cannot be ignored because table/column names remain unchanged.
+## 8. Vector D — type mutation
 
-## 8. Test vector D — constraint mutation
+Change the type of `balance` while retaining the same column identity.
 
-Starting from A, add:
-
-```text
-UNIQUE (owner_id)
-```
-
-Required result:
+Required:
 
 `Fingerprint(D) != Fingerprint(A)`
 
-## 9. Test vector E — index mutation
+## 9. Vector E1 — primary-key mutation
 
-Starting from A, add an index on `owner_id`.
+Change PK membership or ordered composite PK definition.
 
-Required result:
+Required:
 
-`Fingerprint(E) != Fingerprint(A)`
+`Fingerprint(E1) != Fingerprint(A)`
 
-Index identity is included only because the declared W3.1 schema domain includes indexes. If the production domain later excludes a class of indexes, that exclusion must be explicit and versioned.
+## 10. Vector E2 — UNIQUE mutation
 
-## 10. Test vector F — catalog ordering invariance
+Add or mutate a UNIQUE constraint.
 
-Create the same logical schema through two independent DDL sequences that produce the same declared schema.
+Required:
 
-Required result:
+`Fingerprint(E2) != Fingerprint(A)`
+
+## 11. Vector E3 — CHECK mutation
+
+Add or mutate a CHECK constraint.
+
+Required:
+
+`Fingerprint(E3) != Fingerprint(A)`
+
+## 12. Vector E4 — FOREIGN KEY mutation
+
+Add or mutate a foreign key, including target or action.
+
+Required:
+
+`Fingerprint(E4) != Fingerprint(A)`
+
+## 13. Vector E5 — standalone index mutation
+
+Add or mutate a standard standalone column index.
+
+Required:
+
+`Fingerprint(E5) != Fingerprint(A)`
+
+Constraint-backed indexes must not create an additional semantic difference when the corresponding PK/UNIQUE constraint is unchanged.
+
+## 14. Vector F — representation/order invariance
+
+Create the same logical schema through different DDL/catalog insertion orders.
+
+Required:
 
 `Fingerprint(F1) == Fingerprint(F2)`
 
-This is a critical anti-false-positive test. Catalog insertion order must not affect the fingerprint.
+## 15. Vector G — scope isolation
 
-## 11. Test vector G — unrelated object exclusion
+Add an explicitly out-of-domain object.
 
-Create the canonical schema plus an object explicitly outside the W3.1 declared domain.
+Required:
 
-Required result:
+`Fingerprint(G) == Fingerprint(A)`
 
-The fingerprint remains unchanged if and only if the object is formally outside the domain.
+provided the object is genuinely outside the declared v1.1 scope.
 
-This prevents accidental dependence on unrelated database state.
+## 16. Vector H — recorded mismatch
 
-## 12. Test vector H — actual mismatch
+Recorded hash = `Fingerprint(A)` while actual schema = B.
 
-Recorded state contains `Fingerprint(A)` while actual PostgreSQL schema is B.
+Required:
 
-Required result:
+`RECONCILIATION = RECORDED_MISMATCH`
 
-`RECONCILIATION = RED`
+No repair is permitted.
 
-The reconciler must not modify the database or authority record.
+## 17. Vector I — version deception
 
-## 13. Test vector I — version equal, fingerprint unequal
+Recorded and actual authority version numbers appear equal while physical fingerprints differ.
 
-Recorded state:
+Required:
 
-`SchemaID=S, Version=8, Fingerprint=A`
+`RECONCILIATION != MATCH`
 
-Actual schema:
+Version equality cannot mask structural mismatch.
 
-`Version is not independently trusted; Fingerprint=B`
+## 18. Vector J — authority deception
 
-Required result:
+Actual physical schema equals the expected fingerprint, but the migration identity/predecessor is invalid.
 
-`RED`
+Required:
 
-Version equality alone is never sufficient evidence.
+`AUTHORITY_VALID = false`
 
-## 14. Test vector J — fingerprint equal, wrong authority
+and W3.1 assurance remains non-GREEN.
 
-Actual schema matches the expected fingerprint, but the canonical authority record has the wrong predecessor or migration identity.
+## 19. Vector K — fresh-process determinism
 
-Required result:
+Independent processes A, B and C calculate the same descriptor/fingerprint from the same schema facts.
 
-`RED`
+Required:
 
-Physical schema correctness does not repair an authority-chain violation.
+`Descriptor_A == Descriptor_B == Descriptor_C`
 
-## 15. Test vector K — deterministic replay
+and:
 
-Run the same descriptor through the independent oracle multiple times.
+`Fingerprint_A == Fingerprint_B == Fingerprint_C`
 
-Required result:
+## 20. Cross-agreement
 
-All outputs are byte-for-byte identical.
+The independent oracle and PostgreSQL observer must independently produce the same canonical descriptor and fingerprint:
 
-## 16. Independent oracle boundary
+`Descriptor_oracle == Descriptor_observer`
 
-The independent oracle must:
+`Fingerprint_oracle == Fingerprint_observer`
 
-- not import `persistence.schema_authority`;
-- not import the production migration executor;
-- independently collect or consume declared schema facts;
-- independently canonicalize them;
-- independently calculate SHA-256;
-- independently evaluate reconciliation predicates.
+Any disagreement is non-GREEN.
 
-Shared constants are permitted only where they are part of the declared public contract, not implementation logic.
+## 21. Closure
 
-## 17. Reconciliation predicate
+`W3.1-A_GREEN = ContractFrozen ∧ OraclePASS ∧ ObserverPASS ∧ A-KPASS ∧ CrossAgreementPASS ∧ FreshProcessPASS ∧ IndependentPGPASS ∧ EvidenceBound ∧ EvidenceReconciled`
 
-For a declared authoritative state `R` and actual descriptor `A`:
-
-`RECONCILED := R.SchemaID == A.SchemaID ∧ R.Version == ExpectedVersion ∧ R.StateHash == Fingerprint(A)`
-
-Any failed conjunction is a reconciliation failure.
-
-The reconciler is read-only.
-
-## 18. Required adversarial cases
-
-The eventual PostgreSQL test suite must include:
-
-- reordered catalog rows;
-- reordered unordered constraint members;
-- changed ordered index keys;
-- changed nullability;
-- changed type;
-- changed default expression;
-- added/removed constraint;
-- added/removed index;
-- unrelated out-of-domain object;
-- recorded/actual mismatch;
-- same fingerprint with wrong migration identity;
-- deterministic replay across independent processes.
-
-## 19. Closure condition
-
-This document does not make W3.1 GREEN.
-
-Fingerprint assurance becomes GREEN only when:
-
-`ContractDefined ∧ ImplementationTested ∧ IndependentOraclePassed ∧ PostgreSQLReproductionPassed ∧ ActualSchemaEvidenceBound ∧ EvidenceReconciled`
-
-## 20. Architectural boundary
-
-The fingerprint is an observation of actual database structure. It is not an authority mechanism and it cannot authorize migrations. Authority remains with W3 Schema Authority; execution remains with the W3.1 Migration Executor; reconciliation remains an independent read-only assurance function.
+W3.1-B production migration execution remains blocked until W3.1-A is GREEN.
