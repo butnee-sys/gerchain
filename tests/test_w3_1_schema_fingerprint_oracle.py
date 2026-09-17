@@ -1,6 +1,7 @@
 """W3.1 independent logical-schema oracle contract tests."""
 
 import importlib.util
+import subprocess
 import sys
 from pathlib import Path
 
@@ -36,12 +37,30 @@ def test_k_fingerprint_is_deterministic():
     assert _ORACLE.fingerprint(baseline) == _ORACLE.fingerprint(baseline)
 
 
+def test_k_fresh_process_replay_is_deterministic():
+    outputs = []
+    for _ in range(3):
+        completed = subprocess.run(
+            [sys.executable, str(_MODULE_PATH)],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        lines = [line for line in completed.stdout.splitlines() if line.strip()]
+        outputs.append(lines[-1])
+    assert outputs[0] == outputs[1] == outputs[2]
+
+
 def test_authority_metadata_does_not_change_physical_fingerprint():
     baseline = _ORACLE._baseline()
     changed_identity = _ORACLE.Descriptor(
         baseline.descriptor_version, "OTHER", baseline.tables, baseline.indexes
     )
+    changed_descriptor_version = _ORACLE.Descriptor(
+        "other-descriptor", baseline.schema_id, baseline.tables, baseline.indexes
+    )
     assert _ORACLE.fingerprint(baseline) == _ORACLE.fingerprint(changed_identity)
+    assert _ORACLE.fingerprint(baseline) == _ORACLE.fingerprint(changed_descriptor_version)
 
 
 def test_backing_constraint_index_is_excluded():
