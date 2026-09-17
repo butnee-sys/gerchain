@@ -169,7 +169,7 @@ def _verify_recorded_predecessor(session: Session, state, definition: MigrationD
     descriptor, actual_hash = reconcile(
         session.connection(),
         definition.identity.schema_id,
-        definition.expected_schema_hash,
+        state.state_hash,
         definition.namespaces,
     )
     if descriptor.descriptor_version != definition.descriptor_version:
