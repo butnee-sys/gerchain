@@ -134,7 +134,7 @@ def descriptor(conn):
         """SELECT n.nspname AS namespace, i.relname AS index_name,
                   tn.nspname AS table_namespace, t.relname AS table_name,
                   ix.indisunique AS unique_index, am.amname AS method,
-                  ix.indkey::int[] AS key_attnums, ix.indnkeyatts, ix.indnatts,
+                  ix.indkey::int[] AS key_attnums, ix.indnkeyatts,
                   ix.indpred IS NOT NULL AS partial, ix.indexprs IS NOT NULL AS expression,
                   EXISTS (SELECT 1 FROM pg_catalog.pg_constraint c
                           WHERE c.conindid=ix.indexrelid AND c.contype IN ('p','u')) AS backing_constraint
@@ -183,12 +183,8 @@ def setup(conn):
     conn.execute("DROP TABLE IF EXISTS w31b_schema_state")
     conn.execute("CREATE TABLE w31b_schema_state (schema_id text PRIMARY KEY, version integer NOT NULL, state_hash text NOT NULL)")
     conn.execute("CREATE TABLE w31b_schema_upgrade (migration_id text PRIMARY KEY, schema_id text NOT NULL, from_version integer NOT NULL, to_version integer NOT NULL, migration_hash text NOT NULL, status text NOT NULL)")
-    conn.execute("INSERT INTO w31b_schema_state VALUES ('CORE', 1, %s)", (empty_hash(conn),))
+    conn.execute("INSERT INTO w31b_schema_state VALUES ('CORE', 1, %s)", (fingerprint(conn),))
     conn.commit()
-
-
-def empty_hash(conn) -> str:
-    return fingerprint(conn)
 
 
 def sql_hash(sql: str) -> str:
@@ -220,26 +216,22 @@ def migrate(sql: str, migration_id: str, expected_hash: str, from_version: int =
 
 
 def main():
+    create_target = f"CREATE TABLE {SCHEMA}.target (id bigint PRIMARY KEY, value text NOT NULL)"
     with psycopg.connect(URL) as conn:
         setup(conn)
-        conn.execute(f'CREATE TABLE {SCHEMA}.target (id bigint PRIMARY KEY, value text NOT NULL)')
+        conn.execute(create_target)
         expected = fingerprint(conn)
         conn.execute(f'DROP TABLE {SCHEMA}.target')
-        predecessor = fingerprint(conn)
-        conn.execute("UPDATE w31b_schema_state SET state_hash=%s", (predecessor,))
         conn.commit()
 
-    result = migrate(f"CREATE TABLE {SCHEMA}.target (id bigint PRIMARY KEY, value text NOT NULL)", "m1", expected)
-    assert result == "APPLIED"
+    assert migrate(create_target, "m1", expected) == "APPLIED"
     with psycopg.connect(URL) as conn:
         assert conn.execute("SELECT version FROM w31b_schema_state WHERE schema_id='CORE'").fetchone()[0] == 2
         assert conn.execute("SELECT count(*) FROM w31b_schema_upgrade").fetchone()[0] == 1
-        committed_hash = fingerprint(conn)
-        assert committed_hash == expected
+        assert fingerprint(conn) == expected
 
     with psycopg.connect(URL) as conn:
         setup(conn)
-        conn.commit()
     bad_sql = f"CREATE TABLE {SCHEMA}.target (id bigint PRIMARY KEY)"
     try:
         migrate(bad_sql, "m2", "0" * 64)
@@ -256,8 +248,10 @@ def main():
         setup(conn)
         conn.execute(f'CREATE TABLE {SCHEMA}.target (id bigint PRIMARY KEY)')
         conn.commit()
+    with psycopg.connect(URL) as conn:
+        external_hash = fingerprint(conn)
     try:
-        migrate(bad_sql, "m3", fingerprint(conn))
+        migrate(bad_sql, "m3", external_hash)
     except RuntimeError as exc:
         assert str(exc) == "RECORDED_PREDECESSOR_MISMATCH"
     else:
@@ -265,21 +259,20 @@ def main():
 
     with psycopg.connect(URL) as conn:
         setup(conn)
+    concurrent_sql = f"CREATE TABLE {SCHEMA}.concurrent_target (id bigint PRIMARY KEY)"
+    with psycopg.connect(URL) as conn:
+        conn.execute(concurrent_sql)
+        concurrent_expected = fingerprint(conn)
+        conn.execute(f'DROP TABLE {SCHEMA}.concurrent_target')
         conn.commit()
     barrier = threading.Barrier(2)
     results = []
     errors = []
-    expected = None
-    with psycopg.connect(URL) as conn:
-        conn.execute(f'CREATE TABLE {SCHEMA}.concurrent_target (id bigint PRIMARY KEY)')
-        expected = fingerprint(conn)
-        conn.execute(f'DROP TABLE {SCHEMA}.concurrent_target')
-        conn.commit()
 
     def worker():
         try:
             barrier.wait(timeout=10)
-            results.append(migrate(f"CREATE TABLE {SCHEMA}.concurrent_target (id bigint PRIMARY KEY)", "m4", expected))
+            results.append(migrate(concurrent_sql, "m4", concurrent_expected))
         except Exception as exc:
             errors.append(exc)
 
@@ -299,7 +292,6 @@ def main():
         changed = fingerprint(conn)
         assert changed != baseline
         conn.rollback()
-        conn.commit()
 
     print(f"W3.1-B independent PostgreSQL re-performance ({DESCRIPTOR_VERSION}): PASS")
     print("transactional DDL + authority commit: PASS")
