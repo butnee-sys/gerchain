@@ -42,6 +42,8 @@ def engine():
     with engine.begin() as conn:
         conn.execute(text("DROP SCHEMA IF EXISTS core CASCADE"))
         conn.execute(text("CREATE SCHEMA core"))
+        conn.execute(text("DROP TABLE IF EXISTS core_schema_upgrade CASCADE"))
+        conn.execute(text("DROP TABLE IF EXISTS core_schema_state CASCADE"))
     create_schema_authority_tables(engine)
     with Session(engine) as session:
         with session.begin():
