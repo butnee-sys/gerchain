@@ -181,6 +181,24 @@ def test_bypass_is_rejected_before_database_mutation(engine):
     assert upgrades == []
 
 
+def test_unsafe_alter_operations_are_rejected_before_database_mutation(engine):
+    for sql in (
+        "ALTER TABLE core.migration_target DROP COLUMN value",
+        "ALTER TABLE core.migration_target RENAME TO renamed",
+        "ALTER TABLE core.migration_target SET SCHEMA public",
+        "CREATE TABLE core.migration_target IF NOT EXISTS (id bigint PRIMARY KEY)",
+        "CREATE INDEX CONCURRENTLY idx_target ON core.migration_target (id)",
+    ):
+        definition = _definition(engine, migration_id=f"unsafe-{hash(sql)}", sql=(sql,))
+        with Session(engine) as session:
+            with session.begin():
+                with pytest.raises(MigrationBypassError):
+                    execute_migration(session, definition)
+    state, upgrades = _authority(engine)
+    assert state.current_version == 1
+    assert upgrades == []
+
+
 def test_concurrent_same_identity_serializes_and_only_one_applies(engine):
     definition = _definition(engine)
     barrier = threading.Barrier(2)
