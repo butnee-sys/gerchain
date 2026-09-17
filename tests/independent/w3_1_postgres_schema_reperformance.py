@@ -177,37 +177,30 @@ def main() -> None:
             baseline = sha(baseline_descriptor)
             assert baseline == fingerprint(conn, schema)
 
-            # B: additive column
             conn.execute(f'ALTER TABLE "{schema}".accounts ADD COLUMN status text NOT NULL DEFAULT \'ACTIVE\'')
             b = fingerprint(conn, schema); assert b != baseline
-            # C: nullability
             conn.execute(f'ALTER TABLE "{schema}".accounts ALTER COLUMN code SET NOT NULL')
             c = fingerprint(conn, schema); assert c != b
-            # D: type
             conn.execute(f'ALTER TABLE "{schema}".accounts ALTER COLUMN status TYPE varchar(16)')
             d = fingerprint(conn, schema); assert d != c
-            # E1: PK semantic mutation on a fresh table
+
             conn.execute(f'CREATE TABLE "{schema}".pk_mut (a bigint NOT NULL, b bigint NOT NULL, CONSTRAINT pk_mut_pkey PRIMARY KEY (a))')
             e1_before = fingerprint(conn, schema)
             conn.execute(f'ALTER TABLE "{schema}".pk_mut DROP CONSTRAINT pk_mut_pkey, ADD CONSTRAINT pk_mut_pkey PRIMARY KEY (b)')
             e1_after = fingerprint(conn, schema); assert e1_after != e1_before
-            # E2: UNIQUE semantic mutation
             conn.execute(f'ALTER TABLE "{schema}".pk_mut ADD CONSTRAINT pk_mut_uq UNIQUE (a)')
             e2_before = fingerprint(conn, schema)
             conn.execute(f'ALTER TABLE "{schema}".pk_mut DROP CONSTRAINT pk_mut_uq, ADD CONSTRAINT pk_mut_uq UNIQUE (b)')
             e2_after = fingerprint(conn, schema); assert e2_after != e2_before
-            # E3: CHECK semantic mutation
             conn.execute(f'ALTER TABLE "{schema}".pk_mut ADD CONSTRAINT pk_mut_ck CHECK (a >= 0)')
             e3_before = fingerprint(conn, schema)
             conn.execute(f'ALTER TABLE "{schema}".pk_mut DROP CONSTRAINT pk_mut_ck, ADD CONSTRAINT pk_mut_ck CHECK (a > 0)')
             e3_after = fingerprint(conn, schema); assert e3_after != e3_before
-            # E4: FK semantic mutation
             conn.execute(f'CREATE TABLE "{schema}".fk_ref (id bigint PRIMARY KEY)')
             conn.execute(f'ALTER TABLE "{schema}".pk_mut ADD CONSTRAINT pk_mut_fk FOREIGN KEY (a) REFERENCES "{schema}".fk_ref(id) ON DELETE RESTRICT')
             e4_before = fingerprint(conn, schema)
             conn.execute(f'ALTER TABLE "{schema}".pk_mut DROP CONSTRAINT pk_mut_fk, ADD CONSTRAINT pk_mut_fk FOREIGN KEY (b) REFERENCES "{schema}".fk_ref(id) ON DELETE CASCADE')
             e4_after = fingerprint(conn, schema); assert e4_after != e4_before
-            # E5: standalone index semantic mutation
             conn.execute(f'CREATE INDEX pk_mut_idx ON "{schema}".pk_mut (a)')
             e5_before = fingerprint(conn, schema)
             conn.execute(f'DROP INDEX "{schema}".pk_mut_idx')
@@ -223,7 +216,6 @@ def main() -> None:
             assert not any(i["name"].endswith("_pkey") for i in observed["indexes"])
             assert d == fingerprint(conn, schema)
 
-            # G: a separate schema is outside the declared scope and must not alter it.
             outside = schema + "_outside"
             conn.execute(f'CREATE SCHEMA "{outside}"')
             try:
@@ -235,9 +227,7 @@ def main() -> None:
             print("W3.1 independent PostgreSQL logical-schema re-performance: PASS")
             for label in ("A baseline", "B column", "C nullability", "D type",
                           "E1 PK", "E2 UNIQUE", "E3 CHECK", "E4 FK",
-                          "E5 index/backing-index exclusion", "F deterministic replay",
-                          "G scope isolation", "H mismatch", "I version deception",
-                          "J authority deception", "K fresh-process determinism"):
+                          "E5 index/backing-index exclusion", "G scope isolation"):
                 print(label + ": PASS")
             print(json.dumps({"schema": schema, "descriptor": observed,
                               "baseline_fingerprint": baseline,
