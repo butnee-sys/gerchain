@@ -131,13 +131,30 @@ def _verify_physical_state(session: Session, definition: MigrationDefinition) ->
         )
 
 
+def _verify_recorded_predecessor(session: Session, state, definition: MigrationDefinition) -> None:
+    """Require actual physical state to equal the W3-recorded predecessor."""
+    descriptor, actual_hash = reconcile(
+        session.connection(),
+        definition.identity.schema_id,
+        definition.expected_schema_hash,
+        definition.namespaces,
+    )
+    if descriptor.descriptor_version != definition.descriptor_version:
+        raise MigrationSchemaMismatch("descriptor version mismatch in recorded predecessor")
+    if actual_hash != state.state_hash:
+        raise MigrationSchemaMismatch(
+            f"recorded predecessor mismatch: recorded={state.state_hash} actual={actual_hash}"
+        )
+
+
 def execute_migration(session: Session, definition: MigrationDefinition) -> UpgradeResult:
     """Execute one W3.1-B migration inside the caller's transaction.
 
     PostgreSQL DDL and W3 authority advancement are deliberately kept in the
     same transaction. A committed retry is accepted only after the physical
-    schema is re-verified; an externally pre-applied but otherwise matching
-    schema may be reconciled and then committed to W3 without replaying DDL.
+    schema is re-verified. A physically pre-applied target without a committed
+    W3 record is never adopted: recovery must first prove the recorded
+    predecessor and then retry the immutable DDL.
     """
     definition.validate()
 
@@ -170,16 +187,15 @@ def execute_migration(session: Session, definition: MigrationDefinition) -> Upgr
     if state.status != "ACTIVE":
         raise MigrationExecutionError("schema is not available for migration")
 
-    # Recovery path for a physical DDL change that exists without a committed
-    # W3 authority record. This is safe only when the complete declared
-    # physical schema exactly matches the immutable expected fingerprint.
-    try:
-        _verify_physical_state(session, definition)
-    except MigrationSchemaMismatch:
-        for statement in definition.statements:
-            connection.execute(text(_normalize_sql(statement)))
-        _verify_physical_state(session, definition)
+    # Recovery is predecessor-based, never target-adoption based. An external
+    # DDL change makes the recorded predecessor unverifiable and therefore
+    # blocks this migration rather than silently converting it into authority.
+    _verify_recorded_predecessor(session, state, definition)
 
+    for statement in definition.statements:
+        connection.execute(text(_normalize_sql(statement)))
+
+    _verify_physical_state(session, definition)
     descriptor, _ = reconcile(
         connection,
         definition.identity.schema_id,
