@@ -1,0 +1,1 @@
+observation_id,domain,jurisdiction,period,et_trust,et_transparency,et_fulfilment,eti,transaction_value,transaction_complexity,verification_time,completion_time,settlement_delay,failure_flag,dispute_flag,evidence_complete,condition_verified,correct_settlement,direct_cost,control_group,data_source,source_version
