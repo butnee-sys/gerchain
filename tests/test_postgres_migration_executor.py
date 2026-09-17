@@ -186,7 +186,7 @@ def test_unsafe_alter_operations_are_rejected_before_database_mutation(engine):
         "ALTER TABLE core.migration_target DROP COLUMN value",
         "ALTER TABLE core.migration_target RENAME TO renamed",
         "ALTER TABLE core.migration_target SET SCHEMA public",
-        "CREATE TABLE core.migration_target IF NOT EXISTS (id bigint PRIMARY KEY)",
+        "CREATE TABLE IF NOT EXISTS core.migration_target (id bigint PRIMARY KEY)",
         "CREATE INDEX CONCURRENTLY idx_target ON core.migration_target (id)",
     ):
         definition = _definition(engine, migration_id=f"unsafe-{hash(sql)}", sql=(sql,))
