@@ -85,20 +85,10 @@ class Index:
     backing_constraint: bool = False
 
 
-@dataclass(frozen=True)
-class Descriptor:
-    descriptor_version: str
-    schema_id: str
-    tables: tuple[Table, ...]
-    indexes: tuple[Index, ...] = ()
-
-
 _SCOPE_RELKINDS = {"r"}
 
 
 def _type_from_row(row: Any) -> Type:
-    # typmod is retained as a canonical parameter so varchar(n), numeric(p,s),
-    # etc. cannot collapse into the same physical fingerprint.
     parameters: tuple[tuple[str, Any], ...] = ()
     if row.typmod is not None and row.typmod >= 0:
         parameters = (("typmod", int(row.typmod)),)
@@ -106,7 +96,13 @@ def _type_from_row(row: Any) -> Type:
 
 
 def _action(code: str) -> str:
-    return {"a": "a", "r": "r", "c": "c", "n": "n", "d": "d"}.get(code, code)
+    return {
+        "a": "NO ACTION",
+        "r": "RESTRICT",
+        "c": "CASCADE",
+        "n": "SET NULL",
+        "d": "SET DEFAULT",
+    }.get(code, code)
 
 
 def observe(conn: Connection, schema_id: str, namespaces: tuple[str, ...] = ("core",)) -> Descriptor:
@@ -134,11 +130,10 @@ def observe(conn: Connection, schema_id: str, namespaces: tuple[str, ...] = ("co
         columns = conn.execute(
             text(
                 """SELECT a.attnum AS ordinal, a.attname AS name,
-                          a.attnotnull AS nullable_not,
-                          a.atttypmod AS typmod,
+                          a.attnotnull AS nullable_not, a.atttypmod AS typmod,
+                          a.attndims AS array_dimensions,
                           t.typname AS type_name,
                           tn.nspname AS type_schema,
-                          CASE WHEN t.typelem <> 0 AND t.typtype = 'b' THEN 1 ELSE 0 END AS array_dimensions,
                           pg_get_expr(ad.adbin, ad.adrelid) AS default_expression
                    FROM pg_catalog.pg_attribute a
                    JOIN pg_catalog.pg_type t ON t.oid = a.atttypid
@@ -158,7 +153,7 @@ def observe(conn: Connection, schema_id: str, namespaces: tuple[str, ...] = ("co
                 row["name"],
                 _type_from_row(row),
                 not bool(row["nullable_not"]),
-                row["default_expression"],
+                row["default_expression"].strip() if row["default_expression"] else None,
             )
             for row in columns
         )
@@ -266,15 +261,18 @@ def observe(conn: Connection, schema_id: str, namespaces: tuple[str, ...] = ("co
                    FROM unnest(:keys) WITH ORDINALITY AS s(attnum, position)
                    JOIN pg_catalog.pg_attribute a
                      ON a.attrelid = to_regclass(:qualified_table)::oid AND a.attnum = s.attnum
-                   WHERE s.position <= :key_count
+                   WHERE s.position <= :total_count
                    ORDER BY s.position"""
             ),
             {
                 "keys": list(row["key_attnums"] or []),
                 "qualified_table": f'"{row["table_namespace"]}"."{row["table_name"]}"',
-                "key_count": int(row["indnkeyatts"]),
+                "total_count": int(row["indnatts"]),
             },
         ).mappings().all()
+        key_count = int(row["indnkeyatts"])
+        key_columns = tuple(v["attname"] for v in column_rows[:key_count])
+        included_columns = tuple(v["attname"] for v in column_rows[key_count:])
         indexes.append(
             Index(
                 row["namespace"],
@@ -282,7 +280,8 @@ def observe(conn: Connection, schema_id: str, namespaces: tuple[str, ...] = ("co
                 (row["table_namespace"], row["table_name"]),
                 bool(row["unique_index"]),
                 row["method"],
-                tuple(v["attname"] for v in column_rows),
+                key_columns,
+                included_columns,
             )
         )
 
@@ -297,7 +296,7 @@ def canonical_descriptor(descriptor: Descriptor) -> dict[str, Any]:
             {
                 "namespace": t.namespace,
                 "name": t.name,
-                "columns": [{"ordinal": c.ordinal, "name": c.name, "type": typ(c.type), "nullable": c.nullable, "default": c.default.strip() if c.default else None} for c in sorted(t.columns, key=lambda c: (c.ordinal, c.name))],
+                "columns": [{"ordinal": c.ordinal, "name": c.name, "type": typ(c.type), "nullable": c.nullable, "default": c.default} for c in sorted(t.columns, key=lambda c: (c.ordinal, c.name))],
                 "primary_keys": [{"name": x.name, "columns": list(x.columns)} for x in sorted(t.primary_keys, key=lambda x: x.name)],
                 "unique_constraints": [{"name": x.name, "columns": list(x.columns)} for x in sorted(t.unique_constraints, key=lambda x: x.name)],
                 "foreign_keys": [{"name": x.name, "columns": list(x.columns), "referenced_table": list(x.referenced_table), "referenced_columns": list(x.referenced_columns), "on_update": x.on_update, "on_delete": x.on_delete} for x in sorted(t.foreign_keys, key=lambda x: x.name)],
