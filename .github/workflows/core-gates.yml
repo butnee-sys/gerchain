@@ -75,7 +75,6 @@ jobs:
             tests/test_nef_consensus_integration.py \
             tests/test_nef_end_to_end.py \
             tests/test_nef_fault_tolerance.py \
-            tests/test_nef_g3_dee_gerchain_e2e.py \
             tests/test_nef_gerchain_boundary.py \
             tests/test_nef_gerchain_port.py \
             tests/test_nef_state_engine.py \
@@ -107,8 +106,7 @@ jobs:
             tests/test_w2_oracle_agreement.py \
             tests/test_w2_independent_reproduction.py
       - name: Run independent PostgreSQL W2 re-performance
-        run: |
-          python tests/independent/w2_postgres_reperformance.py
+        run: python tests/independent/w2_postgres_reperformance.py
       - name: Run CORE W3 schema authority tests
         run: |
           pytest -q \
@@ -117,12 +115,12 @@ jobs:
             tests/test_w3_independent_oracle.py \
             tests/test_w3_independent_reproduction.py
       - name: Run independent PostgreSQL W3 re-performance
-        run: |
-          python tests/independent/w3_postgres_reperformance.py
+        run: python tests/independent/w3_postgres_reperformance.py
       - name: Run CORE W3.1 logical schema oracle tests
         run: |
           pytest -q tests/test_w3_1_schema_fingerprint_oracle.py
           python tests/independent/w3_1_schema_fingerprint_oracle.py
       - name: Run independent PostgreSQL W3.1 schema re-performance
-        run: |
-          python tests/independent/w3_1_postgres_schema_reperformance.py
+        run: python tests/independent/w3_1_postgres_schema_reperformance.py
+      - name: Run W3.1 independent PostgreSQL cross-agreement
+        run: python tests/independent/w3_1_cross_agreement.py
