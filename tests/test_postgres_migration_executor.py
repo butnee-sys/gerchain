@@ -24,11 +24,10 @@ from persistence.migration_executor import (
 from persistence.schema_authority import (
     CoreSchemaStateModel,
     CoreSchemaUpgradeModel,
-    SchemaAuthorityBase,
     create_schema_authority_tables,
     initialize_schema,
 )
-from persistence.schema_reconciler import Descriptor, physical_schema_fingerprint
+from persistence.schema_reconciler import Descriptor, physical_schema_fingerprint, observe
 
 
 pytestmark = pytest.mark.skipif(
@@ -55,22 +54,14 @@ def engine():
     engine.dispose()
 
 
-def _target_hash():
-    # The expected hash is derived from the same read-only production observer
-    # after a fixture schema is constructed in a separate transaction.
-    from persistence.schema_reconciler import observe
-    return observe
-
-
 def _definition(engine, migration_id="m-1", sql=None, expected_hash=None, from_version=1, to_version=2):
     statements = tuple(sql or ("CREATE TABLE core.migration_target (id bigint PRIMARY KEY, value text NOT NULL)",))
     if expected_hash is None:
-        from persistence.schema_reconciler import observe
         with engine.begin() as conn:
-            conn.execute(text("CREATE TABLE core.expected_target (id bigint PRIMARY KEY, value text NOT NULL)"))
+            conn.execute(text("CREATE TABLE core.migration_target (id bigint PRIMARY KEY, value text NOT NULL)"))
             descriptor = observe(conn, "CORE")
             expected_hash = physical_schema_fingerprint(descriptor)
-            conn.execute(text("DROP TABLE core.expected_target"))
+            conn.execute(text("DROP TABLE core.migration_target"))
     return MigrationDefinition(
         MigrationIdentity(migration_id, "CORE", from_version, to_version, migration_hash(statements)),
         statements,
@@ -117,7 +108,6 @@ def test_same_id_changed_hash_is_rejected(engine):
         with session.begin():
             execute_migration(session, definition)
     changed_sql = ("CREATE TABLE core.migration_target (id bigint PRIMARY KEY, other text NOT NULL)",)
-    conflict = _definition(engine, sql=changed_sql, expected_hash=definition.expected_schema_hash)
     conflict = MigrationDefinition(
         MigrationIdentity("m-1", "CORE", 1, 2, migration_hash(changed_sql)),
         changed_sql,
