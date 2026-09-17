@@ -3,7 +3,7 @@
 **Audit scope:** GerChain CORE  
 **Frozen baseline:** `274f45c83ce088e2229a2628e3a80403a68503df`  
 **Main baseline:** `621e7e2acefe243d4c72e783970e1eb833c60b96`  
-**Current CORE revalidation/evidence commit:** `ce39dc9886af4a2da6bdc3d6d7e6407bac5f8eb7`
+**Current CORE revalidation/evidence commit:** `8258c2dcebfff677291ed85af17648a1176b5993`
 
 ## Evidence register
 
@@ -17,9 +17,10 @@
 | E-CORE-006 | DEE key management | `tests/test_dee_key_management.py` | GREEN |
 | E-CORE-007 | DEE security | `tests/test_dee_security.py` | GREEN |
 | E-CORE-008 | CORE/SHUUD boundary | CORE-only workflow + scope-boundary evidence | GREEN |
-| E-CORE-009 | CodeQL | `.github/workflows/codeql.yml` + run `35124770618` | GREEN |
+| E-CORE-009 | CodeQL | `.github/workflows/codeql.yml` + current successful run | GREEN |
 | E-CORE-010 | PwC frozen baseline | Frozen SHA and prior PwC evidence set | FROZEN |
 | E-CORE-011 | W3 schema/version authority | `docs/evidence/W3_CLOSURE_2026-09-16.md` + current CORE gates | GREEN (bounded) |
+| E-CORE-012 | W3.1 logical PostgreSQL schema truth | `docs/evidence/W3_1_CLOSURE_2026-09-17.md` + exact execution commit `2d063f6b816a08899ee9f7f12cedf50322ea7099` | GREEN (bounded) |
 | E-GOV-001 | IAM / MFA | `GC-IDM-001/002` evidence package | MISSING |
 | E-GOV-002 | Privileged access review | Organizational access inventory/review records | MISSING |
 | E-GOV-003 | Main branch governance | Active repository ruleset `CORE-main-protection` | VERIFIED (bounded) |
@@ -28,9 +29,9 @@
 
 ## Current CORE revalidation evidence
 
-The W3 execution commit `3654060db520e5493c23a6203c6ab29eef60f314` passed CORE gates, PostgreSQL concurrency, operating reconciliation, CodeQL and Snyk checks; W3 production tests, independent oracle/deterministic reproduction, and independent PostgreSQL re-performance passed in the CORE gate chain. The evidence-record refresh is carried by the subsequent evidence commits on the same W3 branch.
+W3.1-A technical closure is recorded at `docs/evidence/W3_1_CLOSURE_2026-09-17.md`. Its exact execution commit is `2d063f6b816a08899ee9f7f12cedf50322ea7099`; the evidence-record refresh is committed at `8258c2dcebfff677291ed85af17648a1176b5993`.
 
-W3 closure is bounded to canonical schema/version authority and concurrency transition semantics. Complete production DDL migration execution remains a separately declared architectural assurance concern.
+The exact W3.1 execution chain passed CORE structure/boundary, W2, W3, W3.1 logical-schema oracle, independent PostgreSQL W3.1 re-performance, cross-agreement, CORE Operating Reconciliation and CodeQL. The W3.1 closure is bounded to the declared PostgreSQL logical-schema domain and does not close production DDL migration execution.
 
 ## Evidence retention rule
 
