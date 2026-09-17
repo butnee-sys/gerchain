@@ -9,9 +9,10 @@ This matrix is a controlled working document. It deliberately distinguishes impl
 | GC-WIT-002 | Witness integrity / tamper evidence | Witness and DEE security tests | GREEN |
 | GC-RES-002 | Release atomicity / idempotency | Atomic release + PostgreSQL concurrency evidence | GREEN |
 | GC-RES-003 | Abandoned PROCESSING recovery | Recovery implementation + PostgreSQL tests | GREEN |
-| GC-IND-001 | Independent audit/re-performance | W2/W3 independent re-performance exists; broader CORE independent assurance remains open | OPEN |
+| GC-IND-001 | Independent audit/re-performance | W2/W3/W3.1 independent re-performance and cross-agreement exist; broader CORE independent assurance remains open | OPEN |
 | GC-SCH-003 | Canonical schema/version authority | W3 domain contract + PostgreSQL concurrency + independent re-performance | GREEN (bounded) |
-| GC-SCH-004 | Production DDL migration execution authority | Production migration executor assurance package | OPEN |
+| GC-SCH-004 | Production DDL migration execution authority | Production migration executor assurance package | OPEN / BLOCKED |
+| GC-SCH-005 | Actual PostgreSQL logical-schema truth | W3.1-A closure, A-K vectors, independent PostgreSQL re-performance, cross-agreement, exact execution commit `2d063f6b816a08899ee9f7f12cedf50322ea7099` | GREEN (bounded) |
 | GC-GOV-003 | Main branch governance | Active `CORE-main-protection` ruleset | VERIFIED (bounded) |
 
 ## Supporting CORE controls
