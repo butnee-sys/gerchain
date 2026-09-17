@@ -79,15 +79,7 @@ Preferred order:
 
 ## 7. Data integrity requirements
 
-Every observation must retain:
-
-- source;
-- source version/date;
-- transformation history;
-- inclusion/exclusion status;
-- missing-value treatment;
-- calculation version;
-- reproducible identifier.
+Every observation must retain source, source version/date, transformation history, inclusion/exclusion status, missing-value treatment, calculation version, and reproducible identifier.
 
 No manually edited result should enter the confirmatory dataset without an auditable transformation record.
 
