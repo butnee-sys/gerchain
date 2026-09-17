@@ -124,3 +124,9 @@ jobs:
         run: python tests/independent/w3_1_postgres_schema_reperformance.py
       - name: Run W3.1 independent PostgreSQL cross-agreement
         run: python tests/independent/w3_1_cross_agreement.py
+      - name: Run CORE W3.1-B migration executor tests
+        run: |
+          pytest -q \
+            tests/test_migration_identity.py \
+            tests/test_migration_executor.py \
+            tests/test_postgres_migration_executor.py
