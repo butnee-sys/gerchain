@@ -1,13 +1,43 @@
 from __future__ import annotations
 
+import os
+from datetime import datetime
+
 import pytest
-from sqlalchemy import text
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session
 
 from persistence.migration_executor import MigrationSchemaMismatch, execute_migration
-from persistence.schema_authority import CoreSchemaStateModel, CoreSchemaUpgradeModel
+from persistence.schema_authority import CoreSchemaStateModel, CoreSchemaUpgradeModel, create_schema_authority_tables, initialize_schema
+from persistence.schema_reconciler import Descriptor, physical_schema_fingerprint
 
 from tests.test_postgres_migration_executor import _authority, _definition
+
+
+pytestmark = pytest.mark.skipif(
+    not os.getenv("GERCHAIN_TEST_DATABASE_URL"),
+    reason="GERCHAIN_TEST_DATABASE_URL is required",
+)
+
+
+@pytest.fixture()
+def engine():
+    engine = create_engine(os.environ["GERCHAIN_TEST_DATABASE_URL"], future=True)
+    with engine.begin() as conn:
+        conn.execute(text("DROP SCHEMA IF EXISTS core CASCADE"))
+        conn.execute(text("CREATE SCHEMA core"))
+        conn.execute(text("DROP TABLE IF EXISTS core_schema_upgrade CASCADE"))
+        conn.execute(text("DROP TABLE IF EXISTS core_schema_state CASCADE"))
+    create_schema_authority_tables(engine)
+    with Session(engine) as session:
+        with session.begin():
+            initialize_schema(session, "CORE", 1, physical_schema_fingerprint(Descriptor("w3.1-v1.1", "CORE", ())))
+    yield engine
+    with engine.begin() as conn:
+        conn.execute(text("DROP SCHEMA IF EXISTS core CASCADE"))
+        conn.execute(text("DROP TABLE IF EXISTS core_schema_upgrade CASCADE"))
+        conn.execute(text("DROP TABLE IF EXISTS core_schema_state CASCADE"))
+    engine.dispose()
 
 
 def test_reader_sees_only_committed_migration_state(engine):
@@ -37,8 +67,8 @@ def test_committed_authority_without_physical_schema_is_not_accepted(engine):
                     migration_hash=definition.identity.migration_hash,
                     authority=definition.authority,
                     status="APPLIED",
-                    created_at=__import__("datetime").datetime.utcnow(),
-                    applied_at=__import__("datetime").datetime.utcnow(),
+                    created_at=datetime.utcnow(),
+                    applied_at=datetime.utcnow(),
                 )
             )
             state = session.get(CoreSchemaStateModel, "CORE")
