@@ -108,7 +108,15 @@ def _existing_upgrade(session: Session, upgrade_id: str):
     return session.get(CoreSchemaUpgradeModel, upgrade_id)
 
 
-def _result_from_existing(existing: CoreSchemaUpgradeModel) -> UpgradeResult:
+def _result_from_existing(existing: CoreSchemaUpgradeModel, requested: SchemaUpgrade) -> UpgradeResult:
+    if (
+        existing.schema_id != requested.schema_id
+        or existing.from_version != requested.from_version
+        or existing.to_version != requested.to_version
+        or existing.migration_hash != requested.migration_hash
+        or existing.authority != requested.authority
+    ):
+        raise SchemaUpgradeConflict("migration identity conflict for existing migration_id")
     if existing.status == UpgradeStatus.APPLIED.value:
         return UpgradeResult(
             existing.upgrade_id,
@@ -134,7 +142,7 @@ def apply_upgrade_transaction(
     """
     existing = _existing_upgrade(session, upgrade.upgrade_id)
     if existing is not None:
-        return _result_from_existing(existing)
+        return _result_from_existing(existing, upgrade)
 
     current_model = (
         session.query(CoreSchemaStateModel)
@@ -145,12 +153,9 @@ def apply_upgrade_transaction(
     if current_model is None:
         raise SchemaUpgradeRejected(f"unknown schema: {upgrade.schema_id}")
 
-    # A concurrent transaction may have inserted the same upgrade identity
-    # while this transaction waited on the canonical schema row. Re-read after
-    # acquiring the lock; READ COMMITTED makes the committed retry visible.
     existing = _existing_upgrade(session, upgrade.upgrade_id)
     if existing is not None:
-        return _result_from_existing(existing)
+        return _result_from_existing(existing, upgrade)
 
     current = _state(current_model)
     try:
