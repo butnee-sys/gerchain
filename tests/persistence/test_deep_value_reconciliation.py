@@ -190,8 +190,12 @@ def test_atomic_value_transaction_rollback_leaves_no_partial_evidence():
         assert session.query(TransactionWitness).count() == 0
         assert session.query(OutboxEvent).count() == 0
         assert session.query(DurableIdempotencyRecord).count() == 0
-        assert session.query(\n            __import__("persistence.atomic_ledger", fromlist=["LedgerAccountModel"]).LedgerAccountModel\n        ).filter_by(account_id="escrow-rollback").one().balance == 100
-        assert session.query(\n            __import__("persistence.atomic_ledger", fromlist=["LedgerAccountModel"]).LedgerAccountModel\n        ).filter_by(account_id="beneficiary-rollback").one().balance == 0
+        assert session.query(
+            __import__("persistence.atomic_ledger", fromlist=["LedgerAccountModel"]).LedgerAccountModel
+        ).filter_by(account_id="escrow-rollback").one().balance == 100
+        assert session.query(
+            __import__("persistence.atomic_ledger", fromlist=["LedgerAccountModel"]).LedgerAccountModel
+        ).filter_by(account_id="beneficiary-rollback").one().balance == 0
     engine.dispose()
 
 
