@@ -413,6 +413,23 @@ class GerchainRuntime:
 
         raise RuntimeError("production cancellation requires Canonical Ledger authority")
 
+    def settle(self, *, transaction_id: str, source: str, destination: str, amount: int, currency: str):
+        if self.is_canonical_ledger_authoritative:
+            from persistence.settlement_coordinator import SettlementCoordinator
+
+            with self._session_factory() as session:
+                result = SettlementCoordinator(session).settle_in_transaction(
+                    transaction_id=transaction_id,
+                    source=source,
+                    destination=destination,
+                    amount=amount,
+                    currency=currency,
+                )
+                session.commit()
+                return result
+
+        raise RuntimeError("production settlement requires Canonical Ledger authority")
+
     def serialize(self) -> bytes:
         from persistence.serializer import serialize_chain
         return serialize_chain(self.witness_chain)
