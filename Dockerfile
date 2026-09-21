@@ -9,4 +9,4 @@ COPY . /app
 RUN pip install --no-cache-dir -r requirements-dee-security.txt
 
 EXPOSE 8485 9333
-CMD ["python", "node_cli.py"]
+CMD ["python", "production_entrypoint.py"]
