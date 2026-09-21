@@ -119,19 +119,39 @@ def deep_reconcile_value_truth(session: Session) -> DeepValueTruthReport:
         elif movement.integrity_hash != _expected_integrity_hash(movement):
             issue("INTEGRITY_HASH_MISMATCH", tx, "movement integrity hash does not match canonical fields")
 
+    # Witness and outbox also represent state-only operations (for example
+    # LOCK), so reverse orphan checks apply only to value-moving event types.
+    value_event_types = {
+        "GERCHAIN_FUND",
+        "GERCHAIN_RELEASE",
+        "GERCHAIN_REFUND",
+        "GERCHAIN_CANCEL",
+        "GERCHAIN_SETTLEMENT",
+    }
+
     for witness in witnesses:
-        if witness.transaction_id not in movement_by_tx:
-            issue("ORPHAN_WITNESS", witness.transaction_id, "witness has no canonical movement")
+        if (
+            witness.event_type in value_event_types
+            and witness.transaction_id not in movement_by_tx
+        ):
+            issue(
+                "ORPHAN_WITNESS",
+                witness.transaction_id,
+                "value-moving witness has no canonical movement",
+            )
 
     for event in outboxes:
+        if event.event_type not in value_event_types:
+            continue
         parts = event.event_id.split(":", 1)
         tx = parts[1] if len(parts) == 2 else None
         if tx is None or tx not in movement_by_tx:
-            issue("ORPHAN_OUTBOX", tx, "outbox event has no canonical movement")
+            issue("ORPHAN_OUTBOX", tx, "value-moving outbox event has no canonical movement")
 
-    for idem in idempotencies:
-        if idem.key not in movement_by_tx and idem.state == "COMPLETED":
-            issue("ORPHAN_IDEMPOTENCY", idem.key, "completed idempotency record has no canonical movement")
+    # Idempotency is also used by state-only operations. A completed record
+    # cannot be classified as an orphan solely from its key because the
+    # current durable record does not persist operation type. Movement-side
+    # checks therefore remain authoritative for value transactions.
 
     return DeepValueTruthReport(
         canonical_movement_count=len(movements),
