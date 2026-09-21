@@ -73,6 +73,7 @@ def refund_escrow_in_transaction(
         new_state=EscrowState.REFUNDED,
         ledger_transfer=ledger_transfer,
         event_type="GERCHAIN_REFUNDED",
+        idempotency_payload=idempotency_payload,
         payload={
             "transaction_id": transaction_id,
             "escrow_id": escrow_id,
