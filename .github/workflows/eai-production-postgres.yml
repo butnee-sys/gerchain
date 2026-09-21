@@ -42,17 +42,14 @@ jobs:
           from sqlalchemy.orm import sessionmaker
           from services.gerchain_runtime_factory import ProductionRuntimeFactory
           engine = create_engine(os.environ["GERCHAIN_DATABASE_URL"], pool_pre_ping=True)
-          factory = ProductionRuntimeFactory(
-              config=__import__("services.gerchain_runtime_factory", fromlist=["ProductionRuntimeConfig"]).ProductionRuntimeConfig(
-                  database_url=os.environ["GERCHAIN_DATABASE_URL"],
-                  escrow_id="eai-boot-1",
-                  amount=100,
-                  currency="USD",
-                  witness_id="witness-1",
-              ),
+          runtime = ProductionRuntimeFactory.create(
+              escrow_id="eai-boot-1",
+              amount=100,
+              currency="USD",
+              witness_id="witness-1",
               engine=engine,
+              session_factory=sessionmaker(bind=engine, expire_on_commit=False),
           )
-          runtime = factory.create()
           assert runtime.is_canonical_ledger_authoritative
           print("EAI_PRODUCTION_FACTORY=PASS")
           engine.dispose()
