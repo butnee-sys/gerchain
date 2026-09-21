@@ -35,10 +35,6 @@ def fund_escrow_in_transaction(
         .with_for_update()
     ).scalar_one()
 
-    if EscrowState(escrow.state) != EscrowState.CREATED:
-        raise ValueError(
-            f"escrow {escrow_id} must be CREATED to fund; got {escrow.state}"
-        )
     if escrow.currency != currency:
         raise ValueError("fund currency does not match escrow currency")
     if int(escrow.amount) != amount:
