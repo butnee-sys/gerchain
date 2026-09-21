@@ -397,6 +397,22 @@ class GerchainRuntime:
             trinity_proof=trinity_proof,
         )
 
+    def cancel(self, *, transaction_id: str, timestamp: str, evidence: Any):
+        if self.is_canonical_ledger_authoritative:
+            from persistence.cancel_escrow import cancel_escrow_in_transaction
+
+            with self._session_factory() as session:
+                result = cancel_escrow_in_transaction(
+                    session,
+                    transaction_id=transaction_id,
+                    escrow_id=self.escrow_engine.escrow_id,
+                    payload={"timestamp": timestamp, "evidence": evidence},
+                )
+                session.commit()
+                return result
+
+        raise RuntimeError("production cancellation requires Canonical Ledger authority")
+
     def serialize(self) -> bytes:
         from persistence.serializer import serialize_chain
         return serialize_chain(self.witness_chain)
