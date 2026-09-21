@@ -456,15 +456,24 @@ def test_deep_reconciliation_detects_orphan_outbox():
     engine.dispose()
 
 
-def test_deep_reconciliation_detects_orphan_completed_idempotency():
+def test_deep_reconciliation_does_not_false_positive_state_only_idempotency():
     engine, factory = _session_factory()
     with factory() as session:
         _seed_clean(session)
         now = datetime.now(timezone.utc)
+        payload = {
+            "escrow_id": "esc-1",
+            "operation": "LOCK",
+            "source_state": "FUNDED",
+            "target_state": "LOCKED",
+        }
         session.add(DurableIdempotencyRecord(
-            key="orphan-tx", fingerprint="orphan", result_json="{}",
+            key="lock-only-tx",
+            fingerprint=IdempotencyEngine.fingerprint(payload),
+            result_json=json.dumps({"status": "LOCKED", "value_movement": False}),
             state="COMPLETED", created_at=now, updated_at=now,
         ))
         session.commit()
-        _assert_code(session, "ORPHAN_IDEMPOTENCY")
+        report = deep_reconcile_value_truth(session)
+        assert not any(i.code == "ORPHAN_IDEMPOTENCY" for i in report.issues)
     engine.dispose()
