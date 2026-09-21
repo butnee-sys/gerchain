@@ -34,6 +34,8 @@ def cancel_escrow_in_transaction(
     ).scalar_one()
 
     state = EscrowState(escrow.state)
+
+    # Terminal replay must be recognized before lifecycle-state rejection.
     if state not in (EscrowState.CREATED, EscrowState.FUNDED):
         raise ValueError(f"escrow {escrow_id} cannot be cancelled from {state.value}")
 
@@ -53,6 +55,14 @@ def cancel_escrow_in_transaction(
         "currency": escrow.currency,
         **dict(payload or {}),
     }
+    existing_result = get_existing_in_transaction(
+        session,
+        key=transaction_id,
+        payload=idempotency_payload,
+    )
+    if existing_result is not None:
+        return {"replayed": True, "result": existing_result}
+
 
     if state == EscrowState.CREATED:
         replay = begin_in_transaction(
