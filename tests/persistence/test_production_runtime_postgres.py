@@ -18,7 +18,7 @@ def test_production_postgresql_boot_and_value_truth():
     engine = create_engine(dsn, pool_pre_ping=True)
     factory = sessionmaker(bind=engine, expire_on_commit=False)
 
-    runtime_factory = ProductionRuntimeFactory.create(
+    runtime = ProductionRuntimeFactory.create(
         escrow_id="prod-esc-1",
         amount=100,
         currency="MNT",
@@ -26,8 +26,6 @@ def test_production_postgresql_boot_and_value_truth():
         engine=engine,
         session_factory=factory,
     )
-    runtime = runtime_factory.create()
-
     assert runtime.is_canonical_ledger_authoritative
     assert runtime.runtime_mode == "production-postgresql"
 
