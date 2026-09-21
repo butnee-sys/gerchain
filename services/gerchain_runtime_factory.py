@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 from typing import Any, Callable
+from pathlib import Path
 
-from sqlalchemy import Engine, inspect
+from sqlalchemy import Engine, inspect, text
 
 from persistence.atomic_ledger import AtomicLedgerBase
 from persistence.atomic_value_transaction import WitnessBase
@@ -32,6 +33,12 @@ class ProductionRuntimeFactory:
             raise ValueError("production runtime requires PostgreSQL engine and session factory")
         if engine.dialect.name != "postgresql":
             raise ValueError("production runtime requires PostgreSQL engine")
+        migration = Path(__file__).resolve().parents[1] / "postgres" / "schema" / "002_canonical_production.sql"
+        if not migration.is_file():
+            raise RuntimeError(f"canonical production migration not found: {migration}")
+        with engine.begin() as connection:
+            connection.execute(text(migration.read_text(encoding="utf-8")))
+
         AtomicLedgerBase.metadata.create_all(engine)
         EscrowBase.metadata.create_all(engine)
         WitnessBase.metadata.create_all(engine)
