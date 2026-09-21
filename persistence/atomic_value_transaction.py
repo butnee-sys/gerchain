@@ -8,7 +8,7 @@ from sqlalchemy import DateTime, Integer, String, select
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
 
 from persistence.escrow_aggregate import EscrowState, transition_escrow
-from persistence.transactional_outbox import enqueue_in_transaction
+from persistence.transactional_outbox import deterministic_event_id, enqueue_in_transaction
 
 
 class WitnessBase(DeclarativeBase):
@@ -109,7 +109,7 @@ class AtomicValueTransaction:
         )
         enqueue_in_transaction(
             self.session,
-            event_id=f"{event_type.lower()}:{transaction_id}",
+            event_id=deterministic_event_id(event_type, transaction_id),
             event_type=event_type,
             aggregate_id=escrow_id,
             payload=dict(payload),
