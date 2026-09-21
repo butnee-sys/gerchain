@@ -76,4 +76,31 @@ def transition_escrow(
     return escrow
 
 
-__all__ = ["CanonicalEscrow", "EscrowState", "transition_escrow"]
+def get_escrow(session: Session, escrow_id: str, *, for_update: bool = False) -> CanonicalEscrow:
+    """Read the authoritative durable escrow aggregate."""
+    stmt = select(CanonicalEscrow).where(CanonicalEscrow.id == escrow_id)
+    if for_update:
+        stmt = stmt.with_for_update()
+    escrow = session.execute(stmt).scalar_one_or_none()
+    if escrow is None:
+        raise ValueError(f"escrow {escrow_id} not found")
+    return escrow
+
+
+def escrow_to_dict(escrow: CanonicalEscrow) -> dict[str, object]:
+    return {
+        "escrow_id": escrow.id,
+        "sender": escrow.sender_address,
+        "receiver": escrow.receiver_address,
+        "amount": escrow.amount,
+        "state": escrow.state,
+        "condition": escrow.condition_desc,
+        "refund_destination": escrow.refund_destination,
+        "currency": escrow.currency,
+        "version": escrow.version,
+        "created_at": escrow.created_at,
+        "updated_at": escrow.updated_at,
+    }
+
+
+__all__ = ["CanonicalEscrow", "EscrowState", "transition_escrow", "get_escrow", "escrow_to_dict"]
