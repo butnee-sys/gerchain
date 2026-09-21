@@ -105,8 +105,16 @@ def deep_reconcile_value_truth(session: Session) -> DeepValueTruthReport:
         matching_outboxes = outbox_by_tx.get(tx, [])
         if not matching_outboxes:
             issue("UNOUTBOXED_MOVEMENT", tx, "movement has no outbox evidence")
-        elif not any(e.aggregate_id == movement.escrow_id for e in matching_outboxes):
-            issue("OUTBOX_AGGREGATE_MISMATCH", tx, "outbox aggregate does not match escrow")
+        elif not any(
+            e.aggregate_id == movement.escrow_id
+            and e.event_type == f"GERCHAIN_{movement.operation}"
+            for e in matching_outboxes
+        ):
+            issue(
+                "OUTBOX_AGGREGATE_MISMATCH",
+                tx,
+                "outbox type or aggregate does not match canonical movement",
+            )
 
         idem = idem_by_key.get(tx)
         if idem is None:
