@@ -78,7 +78,3 @@ CREATE INDEX IF NOT EXISTS ix_gerchain_ledger_movements_created
 
 CREATE INDEX IF NOT EXISTS ix_gerchain_outbox_state_lease
     ON gerchain_outbox_events (state, lease_until);
-
-INSERT INTO schema_version (version, checksum)
-SELECT 2, 'canonical-production-v1'
-WHERE NOT EXISTS (SELECT 1 FROM schema_version WHERE version = 2);
