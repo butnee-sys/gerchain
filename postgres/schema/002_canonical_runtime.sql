@@ -29,9 +29,6 @@ ALTER TABLE escrows
     ADD CONSTRAINT escrows_state_canonical_check
     CHECK (state IN ('CREATED','FUNDED','LOCKED','RELEASED','REFUNDED','CANCELLED'));
 
-ALTER TABLE escrows
-    ALTER COLUMN currency SET NOT NULL;
-
 CREATE TABLE IF NOT EXISTS gerchain_ledger_accounts (
     account_id VARCHAR(128) PRIMARY KEY,
     currency VARCHAR(16) NOT NULL,
