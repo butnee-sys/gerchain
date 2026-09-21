@@ -195,6 +195,104 @@ def test_atomic_value_transaction_rollback_leaves_no_partial_evidence():
     engine.dispose()
 
 
+def test_atomic_value_transaction_replay_is_idempotent():
+    engine, factory = _session_factory()
+    with factory() as session:
+        now = datetime.now(timezone.utc)
+        ledger = PostgreSQLAtomicLedger(factory)
+        ledger.create_account_in_transaction(session, "escrow-replay", "USD", 100)
+        ledger.create_account_in_transaction(session, "beneficiary-replay", "USD", 0)
+        session.add(CanonicalEscrow(
+            id="escrow-replay", sender_address="source-replay",
+            receiver_address="beneficiary-replay", amount=25,
+            state=EscrowState.LOCKED.value, condition_desc="replay",
+            refund_destination="source-replay", currency="USD", version=1,
+            created_at=now, updated_at=now,
+        ))
+        session.commit()
+
+        def transfer(shared_session, tx, source, destination, amount, currency,
+                     operation, escrow_id, integrity_hash):
+            return PostgreSQLAtomicLedger.transfer_in_transaction(
+                shared_session, tx, source, destination, amount, currency,
+                operation, escrow_id, integrity_hash,
+            )
+
+        kwargs = dict(
+            transaction_id="tx-replay", escrow_id="escrow-replay",
+            source="escrow-replay", destination="beneficiary-replay",
+            amount=25, currency="USD", expected_state=EscrowState.LOCKED,
+            new_state=EscrowState.RELEASED, ledger_transfer=transfer,
+            event_type="GERCHAIN_RELEASE", payload={"replay": True},
+        )
+        first = AtomicValueTransaction(session).transfer_and_transition(**kwargs)
+        session.commit()
+        second = AtomicValueTransaction(session).transfer_and_transition(**kwargs)
+        session.commit()
+
+        assert first["replayed"] is False
+        assert second["replayed"] is True
+        assert session.query(LedgerMovementModel).count() == 1
+        assert session.query(TransactionWitness).count() == 1
+        assert session.query(OutboxEvent).count() == 1
+        assert session.query(DurableIdempotencyRecord).one().state == "COMPLETED"
+        assert session.query(LedgerAccountModel).filter_by(account_id="escrow-replay").one().balance == 75
+        assert session.query(LedgerAccountModel).filter_by(account_id="beneficiary-replay").one().balance == 25
+        assert deep_reconcile_value_truth(session).matched is True
+    engine.dispose()
+
+
+def test_atomic_value_transaction_replay_with_different_payload_conflicts():
+    engine, factory = _session_factory()
+    with factory() as session:
+        now = datetime.now(timezone.utc)
+        ledger = PostgreSQLAtomicLedger(factory)
+        ledger.create_account_in_transaction(session, "escrow-conflict", "USD", 100)
+        ledger.create_account_in_transaction(session, "beneficiary-conflict", "USD", 0)
+        session.add(CanonicalEscrow(
+            id="escrow-conflict", sender_address="source-conflict",
+            receiver_address="beneficiary-conflict", amount=25,
+            state=EscrowState.LOCKED.value, condition_desc="conflict",
+            refund_destination="source-conflict", currency="USD", version=1,
+            created_at=now, updated_at=now,
+        ))
+        session.commit()
+
+        def transfer(shared_session, tx, source, destination, amount, currency,
+                     operation, escrow_id, integrity_hash):
+            return PostgreSQLAtomicLedger.transfer_in_transaction(
+                shared_session, tx, source, destination, amount, currency,
+                operation, escrow_id, integrity_hash,
+            )
+
+        base = dict(
+            transaction_id="tx-conflict", escrow_id="escrow-conflict",
+            source="escrow-conflict", destination="beneficiary-conflict",
+            amount=25, currency="USD", expected_state=EscrowState.LOCKED,
+            new_state=EscrowState.RELEASED, ledger_transfer=transfer,
+            event_type="GERCHAIN_RELEASE",
+        )
+        AtomicValueTransaction(session).transfer_and_transition(
+            **base, payload={"request": "A"})
+        session.commit()
+
+        try:
+            AtomicValueTransaction(session).transfer_and_transition(
+                **base, payload={"request": "B"})
+            raise AssertionError("expected idempotency conflict")
+        except Exception as exc:
+            assert "idempotency key reused with different request" in str(exc)
+            session.rollback()
+
+        assert session.query(LedgerMovementModel).count() == 1
+        assert session.query(TransactionWitness).count() == 1
+        assert session.query(OutboxEvent).count() == 1
+        assert session.query(LedgerAccountModel).filter_by(account_id="escrow-conflict").one().balance == 75
+        assert session.query(LedgerAccountModel).filter_by(account_id="beneficiary-conflict").one().balance == 25
+        assert deep_reconcile_value_truth(session).matched is True
+    engine.dispose()
+
+
 def test_deep_reconciliation_detects_missing_hash():
     engine, factory = _session_factory()
     with factory() as session:
