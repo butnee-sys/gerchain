@@ -119,7 +119,7 @@ def cancel_escrow_in_transaction(
             payload=idempotency_payload,
             result_json=json.dumps(result, sort_keys=True, separators=(",", ":")),
         )
-    return {"replayed": False, "result": result}
+    return {"replayed": bool(result.get("replayed")), "result": result}
 
 
 __all__ = ["cancel_escrow_in_transaction"]
