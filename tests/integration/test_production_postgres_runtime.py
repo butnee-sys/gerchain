@@ -46,7 +46,7 @@ def test_production_postgresql_canonical_value_flow():
     for account_id, balance in (
         ("alice", 100),
         ("bob", 0),
-        ("carol", 0),
+        ("carol", 10),
         ("settlement-source", 50),
         ("settlement-destination", 0),
         ("smoke-release", 0),
