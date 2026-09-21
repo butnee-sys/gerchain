@@ -66,6 +66,7 @@ def test_coordinator_commits_all_components_once():
     EscrowBase.metadata.create_all(engine)
     WitnessBase.metadata.create_all(engine)
     OutboxBase.metadata.create_all(engine)
+    IdempotencyBase.metadata.create_all(engine)
     factory = sessionmaker(bind=engine, future=True)
 
     from datetime import datetime, timezone
