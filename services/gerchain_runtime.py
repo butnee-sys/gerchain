@@ -346,9 +346,45 @@ class GerchainRuntime:
         self.require_postgresql_authority()
         return self._postgres_release.execute(request)
 
-    def refund(self, *, transaction_id: str, destination: str, timestamp: str, evidence: Any, root: RootOfTrust | None = None, owner_id: str | None = None, authorized: bool = False, evidence_verified: bool = False, trinity_proof: Mapping[str, bool] | None = None):
+    def refund(
+        self,
+        *,
+        transaction_id: str,
+        destination: str,
+        timestamp: str,
+        evidence: Any,
+        root: RootOfTrust | None = None,
+        owner_id: str | None = None,
+        authorized: bool = False,
+        evidence_verified: bool = False,
+        trinity_proof: Mapping[str, bool] | None = None,
+    ):
         if root is None or owner_id is None or trinity_proof is None:
             raise ValueError("DEE authorization context is required for refund")
+
+        if self.is_canonical_ledger_authoritative:
+            from persistence.refund_escrow import refund_escrow_in_transaction
+
+            with self._session_factory() as session:
+                result = refund_escrow_in_transaction(
+                    session,
+                    transaction_id=transaction_id,
+                    escrow_id=self.escrow_engine.escrow_id,
+                    amount=self.escrow_engine.amount,
+                    currency=self.escrow_engine.currency,
+                    payload={
+                        "timestamp": timestamp,
+                        "evidence": evidence,
+                        "owner_id": owner_id,
+                        "authorized": authorized,
+                        "evidence_verified": evidence_verified,
+                        "trinity_proof": dict(trinity_proof),
+                        "requested_destination": destination,
+                    },
+                )
+                session.commit()
+                return result
+
         return self.escrow_service.refund(
             transaction_id=transaction_id,
             destination=destination,
