@@ -16,7 +16,7 @@ from persistence.lock_escrow import lock_escrow_in_transaction
 from persistence.refund_escrow import refund_escrow_in_transaction
 from persistence.release_escrow import release_escrow_in_transaction
 from persistence.settlement_coordinator import SettlementCoordinator
-from services.gerchain_runtime_factory import ProductionRuntimeFactory
+from services.gerchain_runtime_factory import ProductionRuntimeConfig, ProductionRuntimeFactory
 
 
 pytestmark = pytest.mark.integration
@@ -31,7 +31,7 @@ def test_production_postgresql_canonical_value_flow():
 
     engine = create_engine(database_url, pool_pre_ping=True)
     factory = ProductionRuntimeFactory(
-        config=__import__("services.gerchain_runtime_factory", fromlist=["ProductionRuntimeConfig"]).ProductionRuntimeConfig(
+        config=ProductionRuntimeConfig(
             database_url=database_url,
             escrow_id="smoke-release",
             amount=30,
