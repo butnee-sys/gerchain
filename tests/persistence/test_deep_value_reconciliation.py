@@ -148,6 +148,52 @@ def test_deep_reconciliation_from_atomic_value_transaction_is_matched():
     engine.dispose()
 
 
+def test_atomic_value_transaction_rollback_leaves_no_partial_evidence():
+    engine, factory = _session_factory()
+    with factory() as session:
+        now = datetime.now(timezone.utc)
+        ledger = PostgreSQLAtomicLedger(factory)
+        ledger.create_account_in_transaction(session, "escrow-rollback", "USD", 100)
+        ledger.create_account_in_transaction(session, "beneficiary-rollback", "USD", 0)
+        session.add(CanonicalEscrow(
+            id="escrow-rollback", sender_address="source-rollback",
+            receiver_address="beneficiary-rollback", amount=25,
+            state=EscrowState.LOCKED.value, condition_desc="rollback",
+            refund_destination="source-rollback", currency="USD", version=1,
+            created_at=now, updated_at=now,
+        ))
+        session.commit()
+
+        def ledger_transfer(shared_session, tx, source, destination, amount, currency,
+                            operation, escrow_id, integrity_hash):
+            return PostgreSQLAtomicLedger.transfer_in_transaction(
+                shared_session, tx, source, destination, amount, currency,
+                operation, escrow_id, integrity_hash,
+            )
+
+        try:
+            AtomicValueTransaction(session).transfer_and_transition(
+                transaction_id="tx-rollback", escrow_id="escrow-rollback",
+                source="escrow-rollback", destination="beneficiary-rollback",
+                amount=25, currency="USD", expected_state=EscrowState.CREATED,
+                new_state=EscrowState.RELEASED, ledger_transfer=ledger_transfer,
+                event_type="GERCHAIN_RELEASE", payload={"rollback": True},
+            )
+            raise AssertionError("expected escrow transition failure")
+        except ValueError:
+            session.rollback()
+
+        assert session.get(CanonicalEscrow, "escrow-rollback").state == EscrowState.LOCKED.value
+        assert session.get(CanonicalEscrow, "escrow-rollback").version == 1
+        assert session.get(LedgerMovementModel, 1) is None
+        assert session.query(TransactionWitness).count() == 0
+        assert session.query(OutboxEvent).count() == 0
+        assert session.query(DurableIdempotencyRecord).count() == 0
+        assert session.query(\n            __import__("persistence.atomic_ledger", fromlist=["LedgerAccountModel"]).LedgerAccountModel\n        ).filter_by(account_id="escrow-rollback").one().balance == 100
+        assert session.query(\n            __import__("persistence.atomic_ledger", fromlist=["LedgerAccountModel"]).LedgerAccountModel\n        ).filter_by(account_id="beneficiary-rollback").one().balance == 0
+    engine.dispose()
+
+
 def test_deep_reconciliation_detects_missing_hash():
     engine, factory = _session_factory()
     with factory() as session:
