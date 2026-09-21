@@ -302,23 +302,34 @@ class GerchainRuntime:
     ):
         if root is None or owner_id is None or trinity_proof is None:
             raise ValueError("DEE authorization context is required for release")
-        if self.is_postgresql_authoritative:
-            if not source:
-                raise ValueError("source is required for PostgreSQL authoritative release")
-            return self.release_postgres(
-                ReleaseRequest(
-                    idempotency_key=idempotency_key or transaction_id,
-                    transaction_id=transaction_id,
+
+        if self.is_canonical_ledger_authoritative:
+            from persistence.release_escrow import release_escrow_in_transaction
+
+            with self._session_factory() as session:
+                result = release_escrow_in_transaction(
+                    session,
+                    transaction_id=idempotency_key or transaction_id,
                     escrow_id=self.escrow_engine.escrow_id,
-                    source=source,
-                    destination=destination,
+                    beneficiary=destination,
                     amount=self.escrow_engine.amount,
+                    currency=self.escrow_engine.currency,
                     decision_status="APPROVE",
                     authorization_status="AUTHORIZED" if authorized else "DENIED",
-                    trinity_proof=trinity_proof,
+                    trust=trinity_proof.get("trust") is True,
+                    transparency=trinity_proof.get("transparency") is True,
+                    performance=trinity_proof.get("performance") is True,
                     evidence_verified=evidence_verified,
+                    payload={
+                        "timestamp": timestamp,
+                        "evidence": evidence,
+                        "owner_id": owner_id,
+                        "source_claim": source,
+                    },
                 )
-            )
+                session.commit()
+                return result
+
         return self.escrow_service.release(
             transaction_id=transaction_id,
             destination=destination,
