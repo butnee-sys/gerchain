@@ -31,6 +31,9 @@ class LedgerMovementModel(AtomicLedgerBase):
     destination: Mapped[str] = mapped_column(String(128), nullable=False)
     amount: Mapped[int] = mapped_column(Integer, nullable=False)
     currency: Mapped[str] = mapped_column(String(16), nullable=False)
+    operation: Mapped[str] = mapped_column(String(32), nullable=False, default="TRANSFER")
+    escrow_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    integrity_hash: Mapped[str | None] = mapped_column(String(128), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
 
@@ -88,9 +91,14 @@ class PostgreSQLAtomicLedger:
         destination: str,
         amount: int,
         currency: str,
+        operation: str = "TRANSFER",
+        escrow_id: str | None = None,
+        integrity_hash: str | None = None,
     ) -> dict[str, Any]:
         if not transaction_id:
             raise ValueError("transaction_id is required")
+        if not operation:
+            raise ValueError("operation is required")
         if amount <= 0:
             raise ValueError("Transfer amount must be positive")
         if source == destination:
@@ -102,7 +110,7 @@ class PostgreSQLAtomicLedger:
             .with_for_update()
         ).scalar_one_or_none()
         if existing is not None:
-            if (existing.source, existing.destination, existing.amount, existing.currency) != (source, destination, amount, currency):
+            if (existing.source, existing.destination, existing.amount, existing.currency, existing.operation, existing.escrow_id) != (source, destination, amount, currency, operation, escrow_id):
                 raise ValueError("Transaction ID was reused with different movement")
             return {"transaction_id": transaction_id, "source": source, "destination": destination, "amount": amount, "currency": currency, "replayed": True}
 
@@ -124,12 +132,12 @@ class PostgreSQLAtomicLedger:
         destination_row.balance += amount
         destination_row.version += 1
         destination_row.updated_at = now
-        session.add(LedgerMovementModel(transaction_id=transaction_id, source=source, destination=destination, amount=amount, currency=currency, created_at=now))
+        session.add(LedgerMovementModel(transaction_id=transaction_id, source=source, destination=destination, amount=amount, currency=currency, operation=operation, escrow_id=escrow_id, integrity_hash=integrity_hash, created_at=now))
         return {"transaction_id": transaction_id, "source": source, "destination": destination, "amount": amount, "currency": currency, "replayed": False}
 
-    def transfer(self, transaction_id: str, source: str, destination: str, amount: int, currency: str) -> dict[str, Any]:
+    def transfer(self, transaction_id: str, source: str, destination: str, amount: int, currency: str, operation: str = "TRANSFER", escrow_id: str | None = None, integrity_hash: str | None = None) -> dict[str, Any]:
         with self.session_factory() as session:
-            result = self.transfer_in_transaction(session, transaction_id, source, destination, amount, currency)
+            result = self.transfer_in_transaction(session, transaction_id, source, destination, amount, currency, operation, escrow_id, integrity_hash)
             session.commit()
             return result
 
