@@ -79,20 +79,18 @@ def test_fund_replay_does_not_move_value_twice():
     with factory.begin() as session:
         fund_escrow_in_transaction(session, transaction_id="F1", escrow_id="E1", source="SOURCE", amount=100, currency="MNT")
 
-    with factory() as session:
-        # A replay reaches idempotency before attempting a second movement.
-        from persistence.durable_idempotency import begin_in_transaction
-        replay = begin_in_transaction(
+    with factory.begin() as session:
+        replay = fund_escrow_in_transaction(
             session,
-            key="F1",
-            payload={
-                "escrow_id": "E1", "source": "SOURCE", "destination": "E1",
-                "amount": 100, "currency": "MNT",
-                "expected_state": "CREATED", "new_state": "FUNDED",
-                "event_type": "GERCHAIN_FUNDED",
-            },
+            transaction_id="F1",
+            escrow_id="E1",
+            source="SOURCE",
+            amount=100,
+            currency="MNT",
         )
-        assert replay is not None
+        assert replay["replayed"] is True
+
+    with factory() as session:
         assert session.get(LedgerAccountModel, "SOURCE").balance == 900
         assert session.get(LedgerAccountModel, "E1").balance == 100
         assert session.query(LedgerMovementModel).count() == 1
