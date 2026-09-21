@@ -10,6 +10,7 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
 
 from persistence.escrow_aggregate import EscrowState, transition_escrow
 from persistence.transactional_outbox import deterministic_event_id, enqueue_in_transaction
+from persistence.durable_idempotency import begin_in_transaction, complete_in_transaction
 
 
 class WitnessBase(DeclarativeBase):
@@ -87,6 +88,24 @@ class AtomicValueTransaction:
         event_type: str,
         payload: Mapping[str, object],
     ) -> dict:
+        idempotency_payload = {
+            "escrow_id": escrow_id,
+            "source": source,
+            "destination": destination,
+            "amount": amount,
+            "currency": currency,
+            "expected_state": expected_state.value,
+            "new_state": new_state.value,
+            "event_type": event_type,
+        }
+        replay = begin_in_transaction(
+            self.session,
+            key=transaction_id,
+            payload=idempotency_payload,
+        )
+        if replay is not None:
+            return {"replayed": True, "result": replay}
+
         result = ledger_transfer(
             self.session,
             transaction_id,
@@ -114,6 +133,12 @@ class AtomicValueTransaction:
             event_type=event_type,
             aggregate_id=escrow_id,
             payload=dict(payload),
+        )
+        complete_in_transaction(
+            self.session,
+            key=transaction_id,
+            payload=idempotency_payload,
+            result_json=json.dumps(result, sort_keys=True, separators=(",", ":")),
         )
         return result
 
