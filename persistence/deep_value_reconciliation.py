@@ -87,40 +87,46 @@ def deep_reconcile_value_truth(session: Session) -> DeepValueTruthReport:
             issue("INVALID_AMOUNT", tx, "canonical movement amount must be positive")
         if not movement.operation:
             issue("MISSING_OPERATION", tx, "canonical movement operation is missing")
-        if not movement.escrow_id:
-            issue("MISSING_ESCROW_ID", tx, "canonical movement escrow reference is missing")
-        elif movement.escrow_id not in escrow_by_id:
-            issue("ORPHAN_ESCROW_REFERENCE", tx, "movement references a missing canonical escrow")
 
-        witness = witness_by_tx.get(tx)
-        if witness is None:
-            issue("UNWITNESSED_MOVEMENT", tx, "movement has no witness")
-        elif (witness.event_type, witness.escrow_id, witness.amount) != (
-            f"GERCHAIN_{movement.operation}",
-            movement.escrow_id,
-            movement.amount,
-        ):
-            issue("WITNESS_MISMATCH", tx, "witness does not match canonical movement")
+        # Escrow-bound value operations require the canonical escrow/evidence
+        # graph. SETTLEMENT is a direct ledger operation by design and therefore
+        # has no escrow aggregate, witness, outbox, or escrow-scoped idempotency.
+        escrow_bound = movement.operation != "SETTLEMENT"
+        if escrow_bound:
+            if not movement.escrow_id:
+                issue("MISSING_ESCROW_ID", tx, "canonical movement escrow reference is missing")
+            elif movement.escrow_id not in escrow_by_id:
+                issue("ORPHAN_ESCROW_REFERENCE", tx, "movement references a missing canonical escrow")
 
-        matching_outboxes = outbox_by_tx.get(tx, [])
-        if not matching_outboxes:
-            issue("UNOUTBOXED_MOVEMENT", tx, "movement has no outbox evidence")
-        elif not any(
-            e.aggregate_id == movement.escrow_id
-            and e.event_type == f"GERCHAIN_{movement.operation}"
-            for e in matching_outboxes
-        ):
-            issue(
-                "OUTBOX_AGGREGATE_MISMATCH",
-                tx,
-                "outbox type or aggregate does not match canonical movement",
-            )
+            witness = witness_by_tx.get(tx)
+            if witness is None:
+                issue("UNWITNESSED_MOVEMENT", tx, "movement has no witness")
+            elif (witness.event_type, witness.escrow_id, witness.amount) != (
+                f"GERCHAIN_{movement.operation}",
+                movement.escrow_id,
+                movement.amount,
+            ):
+                issue("WITNESS_MISMATCH", tx, "witness does not match canonical movement")
 
-        idem = idem_by_key.get(tx)
-        if idem is None:
-            issue("MISSING_IDEMPOTENCY_EVIDENCE", tx, "movement has no durable idempotency record")
-        elif idem.state != "COMPLETED":
-            issue("INCOMPLETE_IDEMPOTENCY", tx, "movement idempotency record is not COMPLETED")
+            matching_outboxes = outbox_by_tx.get(tx, [])
+            if not matching_outboxes:
+                issue("UNOUTBOXED_MOVEMENT", tx, "movement has no outbox evidence")
+            elif not any(
+                e.aggregate_id == movement.escrow_id
+                and e.event_type == f"GERCHAIN_{movement.operation}"
+                for e in matching_outboxes
+            ):
+                issue(
+                    "OUTBOX_AGGREGATE_MISMATCH",
+                    tx,
+                    "outbox type or aggregate does not match canonical movement",
+                )
+
+            idem = idem_by_key.get(tx)
+            if idem is None:
+                issue("MISSING_IDEMPOTENCY_EVIDENCE", tx, "movement has no durable idempotency record")
+            elif idem.state != "COMPLETED":
+                issue("INCOMPLETE_IDEMPOTENCY", tx, "movement idempotency record is not COMPLETED")
 
         if not movement.integrity_hash:
             issue("MISSING_INTEGRITY_HASH", tx, "movement integrity hash is missing")
