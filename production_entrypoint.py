@@ -66,11 +66,4 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()    runtime = ProductionRuntimeFactory.create(
-        escrow_id=escrow_id,
-        amount=amount,
-        currency=currency,
-        witness_id=witness_id,
-        engine=engine,
-        session_factory=session_factory,
-    )
+    main()
