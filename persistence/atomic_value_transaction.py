@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 import json
+import hashlib
 from enum import StrEnum
 from typing import Mapping
 
@@ -107,6 +108,21 @@ class AtomicValueTransaction:
         if replay is not None:
             return {"replayed": True, "result": replay}
 
+        operation = event_type.removeprefix("GERCHAIN_").upper()
+        integrity_material = json.dumps(
+            {
+                "transaction_id": transaction_id,
+                "operation": operation,
+                "escrow_id": escrow_id,
+                "source": source,
+                "destination": destination,
+                "amount": amount,
+                "currency": currency,
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        integrity_hash = hashlib.sha256(integrity_material.encode("utf-8")).hexdigest()
         result = ledger_transfer(
             self.session,
             transaction_id,
@@ -114,6 +130,9 @@ class AtomicValueTransaction:
             destination,
             amount,
             currency,
+            operation,
+            escrow_id,
+            integrity_hash,
         )
         transition_escrow(
             self.session,
