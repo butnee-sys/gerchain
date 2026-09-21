@@ -35,15 +35,50 @@ class LedgerMovementModel(AtomicLedgerBase):
 
 
 class PostgreSQLAtomicLedger:
-    """Database-authoritative monetary movement.
-
-    transfer_in_transaction participates in a caller-owned transaction and
-    deliberately does not commit. transfer remains the standalone compatibility
-    wrapper for callers that own the whole transaction.
-    """
+    """Database-authoritative monetary movement and account boundary."""
 
     def __init__(self, session_factory):
         self.session_factory = session_factory
+
+    @staticmethod
+    def create_account_in_transaction(
+        session: Session,
+        account_id: str,
+        currency: str,
+        initial_balance: int = 0,
+    ) -> dict[str, Any]:
+        if not account_id:
+            raise ValueError("account_id is required")
+        if not currency:
+            raise ValueError("currency is required")
+        if initial_balance < 0:
+            raise ValueError("initial_balance cannot be negative")
+
+        existing = session.execute(
+            select(LedgerAccountModel)
+            .where(LedgerAccountModel.account_id == account_id)
+            .with_for_update()
+        ).scalar_one_or_none()
+        if existing is not None:
+            if existing.currency != currency or existing.balance != initial_balance:
+                raise ValueError("Account already exists with different canonical state")
+            return {"account_id": account_id, "currency": currency, "balance": int(existing.balance), "version": int(existing.version), "replayed": True}
+
+        now = datetime.now(timezone.utc)
+        session.add(LedgerAccountModel(
+            account_id=account_id,
+            currency=currency,
+            balance=initial_balance,
+            version=0,
+            updated_at=now,
+        ))
+        return {"account_id": account_id, "currency": currency, "balance": initial_balance, "version": 0, "replayed": False}
+
+    def create_account(self, account_id: str, currency: str, initial_balance: int = 0) -> dict[str, Any]:
+        with self.session_factory() as session:
+            result = self.create_account_in_transaction(session, account_id, currency, initial_balance)
+            session.commit()
+            return result
 
     @staticmethod
     def transfer_in_transaction(
@@ -67,31 +102,13 @@ class PostgreSQLAtomicLedger:
             .with_for_update()
         ).scalar_one_or_none()
         if existing is not None:
-            if (existing.source, existing.destination, existing.amount, existing.currency) != (
-                source, destination, amount, currency
-            ):
+            if (existing.source, existing.destination, existing.amount, existing.currency) != (source, destination, amount, currency):
                 raise ValueError("Transaction ID was reused with different movement")
-            return {
-                "transaction_id": transaction_id,
-                "source": source,
-                "destination": destination,
-                "amount": amount,
-                "currency": currency,
-                "replayed": True,
-            }
+            return {"transaction_id": transaction_id, "source": source, "destination": destination, "amount": amount, "currency": currency, "replayed": True}
 
         first, second = sorted((source, destination))
-        first_row = session.execute(
-            select(LedgerAccountModel)
-            .where(LedgerAccountModel.account_id == first)
-            .with_for_update()
-        ).scalar_one()
-        second_row = session.execute(
-            select(LedgerAccountModel)
-            .where(LedgerAccountModel.account_id == second)
-            .with_for_update()
-        ).scalar_one()
-
+        first_row = session.execute(select(LedgerAccountModel).where(LedgerAccountModel.account_id == first).with_for_update()).scalar_one()
+        second_row = session.execute(select(LedgerAccountModel).where(LedgerAccountModel.account_id == second).with_for_update()).scalar_one()
         source_row = first_row if first == source else second_row
         destination_row = first_row if first == destination else second_row
 
@@ -107,37 +124,12 @@ class PostgreSQLAtomicLedger:
         destination_row.balance += amount
         destination_row.version += 1
         destination_row.updated_at = now
-        session.add(
-            LedgerMovementModel(
-                transaction_id=transaction_id,
-                source=source,
-                destination=destination,
-                amount=amount,
-                currency=currency,
-                created_at=now,
-            )
-        )
-        return {
-            "transaction_id": transaction_id,
-            "source": source,
-            "destination": destination,
-            "amount": amount,
-            "currency": currency,
-            "replayed": False,
-        }
+        session.add(LedgerMovementModel(transaction_id=transaction_id, source=source, destination=destination, amount=amount, currency=currency, created_at=now))
+        return {"transaction_id": transaction_id, "source": source, "destination": destination, "amount": amount, "currency": currency, "replayed": False}
 
-    def transfer(
-        self,
-        transaction_id: str,
-        source: str,
-        destination: str,
-        amount: int,
-        currency: str,
-    ) -> dict[str, Any]:
+    def transfer(self, transaction_id: str, source: str, destination: str, amount: int, currency: str) -> dict[str, Any]:
         with self.session_factory() as session:
-            result = self.transfer_in_transaction(
-                session, transaction_id, source, destination, amount, currency
-            )
+            result = self.transfer_in_transaction(session, transaction_id, source, destination, amount, currency)
             session.commit()
             return result
 
