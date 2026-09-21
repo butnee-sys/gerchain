@@ -33,17 +33,19 @@ class ProductionRuntimeFactory:
             raise ValueError("production runtime requires PostgreSQL engine and session factory")
         if engine.dialect.name != "postgresql":
             raise ValueError("production runtime requires PostgreSQL engine")
-        migration = Path(__file__).resolve().parents[1] / "postgres" / "schema" / "002_canonical_production.sql"
-        if not migration.is_file():
-            raise RuntimeError(f"canonical production migration not found: {migration}")
-        with engine.begin() as connection:
-            connection.execute(text(migration.read_text(encoding="utf-8")))
-
+        # Bootstrap base tables first; the canonical migration extends the
+        # durable escrow table with production-only fields/constraints.
         AtomicLedgerBase.metadata.create_all(engine)
         EscrowBase.metadata.create_all(engine)
         WitnessBase.metadata.create_all(engine)
         IdempotencyBase.metadata.create_all(engine)
         OutboxBase.metadata.create_all(engine)
+
+        migration = Path(__file__).resolve().parents[1] / "postgres" / "schema" / "002_canonical_production.sql"
+        if not migration.is_file():
+            raise RuntimeError(f"canonical production migration not found: {migration}")
+        with engine.begin() as connection:
+            connection.execute(text(migration.read_text(encoding="utf-8")))
 
         required = {
             "escrows": {"id", "sender_address", "receiver_address", "amount", "state", "refund_destination", "currency", "version", "created_at", "updated_at"},
