@@ -35,26 +35,34 @@ def cancel_escrow_in_transaction(
 
     state = EscrowState(escrow.state)
 
-    # Terminal replay must be recognized before lifecycle-state rejection.
-    if state not in (EscrowState.CREATED, EscrowState.FUNDED):
-        raise ValueError(f"escrow {escrow_id} cannot be cancelled from {state.value}")
-
     if not escrow.currency:
         raise ValueError("escrow currency is required for cancellation")
 
-    destination = escrow.sender_address if state == EscrowState.FUNDED else None
-    amount = int(escrow.amount) if state == EscrowState.FUNDED else 0
+    destination = escrow.sender_address
+    amount = int(escrow.amount)
 
+    # Keep the idempotency fingerprint stable across the CREATED/FUNDED -> CANCELLED
+    # transition so a completed cancellation can be replayed after state mutation.
     idempotency_payload = {
         "escrow_id": escrow_id,
         "operation": "CANCEL",
-        "state": state.value,
-        "source": escrow_id if state == EscrowState.FUNDED else None,
+        "source": escrow_id,
         "destination": destination,
         "amount": amount,
         "currency": escrow.currency,
         **dict(payload or {}),
     }
+
+    existing_result = get_existing_in_transaction(
+        session,
+        key=transaction_id,
+        payload=idempotency_payload,
+    )
+    if existing_result is not None:
+        return {"replayed": True, "result": existing_result}
+
+    if state not in (EscrowState.CREATED, EscrowState.FUNDED):
+        raise ValueError(f"escrow {escrow_id} cannot be cancelled from {state.value}")
     existing_result = get_existing_in_transaction(
         session,
         key=transaction_id,
