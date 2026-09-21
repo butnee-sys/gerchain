@@ -82,7 +82,7 @@ def test_deep_reconciliation_clean_graph_is_matched():
         _seed_clean(session)
         report = deep_reconcile_value_truth(session)
         assert report.matched is True
-        assert report.issues == []
+        assert not report.issues
     engine.dispose()
 
 
