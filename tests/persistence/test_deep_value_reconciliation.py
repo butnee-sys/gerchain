@@ -6,11 +6,15 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from core.idempotency import IdempotencyEngine
-from persistence.atomic_ledger import AtomicLedgerBase, LedgerMovementModel
-from persistence.atomic_value_transaction import TransactionWitness
+from persistence.atomic_ledger import (
+    AtomicLedgerBase,
+    LedgerMovementModel,
+    PostgreSQLAtomicLedger,
+)
+from persistence.atomic_value_transaction import AtomicValueTransaction, TransactionWitness
 from persistence.deep_value_reconciliation import deep_reconcile_value_truth
 from persistence.durable_idempotency import DurableIdempotencyRecord, IdempotencyBase
-from persistence.escrow_aggregate import CanonicalEscrow, EscrowBase
+from persistence.escrow_aggregate import CanonicalEscrow, EscrowBase, EscrowState
 from persistence.recovery_outbox import OutboxBase, OutboxEvent
 
 
@@ -78,6 +82,69 @@ def test_deep_reconciliation_clean_graph_is_matched():
         report = deep_reconcile_value_truth(session)
         assert report.matched is True
         assert report.issues == []
+    engine.dispose()
+
+
+def test_deep_reconciliation_from_atomic_value_transaction_is_matched():
+    engine, factory = _session_factory()
+    with factory() as session:
+        now = datetime.now(timezone.utc)
+        ledger = PostgreSQLAtomicLedger(factory)
+        ledger.create_account_in_transaction(session, "escrow-live", "USD", 100)
+        ledger.create_account_in_transaction(session, "beneficiary-live", "USD", 0)
+        session.add(CanonicalEscrow(
+            id="escrow-live",
+            sender_address="source-live",
+            receiver_address="beneficiary-live",
+            amount=25,
+            state=EscrowState.LOCKED.value,
+            condition_desc="integration",
+            refund_destination="source-live",
+            currency="USD",
+            version=1,
+            created_at=now,
+            updated_at=now,
+        ))
+        session.commit()
+
+        transaction_id = "tx-live-release"
+        payload = {
+            "timestamp": now.isoformat(),
+            "evidence": {"integration": True},
+            "owner_id": "owner-live",
+            "authorized": True,
+            "evidence_verified": True,
+            "trinity_proof": {"trust": True, "transparency": True, "performance": True},
+        }
+
+        def ledger_transfer(shared_session, tx, source, destination, amount, currency,
+                            operation, escrow_id, integrity_hash):
+            return PostgreSQLAtomicLedger.transfer_in_transaction(
+                shared_session, tx, source, destination, amount, currency,
+                operation, escrow_id, integrity_hash,
+            )
+
+        result = AtomicValueTransaction(session).transfer_and_transition(
+            transaction_id=transaction_id,
+            escrow_id="escrow-live",
+            source="escrow-live",
+            destination="beneficiary-live",
+            amount=25,
+            currency="USD",
+            expected_state=EscrowState.LOCKED,
+            new_state=EscrowState.RELEASED,
+            ledger_transfer=ledger_transfer,
+            event_type="GERCHAIN_RELEASE",
+            payload=payload,
+        )
+        session.commit()
+
+        assert result["replayed"] is False
+        report = deep_reconcile_value_truth(session)
+        assert report.matched is True, report.issues
+        assert session.get(CanonicalEscrow, "escrow-live").state == EscrowState.RELEASED.value
+        assert session.get(TransactionWitness, 1) is not None
+        assert session.get(LedgerMovementModel, 1).integrity_hash
     engine.dispose()
 
 
