@@ -80,7 +80,7 @@ def release_escrow_in_transaction(
             **dict(payload or {}),
         },
     )
-    return {"replayed": False, "result": result}
+    return {"replayed": bool(result.get("replayed")), "result": result}
 
 
 __all__ = ["release_escrow_in_transaction"]
