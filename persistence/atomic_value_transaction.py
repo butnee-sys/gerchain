@@ -87,8 +87,9 @@ class AtomicValueTransaction:
         ledger_transfer,
         event_type: str,
         payload: Mapping[str, object],
+        idempotency_payload: Mapping[str, object] | None = None,
     ) -> dict:
-        idempotency_payload = {
+        idempotency_payload = dict(idempotency_payload or {
             "escrow_id": escrow_id,
             "source": source,
             "destination": destination,
@@ -97,7 +98,7 @@ class AtomicValueTransaction:
             "expected_state": expected_state.value,
             "new_state": new_state.value,
             "event_type": event_type,
-        }
+        })
         replay = begin_in_transaction(
             self.session,
             key=transaction_id,
