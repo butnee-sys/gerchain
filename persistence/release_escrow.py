@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from persistence.atomic_ledger import PostgreSQLAtomicLedger
 from persistence.atomic_value_transaction import AtomicValueTransaction
-from persistence.durable_idempotency import begin_in_transaction, complete_in_transaction
+from persistence.durable_idempotency import get_existing_in_transaction
 from persistence.escrow_aggregate import EscrowState
 
 
@@ -57,14 +57,6 @@ def release_escrow_in_transaction(
         **dict(payload or {}),
     }
 
-    replay = begin_in_transaction(
-        session,
-        key=transaction_id,
-        payload=idempotency_payload,
-    )
-    if replay is not None:
-        return {"replayed": True, "result": replay}
-
     value_tx = AtomicValueTransaction(session)
     result = value_tx.transfer_and_transition(
         transaction_id=transaction_id,
@@ -87,13 +79,6 @@ def release_escrow_in_transaction(
             "currency": currency,
             **dict(payload or {}),
         },
-    )
-
-    complete_in_transaction(
-        session,
-        key=transaction_id,
-        payload=idempotency_payload,
-        result_json=json.dumps(result, sort_keys=True, separators=(",", ":")),
     )
     return {"replayed": False, "result": result}
 
