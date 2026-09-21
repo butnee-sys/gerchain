@@ -34,8 +34,6 @@ def refund_escrow_in_transaction(
         .with_for_update()
     ).scalar_one()
 
-    if EscrowState(escrow.state) != EscrowState.LOCKED:
-        raise ValueError(f"escrow {escrow_id} must be LOCKED to refund")
     if escrow.currency != currency:
         raise ValueError("refund currency does not match escrow currency")
     if int(escrow.amount) != amount:
