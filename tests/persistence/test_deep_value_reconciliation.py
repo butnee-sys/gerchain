@@ -293,6 +293,48 @@ def test_atomic_value_transaction_replay_with_different_payload_conflicts():
     engine.dispose()
 
 
+def test_deep_reconciliation_accepts_lock_as_state_only_evidence():
+    engine, factory = _session_factory()
+    with factory() as session:
+        now = datetime.now(timezone.utc)
+        session.add(CanonicalEscrow(
+            id="escrow-lock", sender_address="SRC", receiver_address="DST",
+            amount=25, state=EscrowState.LOCKED.value, condition_desc="lock",
+            refund_destination="SRC", currency="USD", version=2,
+            created_at=now, updated_at=now,
+        ))
+        payload = {
+            "escrow_id": "escrow-lock",
+            "operation": "LOCK",
+            "source_state": "FUNDED",
+            "target_state": "LOCKED",
+        }
+        session.add(TransactionWitness(
+            transaction_id="tx-lock", event_type="GERCHAIN_LOCKED",
+            escrow_id="escrow-lock", amount=0, created_at=now,
+        ))
+        session.add(OutboxEvent(
+            event_id="gerchain_locked:tx-lock", event_type="GERCHAIN_LOCKED",
+            aggregate_id="escrow-lock", payload_json=json.dumps(payload),
+            state="PENDING", attempts=0, lease_until=None,
+            created_at=now, updated_at=now,
+        ))
+        session.add(DurableIdempotencyRecord(
+            key="tx-lock",
+            fingerprint=IdempotencyEngine.fingerprint(payload),
+            result_json='{"status":"LOCKED","value_movement":false}',
+            state="COMPLETED", created_at=now, updated_at=now,
+        ))
+        session.commit()
+
+        report = deep_reconcile_value_truth(session)
+        assert report.matched is True, report.issues
+        assert report.canonical_movement_count == 0
+        assert report.witness_count == 1
+        assert report.outbox_count == 1
+    engine.dispose()
+
+
 def test_deep_reconciliation_detects_missing_hash():
     engine, factory = _session_factory()
     with factory() as session:
