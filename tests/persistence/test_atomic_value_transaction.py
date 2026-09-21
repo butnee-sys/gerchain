@@ -10,6 +10,7 @@ from persistence.atomic_value_transaction import (
     WitnessBase,
 )
 from persistence.escrow_aggregate import CanonicalEscrow, EscrowBase, EscrowState
+from persistence.durable_idempotency import IdempotencyBase
 from persistence.recovery_outbox import OutboxBase, OutboxEvent
 from persistence.transaction_coordinator import AtomicTransactionCoordinator
 
@@ -20,6 +21,7 @@ def test_coordinator_rolls_back_ledger_escrow_witness_and_outbox():
     EscrowBase.metadata.create_all(engine)
     WitnessBase.metadata.create_all(engine)
     OutboxBase.metadata.create_all(engine)
+    IdempotencyBase.metadata.create_all(engine)
     factory = sessionmaker(bind=engine, future=True)
 
     from datetime import datetime, timezone
