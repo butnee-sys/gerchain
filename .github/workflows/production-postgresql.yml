@@ -46,19 +46,17 @@ jobs:
           import os
           from sqlalchemy import create_engine
           from sqlalchemy.orm import sessionmaker
-          from services.gerchain_runtime_factory import ProductionRuntimeConfig, ProductionRuntimeFactory
+          from services.gerchain_runtime_factory import ProductionRuntimeFactory
 
           engine = create_engine(os.environ["GERCHAIN_DATABASE_URL"])
-          runtime = ProductionRuntimeFactory(
-              ProductionRuntimeConfig(
-                  database_url=os.environ["GERCHAIN_DATABASE_URL"],
-                  escrow_id="ci-escrow",
-                  amount=100,
-                  currency="MNT",
-                  witness_id="ci-witness",
-              ),
+          runtime = ProductionRuntimeFactory.create(
+              escrow_id="ci-escrow",
+              amount=100,
+              currency="MNT",
+              witness_id="ci-witness",
               engine=engine,
-          ).create()
+              session_factory=sessionmaker(bind=engine, expire_on_commit=False),
+          )
           assert runtime.is_canonical_ledger_authoritative
           assert runtime.runtime_mode == "production-postgresql"
           print("CANONICAL_POSTGRES_RUNTIME_OK")
