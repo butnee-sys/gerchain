@@ -10,7 +10,7 @@ from persistence.deep_value_reconciliation import deep_reconcile_value_truth
 from persistence.durable_idempotency import DurableIdempotencyRecord
 from persistence.escrow_aggregate import CanonicalEscrow, EscrowState, EscrowBase
 from persistence.recovery_outbox import OutboxBase, OutboxEvent
-from services.gerchain_runtime_factory import ProductionRuntimeConfig, ProductionRuntimeFactory
+from services.gerchain_runtime_factory import ProductionRuntimeFactory
 
 
 def test_production_postgresql_boot_and_value_truth():
@@ -18,15 +18,13 @@ def test_production_postgresql_boot_and_value_truth():
     engine = create_engine(dsn, pool_pre_ping=True)
     factory = sessionmaker(bind=engine, expire_on_commit=False)
 
-    runtime_factory = ProductionRuntimeFactory(
-        ProductionRuntimeConfig(
-            database_url=dsn,
-            escrow_id="prod-esc-1",
-            amount=100,
-            currency="MNT",
-            witness_id="prod-witness-1",
-        ),
+    runtime_factory = ProductionRuntimeFactory.create(
+        escrow_id="prod-esc-1",
+        amount=100,
+        currency="MNT",
+        witness_id="prod-witness-1",
         engine=engine,
+        session_factory=factory,
     )
     runtime = runtime_factory.create()
 
