@@ -28,10 +28,13 @@ jobs:
         with:
           python-version: "3.13"
       - name: Install runtime dependencies
-        run: python -m pip install -r requirements-dee-security.txt
+        run: |
+          python -m pip install -r requirements-dee-security.txt
+          python -m pip install pytest "psycopg[binary]"
+
       - name: Verify production factory and canonical schema
         env:
-          GERCHAIN_DATABASE_URL: postgresql://gerchain:gerchain@127.0.0.1:5432/gerchain_prod_verify
+          GERCHAIN_DATABASE_URL: postgresql+psycopg://gerchain:gerchain@127.0.0.1:5432/gerchain_prod_verify
           GERCHAIN_ESCROW_ID: production-verify-escrow
           GERCHAIN_ESCROW_AMOUNT: "100"
           GERCHAIN_CURRENCY: USD
@@ -43,18 +46,14 @@ jobs:
           from services.gerchain_runtime_factory import ProductionRuntimeFactory
 
           engine = create_engine(os.environ["GERCHAIN_DATABASE_URL"], pool_pre_ping=True)
-          from services.gerchain_runtime_factory import ProductionRuntimeConfig
-          factory = ProductionRuntimeFactory(
-              ProductionRuntimeConfig(
-                  database_url=os.environ["GERCHAIN_DATABASE_URL"],
-                  escrow_id=os.environ["GERCHAIN_ESCROW_ID"],
-                  amount=int(os.environ["GERCHAIN_ESCROW_AMOUNT"]),
-                  currency=os.environ["GERCHAIN_CURRENCY"],
-                  witness_id=os.environ["GERCHAIN_WITNESS_ID"],
-              ),
+          runtime = ProductionRuntimeFactory.create(
+              escrow_id=os.environ["GERCHAIN_ESCROW_ID"],
+              amount=int(os.environ["GERCHAIN_ESCROW_AMOUNT"]),
+              currency=os.environ["GERCHAIN_CURRENCY"],
+              witness_id=os.environ["GERCHAIN_WITNESS_ID"],
               engine=engine,
+              session_factory=lambda: __import__("sqlalchemy").orm.sessionmaker(bind=engine, expire_on_commit=False)(),
           )
-          runtime = factory.create()
           assert runtime.is_canonical_ledger_authoritative
           required = {
               "escrows", "gerchain_ledger_accounts", "gerchain_ledger_movements",
