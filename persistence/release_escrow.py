@@ -77,6 +77,7 @@ def release_escrow_in_transaction(
         new_state=EscrowState.RELEASED,
         ledger_transfer=ledger_transfer,
         event_type="GERCHAIN_RELEASED",
+        idempotency_payload=idempotency_payload,
         payload={
             "transaction_id": transaction_id,
             "escrow_id": escrow_id,
