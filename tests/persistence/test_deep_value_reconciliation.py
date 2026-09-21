@@ -282,7 +282,7 @@ def test_atomic_value_transaction_replay_with_different_payload_conflicts():
 
         try:
             AtomicValueTransaction(session).transfer_and_transition(
-                **base, payload={"request": "B"})
+                **base, payload={"request": "B"}, idempotency_payload={"request": "B"})
             raise AssertionError("expected idempotency conflict")
         except Exception as exc:
             assert "idempotency key reused with different request" in str(exc)
