@@ -49,6 +49,9 @@ def test_production_postgresql_canonical_value_flow():
         ("carol", 0),
         ("settlement-source", 50),
         ("settlement-destination", 0),
+        ("smoke-release", 0),
+        ("smoke-refund", 0),
+        ("smoke-cancel", 0),
     ):
         ledger.create_account(account_id, "USD", balance)
 
