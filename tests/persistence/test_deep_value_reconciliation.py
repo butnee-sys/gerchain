@@ -9,6 +9,7 @@ from core.idempotency import IdempotencyEngine
 from persistence.atomic_ledger import (
     AtomicLedgerBase,
     LedgerMovementModel,
+    LedgerAccountModel,
     PostgreSQLAtomicLedger,
 )
 from persistence.atomic_value_transaction import AtomicValueTransaction, TransactionWitness
