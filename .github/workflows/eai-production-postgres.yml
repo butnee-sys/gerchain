@@ -34,7 +34,7 @@ jobs:
           python -m pip install -r requirements-dee-security.txt
       - name: Verify production factory construction
         env:
-          GERCHAIN_DATABASE_URL: postgresql://gerchain:gerchain@127.0.0.1:5432/gerchain_test
+          GERCHAIN_DATABASE_URL: postgresql+psycopg://gerchain:gerchain@127.0.0.1:5432/gerchain_test
         run: |
           python - <<'PY'
           import os
@@ -42,14 +42,17 @@ jobs:
           from sqlalchemy.orm import sessionmaker
           from services.gerchain_runtime_factory import ProductionRuntimeFactory
           engine = create_engine(os.environ["GERCHAIN_DATABASE_URL"], pool_pre_ping=True)
-          runtime = ProductionRuntimeFactory.create(
-              escrow_id="eai-boot-1",
-              amount=100,
-              currency="USD",
-              witness_id="witness-1",
+          factory = ProductionRuntimeFactory(
+              config=__import__("services.gerchain_runtime_factory", fromlist=["ProductionRuntimeConfig"]).ProductionRuntimeConfig(
+                  database_url=os.environ["GERCHAIN_DATABASE_URL"],
+                  escrow_id="eai-boot-1",
+                  amount=100,
+                  currency="USD",
+                  witness_id="witness-1",
+              ),
               engine=engine,
-              session_factory=sessionmaker(bind=engine, expire_on_commit=False),
           )
+          runtime = factory.create()
           assert runtime.is_canonical_ledger_authoritative
           print("EAI_PRODUCTION_FACTORY=PASS")
           engine.dispose()
