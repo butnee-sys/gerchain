@@ -140,7 +140,6 @@ def deep_reconcile_value_truth(session: Session) -> DeepValueTruthReport:
         "GERCHAIN_RELEASE",
         "GERCHAIN_REFUND",
         "GERCHAIN_CANCEL",
-        "GERCHAIN_SETTLEMENT",
     }
 
     for witness in witnesses:
