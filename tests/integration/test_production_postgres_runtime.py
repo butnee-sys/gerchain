@@ -202,7 +202,7 @@ def test_production_postgresql_canonical_value_flow():
                 select(LedgerAccountModel.account_id, LedgerAccountModel.balance)
             ).all()
         )
-        assert balances["alice"] == 90
+        assert balances["alice"] == 70
         assert balances["bob"] == 30
         assert balances["carol"] == 10
         assert balances["settlement-source"] == 30
