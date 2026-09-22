@@ -53,7 +53,18 @@ jobs:
               currency="USD",
               witness_id="ea35-smoke-witness",
           )
-          runtime = ProductionRuntimeFactory(cfg).create()
+          from sqlalchemy import create_engine
+          from sqlalchemy.orm import sessionmaker
+          engine = create_engine(cfg.database_url)
+          session_factory = sessionmaker(bind=engine, expire_on_commit=False)
+          runtime = ProductionRuntimeFactory.create(
+              escrow_id=cfg.escrow_id,
+              amount=cfg.amount,
+              currency=cfg.currency,
+              witness_id=cfg.witness_id,
+              engine=engine,
+              session_factory=session_factory,
+          )
           assert runtime.is_canonical_ledger_authoritative
           print("CANONICAL_LEDGER_AUTHORITY=TRUE")
           PY
