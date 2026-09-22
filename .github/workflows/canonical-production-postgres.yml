@@ -42,17 +42,18 @@ jobs:
         run: |
           python - <<'PY'
           import os
-          from services.gerchain_runtime_factory import ProductionRuntimeConfig, ProductionRuntimeFactory
+          from services.gerchain_runtime_factory import ProductionRuntimeFactory
           from sqlalchemy import create_engine
-          config = ProductionRuntimeConfig(
-              database_url=os.environ["GERCHAIN_DATABASE_URL"],
+          dsn = os.environ["GERCHAIN_DATABASE_URL"]
+          engine = create_engine(dsn)
+          runtime = ProductionRuntimeFactory.create(
               escrow_id=os.environ["GERCHAIN_ESCROW_ID"],
               amount=int(os.environ["GERCHAIN_ESCROW_AMOUNT"]),
               currency=os.environ["GERCHAIN_CURRENCY"],
               witness_id=os.environ["GERCHAIN_WITNESS_ID"],
+              engine=engine,
+              session_factory=__import__("sqlalchemy").orm.sessionmaker(bind=engine, expire_on_commit=False),
           )
-          engine = create_engine(config.database_url)
-          runtime = ProductionRuntimeFactory(config, engine=engine).create()
           assert runtime.is_canonical_ledger_authoritative
           print("CANONICAL_LEDGER_AUTHORITY=TRUE")
           engine.dispose()
