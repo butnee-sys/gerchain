@@ -17,7 +17,7 @@ def test_production_factory_and_canonical_ledger_postgresql():
     )
     assert runtime.is_canonical_ledger_authoritative
 
-    session_factory = factory.session_factory
+    session_factory = sessionmaker(bind=engine, expire_on_commit=False)
     ledger = runtime._canonical_ledger
     assert ledger is not None
 
