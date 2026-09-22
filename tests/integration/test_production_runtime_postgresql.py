@@ -11,16 +11,14 @@ from services.gerchain_runtime_factory import ProductionRuntimeFactory
 def test_production_runtime_boots_against_real_postgresql() -> None:
     database_url = os.environ["GERCHAIN_DATABASE_URL"]
     engine = create_engine(database_url, pool_pre_ping=True)
-    factory = ProductionRuntimeFactory(
-        ProductionRuntimeConfig(
-            database_url=database_url,
-            escrow_id="pg-boot-escrow",
-            amount=100,
-            currency="USD",
-            witness_id="pg-boot-witness",
-        ),
+    factory = ProductionRuntimeFactory.create(
+        escrow_id="pg-boot-escrow",
+        amount=100,
+        currency="USD",
+        witness_id="pg-boot-witness",
         engine=engine,
-    ).create()
+        session_factory=session_factory,
+    )
 
     assert factory.is_canonical_ledger_authoritative
 
