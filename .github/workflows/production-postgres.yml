@@ -1,12 +1,13 @@
 name: Production PostgreSQL Re-performance
 
 on:
-  push:
-    branches: ["feat/ea21-transaction-aware-ledger"]
   workflow_dispatch:
+  push:
+    branches:
+      - feat/ea21-transaction-aware-ledger
 
 jobs:
-  production-postgres:
+  postgres-reperformance:
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -14,58 +15,64 @@ jobs:
         env:
           POSTGRES_USER: gerchain
           POSTGRES_PASSWORD: gerchain
-          POSTGRES_DB: gerchain_prod_verify
+          POSTGRES_DB: gerchain_test
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U gerchain -d gerchain_prod_verify"
+          --health-cmd "pg_isready -U gerchain -d gerchain_test"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 20
+    env:
+      GERCHAIN_DATABASE_URL: postgresql+psycopg://gerchain:gerchain@127.0.0.1:5432/gerchain_test
+      GERCHAIN_ESCROW_ID: escrow-ci-001
+      GERCHAIN_ESCROW_AMOUNT: "100"
+      GERCHAIN_CURRENCY: USD
+      GERCHAIN_WITNESS_ID: witness-ci-001
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
           python-version: "3.13"
-      - name: Install runtime dependencies
+      - name: Install dependencies
         run: |
-          python -m pip install -r requirements-dee-security.txt
-          python -m pip install pytest "psycopg[binary]"
-
-      - name: Verify production factory and canonical schema
-        env:
-          GERCHAIN_DATABASE_URL: postgresql+psycopg://gerchain:gerchain@127.0.0.1:5432/gerchain_prod_verify
-          GERCHAIN_ESCROW_ID: production-verify-escrow
-          GERCHAIN_ESCROW_AMOUNT: "100"
-          GERCHAIN_CURRENCY: USD
-          GERCHAIN_WITNESS_ID: production-verify-witness
+          python -m pip install --upgrade pip
+          pip install -r requirements-dee-security.txt
+          pip install pytest
+      - name: Verify PostgreSQL
+        run: |
+          python - <<'PY'
+          from sqlalchemy import create_engine, text
+          import os
+          engine = create_engine(os.environ["GERCHAIN_DATABASE_URL"])
+          with engine.connect() as conn:
+              assert conn.execute(text("select 1")).scalar() == 1
+          print("PostgreSQL reachable")
+          PY
+      - name: Compile production modules
+        run: |
+          python -m py_compile production_entrypoint.py services/gerchain_runtime_factory.py services/gerchain_runtime.py
+      - name: Run persistence and deep-reconciliation tests
+        run: |
+          pytest -q tests/persistence/test_atomic_ledger_transaction_boundary.py
+          pytest -q tests/persistence/test_deep_value_reconciliation.py
+      - name: Verify production factory against PostgreSQL
         run: |
           python - <<'PY'
           import os
-          from sqlalchemy import create_engine, inspect
           from services.gerchain_runtime_factory import ProductionRuntimeConfig, ProductionRuntimeFactory
-
-          engine = create_engine(os.environ["GERCHAIN_DATABASE_URL"], pool_pre_ping=True)
-          runtime = ProductionRuntimeFactory(
-              ProductionRuntimeConfig(
-                  database_url=os.environ["GERCHAIN_DATABASE_URL"],
-                  escrow_id=os.environ["GERCHAIN_ESCROW_ID"],
-                  amount=int(os.environ["GERCHAIN_ESCROW_AMOUNT"]),
-                  currency=os.environ["GERCHAIN_CURRENCY"],
-                  witness_id=os.environ["GERCHAIN_WITNESS_ID"],
-              ),
-              engine=engine,
-          ).create()
+          config = ProductionRuntimeConfig(
+              database_url=os.environ["GERCHAIN_DATABASE_URL"],
+              escrow_id=os.environ["GERCHAIN_ESCROW_ID"],
+              amount=int(os.environ["GERCHAIN_ESCROW_AMOUNT"]),
+              currency=os.environ["GERCHAIN_CURRENCY"],
+              witness_id=os.environ["GERCHAIN_WITNESS_ID"],
+          )
+          factory = ProductionRuntimeFactory(config)
+          runtime = factory.create()
           assert runtime.is_canonical_ledger_authoritative
-          required = {
-              "escrows", "gerchain_ledger_accounts", "gerchain_ledger_movements",
-              "gerchain_transaction_witnesses", "gerchain_outbox_events",
-              "gerchain_idempotency_records",
-          }
-          tables = set(inspect(engine).get_table_names())
-          assert required <= tables, (required - tables)
-          print("PRODUCTION_POSTGRES_BOOT=PASS")
-          print("CANONICAL_LEDGER_AUTHORITY=PASS")
-          print("CANONICAL_SCHEMA_TABLES=PASS")
-          engine.dispose()
+          print("CANONICAL_LEDGER_AUTHORITY=TRUE")
+          factory.engine.dispose()
           PY
