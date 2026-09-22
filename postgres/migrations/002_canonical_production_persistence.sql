@@ -28,20 +28,9 @@ SET created_at = COALESCE(created_at, updated_at, now()),
     version = COALESCE(version, 0),
     refund_destination = COALESCE(refund_destination, sender_address);
 
-DO $$
-DECLARE
-    constraint_name TEXT;
-BEGIN
-    SELECT conname INTO constraint_name
-    FROM pg_constraint
-    WHERE conrelid = 'escrows'::regclass
-      AND contype = 'c'
-      AND pg_get_constraintdef(oid) LIKE '%state IN%';
-
-    IF constraint_name IS NOT NULL THEN
-        EXECUTE format('ALTER TABLE escrows DROP CONSTRAINT %I', constraint_name);
-    END IF;
-END $$;
+ALTER TABLE escrows
+    DROP CONSTRAINT IF EXISTS escrows_state_check,
+    DROP CONSTRAINT IF EXISTS escrows_state_canonical_check;
 
 ALTER TABLE escrows
     ADD CONSTRAINT escrows_state_check
