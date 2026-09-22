@@ -1,4 +1,5 @@
 import os
+import base64
 from datetime import datetime, timezone
 
 from sqlalchemy import create_engine
@@ -11,6 +12,7 @@ from persistence.escrow_aggregate import EscrowBase, CanonicalEscrow, EscrowStat
 from persistence.recovery_outbox import OutboxBase
 from persistence.deep_value_reconciliation import deep_reconcile_value_truth
 from services.gerchain_runtime_factory import ProductionRuntimeConfig, ProductionRuntimeFactory
+from dee_security.root_of_trust import RootOfTrust
 
 
 def test_postgresql_production_runtime_boot_and_value_truth():
@@ -45,7 +47,7 @@ def test_postgresql_production_runtime_boot_and_value_truth():
     assert funded["replayed"] is False
     runtime.lock("pg-lock-1", "T1", {"evidence": "ok"})
     released = runtime.release(
-        root=runtime.witness_chain.root_of_trust,
+        root=RootOfTrust("pg-owner", base64.b64encode(bytes(32)).decode("ascii")),
         owner_id="pg-owner",
         transaction_id="pg-release-1",
         destination="pg-bob",
