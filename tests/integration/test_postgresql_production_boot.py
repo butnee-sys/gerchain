@@ -1,7 +1,7 @@
 import os
 from datetime import datetime, timezone
 
-from sqlalchemy import func, select
+from sqlalchemy import create_engine, func, select
 from sqlalchemy.orm import sessionmaker
 
 from persistence.atomic_ledger import LedgerAccountModel, LedgerMovementModel, PostgreSQLAtomicLedger
@@ -12,7 +12,7 @@ from persistence.lock_escrow import lock_escrow_in_transaction
 from persistence.release_escrow import release_escrow_in_transaction
 from persistence.atomic_value_transaction import TransactionWitness
 from persistence.recovery_outbox import OutboxEvent
-from services.gerchain_runtime_factory import ProductionRuntimeConfig, ProductionRuntimeFactory
+from services.gerchain_runtime_factory import ProductionRuntimeFactory
 
 
 def test_production_runtime_full_fund_lock_release_graph():
@@ -30,7 +30,10 @@ def test_production_runtime_full_fund_lock_release_graph():
         )
         assert runtime.is_canonical_ledger_authoritative
         # A second construction must validate migration checksums and remain idempotent.
-        runtime_again = factory.create()
+        runtime_again = ProductionRuntimeFactory.create(
+            escrow_id="integration-escrow", amount=100, currency="USD", witness_id="integration-witness",
+            engine=engine, session_factory=Session,
+        )
         assert runtime_again.is_canonical_ledger_authoritative
 
         Session = sessionmaker(bind=engine, expire_on_commit=False)
