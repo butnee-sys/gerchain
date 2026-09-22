@@ -2,8 +2,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from pathlib import Path
-from pathlib import Path
 from typing import Any, Callable
 
 from sqlalchemy import Engine, inspect
@@ -14,7 +12,6 @@ from persistence.atomic_value_transaction import WitnessBase
 from persistence.durable_idempotency import IdempotencyBase
 from persistence.escrow_aggregate import EscrowBase
 from persistence.recovery_outbox import OutboxBase
-from postgres.migrations import apply_migrations
 from services.gerchain_runtime import GerchainRuntime
 
 
