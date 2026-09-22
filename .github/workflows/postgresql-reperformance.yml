@@ -1,0 +1,40 @@
+name: Production PostgreSQL Re-performance
+
+on:
+  push:
+    branches:
+      - feat/ea21-transaction-aware-ledger
+  workflow_dispatch:
+
+jobs:
+  postgres-reperformance:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: gerchain
+          POSTGRES_PASSWORD: gerchain
+          POSTGRES_DB: gerchain
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U gerchain -d gerchain"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      GERCHAIN_DATABASE_URL: postgresql+psycopg://gerchain:gerchain@localhost:5432/gerchain
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r requirements-dee-security.txt
+          pip install psycopg[binary]
+      - name: PostgreSQL production re-performance
+        run: pytest -q tests/integration/test_postgresql_production_runtime.py
