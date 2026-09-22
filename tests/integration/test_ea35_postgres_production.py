@@ -27,9 +27,8 @@ def test_production_postgres_fund_lock_release_reconciles():
     )
     assert runtime.is_canonical_ledger_authoritative
     with factory() as session:
-        ledger = PostgreSQLAtomicLedger(factory)
-        ledger.create_account("pg-source", "USD", initial_balance=100)
-        ledger.create_account("pg-beneficiary", "USD", initial_balance=0)
+        PostgreSQLAtomicLedger.create_account_in_transaction(session, "pg-source", "USD", initial_balance=100)
+        PostgreSQLAtomicLedger.create_account_in_transaction(session, "pg-beneficiary", "USD", initial_balance=0)
         session.add(CanonicalEscrow(
             id="pg-ea35-escrow",
             sender_address="pg-source",
