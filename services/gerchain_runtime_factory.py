@@ -102,11 +102,4 @@ class ProductionRuntimeFactory:
         runtime.require_canonical_ledger_authority()
         return runtime
 
-
-__all__ = ["ProductionRuntimeConfig", "ProductionRuntimeFactory"]    def initialize(self) -> None:
-        """Apply the canonical PostgreSQL schema before constructing runtime."""
-        migration_dir = Path(__file__).resolve().parents[1] / "postgres" / "migrations"
-        with self.engine.begin() as conn:
-            apply_migrations(conn, migration_dir)
-
-
+__all__ = ["ProductionRuntimeConfig", "ProductionRuntimeFactory"]
