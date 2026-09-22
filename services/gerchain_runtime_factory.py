@@ -83,4 +83,14 @@ class ProductionRuntimeFactory:
         return runtime
 
 
-__all__ = ["ProductionRuntimeFactory"]
+__all__ = ["ProductionRuntimeFactory"]    def initialize(self) -> None:
+        """Apply the repository's versioned PostgreSQL migrations.
+
+        Production boot must use the same migration path as deployment.
+        ``create_all`` is intentionally not used as a substitute because it
+        cannot reconcile an already-existing legacy schema.
+        """
+        migration_dir = Path(__file__).resolve().parents[1] / "postgres" / "schema"
+        with self.engine.begin() as conn:
+            apply_migrations(conn, migration_dir)
+
