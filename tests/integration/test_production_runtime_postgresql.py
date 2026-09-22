@@ -12,12 +12,14 @@ def test_production_runtime_boots_against_real_postgresql() -> None:
     database_url = os.environ["GERCHAIN_DATABASE_URL"]
     engine = create_engine(database_url, pool_pre_ping=True)
     session_factory = sessionmaker(bind=engine, expire_on_commit=False)
-    factory = ProductionRuntimeFactory(ProductionRuntimeConfig(
-        database_url=database_url,
+    factory = ProductionRuntimeFactory.create(
         escrow_id="pg-boot-escrow",
         amount=100,
         currency="USD",
-        witness_id="pg-boot-witness"), engine=engine).create()
+        witness_id="pg-boot-witness",
+        engine=engine,
+        session_factory=session_factory,
+    )
 
     assert factory.is_canonical_ledger_authoritative
 
