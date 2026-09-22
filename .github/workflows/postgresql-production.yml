@@ -39,4 +39,4 @@ jobs:
           pip install -r requirements-dee-security.txt
           pip install pytest
       - name: PostgreSQL production re-performance
-        run: pytest -q tests/integration/test_postgresql_production_boot.py
+        run: pytest -q tests/integration/test_postgresql_production_boot.py tests/integration/test_postgresql_eai_matrix.py
