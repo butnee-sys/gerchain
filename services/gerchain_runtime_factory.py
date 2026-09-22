@@ -2,19 +2,17 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from pathlib import Path
 from typing import Any, Callable
 
 from sqlalchemy import Engine, inspect
 
 from postgres.migrations import apply_migrations
 from services.gerchain_runtime import GerchainRuntime
-from postgres.migrations import apply_migrations
 
 
 @dataclass(frozen=True)
 class ProductionRuntimeConfig:
-    """Compatibility configuration contract for production runtime construction."""
+    """Configuration contract for the PostgreSQL production runtime."""
 
     database_url: str
     escrow_id: str
@@ -43,6 +41,10 @@ class ProductionRuntimeFactory:
             raise ValueError("production runtime requires PostgreSQL engine and session factory")
         if engine.dialect.name != "postgresql":
             raise ValueError("production runtime requires PostgreSQL engine")
+        if amount <= 0:
+            raise ValueError("production escrow amount must be positive")
+        if not currency or not escrow_id or not witness_id:
+            raise ValueError("production escrow identity is incomplete")
 
         migration_dir = Path(__file__).resolve().parents[1] / "postgres" / "migrations"
         if not migration_dir.is_dir():
@@ -102,12 +104,5 @@ class ProductionRuntimeFactory:
         runtime.require_canonical_ledger_authority()
         return runtime
 
-__all__ = ["ProductionRuntimeConfig", "ProductionRuntimeFactory"]    def initialize(self) -> None:
-        """Apply versioned PostgreSQL migrations under the migration lock."""
-        from pathlib import Path
 
-        migration_dir = Path(__file__).resolve().parents[1] / "postgres" / "migrations"
-        with self.engine.begin() as connection:
-            apply_migrations(connection, migration_dir)
-
-
+__all__ = ["ProductionRuntimeConfig", "ProductionRuntimeFactory"]
