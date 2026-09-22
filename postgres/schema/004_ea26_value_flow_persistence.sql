@@ -1,7 +1,5 @@
 -- EA-26 production persistence tables for the canonical value-flow boundary.
 -- Structural only; no value movement.
-BEGIN;
-
 CREATE TABLE IF NOT EXISTS gerchain_ledger_accounts (
     account_id VARCHAR(128) PRIMARY KEY,
     currency VARCHAR(16) NOT NULL,
@@ -47,4 +45,3 @@ CREATE TABLE IF NOT EXISTS gerchain_outbox_events (
 CREATE INDEX IF NOT EXISTS ix_gerchain_outbox_claim
     ON gerchain_outbox_events (state, id);
 
-COMMIT;
