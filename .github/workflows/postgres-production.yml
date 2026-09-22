@@ -38,6 +38,6 @@ jobs:
           pip install psycopg[binary] pytest
       - name: Verify production factory construction
         run: |
-          python -c 'import os; from services.gerchain_runtime_factory import ProductionRuntimeConfig, ProductionRuntimeFactory; c=ProductionRuntimeConfig(database_url=os.environ["GERCHAIN_DATABASE_URL"], escrow_id=os.environ["GERCHAIN_ESCROW_ID"], amount=100, currency="USD", witness_id=os.environ["GERCHAIN_WITNESS_ID"]); r=ProductionRuntimeFactory(c).create(); assert r.is_canonical_ledger_authoritative; print("CANONICAL_LEDGER_AUTHORITY=TRUE")'
+          python -c 'import os; from sqlalchemy import create_engine; from sqlalchemy.orm import sessionmaker; from services.gerchain_runtime_factory import ProductionRuntimeFactory; e=create_engine(os.environ["GERCHAIN_DATABASE_URL"]); r=ProductionRuntimeFactory.create(escrow_id=os.environ["GERCHAIN_ESCROW_ID"], amount=100, currency="USD", witness_id=os.environ["GERCHAIN_WITNESS_ID"], engine=e, session_factory=sessionmaker(bind=e, expire_on_commit=False)); assert r.is_canonical_ledger_authoritative; print("CANONICAL_LEDGER_AUTHORITY=TRUE")'
       - name: Run persistence and reconciliation tests
         run: pytest -q tests/persistence/test_deep_value_reconciliation.py tests/persistence/test_atomic_ledger_transaction_boundary.py
