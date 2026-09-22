@@ -1,9 +1,8 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Callable
-from pathlib import Path
-from sqlalchemy import text
-from pathlib import Path
 
 from sqlalchemy import Engine, inspect
 
@@ -14,6 +13,17 @@ from persistence.escrow_aggregate import EscrowBase
 from persistence.recovery_outbox import OutboxBase
 from postgres.migrations import apply_migrations
 from services.gerchain_runtime import GerchainRuntime
+
+
+@dataclass(frozen=True)
+class ProductionRuntimeConfig:
+    """Compatibility configuration contract for production runtime construction."""
+
+    database_url: str
+    escrow_id: str
+    amount: int
+    currency: str
+    witness_id: str
 
 
 class ProductionRuntimeFactory:
@@ -84,4 +94,4 @@ class ProductionRuntimeFactory:
 
 
 
-__all__ = ["ProductionRuntimeFactory"]
+__all__ = ["ProductionRuntimeConfig", "ProductionRuntimeFactory"]
