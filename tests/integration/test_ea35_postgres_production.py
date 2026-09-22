@@ -29,6 +29,7 @@ def test_production_postgres_fund_lock_release_reconciles():
     with factory() as session:
         PostgreSQLAtomicLedger.create_account_in_transaction(session, "pg-source", "USD", initial_balance=100)
         PostgreSQLAtomicLedger.create_account_in_transaction(session, "pg-beneficiary", "USD", initial_balance=0)
+        PostgreSQLAtomicLedger.create_account_in_transaction(session, "pg-ea35-escrow", "USD", initial_balance=0)
         session.add(CanonicalEscrow(
             id="pg-ea35-escrow",
             sender_address="pg-source",
