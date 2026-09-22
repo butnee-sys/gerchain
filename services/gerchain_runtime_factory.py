@@ -2,6 +2,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+
+from persistence.atomic_ledger import AtomicLedgerBase
+from persistence.escrow_aggregate import EscrowBase
+from persistence.recovery_outbox import OutboxBase
+from persistence.durable_idempotency import IdempotencyBase
+from persistence.atomic_value_transaction import WitnessBase
 from typing import Any, Callable
 
 from sqlalchemy import Engine, inspect
@@ -46,10 +52,15 @@ class ProductionRuntimeFactory:
         if not currency or not escrow_id or not witness_id:
             raise ValueError("production escrow identity is incomplete")
 
-        migration_dir = Path(__file__).resolve().parents[1] / "postgres" / "migrations"
+        migration_dir = Path(__file__).resolve().parents[1] / "postgres" / "schema"
         if not migration_dir.is_dir():
             raise RuntimeError(f"canonical production migration directory not found: {migration_dir}")
 
+        # Materialize the canonical model on a fresh PostgreSQL database before
+        # applying the repository schema migration. Existing incompatible tables
+        # are not silently rewritten; the schema contract check below must fail.
+        for base in (AtomicLedgerBase, EscrowBase, OutboxBase, IdempotencyBase, WitnessBase):
+            base.metadata.create_all(engine)
         with engine.connect() as connection:
             apply_migrations(connection, migration_dir)
 
