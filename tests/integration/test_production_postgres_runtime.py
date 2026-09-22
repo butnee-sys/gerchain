@@ -30,14 +30,17 @@ def test_production_postgresql_canonical_value_flow():
         raise AssertionError("integration test requires PostgreSQL")
 
     engine = create_engine(database_url, pool_pre_ping=True)
-    runtime = ProductionRuntimeFactory.create(
-        escrow_id="smoke-release",
-        amount=30,
-        currency="USD",
-        witness_id="w-smoke",
+    factory = ProductionRuntimeFactory(
+        config=__import__("services.gerchain_runtime_factory", fromlist=["ProductionRuntimeConfig"]).ProductionRuntimeConfig(
+            database_url=database_url,
+            escrow_id="smoke-release",
+            amount=30,
+            currency="USD",
+            witness_id="w-smoke",
+        ),
         engine=engine,
-        session_factory=sessionmaker(bind=engine, expire_on_commit=False),
     )
+    runtime = factory.create()
     assert runtime.is_canonical_ledger_authoritative
 
     Session = sessionmaker(bind=engine, expire_on_commit=False)
