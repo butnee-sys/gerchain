@@ -36,8 +36,10 @@ def test_postgresql_eai_refund_cancel_and_settlement_paths():
         with Session() as session:
             for account_id, balance in (
                 ("MATRIX-SOURCE", 300),
+                ("eai-matrix-refund", 0),
                 ("MATRIX-REFUND", 0),
                 ("MATRIX-BENEFICIARY", 0),
+                ("eai-matrix-cancel", 0),
                 ("MATRIX-CANCEL-SOURCE", 100),
                 ("MATRIX-SETTLE-DEST", 0),
             ):
