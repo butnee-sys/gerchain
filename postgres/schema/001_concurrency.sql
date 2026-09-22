@@ -1,6 +1,7 @@
 -- GerChain PostgreSQL concurrency hardening
 -- Atomic escrow transition + audit + transactional outbox.
 -- Transaction boundaries are owned by postgres.migrations.apply_migrations().
+-- Transaction boundaries are owned by postgres.migrations.apply_migrations().
 
 CREATE TABLE IF NOT EXISTS schema_version (
     version BIGINT PRIMARY KEY,
