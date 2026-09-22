@@ -33,15 +33,6 @@ jobs:
           python -m pip install -r postgres/requirements-test.txt
           python -m pip install -r requirements-dee-security.txt
           python -m pip install "psycopg[binary]"
-      - name: Apply canonical PostgreSQL migrations
-        env:
-          PGPASSWORD: gerchain
-        run: |
-          psql -h 127.0.0.1 -U gerchain -d gerchain_test -v ON_ERROR_STOP=1 -f postgres/schema/001_concurrency.sql
-          psql -h 127.0.0.1 -U gerchain -d gerchain_test -v ON_ERROR_STOP=1 -f postgres/schema/002_canonical_escrow_lifecycle.sql
-          psql -h 127.0.0.1 -U gerchain -d gerchain_test -v ON_ERROR_STOP=1 -f postgres/schema/003_ea25_durable_idempotency.sql
-          psql -h 127.0.0.1 -U gerchain -d gerchain_test -v ON_ERROR_STOP=1 -f postgres/schema/004_ea26_value_flow_persistence.sql
-          psql -h 127.0.0.1 -U gerchain -d gerchain_test -v ON_ERROR_STOP=1 -f postgres/schema/005_ea35_canonical_production.sql
       - name: Run production PostgreSQL value-flow proof
         env:
           GERCHAIN_DATABASE_URL: postgresql+psycopg://gerchain:gerchain@127.0.0.1:5432/gerchain_test
