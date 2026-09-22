@@ -17,18 +17,17 @@ from services.gerchain_runtime_factory import ProductionRuntimeConfig, Productio
 
 def test_production_runtime_full_fund_lock_release_graph():
     database_url = os.environ["GERCHAIN_DATABASE_URL"]
-    factory = ProductionRuntimeFactory(
-        ProductionRuntimeConfig(
-            database_url=database_url,
+    engine = create_engine(database_url, future=True, pool_pre_ping=True)
+    try:
+        Session = sessionmaker(bind=engine, expire_on_commit=False)
+        runtime = ProductionRuntimeFactory.create(
             escrow_id="integration-escrow",
             amount=100,
             currency="USD",
             witness_id="integration-witness",
+            engine=engine,
+            session_factory=Session,
         )
-    )
-    engine = factory.engine
-    try:
-        runtime = factory.create()
         assert runtime.is_canonical_ledger_authoritative
         # A second construction must validate migration checksums and remain idempotent.
         runtime_again = factory.create()
