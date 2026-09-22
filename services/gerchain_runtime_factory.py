@@ -54,6 +54,16 @@ class ProductionRuntimeFactory:
         IdempotencyBase.metadata.create_all(engine)
         OutboxBase.metadata.create_all(engine)
 
+        # Reconcile the pre-canonical escrow table before checksum-managed migrations.
+        # This is idempotent and preserves migration history while upgrading the durable shape.
+        with engine.begin() as connection:
+            connection.execute(text("ALTER TABLE escrows ADD COLUMN IF NOT EXISTS refund_destination TEXT"))
+            connection.execute(text("ALTER TABLE escrows ADD COLUMN IF NOT EXISTS currency VARCHAR(16)"))
+            connection.execute(text("ALTER TABLE escrows ADD COLUMN IF NOT EXISTS version BIGINT NOT NULL DEFAULT 0"))
+            connection.execute(text("ALTER TABLE escrows ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT now()"))
+            connection.execute(text("ALTER TABLE escrows DROP CONSTRAINT IF EXISTS escrows_state_check"))
+            connection.execute(text("ALTER TABLE escrows ADD CONSTRAINT escrows_state_check CHECK (state IN ('CREATED','FUNDED','LOCKED','RELEASED','REFUNDED','CANCELLED'))"))
+
         migration_dir = Path(__file__).resolve().parents[1] / "postgres" / "schema"
         if not migration_dir.is_dir():
             raise RuntimeError(f"canonical production migration directory not found: {migration_dir}")
