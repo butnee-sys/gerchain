@@ -25,14 +25,7 @@ def test_postgres_canonical_fund_lock_release_and_reconcile():
     )
     engine = create_engine(DB_URL, pool_pre_ping=True)
     sf = sessionmaker(bind=engine, expire_on_commit=False)
-    runtime = ProductionRuntimeFactory.create(
-        escrow_id=cfg.escrow_id,
-        amount=cfg.amount,
-        currency=cfg.currency,
-        witness_id=cfg.witness_id,
-        engine=engine,
-        session_factory=sf,
-    )
+    runtime = ProductionRuntimeFactory(cfg, engine=engine).create()
     now = datetime.now(timezone.utc)
 
     with sf.begin() as session:
