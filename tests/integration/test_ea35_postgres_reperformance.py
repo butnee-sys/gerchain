@@ -68,6 +68,19 @@ def test_postgres_canonical_fund_lock_release_and_reconcile():
     )
     assert result["replayed"] is False
 
+    replay = runtime.release(
+        transaction_id="ea35-release",
+        destination="EA35-BEN",
+        timestamp="T3",
+        evidence={"verified": True},
+        root=object(),
+        owner_id="ea35-owner",
+        authorized=True,
+        evidence_verified=True,
+        trinity_proof={"trust": True, "transparency": True, "performance": True},
+    )
+    assert replay["replayed"] is True
+
     with sf() as session:
         report = deep_reconcile_value_truth(session)
         assert report.matched, [f"{i.code}:{i.transaction_id}:{i.detail}" for i in report.issues]
