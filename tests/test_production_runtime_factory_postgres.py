@@ -67,7 +67,7 @@ def test_production_factory_executes_canonical_ledger_value_flow_on_real_postgre
         )
         session.commit()
 
-    assert first["status"] in {"COMMITTED", "SUCCESS", "APPLIED"}
+    assert first["replayed"] is False
 
     with factory.session_factory() as session:
         replay = ledger.transfer_in_transaction(
@@ -84,5 +84,5 @@ def test_production_factory_executes_canonical_ledger_value_flow_on_real_postgre
 
     source = runtime.get_balance("PG-SOURCE")
     destination = runtime.get_balance("PG-DEST")
-    assert source["balance"] == 900
-    assert destination["balance"] == 100
+    assert source == 900
+    assert destination == 100
