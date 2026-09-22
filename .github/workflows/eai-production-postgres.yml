@@ -43,18 +43,14 @@ jobs:
           from services.gerchain_runtime_factory import ProductionRuntimeFactory
           engine = create_engine(os.environ["GERCHAIN_DATABASE_URL"], pool_pre_ping=True)
           session_factory = sessionmaker(bind=engine, expire_on_commit=False)
-          from services.gerchain_runtime_factory import ProductionRuntimeConfig
-          factory = ProductionRuntimeFactory(
-              ProductionRuntimeConfig(
-                  database_url=os.environ["GERCHAIN_DATABASE_URL"],
-                  escrow_id="eai-boot-1",
-                  amount=100,
-                  currency="USD",
-                  witness_id="witness-1",
-              ),
+          runtime = ProductionRuntimeFactory.create(
+              escrow_id="eai-boot-1",
+              amount=100,
+              currency="USD",
+              witness_id="witness-1",
               engine=engine,
+              session_factory=session_factory,
           )
-          runtime = factory.create()
           assert runtime.is_canonical_ledger_authoritative
           print("EAI_PRODUCTION_FACTORY=PASS")
           engine.dispose()
