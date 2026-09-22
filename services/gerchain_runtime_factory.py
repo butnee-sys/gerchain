@@ -3,13 +3,14 @@ from __future__ import annotations
 from typing import Any, Callable
 from pathlib import Path
 
-from sqlalchemy import Engine, inspect, text
+from sqlalchemy import Engine, inspect
 
 from persistence.atomic_ledger import AtomicLedgerBase
 from persistence.atomic_value_transaction import WitnessBase
 from persistence.durable_idempotency import IdempotencyBase
 from persistence.escrow_aggregate import EscrowBase
 from persistence.recovery_outbox import OutboxBase
+from postgres.migrations import apply_migrations
 from services.gerchain_runtime import GerchainRuntime
 
 
@@ -41,11 +42,11 @@ class ProductionRuntimeFactory:
         IdempotencyBase.metadata.create_all(engine)
         OutboxBase.metadata.create_all(engine)
 
-        migration = Path(__file__).resolve().parents[1] / "postgres" / "schema" / "002_canonical_production.sql"
-        if not migration.is_file():
-            raise RuntimeError(f"canonical production migration not found: {migration}")
-        with engine.begin() as connection:
-            connection.execute(text(migration.read_text(encoding="utf-8")))
+        migration_dir = Path(__file__).resolve().parents[1] / "postgres" / "schema"
+        if not migration_dir.is_dir():
+            raise RuntimeError(f"canonical production migration directory not found: {migration_dir}")
+        with engine.connect() as connection:
+            apply_migrations(connection, migration_dir)
 
         required = {
             "escrows": {"id", "sender_address", "receiver_address", "amount", "state", "refund_destination", "currency", "version", "created_at", "updated_at"},
