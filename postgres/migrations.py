@@ -22,6 +22,12 @@ def _transaction(conn):
 
 
 def _execute(conn, sql: str, params=None):
+    # Non-parameterized DDL/PLpgSQL may contain literal percent signs.
+    # Avoid psycopg's pyformat parser when there are no parameters.
+    if params is None and hasattr(conn, "connection"):
+        driver = getattr(conn.connection, "driver_connection", None)
+        if driver is not None and hasattr(driver, "execute"):
+            return driver.execute(sql)
     if hasattr(conn, "exec_driver_sql"):
         return conn.exec_driver_sql(sql, params or ())
     return conn.execute(sql, params or ())
