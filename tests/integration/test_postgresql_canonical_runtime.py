@@ -13,7 +13,7 @@ from persistence.release_escrow import release_escrow_in_transaction
 from persistence.atomic_value_transaction import TransactionWitness
 from persistence.recovery_outbox import OutboxEvent
 from persistence.durable_idempotency import DurableIdempotencyRecord
-from services.gerchain_runtime_factory import ProductionRuntimeFactory
+from services.gerchain_runtime_factory import ProductionRuntimeConfig, ProductionRuntimeFactory
 
 
 def test_postgresql_canonical_runtime_end_to_end():
@@ -21,14 +21,9 @@ def test_postgresql_canonical_runtime_end_to_end():
     engine = create_engine(url, pool_pre_ping=True)
     factory = sessionmaker(bind=engine, expire_on_commit=False)
 
-    runtime = ProductionRuntimeFactory.create(
-        escrow_id="pg-e2e-escrow",
-        amount=40,
-        currency="MNT",
-        witness_id="pg-e2e-witness",
-        engine=engine,
-        session_factory=factory,
-    )
+    runtime = ProductionRuntimeFactory(ProductionRuntimeConfig(
+        database_url=url, escrow_id="pg-e2e-escrow", amount=40,
+        currency="MNT", witness_id="pg-e2e-witness"), engine=engine).create()
     assert runtime.is_canonical_ledger_authoritative
 
     with factory() as session:
