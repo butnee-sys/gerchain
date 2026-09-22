@@ -32,27 +32,38 @@ jobs:
         run: |
           python -m pip install -r postgres/requirements-test.txt
           python -m pip install -r requirements-dee-security.txt
+      - name: Apply canonical PostgreSQL migrations
+        env:
+          PGPASSWORD: gerchain
+        run: |
+          psql -h 127.0.0.1 -U gerchain -d gerchain_test -v ON_ERROR_STOP=1 -f postgres/schema/001_concurrency.sql
+          psql -h 127.0.0.1 -U gerchain -d gerchain_test -v ON_ERROR_STOP=1 -f postgres/schema/002_canonical_escrow_lifecycle.sql
+          psql -h 127.0.0.1 -U gerchain -d gerchain_test -v ON_ERROR_STOP=1 -f postgres/schema/003_ea25_durable_idempotency.sql
+          psql -h 127.0.0.1 -U gerchain -d gerchain_test -v ON_ERROR_STOP=1 -f postgres/schema/004_ea26_value_flow_persistence.sql
+          psql -h 127.0.0.1 -U gerchain -d gerchain_test -v ON_ERROR_STOP=1 -f postgres/schema/005_ea35_canonical_production.sql
       - name: Verify production factory construction
         env:
           GERCHAIN_DATABASE_URL: postgresql+psycopg://gerchain:gerchain@127.0.0.1:5432/gerchain_test
         run: |
           python - <<'PY'
           import os
-          from sqlalchemy import create_engine
-          from services.gerchain_runtime_factory import ProductionRuntimeFactory
+          from services.gerchain_runtime_factory import ProductionRuntimeConfig, ProductionRuntimeFactory
           dsn = os.environ["GERCHAIN_DATABASE_URL"]
-          engine = create_engine(dsn, pool_pre_ping=True)
-          runtime = ProductionRuntimeFactory.create(
-              escrow_id="eai-boot-1",
-              amount=100,
-              currency="USD",
-              witness_id="witness-1",
-              engine=engine,
-              session_factory=__import__("sqlalchemy.orm", fromlist=["sessionmaker"]).sessionmaker(bind=engine, expire_on_commit=False),
+          factory = ProductionRuntimeFactory(
+              ProductionRuntimeConfig(
+                  database_url=dsn,
+                  escrow_id="eai-boot-1",
+                  amount=100,
+                  currency="USD",
+                  witness_id="witness-1",
+              )
           )
+          runtime = factory.create()
           assert runtime.is_canonical_ledger_authoritative
           print("EAI_PRODUCTION_FACTORY=PASS")
-          engine.dispose()
+          factory.engine.dispose()
           PY
       - name: Run deep value-truth reconciliation tests
+        env:
+          GERCHAIN_TEST_DATABASE_URL: postgresql+psycopg://gerchain:gerchain@127.0.0.1:5432/gerchain_test
         run: python -m pytest -q tests/persistence/test_deep_value_reconciliation.py
