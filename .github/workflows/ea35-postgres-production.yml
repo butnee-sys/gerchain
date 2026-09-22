@@ -35,7 +35,10 @@ jobs:
           PGPASSWORD: gerchain
         run: |
           psql -h 127.0.0.1 -U gerchain -d gerchain_test -v ON_ERROR_STOP=1 -f postgres/schema/001_concurrency.sql
-          psql -h 127.0.0.1 -U gerchain -d gerchain_test -v ON_ERROR_STOP=1 -f postgres/schema/002_canonical_production.sql
+          psql -h 127.0.0.1 -U gerchain -d gerchain_test -v ON_ERROR_STOP=1 -f postgres/schema/002_canonical_value_authority.sql
+          psql -h 127.0.0.1 -U gerchain -d gerchain_test -v ON_ERROR_STOP=1 -f postgres/schema/003_ea25_durable_idempotency.sql
+          psql -h 127.0.0.1 -U gerchain -d gerchain_test -v ON_ERROR_STOP=1 -f postgres/schema/004_ea26_value_flow_persistence.sql
+          psql -h 127.0.0.1 -U gerchain -d gerchain_test -v ON_ERROR_STOP=1 -f postgres/schema/005_ea35_canonical_production.sql
       - name: PostgreSQL production re-performance
         env:
           GERCHAIN_DATABASE_URL: postgresql+psycopg://gerchain:gerchain@127.0.0.1:5432/gerchain_test
