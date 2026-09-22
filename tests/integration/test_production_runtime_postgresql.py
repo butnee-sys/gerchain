@@ -11,6 +11,7 @@ from services.gerchain_runtime_factory import ProductionRuntimeFactory
 def test_production_runtime_boots_against_real_postgresql() -> None:
     database_url = os.environ["GERCHAIN_DATABASE_URL"]
     engine = create_engine(database_url, pool_pre_ping=True)
+    session_factory = sessionmaker(bind=engine, expire_on_commit=False)
     factory = ProductionRuntimeFactory.create(
         escrow_id="pg-boot-escrow",
         amount=100,
