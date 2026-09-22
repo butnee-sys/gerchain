@@ -176,7 +176,7 @@ def test_migrations_are_serialized_and_checksum_is_stable():
 
     with connect() as conn:
         rows = conn.execute("SELECT version, checksum FROM schema_version ORDER BY version").fetchall()
-        assert [row[0] for row in rows] == [1, 2, 3, 4]
+        assert [row[0] for row in rows] == [1, 2, 3, 4, 5]
         assert all(len(row[1]) == 64 for row in rows)
 
 
