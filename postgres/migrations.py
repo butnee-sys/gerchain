@@ -70,6 +70,19 @@ def apply_migrations(conn, migration_dir: str | Path) -> None:
             _execute(conn, sql)
             _execute(
                 conn,
-                "INSERT INTO schema_version(version, checksum) VALUES (%s, %s)",
+                """
+                INSERT INTO schema_version(version, checksum)
+                VALUES (%s, %s)
+                ON CONFLICT (version) DO NOTHING
+                """,
                 (version, digest),
             )
+            recorded = _execute(
+                conn,
+                "SELECT checksum FROM schema_version WHERE version = %s",
+                (version,),
+            ).fetchone()
+            if recorded is None or recorded[0] != digest:
+                raise RuntimeError(
+                    f"Migration checksum mismatch for version {version}"
+                )
