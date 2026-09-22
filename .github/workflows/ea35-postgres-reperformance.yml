@@ -64,6 +64,23 @@ jobs:
           print("CANONICAL_LEDGER_AUTHORITY=TRUE")
           PY
 
+      - name: Boot production entrypoint against PostgreSQL
+        env:
+          GERCHAIN_DATABASE_URL: postgresql+psycopg://gerchain:gerchain@localhost:5432/gerchain
+          GERCHAIN_ESCROW_ID: ea35-entrypoint-escrow
+          GERCHAIN_ESCROW_AMOUNT: "100"
+          GERCHAIN_CURRENCY: USD
+          GERCHAIN_WITNESS_ID: ea35-entrypoint-witness
+        run: |
+          set +e
+          timeout 10s python production_entrypoint.py
+          code=$?
+          if [ "$code" -ne 124 ]; then
+            echo "Production entrypoint failed before controlled timeout (exit=$code)"
+            exit "$code"
+          fi
+          echo "PRODUCTION_ENTRYPOINT_BOOT=TRUE"
+
       - name: Run PostgreSQL canonical value-flow re-performance
         env:
           GERCHAIN_DATABASE_URL: postgresql+psycopg://gerchain:gerchain@localhost:5432/gerchain
