@@ -15,12 +15,12 @@ WHERE created_at IS NULL;
 ALTER TABLE escrows
     ALTER COLUMN created_at SET NOT NULL;
 
-DO $
+DO $$
 BEGIN
     IF EXISTS (SELECT 1 FROM escrows WHERE refund_destination IS NULL OR currency IS NULL) THEN
         RAISE EXCEPTION 'canonical escrow migration requires explicit refund_destination and currency for every existing escrow';
     END IF;
-END $;
+END $$;
 
 ALTER TABLE escrows
     ALTER COLUMN refund_destination SET NOT NULL,
