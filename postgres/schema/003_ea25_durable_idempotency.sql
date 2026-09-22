@@ -1,7 +1,5 @@
 -- EA-25 durable idempotency
 -- Structural only. No value movement.
-BEGIN;
-
 CREATE TABLE IF NOT EXISTS gerchain_idempotency_records (
     id BIGSERIAL PRIMARY KEY,
     key VARCHAR(255) NOT NULL UNIQUE,
@@ -17,4 +15,3 @@ CREATE TABLE IF NOT EXISTS gerchain_idempotency_records (
 CREATE INDEX IF NOT EXISTS ix_gerchain_idempotency_state
     ON gerchain_idempotency_records (state);
 
-COMMIT;
