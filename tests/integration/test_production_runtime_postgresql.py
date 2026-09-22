@@ -5,21 +5,19 @@ import os
 from sqlalchemy import create_engine, inspect
 from sqlalchemy.orm import sessionmaker
 
-from services.gerchain_runtime_factory import ProductionRuntimeFactory
+from services.gerchain_runtime_factory import ProductionRuntimeConfig, ProductionRuntimeFactory
 
 
 def test_production_runtime_boots_against_real_postgresql() -> None:
     database_url = os.environ["GERCHAIN_DATABASE_URL"]
     engine = create_engine(database_url, pool_pre_ping=True)
     session_factory = sessionmaker(bind=engine, expire_on_commit=False)
-    factory = ProductionRuntimeFactory.create(
+    factory = ProductionRuntimeFactory(ProductionRuntimeConfig(
+        database_url=database_url,
         escrow_id="pg-boot-escrow",
         amount=100,
         currency="USD",
-        witness_id="pg-boot-witness",
-        engine=engine,
-        session_factory=session_factory,
-    )
+        witness_id="pg-boot-witness"), engine=engine).create()
 
     assert factory.is_canonical_ledger_authoritative
 
