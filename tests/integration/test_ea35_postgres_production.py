@@ -28,6 +28,7 @@ def test_production_postgres_fund_lock_release_reconciles():
         engine=engine,
     ).create()
     assert runtime.is_canonical_ledger_authoritative
+    assert runtime.runtime_mode == "production-postgresql"
     with factory() as session:
         PostgreSQLAtomicLedger.create_account_in_transaction(session, "pg-source", "USD", initial_balance=100)
         PostgreSQLAtomicLedger.create_account_in_transaction(session, "pg-beneficiary", "USD", initial_balance=0)
