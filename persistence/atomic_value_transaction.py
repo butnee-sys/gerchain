@@ -108,7 +108,15 @@ class AtomicValueTransaction:
         if replay is not None:
             return {"replayed": True, "result": replay}
 
-        operation = event_type.removeprefix("GERCHAIN_").upper()
+        operation = {
+            "GERCHAIN_FUNDED": "FUND",
+            "GERCHAIN_RELEASED": "RELEASE",
+            "GERCHAIN_REFUNDED": "REFUND",
+            "GERCHAIN_CANCELLED": "CANCEL",
+            "GERCHAIN_SETTLED": "SETTLEMENT",
+        }.get(event_type)
+        if operation is None:
+            raise ValueError(f"unsupported value event type: {event_type}")
         integrity_material = json.dumps(
             {
                 "transaction_id": transaction_id,
