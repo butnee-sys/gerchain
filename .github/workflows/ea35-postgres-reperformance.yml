@@ -50,16 +50,14 @@ jobs:
           from sqlalchemy.orm import sessionmaker
           engine = create_engine("postgresql+psycopg://gerchain:gerchain@localhost:5432/gerchain")
           session_factory = sessionmaker(bind=engine, expire_on_commit=False)
-          runtime = ProductionRuntimeFactory(
-              ProductionRuntimeConfig(
-                  database_url="postgresql+psycopg://gerchain:gerchain@localhost:5432/gerchain",
-                  escrow_id="ea35-smoke-escrow",
-                  amount=100,
-                  currency="USD",
-                  witness_id="ea35-smoke-witness",
-              ),
+          runtime = ProductionRuntimeFactory.create(
+              escrow_id="ea35-smoke-escrow",
+              amount=100,
+              currency="USD",
+              witness_id="ea35-smoke-witness",
               engine=engine,
-          ).create()
+              session_factory=session_factory,
+          )
           assert runtime.is_canonical_ledger_authoritative
           print("CANONICAL_LEDGER_AUTHORITY=TRUE")
           PY
