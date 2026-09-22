@@ -45,6 +45,15 @@ def apply_migrations(conn, migration_dir: str | Path) -> None:
     """Apply migrations atomically for SQLAlchemy or native psycopg connections."""
     path = Path(migration_dir)
     files = sorted(path.glob("*.sql"))
+    versions: dict[int, Path] = {}
+    for migration in files:
+        version = int(migration.name.split("_", 1)[0])
+        if version in versions:
+            raise RuntimeError(
+                f"Duplicate migration version {version}: "
+                f"{versions[version].name} and {migration.name}"
+            )
+        versions[version] = migration
 
     with _transaction(conn):
         _execute(
