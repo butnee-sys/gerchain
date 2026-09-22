@@ -5,6 +5,7 @@ from contextlib import nullcontext
 from pathlib import Path
 
 import psycopg.sql
+from sqlalchemy import text
 
 
 MIGRATION_LOCK_KEY = 73546501
@@ -27,7 +28,12 @@ def _execute(conn, sql: str, params=None):
     # Non-parameterized DDL/PLpgSQL may contain literal percent signs.
     # Avoid psycopg's pyformat parser when there are no parameters.
     if hasattr(conn, "exec_driver_sql"):
-        return conn.exec_driver_sql(sql, params or ())
+        if params is None:
+            # SQLAlchemy's PostgreSQL driver still interprets literal % signs
+            # when using exec_driver_sql. text() preserves PL/pgSQL format
+            # strings such as format('%I', ...) as literal SQL.
+            return conn.execute(text(sql))
+        return conn.exec_driver_sql(sql, params)
     if params is None:
         # Native psycopg parses % as a placeholder even for literal DDL.
         # SQL() marks the migration as literal SQL without changing its source text.
