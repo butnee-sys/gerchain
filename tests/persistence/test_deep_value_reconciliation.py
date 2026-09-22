@@ -51,18 +51,18 @@ def _seed_clean(session):
         escrow_id=escrow_id, integrity_hash=integrity_hash, created_at=now,
     ))
     session.add(TransactionWitness(
-        transaction_id=tx, event_type="GERCHAIN_RELEASE",
+        transaction_id=tx, event_type="GERCHAIN_RELEASED",
         escrow_id=escrow_id, amount=amount, created_at=now,
     ))
     session.add(OutboxEvent(
-        event_id="gerchain_release:tx-1", event_type="GERCHAIN_RELEASE",
+        event_id="gerchain_release:tx-1", event_type="GERCHAIN_RELEASED",
         aggregate_id=escrow_id, payload_json="{}", state="PENDING",
         attempts=0, lease_until=None, created_at=now, updated_at=now,
     ))
     payload = {
         "escrow_id": escrow_id, "source": source, "destination": destination,
         "amount": amount, "currency": currency, "expected_state": "LOCKED",
-        "new_state": "RELEASED", "event_type": "GERCHAIN_RELEASE",
+        "new_state": "RELEASED", "event_type": "GERCHAIN_RELEASED",
     }
     session.add(DurableIdempotencyRecord(
         key=tx, fingerprint=IdempotencyEngine.fingerprint(payload),
@@ -135,7 +135,7 @@ def test_deep_reconciliation_from_atomic_value_transaction_is_matched():
             expected_state=EscrowState.LOCKED,
             new_state=EscrowState.RELEASED,
             ledger_transfer=ledger_transfer,
-            event_type="GERCHAIN_RELEASE",
+            event_type="GERCHAIN_RELEASED",
             payload=payload,
         )
         session.commit()
@@ -178,7 +178,7 @@ def test_atomic_value_transaction_rollback_leaves_no_partial_evidence():
                 source="escrow-rollback", destination="beneficiary-rollback",
                 amount=25, currency="USD", expected_state=EscrowState.CREATED,
                 new_state=EscrowState.RELEASED, ledger_transfer=ledger_transfer,
-                event_type="GERCHAIN_RELEASE", payload={"rollback": True},
+                event_type="GERCHAIN_RELEASED", payload={"rollback": True},
             )
             raise AssertionError("expected escrow transition failure")
         except ValueError:
@@ -227,7 +227,7 @@ def test_atomic_value_transaction_replay_is_idempotent():
             source="escrow-replay", destination="beneficiary-replay",
             amount=25, currency="USD", expected_state=EscrowState.LOCKED,
             new_state=EscrowState.RELEASED, ledger_transfer=transfer,
-            event_type="GERCHAIN_RELEASE", payload={"replay": True},
+            event_type="GERCHAIN_RELEASED", payload={"replay": True},
         )
         first = AtomicValueTransaction(session).transfer_and_transition(**kwargs)
         session.commit()
@@ -274,7 +274,7 @@ def test_atomic_value_transaction_replay_with_different_payload_conflicts():
             source="escrow-conflict", destination="beneficiary-conflict",
             amount=25, currency="USD", expected_state=EscrowState.LOCKED,
             new_state=EscrowState.RELEASED, ledger_transfer=transfer,
-            event_type="GERCHAIN_RELEASE",
+            event_type="GERCHAIN_RELEASED",
         )
         AtomicValueTransaction(session).transfer_and_transition(
             **base, payload={"request": "A"})
@@ -437,7 +437,7 @@ def test_deep_reconciliation_detects_orphan_witness():
     with factory() as session:
         _seed_clean(session)
         session.add(TransactionWitness(
-            transaction_id="orphan-tx", event_type="GERCHAIN_RELEASE",
+            transaction_id="orphan-tx", event_type="GERCHAIN_RELEASED",
             escrow_id="esc-1", amount=1, created_at=datetime.now(timezone.utc),
         ))
         session.commit()
@@ -450,7 +450,7 @@ def test_deep_reconciliation_detects_orphan_outbox():
     with factory() as session:
         _seed_clean(session)
         session.add(OutboxEvent(
-            event_id="gerchain_release:orphan-tx", event_type="GERCHAIN_RELEASE",
+            event_id="gerchain_release:orphan-tx", event_type="GERCHAIN_RELEASED",
             aggregate_id="esc-1", payload_json="{}", state="PENDING",
             attempts=0, lease_until=None,
             created_at=datetime.now(timezone.utc), updated_at=datetime.now(timezone.utc),
