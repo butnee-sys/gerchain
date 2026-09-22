@@ -19,7 +19,7 @@ def test_production_postgres_fund_lock_release_reconciles():
     factory = sessionmaker(bind=engine, expire_on_commit=False)
     runtime = ProductionRuntimeFactory(
         ProductionRuntimeConfig(
-            database_url=database_url if "database_url" in locals() else url if "url" in locals() else dsn,
+            database_url=url,
             escrow_id="pg-ea35-escrow",
             amount=100,
             currency="USD",
