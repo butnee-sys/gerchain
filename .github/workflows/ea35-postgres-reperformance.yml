@@ -46,18 +46,18 @@ jobs:
           python - <<'PY'
           from services.gerchain_runtime_factory import ProductionRuntimeConfig, ProductionRuntimeFactory
 
-          cfg = ProductionRuntimeConfig(
-              database_url="postgresql+psycopg://gerchain:gerchain@localhost:5432/gerchain",
+          from sqlalchemy import create_engine
+          from sqlalchemy.orm import sessionmaker
+          engine = create_engine("postgresql+psycopg://gerchain:gerchain@localhost:5432/gerchain")
+          session_factory = sessionmaker(bind=engine, expire_on_commit=False)
+          runtime = ProductionRuntimeFactory.create(
               escrow_id="ea35-smoke-escrow",
               amount=100,
               currency="USD",
               witness_id="ea35-smoke-witness",
+              engine=engine,
+              session_factory=session_factory,
           )
-          from sqlalchemy import create_engine
-          from sqlalchemy.orm import sessionmaker
-          engine = create_engine(cfg.database_url)
-          session_factory = sessionmaker(bind=engine, expire_on_commit=False)
-          runtime = ProductionRuntimeFactory(cfg, engine=engine).create()
           assert runtime.is_canonical_ledger_authoritative
           print("CANONICAL_LEDGER_AUTHORITY=TRUE")
           PY
