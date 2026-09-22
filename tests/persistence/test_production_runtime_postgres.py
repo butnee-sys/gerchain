@@ -20,7 +20,7 @@ def test_production_postgresql_boot_and_value_truth():
 
     runtime = ProductionRuntimeFactory(
         ProductionRuntimeConfig(
-            database_url=database_url if "database_url" in locals() else url if "url" in locals() else dsn,
+            database_url=dsn,
             escrow_id="prod-esc-1",
             amount=100,
             currency="MNT",
