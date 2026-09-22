@@ -33,6 +33,7 @@ def test_production_postgresql_boot_and_value_truth():
     with factory() as session:
         PostgreSQLAtomicLedger.create_account_in_transaction(session, "PROD-SRC", "MNT", 100)
         PostgreSQLAtomicLedger.create_account_in_transaction(session, "PROD-BEN", "MNT", 0)
+        PostgreSQLAtomicLedger.create_account_in_transaction(session, "prod-esc-1", "MNT", 0)
         session.add(CanonicalEscrow(
             id="prod-esc-1",
             sender_address="PROD-SRC",
