@@ -25,10 +25,16 @@ def test_production_postgresql_boot_and_canonical_value_flow():
     if not url:
         pytest.skip("GERCHAIN_DATABASE_URL is required")
     engine = create_engine(url, future=True, pool_pre_ping=True)
-    factory = ProductionRuntimeFactory.create(
-        escrow_id="pg-proof-escrow", amount=100, currency="USD",
-        witness_id="pg-proof-witness", engine=engine, session_factory=sessionmaker(bind=engine, expire_on_commit=False),
-    )
+    factory = ProductionRuntimeFactory(
+        ProductionRuntimeConfig(
+            database_url=url,
+            escrow_id="pg-proof-escrow",
+            amount=100,
+            currency="USD",
+            witness_id="pg-proof-witness",
+        ),
+        engine=engine,
+    ).create()
     runtime = factory
     assert runtime.is_canonical_ledger_authoritative
     assert runtime._canonical_ledger is not None
