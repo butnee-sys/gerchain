@@ -15,6 +15,17 @@ WHERE created_at IS NULL;
 ALTER TABLE escrows
     ALTER COLUMN created_at SET NOT NULL;
 
+DO $
+BEGIN
+    IF EXISTS (SELECT 1 FROM escrows WHERE refund_destination IS NULL OR currency IS NULL) THEN
+        RAISE EXCEPTION 'canonical escrow migration requires explicit refund_destination and currency for every existing escrow';
+    END IF;
+END $;
+
+ALTER TABLE escrows
+    ALTER COLUMN refund_destination SET NOT NULL,
+    ALTER COLUMN currency SET NOT NULL;
+
 DO $$
 DECLARE
     c RECORD;
@@ -86,3 +97,12 @@ CREATE TABLE IF NOT EXISTS gerchain_idempotency_records (
     created_at TIMESTAMPTZ NOT NULL,
     updated_at TIMESTAMPTZ NOT NULL
 );
+
+CREATE INDEX IF NOT EXISTS ix_gerchain_ledger_movements_escrow
+    ON gerchain_ledger_movements (escrow_id);
+
+CREATE INDEX IF NOT EXISTS ix_gerchain_outbox_state_lease
+    ON gerchain_outbox_events (state, lease_until);
+
+CREATE INDEX IF NOT EXISTS ix_gerchain_idempotency_state
+    ON gerchain_idempotency_records (state);
