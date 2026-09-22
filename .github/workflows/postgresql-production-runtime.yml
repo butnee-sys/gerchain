@@ -36,4 +36,4 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements-dee-security.txt pytest
       - name: Real PostgreSQL production boot
-        run: pytest -q tests/integration/test_production_runtime_postgresql.py
+        run: pytest -q tests/integration/test_ea35_postgres_production.py
