@@ -5,8 +5,6 @@
 -- This migration is intentionally separate from SQLAlchemy create_all().
 -- It is required when upgrading an existing database created by 001_concurrency.sql.
 
-BEGIN;
-
 -- Canonical escrow aggregate: expand lifecycle and durable fields.
 ALTER TABLE escrows
     ADD COLUMN IF NOT EXISTS refund_destination TEXT,
@@ -85,5 +83,3 @@ CREATE TABLE IF NOT EXISTS gerchain_transaction_witnesses (
 INSERT INTO schema_version(version, checksum)
 VALUES (2, 'gerchain-canonical-production-002')
 ON CONFLICT (version) DO NOTHING;
-
-COMMIT;
