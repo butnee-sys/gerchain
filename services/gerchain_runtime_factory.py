@@ -42,7 +42,7 @@ class ProductionRuntimeFactory:
         if engine.dialect.name != "postgresql":
             raise ValueError("production runtime requires PostgreSQL engine")
 
-        migration_dir = Path(__file__).resolve().parents[1] / "postgres" / "schema"
+        migration_dir = Path(__file__).resolve().parents[1] / "postgres" / "migrations"
         if not migration_dir.is_dir():
             raise RuntimeError(f"canonical production migration directory not found: {migration_dir}")
 
