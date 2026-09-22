@@ -64,5 +64,7 @@ jobs:
           PY
 
       - name: Run canonical persistence tests
+        env:
+          GERCHAIN_DATABASE_URL: postgresql+psycopg://gerchain:gerchain@localhost:5432/gerchain_test
         run: |
           pytest -q tests/persistence
