@@ -16,7 +16,7 @@ from persistence.lock_escrow import lock_escrow_in_transaction
 from persistence.refund_escrow import refund_escrow_in_transaction
 from persistence.release_escrow import release_escrow_in_transaction
 from persistence.settlement_coordinator import SettlementCoordinator
-from services.gerchain_runtime_factory import ProductionRuntimeConfig, ProductionRuntimeFactory
+from services.gerchain_runtime_factory import ProductionRuntimeFactory
 
 
 pytestmark = pytest.mark.integration
