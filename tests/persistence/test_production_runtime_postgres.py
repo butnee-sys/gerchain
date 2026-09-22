@@ -16,7 +16,7 @@ from services.gerchain_runtime_factory import ProductionRuntimeConfig, Productio
 def test_production_postgresql_boot_and_value_truth():
     dsn = os.environ["GERCHAIN_DATABASE_URL"]
     engine = create_engine(dsn, pool_pre_ping=True)
-    factory = sessionmaker(bind=engine, expire_on_commit=False)
+    session_factory = sessionmaker(bind=engine, expire_on_commit=False)
 
     runtime = ProductionRuntimeFactory(
         ProductionRuntimeConfig(
