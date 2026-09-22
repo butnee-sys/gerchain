@@ -2,7 +2,8 @@ import os
 from datetime import datetime, timezone
 
 import pytest
-from sqlalchemy import text
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
 
 from persistence.atomic_ledger import LedgerAccountModel
 from persistence.escrow_aggregate import CanonicalEscrow, EscrowState
@@ -22,9 +23,16 @@ def test_postgres_canonical_fund_lock_release_and_reconcile():
         currency="USD",
         witness_id="ea35-postgres-witness",
     )
-    factory = ProductionRuntimeFactory(cfg)
-    runtime = factory.create()
-    sf = factory.session_factory
+    engine = create_engine(DB_URL, pool_pre_ping=True)
+    sf = sessionmaker(bind=engine, expire_on_commit=False)
+    runtime = ProductionRuntimeFactory.create(
+        escrow_id=cfg.escrow_id,
+        amount=cfg.amount,
+        currency=cfg.currency,
+        witness_id=cfg.witness_id,
+        engine=engine,
+        session_factory=sf,
+    )
     now = datetime.now(timezone.utc)
 
     with sf.begin() as session:
@@ -88,4 +96,4 @@ def test_postgres_canonical_fund_lock_release_and_reconcile():
         assert session.get(LedgerAccountModel, "EA35-BEN").balance == 100
         assert session.get(CanonicalEscrow, "ea35-postgres-escrow").state == EscrowState.RELEASED.value
 
-    factory.engine.dispose()
+    engine.dispose()
