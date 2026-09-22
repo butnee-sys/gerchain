@@ -56,14 +56,10 @@ jobs:
           from sqlalchemy import create_engine
           from sqlalchemy.orm import sessionmaker
           engine = create_engine(cfg.database_url)
-          runtime = ProductionRuntimeFactory.create(
-              escrow_id=cfg.escrow_id,
-              amount=cfg.amount,
-              currency=cfg.currency,
-              witness_id=cfg.witness_id,
+          runtime = ProductionRuntimeFactory(
+              cfg,
               engine=engine,
-              session_factory=sessionmaker(bind=engine, expire_on_commit=False),
-          )
+          ).create()
           assert runtime.is_canonical_ledger_authoritative
           print("CANONICAL_LEDGER_AUTHORITY=TRUE")
           PY
