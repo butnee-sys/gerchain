@@ -5,6 +5,7 @@ import signal
 import time
 
 from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
 
 from services.gerchain_runtime_factory import ProductionRuntimeFactory
 
@@ -41,6 +42,7 @@ def main() -> None:
         raise RuntimeError("GERCHAIN_ESCROW_AMOUNT must be an integer") from exc
 
     engine = create_engine(database_url, pool_pre_ping=True)
+    session_factory = sessionmaker(bind=engine, expire_on_commit=False)
     try:
         runtime = ProductionRuntimeFactory.create(
             escrow_id=escrow_id,
