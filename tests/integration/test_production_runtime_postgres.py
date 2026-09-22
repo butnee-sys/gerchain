@@ -8,7 +8,7 @@ from sqlalchemy import create_engine, inspect, select
 from sqlalchemy.orm import sessionmaker
 
 from persistence.escrow_aggregate import CanonicalEscrow
-from services.gerchain_runtime_factory import ProductionRuntimeFactory
+from services.gerchain_runtime_factory import ProductionRuntimeConfig, ProductionRuntimeFactory
 
 
 pytestmark = pytest.mark.integration
@@ -22,14 +22,9 @@ def test_production_runtime_bootstraps_canonical_postgres():
     engine = create_engine(url, future=True)
     session_factory = sessionmaker(bind=engine, expire_on_commit=False)
 
-    runtime = ProductionRuntimeFactory.create(
-        escrow_id="integration-escrow",
-        amount=100,
-        currency="MNT",
-        witness_id="integration-witness",
-        engine=engine,
-        session_factory=session_factory,
-    )
+    runtime = ProductionRuntimeFactory(ProductionRuntimeConfig(
+        database_url=url, escrow_id="integration-escrow", amount=100,
+        currency="MNT", witness_id="integration-witness"), engine=engine).create()
 
     assert runtime.is_canonical_ledger_authoritative
 
