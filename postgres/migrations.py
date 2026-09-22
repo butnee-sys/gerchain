@@ -4,6 +4,8 @@ import hashlib
 from contextlib import nullcontext
 from pathlib import Path
 
+import psycopg.sql
+
 
 MIGRATION_LOCK_KEY = 73546501
 
@@ -24,13 +26,13 @@ def _transaction(conn):
 def _execute(conn, sql: str, params=None):
     # Non-parameterized DDL/PLpgSQL may contain literal percent signs.
     # Avoid psycopg's pyformat parser when there are no parameters.
-    if params is None and hasattr(conn, "connection"):
-        driver = getattr(conn.connection, "driver_connection", None)
-        if driver is not None and hasattr(driver, "execute"):
-            return driver.execute(sql)
     if hasattr(conn, "exec_driver_sql"):
         return conn.exec_driver_sql(sql, params or ())
-    return conn.execute(sql, params or ())
+    if params is None:
+        # Native psycopg parses % as a placeholder even for literal DDL.
+        # SQL() marks the migration as literal SQL without changing its source text.
+        return conn.execute(psycopg.sql.SQL(sql))
+    return conn.execute(sql, params)
 
 
 def apply_migrations(conn, migration_dir: str | Path) -> None:
