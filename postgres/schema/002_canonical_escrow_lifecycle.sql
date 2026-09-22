@@ -22,7 +22,7 @@ BEGIN
         FROM pg_constraint
         WHERE conrelid = 'escrows'::regclass
           AND contype = 'c'
-          AND pg_get_constraintdef(oid) LIKE '%state%'
+          AND strpos(pg_get_constraintdef(oid), 'state') > 0
     LOOP
         EXECUTE format('ALTER TABLE escrows DROP CONSTRAINT %I', constraint_name);
     END LOOP;
