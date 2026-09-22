@@ -2,16 +2,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from pathlib import Path
 from typing import Any, Callable
 
-from sqlalchemy import Engine, inspect, text
+from sqlalchemy import Engine, inspect
 
-from persistence.atomic_ledger import AtomicLedgerBase
-from persistence.atomic_value_transaction import WitnessBase
-from persistence.durable_idempotency import IdempotencyBase
-from persistence.escrow_aggregate import EscrowBase
-from persistence.recovery_outbox import OutboxBase
 from postgres.migrations import apply_migrations
 from services.gerchain_runtime import GerchainRuntime
 
@@ -47,43 +41,44 @@ class ProductionRuntimeFactory:
             raise ValueError("production runtime requires PostgreSQL engine and session factory")
         if engine.dialect.name != "postgresql":
             raise ValueError("production runtime requires PostgreSQL engine")
-        # Bootstrap base tables first; the canonical migration extends the
-        # durable escrow table with production-only fields/constraints.
-        AtomicLedgerBase.metadata.create_all(engine)
-        EscrowBase.metadata.create_all(engine)
-        WitnessBase.metadata.create_all(engine)
-        IdempotencyBase.metadata.create_all(engine)
-        OutboxBase.metadata.create_all(engine)
-
-        # Reconcile the pre-canonical escrow table before checksum-managed migrations.
-        # This is idempotent and preserves migration history while upgrading the durable shape.
-        with engine.begin() as connection:
-            connection.execute(text("ALTER TABLE escrows ADD COLUMN IF NOT EXISTS refund_destination TEXT"))
-            connection.execute(text("ALTER TABLE escrows ADD COLUMN IF NOT EXISTS currency VARCHAR(16)"))
-            connection.execute(text("ALTER TABLE escrows ADD COLUMN IF NOT EXISTS version BIGINT NOT NULL DEFAULT 0"))
-            connection.execute(text("ALTER TABLE escrows ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT now()"))
-            connection.execute(text("ALTER TABLE escrows DROP CONSTRAINT IF EXISTS escrows_state_check"))
-            connection.execute(text("ALTER TABLE escrows ADD CONSTRAINT escrows_state_check CHECK (state IN ('CREATED','FUNDED','LOCKED','RELEASED','REFUNDED','CANCELLED'))"))
 
         migration_dir = Path(__file__).resolve().parents[1] / "postgres" / "schema"
         if not migration_dir.is_dir():
             raise RuntimeError(f"canonical production migration directory not found: {migration_dir}")
+
         with engine.connect() as connection:
             apply_migrations(connection, migration_dir)
 
         required = {
-            "escrows": {"id", "sender_address", "receiver_address", "amount", "state", "refund_destination", "currency", "version", "created_at", "updated_at"},
-            "gerchain_ledger_accounts": {"account_id", "currency", "balance", "version", "updated_at"},
-            "gerchain_ledger_movements": {"id", "transaction_id", "source", "destination", "amount", "currency", "operation", "escrow_id", "integrity_hash", "created_at"},
-            "gerchain_transaction_witnesses": {"id", "transaction_id", "event_type", "escrow_id", "amount", "created_at"},
-            "gerchain_outbox_events": {"id", "event_id", "event_type", "aggregate_id", "payload_json", "state", "lease_until", "attempts", "created_at", "updated_at"},
-            "gerchain_idempotency_records": {"id", "key", "fingerprint", "result_json", "state", "created_at", "updated_at"},
+            "escrows": {
+                "id", "sender_address", "receiver_address", "amount", "state",
+                "refund_destination", "currency", "version", "created_at", "updated_at",
+            },
+            "gerchain_ledger_accounts": {
+                "account_id", "currency", "balance", "version", "updated_at",
+            },
+            "gerchain_ledger_movements": {
+                "id", "transaction_id", "source", "destination", "amount",
+                "currency", "operation", "escrow_id", "integrity_hash", "created_at",
+            },
+            "gerchain_transaction_witnesses": {
+                "id", "transaction_id", "event_type", "escrow_id", "amount", "created_at",
+            },
+            "gerchain_outbox_events": {
+                "id", "event_id", "event_type", "aggregate_id", "payload_json",
+                "state", "lease_until", "attempts", "created_at", "updated_at",
+            },
+            "gerchain_idempotency_records": {
+                "id", "key", "fingerprint", "result_json", "state", "created_at", "updated_at",
+            },
         }
+
         inspector = inspect(engine)
         missing_tables = sorted(set(required) - set(inspector.get_table_names()))
         if missing_tables:
             raise RuntimeError(f"canonical production schema missing tables: {missing_tables}")
-        missing_columns = {}
+
+        missing_columns: dict[str, list[str]] = {}
         for table, columns in required.items():
             actual = {column["name"] for column in inspector.get_columns(table)}
             missing = sorted(columns - actual)
@@ -91,6 +86,7 @@ class ProductionRuntimeFactory:
                 missing_columns[table] = missing
         if missing_columns:
             raise RuntimeError(f"canonical production schema missing columns: {missing_columns}")
+
         runtime = GerchainRuntime(
             escrow_id=escrow_id,
             amount=amount,
@@ -101,59 +97,8 @@ class ProductionRuntimeFactory:
             initial_money_state=initial_money_state,
         )
         runtime.configure_canonical_ledger(session_factory)
+        runtime.require_canonical_ledger_authority()
         return runtime
 
 
-
-__all__ = ["ProductionRuntimeConfig", "ProductionRuntimeFactory"]    def initialize(self) -> None:
-        """Apply repository migrations and reconcile the canonical PostgreSQL schema."""
-        migration_dir = Path(__file__).resolve().parents[1] / "postgres" / "schema"
-        with self.engine.connect() as conn:
-            apply_migrations(conn, migration_dir)
-            conn.execute(text("ALTER TABLE escrows ADD COLUMN IF NOT EXISTS refund_destination TEXT"))
-            conn.execute(text("ALTER TABLE escrows ADD COLUMN IF NOT EXISTS currency TEXT"))
-            conn.execute(text("ALTER TABLE escrows ADD COLUMN IF NOT EXISTS version BIGINT NOT NULL DEFAULT 0"))
-            conn.execute(text("ALTER TABLE escrows ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT now()"))
-            conn.execute(text("ALTER TABLE escrows DROP CONSTRAINT IF EXISTS escrows_state_check"))
-            conn.execute(text(
-                "ALTER TABLE escrows ADD CONSTRAINT escrows_state_check "
-                "CHECK (state IN ('CREATED','FUNDED','LOCKED','RELEASED','REFUNDED','CANCELLED'))"
-            ))
-            conn.execute(text(
-                "CREATE TABLE IF NOT EXISTS gerchain_ledger_accounts ("
-                "account_id VARCHAR(128) PRIMARY KEY, currency VARCHAR(16) NOT NULL, "
-                "balance INTEGER NOT NULL DEFAULT 0, version INTEGER NOT NULL DEFAULT 0, "
-                "updated_at TIMESTAMPTZ NOT NULL)"
-            ))
-            conn.execute(text(
-                "CREATE TABLE IF NOT EXISTS gerchain_ledger_movements ("
-                "id SERIAL PRIMARY KEY, transaction_id VARCHAR(128) NOT NULL UNIQUE, "
-                "source VARCHAR(128) NOT NULL, destination VARCHAR(128) NOT NULL, amount INTEGER NOT NULL, "
-                "currency VARCHAR(16) NOT NULL, operation VARCHAR(32) NOT NULL DEFAULT 'TRANSFER', "
-                "escrow_id VARCHAR(128), integrity_hash VARCHAR(128), created_at TIMESTAMPTZ NOT NULL)"
-            ))
-            conn.execute(text(
-                "CREATE TABLE IF NOT EXISTS gerchain_transaction_witnesses ("
-                "id SERIAL PRIMARY KEY, transaction_id VARCHAR(128) NOT NULL UNIQUE, event_type VARCHAR(64) NOT NULL, "
-                "escrow_id VARCHAR(255) NOT NULL, amount INTEGER NOT NULL, created_at TIMESTAMPTZ NOT NULL)"
-            ))
-            conn.execute(text(
-                "CREATE TABLE IF NOT EXISTS gerchain_outbox_events ("
-                "id SERIAL PRIMARY KEY, event_id VARCHAR(255) NOT NULL UNIQUE, event_type VARCHAR(128) NOT NULL, "
-                "aggregate_id VARCHAR(255) NOT NULL, payload_json TEXT NOT NULL, state VARCHAR(32) NOT NULL DEFAULT 'PENDING', "
-                "lease_until TIMESTAMPTZ, attempts INTEGER NOT NULL DEFAULT 0, created_at TIMESTAMPTZ NOT NULL, "
-                "updated_at TIMESTAMPTZ NOT NULL)"
-            ))
-            conn.execute(text(
-                "CREATE TABLE IF NOT EXISTS gerchain_idempotency_records ("
-                "id SERIAL PRIMARY KEY, key VARCHAR(255) NOT NULL UNIQUE, fingerprint VARCHAR(64) NOT NULL, "
-                "result_json TEXT, state VARCHAR(32) NOT NULL DEFAULT 'COMPLETED', "
-                "created_at TIMESTAMPTZ NOT NULL, updated_at TIMESTAMPTZ NOT NULL)"
-            ))
-            conn.execute(text(
-                "CREATE INDEX IF NOT EXISTS ix_gerchain_ledger_movements_escrow "
-                "ON gerchain_ledger_movements (escrow_id)"
-            ))
-            conn.commit()
-
-
+__all__ = ["ProductionRuntimeConfig", "ProductionRuntimeFactory"]
