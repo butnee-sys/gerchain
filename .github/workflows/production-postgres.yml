@@ -1,4 +1,4 @@
-name: Production PostgreSQL Runtime Verification
+name: Production PostgreSQL Re-performance
 
 on:
   push:
