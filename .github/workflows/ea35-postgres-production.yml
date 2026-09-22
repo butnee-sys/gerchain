@@ -30,6 +30,12 @@ jobs:
           python-version: "3.13"
       - name: Install dependencies
         run: pip install -r requirements-dee-security.txt pytest
+      - name: Apply canonical PostgreSQL migrations
+        env:
+          PGPASSWORD: gerchain
+        run: |
+          psql -h 127.0.0.1 -U gerchain -d gerchain_test -v ON_ERROR_STOP=1 -f postgres/schema/001_concurrency.sql
+          psql -h 127.0.0.1 -U gerchain -d gerchain_test -v ON_ERROR_STOP=1 -f postgres/schema/002_canonical_production.sql
       - name: PostgreSQL production re-performance
         env:
           GERCHAIN_DATABASE_URL: postgresql+psycopg://gerchain:gerchain@127.0.0.1:5432/gerchain_test
