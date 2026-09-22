@@ -20,7 +20,11 @@ from persistence.recovery_outbox import OutboxBase, OutboxEvent
 
 
 def _session_factory():
-    engine = create_engine("sqlite+pysqlite:///:memory:")
+    database_url = __import__("os").environ.get(
+        "GERCHAIN_TEST_DATABASE_URL",
+        "sqlite+pysqlite:///:memory:",
+    )
+    engine = create_engine(database_url, pool_pre_ping=True)
     AtomicLedgerBase.metadata.create_all(engine)
     EscrowBase.metadata.create_all(engine)
     OutboxBase.metadata.create_all(engine)
