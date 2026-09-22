@@ -47,21 +47,22 @@ jobs:
         run: |
           python - <<'PY'
           import os
-          from services.gerchain_runtime_factory import ProductionRuntimeConfig, ProductionRuntimeFactory
+          from sqlalchemy import create_engine
+          from sqlalchemy.orm import sessionmaker
+          from services.gerchain_runtime_factory import ProductionRuntimeFactory
           dsn = os.environ["GERCHAIN_DATABASE_URL"]
-          factory = ProductionRuntimeFactory(
-              ProductionRuntimeConfig(
-                  database_url=dsn,
-                  escrow_id="eai-boot-1",
-                  amount=100,
-                  currency="USD",
-                  witness_id="witness-1",
-              )
+          engine = create_engine(dsn, pool_pre_ping=True)
+          runtime = ProductionRuntimeFactory.create(
+              escrow_id="eai-boot-1",
+              amount=100,
+              currency="USD",
+              witness_id="witness-1",
+              engine=engine,
+              session_factory=sessionmaker(bind=engine, expire_on_commit=False),
           )
-          runtime = factory.create()
           assert runtime.is_canonical_ledger_authoritative
           print("EAI_PRODUCTION_FACTORY=PASS")
-          factory.engine.dispose()
+          engine.dispose()
           PY
       - name: Run deep value-truth reconciliation tests
         env:
