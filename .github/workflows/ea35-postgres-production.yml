@@ -34,11 +34,10 @@ jobs:
         env:
           PGPASSWORD: gerchain
         run: |
-          psql -h 127.0.0.1 -U gerchain -d gerchain_test -v ON_ERROR_STOP=1 -f postgres/schema/001_concurrency.sql
-          psql -h 127.0.0.1 -U gerchain -d gerchain_test -v ON_ERROR_STOP=1 -f postgres/schema/002_canonical_escrow_lifecycle.sql
-          psql -h 127.0.0.1 -U gerchain -d gerchain_test -v ON_ERROR_STOP=1 -f postgres/schema/003_ea25_durable_idempotency.sql
-          psql -h 127.0.0.1 -U gerchain -d gerchain_test -v ON_ERROR_STOP=1 -f postgres/schema/004_ea26_value_flow_persistence.sql
-          psql -h 127.0.0.1 -U gerchain -d gerchain_test -v ON_ERROR_STOP=1 -f postgres/schema/005_ea35_canonical_production.sql
+          for migration in             postgres/schema/001_concurrency.sql             postgres/schema/002_canonical_production.sql             postgres/schema/003_ea25_durable_idempotency.sql             postgres/schema/004_ea26_value_flow_persistence.sql             postgres/schema/005_ea35_canonical_production.sql             postgres/schema/006_canonical_escrow_lifecycle_hardening.sql             postgres/schema/007_canonical_production_compat.sql
+          do
+            psql -h 127.0.0.1 -U gerchain -d gerchain_test -v ON_ERROR_STOP=1 -f "$migration"
+          done
       - name: PostgreSQL production re-performance
         env:
           GERCHAIN_DATABASE_URL: postgresql+psycopg://gerchain:gerchain@127.0.0.1:5432/gerchain_test
