@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from pathlib import Path
 from typing import Any, Callable
 
 from sqlalchemy import Engine, inspect
@@ -14,7 +13,6 @@ from persistence.escrow_aggregate import EscrowBase
 from persistence.recovery_outbox import OutboxBase
 from postgres.migrations import apply_migrations
 from services.gerchain_runtime import GerchainRuntime
-from postgres.migrations import apply_migrations
 
 
 @dataclass(frozen=True)
