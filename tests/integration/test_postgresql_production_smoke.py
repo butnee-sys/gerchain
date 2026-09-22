@@ -11,9 +11,10 @@ def test_production_factory_and_canonical_ledger_postgresql():
     url = os.environ["GERCHAIN_DATABASE_URL"]
     engine = create_engine(url, future=True)
     session_factory = sessionmaker(bind=engine, expire_on_commit=False)
-    runtime = ProductionRuntimeFactory(ProductionRuntimeConfig(
-        database_url=url, escrow_id="pg-smoke-escrow", amount=100,
-        currency="MNT", witness_id="pg-smoke-witness"), engine=engine).create()
+    runtime = ProductionRuntimeFactory.create(
+        escrow_id="pg-smoke-escrow", amount=100, currency="MNT", witness_id="pg-smoke-witness",
+        engine=engine, session_factory=session_factory,
+    )
     assert runtime.is_canonical_ledger_authoritative
 
     ledger = runtime._canonical_ledger
