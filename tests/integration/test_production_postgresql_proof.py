@@ -23,17 +23,11 @@ def test_production_postgresql_boot_and_canonical_value_flow():
     if not url:
         raise RuntimeError("GERCHAIN_DATABASE_URL is required for PostgreSQL production proof")
     engine = create_engine(url, future=True, pool_pre_ping=True)
-    factory = ProductionRuntimeFactory(
-        ProductionRuntimeConfig(
-            database_url=url,
-            escrow_id="pg-proof-escrow",
-            amount=100,
-            currency="USD",
-            witness_id="pg-proof-witness",
-        ),
-        engine=engine,
+    sf = sessionmaker(bind=engine, expire_on_commit=False)
+    runtime = ProductionRuntimeFactory.create(
+        escrow_id="pg-proof-escrow", amount=100, currency="USD", witness_id="pg-proof-witness",
+        engine=engine, session_factory=sf,
     )
-    runtime = factory.create()
     assert runtime.is_canonical_ledger_authoritative
     assert runtime._canonical_ledger is not None
 
