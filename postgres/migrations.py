@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+from contextlib import nullcontext
 from pathlib import Path
 
 
@@ -11,17 +12,34 @@ def checksum(sql: str) -> str:
     return hashlib.sha256(sql.encode("utf-8")).hexdigest()
 
 
+def _transaction(conn):
+    """Support both SQLAlchemy and native psycopg connections."""
+    if hasattr(conn, "begin"):
+        return conn.begin()
+    if hasattr(conn, "transaction"):
+        return conn.transaction()
+    return nullcontext()
+
+
+def _execute(conn, sql: str, params=None):
+    if hasattr(conn, "exec_driver_sql"):
+        return conn.exec_driver_sql(sql, params or ())
+    return conn.execute(sql, params or ())
+
+
 def apply_migrations(conn, migration_dir: str | Path) -> None:
-    """Apply migrations atomically using the SQLAlchemy PostgreSQL connection."""
+    """Apply migrations atomically for SQLAlchemy or native psycopg connections."""
     path = Path(migration_dir)
     files = sorted(path.glob("*.sql"))
 
-    with conn.begin():
-        conn.exec_driver_sql(
+    with _transaction(conn):
+        _execute(
+            conn,
             "SELECT pg_advisory_xact_lock(%s)",
             (MIGRATION_LOCK_KEY,),
         )
-        conn.exec_driver_sql(
+        _execute(
+            conn,
             """
             CREATE TABLE IF NOT EXISTS schema_version (
                 version BIGINT PRIMARY KEY,
@@ -31,8 +49,9 @@ def apply_migrations(conn, migration_dir: str | Path) -> None:
             """
         )
 
-        rows = conn.exec_driver_sql(
-            "SELECT version, checksum FROM schema_version ORDER BY version"
+        rows = _execute(
+            conn,
+            "SELECT version, checksum FROM schema_version ORDER BY version",
         ).fetchall()
         applied = {int(row[0]): row[1] for row in rows}
 
@@ -48,8 +67,9 @@ def apply_migrations(conn, migration_dir: str | Path) -> None:
                     )
                 continue
 
-            conn.exec_driver_sql(sql)
-            conn.exec_driver_sql(
+            _execute(conn, sql)
+            _execute(
+                conn,
                 "INSERT INTO schema_version(version, checksum) VALUES (%s, %s)",
                 (version, digest),
             )
