@@ -32,7 +32,7 @@ def test_production_postgresql_boot_and_value_truth():
     assert runtime.runtime_mode == "production-postgresql"
 
     now = datetime.now(timezone.utc)
-    with factory() as session:
+    with session_factory() as session:
         PostgreSQLAtomicLedger.create_account_in_transaction(session, "PROD-SRC", "MNT", 100)
         PostgreSQLAtomicLedger.create_account_in_transaction(session, "PROD-BEN", "MNT", 0)
         PostgreSQLAtomicLedger.create_account_in_transaction(session, "prod-esc-1", "MNT", 0)
@@ -59,7 +59,7 @@ def test_production_postgresql_boot_and_value_truth():
     assert runtime.get_balance("PROD-SRC") == 0
     assert runtime.get_balance("prod-esc-1") == 100
 
-    with factory() as session:
+    with session_factory() as session:
         from persistence.release_escrow import release_escrow_in_transaction
         result = release_escrow_in_transaction(
             session,
