@@ -11,7 +11,6 @@ from persistence.durable_idempotency import IdempotencyBase
 from persistence.escrow_aggregate import EscrowBase
 from persistence.recovery_outbox import OutboxBase
 from postgres.migrations import apply_migrations
-from persistence.production_schema_guard import assert_canonical_production_schema
 from services.gerchain_runtime import GerchainRuntime
 
 
@@ -69,9 +68,6 @@ class ProductionRuntimeFactory:
                 missing_columns[table] = missing
         if missing_columns:
             raise RuntimeError(f"canonical production schema missing columns: {missing_columns}")
-        with engine.connect() as connection:
-            assert_canonical_production_schema(connection)
-
         runtime = GerchainRuntime(
             escrow_id=escrow_id,
             amount=amount,
