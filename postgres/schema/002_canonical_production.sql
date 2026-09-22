@@ -59,6 +59,7 @@ ALTER TABLE escrows ADD COLUMN IF NOT EXISTS refund_destination TEXT;
 ALTER TABLE escrows ADD COLUMN IF NOT EXISTS currency VARCHAR(16);
 ALTER TABLE escrows ADD COLUMN IF NOT EXISTS version BIGINT NOT NULL DEFAULT 0;
 ALTER TABLE escrows ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT now();
+ALTER TABLE escrows ALTER COLUMN created_at SET NOT NULL;
 
 UPDATE escrows
 SET currency = COALESCE(currency, 'MNT')
@@ -78,3 +79,7 @@ CREATE INDEX IF NOT EXISTS ix_gerchain_ledger_movements_created
 
 CREATE INDEX IF NOT EXISTS ix_gerchain_outbox_state_lease
     ON gerchain_outbox_events (state, lease_until);
+
+INSERT INTO schema_version(version, checksum)
+VALUES (2, 'canonical-production-002')
+ON CONFLICT (version) DO NOTHING;
