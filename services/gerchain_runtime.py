@@ -130,7 +130,7 @@ class GerchainRuntime:
 
     def require_postgresql_authority(self) -> None:
         if not self.is_postgresql_authoritative:
-            raise RuntimeError("legacy PostgreSQL release adapter authority is required")
+            raise RuntimeError("PostgreSQL authoritative runtime is required")
     def configure_canonical_ledger(self, session_factory) -> PostgreSQLAtomicLedger:
         """Attach the production Canonical Ledger boundary."""
         if session_factory is None:
