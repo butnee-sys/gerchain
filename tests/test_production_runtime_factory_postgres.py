@@ -29,3 +29,60 @@ def test_production_factory_builds_real_postgresql_runtime():
     runtime.require_canonical_ledger_authority()
     assert runtime._canonical_ledger is not None
     assert runtime._session_factory is factory.session_factory
+
+
+@pytest.mark.integration
+def test_production_factory_executes_canonical_ledger_value_flow_on_real_postgresql():
+    database_url = os.getenv("GERCHAIN_TEST_DATABASE_URL")
+    if not database_url:
+        pytest.skip("GERCHAIN_TEST_DATABASE_URL is required")
+
+    factory = ProductionRuntimeFactory(
+        ProductionRuntimeConfig(
+            database_url=database_url,
+            escrow_id="FACTORY-PG-FLOW",
+            amount=100,
+            currency="MNT",
+            witness_id="FACTORY-PG-W-FLOW",
+        )
+    )
+    runtime = factory.create()
+
+    ledger = runtime._canonical_ledger
+    assert ledger is not None
+
+    with factory.session_factory() as session:
+        ledger.create_account_in_transaction(session, "PG-SOURCE", "MNT", 1000)
+        ledger.create_account_in_transaction(session, "PG-DEST", "MNT", 0)
+        session.commit()
+
+    with factory.session_factory() as session:
+        first = ledger.transfer_in_transaction(
+            session,
+            transaction_id="PG-FLOW-1",
+            source="PG-SOURCE",
+            destination="PG-DEST",
+            amount=100,
+            currency="MNT",
+        )
+        session.commit()
+
+    assert first["status"] in {"COMMITTED", "SUCCESS", "APPLIED"}
+
+    with factory.session_factory() as session:
+        replay = ledger.transfer_in_transaction(
+            session,
+            transaction_id="PG-FLOW-1",
+            source="PG-SOURCE",
+            destination="PG-DEST",
+            amount=100,
+            currency="MNT",
+        )
+        session.rollback()
+
+    assert replay.get("replayed") is True
+
+    source = runtime.get_balance("PG-SOURCE")
+    destination = runtime.get_balance("PG-DEST")
+    assert source["balance"] == 900
+    assert destination["balance"] == 100
