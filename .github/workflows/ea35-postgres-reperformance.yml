@@ -78,4 +78,4 @@ jobs:
             tests/services/test_gerchain_runtime_refund_canonical.py \
             tests/services/test_gerchain_runtime_cancel_canonical.py \
             tests/services/test_gerchain_runtime_settlement_canonical.py \
-            tests/services/test_gerchain_runtime_create_account_canonical.py
+            tests/services/test_gerchain_runtime_canonical_ledger.py
