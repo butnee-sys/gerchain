@@ -2,12 +2,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+from pathlib import Path
 from typing import Any, Callable
 
 from sqlalchemy import Engine, inspect
 
 from postgres.migrations import apply_migrations
 from services.gerchain_runtime import GerchainRuntime
+from postgres.migrations import apply_migrations
 
 
 @dataclass(frozen=True)
@@ -101,4 +103,10 @@ class ProductionRuntimeFactory:
         return runtime
 
 
-__all__ = ["ProductionRuntimeConfig", "ProductionRuntimeFactory"]
+__all__ = ["ProductionRuntimeConfig", "ProductionRuntimeFactory"]    def initialize(self) -> None:
+        """Apply the canonical PostgreSQL schema before constructing runtime."""
+        migration_dir = Path(__file__).resolve().parents[1] / "postgres" / "migrations"
+        with self.engine.begin() as conn:
+            apply_migrations(conn, migration_dir)
+
+
