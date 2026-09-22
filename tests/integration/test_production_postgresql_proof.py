@@ -16,7 +16,7 @@ from persistence.fund_escrow import fund_escrow_in_transaction
 from persistence.lock_escrow import lock_escrow_in_transaction
 from persistence.release_escrow import release_escrow_in_transaction
 from persistence.deep_value_reconciliation import deep_reconcile_value_truth
-from services.gerchain_runtime_factory import ProductionRuntimeFactory
+from services.gerchain_runtime_factory import ProductionRuntimeConfig, ProductionRuntimeFactory
 
 
 @pytest.mark.integration
