@@ -10,7 +10,7 @@ from persistence.deep_value_reconciliation import deep_reconcile_value_truth
 from persistence.durable_idempotency import DurableIdempotencyRecord
 from persistence.escrow_aggregate import CanonicalEscrow, EscrowState, EscrowBase
 from persistence.recovery_outbox import OutboxBase, OutboxEvent
-from services.gerchain_runtime_factory import ProductionRuntimeConfig, ProductionRuntimeFactory
+from services.gerchain_runtime_factory import ProductionRuntimeFactory
 
 
 def test_production_postgresql_boot_and_value_truth():
