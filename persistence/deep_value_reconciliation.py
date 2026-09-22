@@ -81,6 +81,13 @@ def deep_reconcile_value_truth(session: Session) -> DeepValueTruthReport:
     def issue(code: str, tx: str | None, detail: str) -> None:
         issues.append(ValueTruthIssue(code, tx, detail))
 
+    event_type_by_operation = {
+        "FUND": "GERCHAIN_FUNDED",
+        "RELEASE": "GERCHAIN_RELEASED",
+        "REFUND": "GERCHAIN_REFUNDED",
+        "CANCEL": "GERCHAIN_CANCELLED",
+    }
+
     for movement in movements:
         tx = movement.transaction_id
         if movement.amount <= 0:
@@ -102,7 +109,7 @@ def deep_reconcile_value_truth(session: Session) -> DeepValueTruthReport:
             if witness is None:
                 issue("UNWITNESSED_MOVEMENT", tx, "movement has no witness")
             elif (witness.event_type, witness.escrow_id, witness.amount) != (
-                f"GERCHAIN_{movement.operation}",
+                event_type_by_operation.get(movement.operation, f"GERCHAIN_{movement.operation}"),
                 movement.escrow_id,
                 movement.amount,
             ):
@@ -136,10 +143,10 @@ def deep_reconcile_value_truth(session: Session) -> DeepValueTruthReport:
     # Witness and outbox also represent state-only operations (for example
     # LOCK), so reverse orphan checks apply only to value-moving event types.
     value_event_types = {
-        "GERCHAIN_FUND",
-        "GERCHAIN_RELEASE",
-        "GERCHAIN_REFUND",
-        "GERCHAIN_CANCEL",
+        "GERCHAIN_FUNDED",
+        "GERCHAIN_RELEASED",
+        "GERCHAIN_REFUNDED",
+        "GERCHAIN_CANCELLED",
     }
 
     for witness in witnesses:
