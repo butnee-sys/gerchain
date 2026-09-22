@@ -3,15 +3,13 @@ from __future__ import annotations
 import os
 from datetime import datetime, timezone
 
-import pytest
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker
 
-from persistence.atomic_ledger import AtomicLedgerBase, LedgerAccountModel
-from persistence.escrow_aggregate import CanonicalEscrow, EscrowBase
-from persistence.recovery_outbox import OutboxBase, OutboxEvent
-from persistence.durable_idempotency import IdempotencyBase
-from persistence.atomic_value_transaction import WitnessBase, TransactionWitness
+from persistence.atomic_ledger import LedgerAccountModel
+from persistence.escrow_aggregate import CanonicalEscrow
+from persistence.recovery_outbox import OutboxEvent
+from persistence.atomic_value_transaction import TransactionWitness
 from persistence.fund_escrow import fund_escrow_in_transaction
 from persistence.lock_escrow import lock_escrow_in_transaction
 from persistence.release_escrow import release_escrow_in_transaction
@@ -23,7 +21,7 @@ from services.gerchain_runtime_factory import ProductionRuntimeConfig, Productio
 def test_production_postgresql_boot_and_canonical_value_flow():
     url = os.environ.get("GERCHAIN_DATABASE_URL")
     if not url:
-        pytest.skip("GERCHAIN_DATABASE_URL is required")
+        raise RuntimeError("GERCHAIN_DATABASE_URL is required for PostgreSQL production proof")
     engine = create_engine(url, future=True, pool_pre_ping=True)
     factory = ProductionRuntimeFactory(
         ProductionRuntimeConfig(
@@ -38,12 +36,6 @@ def test_production_postgresql_boot_and_canonical_value_flow():
     runtime = factory.create()
     assert runtime.is_canonical_ledger_authoritative
     assert runtime._canonical_ledger is not None
-
-    AtomicLedgerBase.metadata.create_all(engine)
-    EscrowBase.metadata.create_all(engine)
-    OutboxBase.metadata.create_all(engine)
-    IdempotencyBase.metadata.create_all(engine)
-    WitnessBase.metadata.create_all(engine)
 
     sf = sessionmaker(bind=engine, expire_on_commit=False)
     with sf() as session:
