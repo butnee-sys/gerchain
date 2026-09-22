@@ -120,7 +120,7 @@ def deep_reconcile_value_truth(session: Session) -> DeepValueTruthReport:
                 issue("UNOUTBOXED_MOVEMENT", tx, "movement has no outbox evidence")
             elif not any(
                 e.aggregate_id == movement.escrow_id
-                and e.event_type == f"GERCHAIN_{movement.operation}"
+                and e.event_type == event_type_by_operation.get(movement.operation, f"GERCHAIN_{movement.operation}")
                 for e in matching_outboxes
             ):
                 issue(
