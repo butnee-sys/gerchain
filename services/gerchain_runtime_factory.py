@@ -102,4 +102,12 @@ class ProductionRuntimeFactory:
         runtime.require_canonical_ledger_authority()
         return runtime
 
-__all__ = ["ProductionRuntimeConfig", "ProductionRuntimeFactory"]
+__all__ = ["ProductionRuntimeConfig", "ProductionRuntimeFactory"]    def initialize(self) -> None:
+        """Apply versioned PostgreSQL migrations under the migration lock."""
+        from pathlib import Path
+
+        migration_dir = Path(__file__).resolve().parents[1] / "postgres" / "migrations"
+        with self.engine.begin() as connection:
+            apply_migrations(connection, migration_dir)
+
+
