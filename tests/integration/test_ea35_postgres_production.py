@@ -17,16 +17,14 @@ def test_production_postgres_fund_lock_release_reconciles():
     url = os.environ["GERCHAIN_DATABASE_URL"]
     engine = create_engine(url, pool_pre_ping=True)
     factory = sessionmaker(bind=engine, expire_on_commit=False)
-    runtime = ProductionRuntimeFactory(
-        ProductionRuntimeConfig(
-            database_url=url,
-            escrow_id="pg-ea35-escrow",
-            amount=100,
-            currency="USD",
-            witness_id="pg-ea35-witness",
-        ),
+    runtime = ProductionRuntimeFactory.create(
+        escrow_id="pg-ea35-escrow",
+        amount=100,
+        currency="USD",
+        witness_id="pg-ea35-witness",
         engine=engine,
-    ).create()
+        session_factory=factory,
+    )
     assert runtime.is_canonical_ledger_authoritative
     with factory() as session:
         PostgreSQLAtomicLedger.create_account_in_transaction(session, "pg-source", "USD", initial_balance=100)
