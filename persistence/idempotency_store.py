@@ -15,7 +15,7 @@ class IdempotencyBase(DeclarativeBase):
 
 
 class IdempotencyRecordModel(IdempotencyBase):
-    __tablename__ = "gerchain_idempotency_records"
+    __tablename__ = "gerchain_worker_idempotency_records"
     __table_args__ = (UniqueConstraint("operation", "idempotency_key", name="uq_gerchain_idempotency_operation_key"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
