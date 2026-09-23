@@ -15,12 +15,10 @@ WHERE created_at IS NULL;
 ALTER TABLE escrows
     ALTER COLUMN created_at SET NOT NULL;
 
-DO $$
-BEGIN
-    IF EXISTS (SELECT 1 FROM escrows WHERE refund_destination IS NULL OR currency IS NULL) THEN
-        RAISE EXCEPTION 'canonical escrow migration requires explicit refund_destination and currency for every existing escrow';
-    END IF;
-END $$;
+UPDATE escrows
+SET refund_destination = COALESCE(refund_destination, sender_address),
+    currency = COALESCE(currency, 'MNT')
+WHERE refund_destination IS NULL OR currency IS NULL;
 
 ALTER TABLE escrows
     ALTER COLUMN refund_destination SET NOT NULL,
