@@ -47,7 +47,7 @@ jobs:
           from sqlalchemy import create_engine
           from sqlalchemy.orm import sessionmaker
           from sqlalchemy.orm import sessionmaker
-          from services.gerchain_runtime_factory import ProductionRuntimeFactory
+          from services.gerchain_runtime_factory import ProductionRuntimeConfig, ProductionRuntimeFactory
 
           engine = create_engine(os.environ["GERCHAIN_DATABASE_URL"])
           runtime = ProductionRuntimeFactory(ProductionRuntimeConfig(database_url=os.environ["GERCHAIN_DATABASE_URL"], escrow_id="ci-escrow", amount=100, currency="MNT", witness_id="ci-witness"), engine=engine).create()
