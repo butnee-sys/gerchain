@@ -2,11 +2,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+from pathlib import Path
 from typing import Any, Callable
 
 from sqlalchemy import create_engine
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import sessionmaker
+
+from postgres.migrations import apply_migrations
 
 from postgres.migrations import apply_migrations
 from services.gerchain_runtime import GerchainRuntime
@@ -51,12 +54,10 @@ class ProductionRuntimeFactory:
         )
 
     def initialize(self) -> None:
-        """Apply all versioned PostgreSQL migrations before runtime use."""
-        with self.engine.connect() as connection:
-            apply_migrations(
-                connection,
-                Path(__file__).resolve().parents[1] / "postgres" / "schema",
-            )
+        """Apply the canonical PostgreSQL migration set under an advisory lock."""
+        migration_dir = Path(__file__).resolve().parents[1] / "postgres" / "schema"
+        with self.engine.connect() as conn:
+            apply_migrations(conn, migration_dir)
 
     def create(self) -> GerchainRuntime:
         self.initialize()
