@@ -37,7 +37,7 @@ class ProductionRuntimeFactory:
 
     def initialize(self) -> None:
         """Apply versioned canonical production migrations atomically."""
-        with self.engine.begin() as conn:
+        with self.engine.connect() as conn:
             apply_migrations(
                 conn,
                 Path(__file__).resolve().parents[1] / "postgres" / "schema",
