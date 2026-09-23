@@ -116,4 +116,9 @@ class ProductionRuntimeFactory:
         return runtime
 
 
-__all__ = ["ProductionRuntimeConfig", "ProductionRuntimeFactory"]
+__all__ = ["ProductionRuntimeConfig", "ProductionRuntimeFactory"]    def initialize(self) -> None:
+        migration_dir = Path(__file__).resolve().parents[1] / "postgres" / "migrations"
+        with self.engine.connect() as connection:
+            apply_migrations(connection, migration_dir)
+
+
