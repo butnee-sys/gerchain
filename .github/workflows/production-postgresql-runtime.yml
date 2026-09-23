@@ -33,6 +33,22 @@ jobs:
           python -m pip install -r postgres/requirements-test.txt
           python -m pip install -r requirements-dee-security.txt
           python -m pip install "psycopg[binary]"
+      - name: Boot production entrypoint against PostgreSQL
+        env:
+          GERCHAIN_DATABASE_URL: postgresql+psycopg://gerchain:gerchain@127.0.0.1:5432/gerchain_test
+          GERCHAIN_ESCROW_ID: ea35-entrypoint-proof
+          GERCHAIN_ESCROW_AMOUNT: "100"
+          GERCHAIN_CURRENCY: USD
+          GERCHAIN_WITNESS_ID: ea35-entrypoint-witness
+        run: |
+          set +e
+          timeout 10s python production_entrypoint.py
+          code=$?
+          if [ "$code" -ne 124 ]; then
+            echo "Production entrypoint failed before controlled timeout (exit=$code)"
+            exit "$code"
+          fi
+          echo "PRODUCTION_ENTRYPOINT_BOOT=TRUE"
       - name: Run production PostgreSQL value-flow proof
         env:
           GERCHAIN_DATABASE_URL: postgresql+psycopg://gerchain:gerchain@127.0.0.1:5432/gerchain_test
