@@ -12,7 +12,7 @@ from persistence.lock_escrow import lock_escrow_in_transaction
 from persistence.release_escrow import release_escrow_in_transaction
 from persistence.atomic_value_transaction import TransactionWitness
 from persistence.recovery_outbox import OutboxEvent
-from services.gerchain_runtime_factory import ProductionRuntimeFactory
+from services.gerchain_runtime_factory import ProductionRuntimeConfig, ProductionRuntimeFactory
 
 
 def test_production_runtime_full_fund_lock_release_graph():
@@ -20,20 +20,17 @@ def test_production_runtime_full_fund_lock_release_graph():
     engine = create_engine(database_url, future=True, pool_pre_ping=True)
     try:
         Session = sessionmaker(bind=engine, expire_on_commit=False)
-        runtime = ProductionRuntimeFactory.create(
+        config = ProductionRuntimeConfig(
+            database_url=database_url,
             escrow_id="integration-escrow",
             amount=100,
             currency="USD",
             witness_id="integration-witness",
-            engine=engine,
-            session_factory=Session,
         )
+        runtime = ProductionRuntimeFactory(config, engine=engine).create()
         assert runtime.is_canonical_ledger_authoritative
         # A second construction must validate migration checksums and remain idempotent.
-        runtime_again = ProductionRuntimeFactory.create(
-            escrow_id="integration-escrow", amount=100, currency="USD", witness_id="integration-witness",
-            engine=engine, session_factory=Session,
-        )
+        runtime_again = ProductionRuntimeFactory(config, engine=engine).create()
         assert runtime_again.is_canonical_ledger_authoritative
 
         Session = sessionmaker(bind=engine, expire_on_commit=False)
