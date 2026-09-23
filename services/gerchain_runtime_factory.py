@@ -9,6 +9,8 @@ from postgres.migrations import apply_migrations
 from sqlalchemy import create_engine
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import sessionmaker
+from postgres.migrations import apply_migrations
+from pathlib import Path
 
 from services.gerchain_runtime import GerchainRuntime
 
