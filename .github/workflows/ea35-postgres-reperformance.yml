@@ -48,7 +48,7 @@ jobs:
               currency="USD",
               witness_id="ea35-smoke-witness",
           )
-          runtime = ProductionRuntimeFactory(config).build()
+          runtime = ProductionRuntimeFactory(config).create()
           assert runtime.is_canonical_ledger_authoritative
           print("CANONICAL_LEDGER_AUTHORITY=TRUE")
           PY
