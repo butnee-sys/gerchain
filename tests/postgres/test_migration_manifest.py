@@ -20,7 +20,7 @@ def test_canonical_production_migration_chain_contains_required_stages():
 
     required = {
         "001_concurrency.sql",
-        "002_canonical_production_persistence.sql",
+        "002_canonical_persistence.sql",
         "003_ea25_durable_idempotency.sql",
         "004_ea26_value_flow_persistence.sql",
         "005_ea35_canonical_production.sql",
