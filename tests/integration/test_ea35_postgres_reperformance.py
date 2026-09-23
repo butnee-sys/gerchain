@@ -8,7 +8,7 @@ from sqlalchemy.orm import sessionmaker
 from persistence.atomic_ledger import LedgerAccountModel
 from persistence.escrow_aggregate import CanonicalEscrow, EscrowState
 from persistence.deep_value_reconciliation import deep_reconcile_value_truth
-from services.gerchain_runtime_factory import ProductionRuntimeConfig, ProductionRuntimeFactory
+from services.gerchain_runtime_factory import ProductionRuntimeFactory
 
 
 DB_URL = os.environ.get("GERCHAIN_DATABASE_URL")
@@ -18,16 +18,14 @@ DB_URL = os.environ.get("GERCHAIN_DATABASE_URL")
 def test_postgres_canonical_fund_lock_release_and_reconcile():
     engine = create_engine(DB_URL, pool_pre_ping=True)
     sf = sessionmaker(bind=engine, expire_on_commit=False)
-    runtime = ProductionRuntimeFactory(
-        ProductionRuntimeConfig(
-            database_url=DB_URL,
-            escrow_id="ea35-postgres-escrow",
-            amount=100,
-            currency="USD",
-            witness_id="ea35-postgres-witness",
-        ),
+    runtime = ProductionRuntimeFactory.create(
+        escrow_id="ea35-postgres-escrow",
+        amount=100,
+        currency="USD",
+        witness_id="ea35-postgres-witness",
         engine=engine,
-    ).create()
+        session_factory=sf,
+    )
     now = datetime.now(timezone.utc)
 
     with sf.begin() as session:
