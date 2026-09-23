@@ -59,20 +59,22 @@ class ProductionRuntimeFactory:
         runtime.require_canonical_ledger_authority()
         return runtime
 
+    def create(self) -> GerchainRuntime:
+        """Create the canonical production runtime from this configured factory."""
+        return self.build()
+
     @classmethod
-    def create(
+    def from_engine(
         cls,
         *,
         escrow_id: str,
         amount: int,
         currency: str,
         witness_id: str,
-        engine: Engine | None = None,
+        engine: Engine,
         session_factory: Callable[[], Any] | None = None,
     ) -> GerchainRuntime:
-        """Backward-compatible construction entry point used by integration tests."""
-        if engine is None:
-            raise ValueError("engine is required")
+        """Construct a factory from an existing PostgreSQL engine."""
         factory = cls(
             ProductionRuntimeConfig(
                 database_url=str(engine.url),
@@ -86,6 +88,7 @@ class ProductionRuntimeFactory:
         if session_factory is not None:
             factory.session_factory = session_factory
         return factory.build()
+
 
 
 __all__ = ["ProductionRuntimeConfig", "ProductionRuntimeFactory"]
