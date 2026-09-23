@@ -27,7 +27,7 @@ def test_production_runtime_full_fund_lock_release_graph():
             currency="USD",
             witness_id="integration-witness",
         )
-        runtime = ProductionRuntimeFactory(config, engine=engine).create()
+        runtime = ProductionRuntimeFactory(config, engine=engine).build()
         assert runtime.is_canonical_ledger_authoritative
         # A second construction must validate migration checksums and remain idempotent.
         runtime_again = ProductionRuntimeFactory(config, engine=engine).create()
