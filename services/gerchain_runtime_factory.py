@@ -38,7 +38,7 @@ class ProductionRuntimeFactory:
     def initialize(self) -> None:
         """Apply the repository's versioned PostgreSQL production schema."""
         migration_dir = Path(__file__).resolve().parents[1] / "postgres" / "schema"
-        with self.engine.begin() as conn:
+        with self.engine.connect() as conn:
             apply_migrations(conn, migration_dir)
 
     def create(self) -> GerchainRuntime:
