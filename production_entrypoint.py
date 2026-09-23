@@ -51,7 +51,7 @@ def main() -> None:
             ),
             engine=engine,
         )
-        runtime = factory.build()
+        runtime = factory.create()
 
         if not runtime.is_canonical_ledger_authoritative:
             raise RuntimeError("canonical ledger authority was not established")
