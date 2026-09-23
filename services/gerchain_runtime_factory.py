@@ -43,7 +43,7 @@ class ProductionRuntimeFactory:
 
     def initialize(self) -> None:
         """Apply the versioned PostgreSQL production schema before runtime use."""
-        with self.engine.begin() as connection:
+        with self.engine.connect() as connection:
             apply_migrations(
                 connection,
                 Path(__file__).resolve().parents[1] / "postgres" / "schema",
