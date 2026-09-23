@@ -14,7 +14,7 @@ from persistence.lock_escrow import lock_escrow_in_transaction
 from persistence.refund_escrow import refund_escrow_in_transaction
 from persistence.cancel_escrow import cancel_escrow_in_transaction
 from persistence.atomic_ledger import LedgerMovementModel
-from services.gerchain_runtime_factory import ProductionRuntimeFactory
+from services.gerchain_runtime_factory import ProductionRuntimeConfig, ProductionRuntimeFactory
 
 
 def test_postgresql_eai_refund_cancel_and_settlement_paths():
@@ -22,14 +22,14 @@ def test_postgresql_eai_refund_cancel_and_settlement_paths():
     engine = create_engine(url, pool_pre_ping=True)
     Session = sessionmaker(bind=engine, expire_on_commit=False)
     try:
-        runtime = ProductionRuntimeFactory.create(
+        config = ProductionRuntimeConfig(
+            database_url=url,
             escrow_id="eai-matrix-refund",
             amount=100,
             currency="USD",
             witness_id="eai-matrix-witness",
-            engine=engine,
-            session_factory=Session,
         )
+        runtime = ProductionRuntimeFactory(config, engine=engine).create()
         assert runtime.is_canonical_ledger_authoritative
         now = datetime.now(timezone.utc)
 
