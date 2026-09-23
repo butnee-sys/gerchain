@@ -23,45 +23,35 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 20
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.13"
-
       - name: Install production dependencies
         run: |
           python -m pip install --upgrade pip
           python -m pip install -r requirements-dee-security.txt
           python -m pip install pytest
-
       - name: Verify production factory construction
         env:
           GERCHAIN_DATABASE_URL: postgresql+psycopg://gerchain:gerchain@localhost:5432/gerchain
         run: |
           python - <<'PY'
           from services.gerchain_runtime_factory import ProductionRuntimeConfig, ProductionRuntimeFactory
-
-          from sqlalchemy import create_engine
-          from sqlalchemy.orm import sessionmaker
-          engine = create_engine("postgresql+psycopg://gerchain:gerchain@localhost:5432/gerchain")
-          session_factory = sessionmaker(bind=engine, expire_on_commit=False)
-          runtime = ProductionRuntimeFactory.create(
+          config = ProductionRuntimeConfig(
+              database_url="postgresql+psycopg://gerchain:gerchain@localhost:5432/gerchain",
               escrow_id="ea35-smoke-escrow",
               amount=100,
               currency="USD",
               witness_id="ea35-smoke-witness",
-              engine=engine,
-              session_factory=session_factory,
           )
+          runtime = ProductionRuntimeFactory(config).create()
           assert runtime.is_canonical_ledger_authoritative
           print("CANONICAL_LEDGER_AUTHORITY=TRUE")
           PY
-
       - name: Boot production entrypoint against PostgreSQL
         env:
           GERCHAIN_DATABASE_URL: postgresql+psycopg://gerchain:gerchain@localhost:5432/gerchain
@@ -78,21 +68,12 @@ jobs:
             exit "$code"
           fi
           echo "PRODUCTION_ENTRYPOINT_BOOT=TRUE"
-
       - name: Run PostgreSQL canonical value-flow re-performance
         env:
           GERCHAIN_DATABASE_URL: postgresql+psycopg://gerchain:gerchain@localhost:5432/gerchain
-        run: |
-          python -m pytest -q tests/integration/test_ea35_postgres_reperformance.py
-
+        run: python -m pytest -q tests/integration/test_ea35_postgres_reperformance.py
       - name: Run EA-35 reconciliation tests
-        run: |
-          python -m pytest -q tests/persistence/test_deep_value_reconciliation.py
-
+        run: python -m pytest -q tests/persistence/test_deep_value_reconciliation.py
       - name: Run canonical value-flow tests
         run: |
-          python -m pytest -q \
-            tests/services/test_gerchain_runtime_refund_canonical.py \
-            tests/services/test_gerchain_runtime_cancel_canonical.py \
-            tests/services/test_gerchain_runtime_settlement_canonical.py \
-            tests/services/test_gerchain_runtime_canonical_ledger.py
+          python -m pytest -q             tests/services/test_gerchain_runtime_refund_canonical.py             tests/services/test_gerchain_runtime_cancel_canonical.py             tests/services/test_gerchain_runtime_settlement_canonical.py             tests/services/test_gerchain_runtime_canonical_ledger.py
