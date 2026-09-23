@@ -37,6 +37,7 @@ def test_production_postgresql_boot_and_canonical_value_flow():
         session.add_all([
             LedgerAccountModel(account_id="integration-source", currency="MNT", balance=100, version=0, updated_at=now),
             LedgerAccountModel(account_id="integration-beneficiary", currency="MNT", balance=0, version=0, updated_at=now),
+            LedgerAccountModel(account_id=escrow_id, currency="MNT", balance=0, version=0, updated_at=now),
             CanonicalEscrow(
                 id=escrow_id,
                 sender_address="integration-source",
