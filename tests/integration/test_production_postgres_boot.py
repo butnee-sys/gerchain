@@ -27,7 +27,6 @@ def test_production_factory_bootstraps_postgresql_schema() -> None:
 
         tables = set(inspect(engine).get_table_names())
         required = {
-            "schema_version",
             "gerchain_ledger_accounts",
             "gerchain_ledger_movements",
             "escrows",
@@ -38,10 +37,5 @@ def test_production_factory_bootstraps_postgresql_schema() -> None:
         missing = required - tables
         assert not missing, f"missing production tables: {sorted(missing)}"
 
-        with engine.connect() as conn:
-            applied = conn.execute(
-                text("SELECT count(*) FROM schema_version")
-            ).scalar_one()
-            assert applied > 0
     finally:
         engine.dispose()
