@@ -1,6 +1,9 @@
 name: production-postgres-reperformance
 
 on:
+  pull_request:
+    branches:
+      - main
   push:
     branches:
       - "feat/ea21-transaction-aware-ledger"
