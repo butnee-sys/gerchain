@@ -3,9 +3,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
-from pathlib import Path
-
-from postgres.migrations import apply_migrations
 
 from postgres.migrations import apply_migrations
 
@@ -41,7 +38,7 @@ class ProductionRuntimeFactory:
 
     def initialize(self) -> None:
         """Apply the repository's versioned PostgreSQL production schema."""
-        migration_dir = Path(__file__).resolve().parents[1] / "postgres" / "migrations"
+        migration_dir = Path(__file__).resolve().parents[1] / "postgres" / "schema"
         with self.engine.connect() as conn:
             apply_migrations(conn, migration_dir)
 
