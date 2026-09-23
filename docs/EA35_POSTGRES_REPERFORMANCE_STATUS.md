@@ -14,4 +14,17 @@ Required evidence:
 7. Deep Value Truth reconciliation reports no issues.
 8. Canonical balances and durable escrow state match expected final state.
 
-Status before CI execution: **UNVERIFIED**.
+Status: **PARTIALLY VERIFIED — NOT LOCKED**.
+
+## Executed evidence
+
+- GitHub Actions run: `35891334931`
+- Job: `postgres-reperformance`
+- Commit SHA: `ad50632f56b3ff4b47dbc6df1eab990e7da13008`
+- PostgreSQL: `16.15`
+- Python: `3.13.15`
+- Executed test: `tests/integration/test_production_postgresql_reperformance.py`
+- Result: **1 passed in 0.59s**
+- The run used a real PostgreSQL 16 service and the configured `GERCHAIN_DATABASE_URL`.
+
+This proves a real PostgreSQL execution path for the production re-performance test at the cited SHA. It does **not** by itself prove the full CREATE/FUND/LOCK/RELEASE/REFUND/CANCEL/SETTLEMENT/READ matrix, restart/recovery, or independent re-performance.
