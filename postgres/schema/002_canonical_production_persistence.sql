@@ -8,6 +8,15 @@ ALTER TABLE IF EXISTS escrows
     ADD COLUMN IF NOT EXISTS version BIGINT NOT NULL DEFAULT 0,
     ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT now();
 
+UPDATE escrows
+SET
+    refund_destination = COALESCE(refund_destination, sender_address),
+    currency = COALESCE(currency, 'USD'),
+    created_at = COALESCE(created_at, updated_at);
+
+ALTER TABLE IF EXISTS escrows
+    ALTER COLUMN currency SET NOT NULL;
+
 ALTER TABLE IF EXISTS escrows
     ALTER COLUMN updated_at SET DEFAULT now();
 
