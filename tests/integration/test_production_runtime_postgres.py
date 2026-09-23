@@ -22,9 +22,14 @@ def test_production_runtime_bootstraps_canonical_postgres():
     engine = create_engine(url, future=True)
     session_factory = sessionmaker(bind=engine, expire_on_commit=False)
 
-    runtime = ProductionRuntimeFactory(ProductionRuntimeConfig(
-        database_url=url, escrow_id="integration-escrow", amount=100,
-        currency="MNT", witness_id="integration-witness"), engine=engine).create()
+    runtime = ProductionRuntimeFactory.create(
+        escrow_id="integration-escrow",
+        amount=100,
+        currency="MNT",
+        witness_id="integration-witness",
+        engine=engine,
+        session_factory=session_factory,
+    )
 
     assert runtime.is_canonical_ledger_authoritative
 
