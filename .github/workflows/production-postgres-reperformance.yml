@@ -32,3 +32,4 @@ jobs:
           python-version: "3.13"
       - run: pip install -r requirements-dee-security.txt pytest
       - run: pytest -q tests/integration/test_production_postgres_runtime.py
+
