@@ -114,3 +114,5 @@ def test_postgres_canonical_fund_lock_release_reconciles():
         assert report.outbox_count == 3
 
     engine.dispose()
+
+# EA-35.13: executed through the pull-request PostgreSQL proof gate.
