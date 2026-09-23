@@ -92,3 +92,5 @@ class ProductionRuntimeFactory:
 
 
 __all__ = ["ProductionRuntimeConfig", "ProductionRuntimeFactory"]
+
+# Backward-compatible construction alias used by existing CI smoke workflows.\nProductionRuntimeFactory.build = ProductionRuntimeFactory.create\n
