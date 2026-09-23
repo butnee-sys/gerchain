@@ -13,17 +13,15 @@ from services.gerchain_runtime_factory import ProductionRuntimeConfig, Productio
 def test_production_factory_boots_and_canonical_ledger_moves_value():
     url = os.environ["GERCHAIN_DATABASE_URL"]
     engine = create_engine(url, future=True)
-    factory = ProductionRuntimeFactory(
-        ProductionRuntimeConfig(
-            database_url=url,
-            escrow_id="pg-smoke-escrow",
-            amount=100,
-            currency="USD",
-            witness_id="pg-smoke-witness",
-        ),
+    runtime = ProductionRuntimeFactory.create(
+        escrow_id="pg-smoke-escrow",
+        amount=100,
+        currency="USD",
+        witness_id="pg-smoke-witness",
         engine=engine,
+        session_factory=sessionmaker(bind=engine, expire_on_commit=False),
     )
-    runtime = factory.create()
+
     assert runtime.is_canonical_ledger_authoritative
 
     with factory.session_factory() as session:
