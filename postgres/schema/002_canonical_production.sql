@@ -15,10 +15,19 @@ WHERE created_at IS NULL;
 ALTER TABLE escrows
     ALTER COLUMN created_at SET NOT NULL;
 
-UPDATE escrows
-SET refund_destination = COALESCE(refund_destination, sender_address),
-    currency = COALESCE(currency, 'MNT')
-WHERE refund_destination IS NULL OR currency IS NULL;
+DO $
+DECLARE
+    missing_rows BIGINT;
+BEGIN
+    SELECT count(*) INTO missing_rows
+    FROM escrows
+    WHERE refund_destination IS NULL OR currency IS NULL;
+    IF missing_rows > 0 THEN
+        RAISE EXCEPTION
+            'canonical escrow migration requires explicit refund_destination and currency for % existing row(s)',
+            missing_rows;
+    END IF;
+END $;
 
 ALTER TABLE escrows
     ALTER COLUMN refund_destination SET NOT NULL,
