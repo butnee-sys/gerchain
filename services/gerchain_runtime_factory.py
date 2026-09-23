@@ -31,7 +31,7 @@ class ProductionRuntimeFactory:
         if not config.database_url.startswith(
             ("postgresql://", "postgresql+psycopg://", "postgresql+psycopg2://")
         ):
-            raise ValueError("ProductionRuntimeFactory requires a PostgreSQL database URL")
+            raise ValueError("ProductionRuntimeFactory requires PostgreSQL database URL")
         self.config = config
         self.engine = engine or create_engine(config.database_url, future=True)
         if self.engine.dialect.name != "postgresql":
