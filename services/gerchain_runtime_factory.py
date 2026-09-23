@@ -1,20 +1,15 @@
 from __future__ import annotations
 
-from dataclasses import dataclass\nfrom pathlib import Path
-from pathlib import Path
-from pathlib import Path
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
 
 from postgres.migrations import apply_migrations
-
 from sqlalchemy import create_engine
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import sessionmaker
 
-from postgres.migrations import apply_migrations
-
-from services.gerchain_runtime import GerchainRuntime\nfrom postgres.migrations import apply_migrations
+from services.gerchain_runtime import GerchainRuntime
 
 
 @dataclass(frozen=True)
@@ -32,13 +27,17 @@ class ProductionRuntimeFactory:
     def __init__(self, config: ProductionRuntimeConfig, *, engine: Engine | None = None) -> None:
         if not config.database_url:
             raise ValueError("database_url is required")
-        if not config.database_url.startswith(("postgresql://", "postgresql+psycopg://", "postgresql+psycopg2://")):
+        if not config.database_url.startswith(
+            ("postgresql://", "postgresql+psycopg://", "postgresql+psycopg2://")
+        ):
             raise ValueError("ProductionRuntimeFactory requires a PostgreSQL database URL")
         self.config = config
         self.engine = engine or create_engine(config.database_url, future=True)
         if self.engine.dialect.name != "postgresql":
             raise ValueError("ProductionRuntimeFactory requires a PostgreSQL engine")
-        self.session_factory: Callable[[], Any] = sessionmaker(bind=self.engine, expire_on_commit=False)
+        self.session_factory: Callable[[], Any] = sessionmaker(
+            bind=self.engine, expire_on_commit=False
+        )
 
     def initialize(self) -> None:
         """Apply the repository's versioned PostgreSQL production schema."""
