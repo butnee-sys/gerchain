@@ -46,7 +46,7 @@ jobs:
           from sqlalchemy import create_engine
           dsn = os.environ["GERCHAIN_DATABASE_URL"]
           engine = create_engine(dsn)
-          runtime = ProductionRuntimeFactory(ProductionRuntimeConfig(database_url=dsn, escrow_id=os.environ["GERCHAIN_ESCROW_ID"], amount=int(os.environ["GERCHAIN_ESCROW_AMOUNT"]), currency=os.environ["GERCHAIN_CURRENCY"], witness_id=os.environ["GERCHAIN_WITNESS_ID"]), engine=engine).build()
+          runtime = ProductionRuntimeFactory(ProductionRuntimeConfig(database_url=dsn, escrow_id=os.environ["GERCHAIN_ESCROW_ID"], amount=int(os.environ["GERCHAIN_ESCROW_AMOUNT"]), currency=os.environ["GERCHAIN_CURRENCY"], witness_id=os.environ["GERCHAIN_WITNESS_ID"]), engine=engine).create()
           assert runtime.is_canonical_ledger_authoritative
           print("CANONICAL_LEDGER_AUTHORITY=TRUE")
           engine.dispose()
