@@ -17,13 +17,15 @@ def test_production_factory_builds_real_postgresql_runtime():
     from sqlalchemy.orm import sessionmaker
     engine = create_engine(database_url, pool_pre_ping=True)
     session_factory = sessionmaker(bind=engine, expire_on_commit=False)
-    runtime = ProductionRuntimeFactory.create(
-        escrow_id="FACTORY-PG-ESC",
-        amount=100,
-        currency="MNT",
-        witness_id="FACTORY-PG-W",
+    runtime = ProductionRuntimeFactory(
+        ProductionRuntimeConfig(
+            database_url=database_url,
+            escrow_id="FACTORY-PG-ESC",
+            amount=100,
+            currency="MNT",
+            witness_id="FACTORY-PG-W",
+        ),
         engine=engine,
-        session_factory=session_factory,
     )
 
     assert runtime.runtime_mode == "production-postgresql"
@@ -44,13 +46,15 @@ def test_production_factory_executes_canonical_ledger_value_flow_on_real_postgre
     from sqlalchemy.orm import sessionmaker
     engine = create_engine(database_url, pool_pre_ping=True)
     session_factory = sessionmaker(bind=engine, expire_on_commit=False)
-    runtime = ProductionRuntimeFactory.create(
-        escrow_id="FACTORY-PG-FLOW",
-        amount=100,
-        currency="MNT",
-        witness_id="FACTORY-PG-W-FLOW",
+    runtime = ProductionRuntimeFactory(
+        ProductionRuntimeConfig(
+            database_url=database_url,
+            escrow_id="FACTORY-PG-FLOW",
+            amount=100,
+            currency="MNT",
+            witness_id="FACTORY-PG-W-FLOW",
+        ),
         engine=engine,
-        session_factory=session_factory,
     )
 
     ledger = runtime._canonical_ledger
