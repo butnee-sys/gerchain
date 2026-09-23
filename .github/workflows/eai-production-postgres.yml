@@ -44,7 +44,7 @@ jobs:
           dsn = os.environ["GERCHAIN_DATABASE_URL"]
           engine = create_engine(dsn, pool_pre_ping=True)
           session_factory = sessionmaker(bind=engine, expire_on_commit=False)
-          runtime = ProductionRuntimeFactory(ProductionRuntimeConfig(database_url=dsn, escrow_id="eai-boot-1", amount=100, currency="USD", witness_id="witness-1"), engine=engine).build()
+          runtime = ProductionRuntimeFactory(ProductionRuntimeConfig(database_url=dsn, escrow_id="eai-boot-1", amount=100, currency="USD", witness_id="witness-1"), engine=engine).create()
           assert runtime.is_canonical_ledger_authoritative
           print("EAI_PRODUCTION_FACTORY=PASS")
           engine.dispose()
