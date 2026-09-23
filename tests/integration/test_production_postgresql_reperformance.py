@@ -36,11 +36,15 @@ def test_postgresql_production_runtime_boot_and_value_truth():
             ),
         ])
 
-    factory = ProductionRuntimeFactory(ProductionRuntimeConfig(
-        database_url=url, escrow_id="pg-escrow-1", amount=40,
-        currency="USD", witness_id="pg-w-1",
-    ), engine=engine)
-    runtime = factory.create()
+    session_factory = sessionmaker(bind=engine, expire_on_commit=False)
+    runtime = ProductionRuntimeFactory.create(
+        escrow_id="pg-escrow-1",
+        amount=40,
+        currency="USD",
+        witness_id="pg-w-1",
+        engine=engine,
+        session_factory=session_factory,
+    )
     assert runtime.is_canonical_ledger_authoritative
 
     funded = runtime.fund("pg-fund-1", "pg-alice", "T0", {"evidence": "ok"})
