@@ -34,13 +34,6 @@ def test_postgres_canonical_fund_lock_release_reconciles():
 
     with Session() as session:
         for account_id, balance in (("pg-proof-source", 200), ("pg-proof-escrow", 0), ("pg-proof-beneficiary", 0)):
-            LedgerAccountModel(
-                account_id=account_id,
-                currency="MNT",
-                balance=balance,
-                version=0,
-                updated_at=now,
-            )
             session.add(LedgerAccountModel(
                 account_id=account_id,
                 currency="MNT",
