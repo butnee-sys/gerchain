@@ -72,6 +72,10 @@ jobs:
         env:
           GERCHAIN_DATABASE_URL: postgresql+psycopg://gerchain:gerchain@localhost:5432/gerchain
         run: python -m pytest -q tests/integration/test_ea35_postgres_reperformance.py
+      - name: Run PostgreSQL refund and cancel re-performance
+        env:
+          GERCHAIN_DATABASE_URL: postgresql+psycopg://gerchain:gerchain@localhost:5432/gerchain
+        run: python -m pytest -q tests/integration/test_ea35_postgres_refund_cancel.py
       - name: Run EA-35 reconciliation tests
         run: python -m pytest -q tests/persistence/test_deep_value_reconciliation.py
       - name: Run canonical value-flow tests
