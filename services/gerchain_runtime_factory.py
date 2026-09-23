@@ -1,16 +1,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Callable
-from pathlib import Path
-from pathlib import Path
 
 from sqlalchemy import create_engine
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import sessionmaker
 
 from postgres.migrations import apply_migrations
-
 from services.gerchain_runtime import GerchainRuntime
 
 
@@ -24,25 +22,36 @@ class ProductionRuntimeConfig:
 
 
 class ProductionRuntimeFactory:
-    """Create a GerChain runtime whose authoritative value path is PostgreSQL Canonical Ledger."""
+    """Construct the production GerChain runtime with Canonical Ledger authority."""
 
-    def __init__(self, config: ProductionRuntimeConfig, *, engine: Engine | None = None) -> None:
+    def __init__(
+        self,
+        config: ProductionRuntimeConfig,
+        *,
+        engine: Engine | None = None,
+    ) -> None:
         if not config.database_url:
             raise ValueError("database_url is required")
         if not config.database_url.startswith(
             ("postgresql://", "postgresql+psycopg://", "postgresql+psycopg2://")
         ):
-            raise ValueError("ProductionRuntimeFactory requires PostgreSQL database URL")
+            raise ValueError(
+                "ProductionRuntimeFactory requires PostgreSQL database URL"
+            )
+
         self.config = config
         self.engine = engine or create_engine(config.database_url, future=True)
         if self.engine.dialect.name != "postgresql":
-            raise ValueError("ProductionRuntimeFactory requires a PostgreSQL engine")
+            raise ValueError(
+                "ProductionRuntimeFactory requires a PostgreSQL engine"
+            )
         self.session_factory: Callable[[], Any] = sessionmaker(
-            bind=self.engine, expire_on_commit=False
+            bind=self.engine,
+            expire_on_commit=False,
         )
 
     def initialize(self) -> None:
-        """Apply the versioned PostgreSQL production schema before runtime use."""
+        """Apply all versioned PostgreSQL migrations before runtime use."""
         with self.engine.connect() as connection:
             apply_migrations(
                 connection,
@@ -50,8 +59,16 @@ class ProductionRuntimeFactory:
             )
 
     def create(self) -> GerchainRuntime:
-        """Create the canonical production runtime from this configured factory."""
-        return self.build()
+        self.initialize()
+        runtime = GerchainRuntime(
+            escrow_id=self.config.escrow_id,
+            amount=self.config.amount,
+            currency=self.config.currency,
+            witness_id=self.config.witness_id,
+        )
+        runtime.configure_canonical_ledger(self.session_factory)
+        runtime.require_canonical_ledger_authority()
+        return runtime
 
     @classmethod
     def from_engine(
@@ -64,7 +81,6 @@ class ProductionRuntimeFactory:
         engine: Engine,
         session_factory: Callable[[], Any] | None = None,
     ) -> GerchainRuntime:
-        """Construct a factory from an existing PostgreSQL engine."""
         factory = cls(
             ProductionRuntimeConfig(
                 database_url=str(engine.url),
@@ -77,10 +93,9 @@ class ProductionRuntimeFactory:
         )
         if session_factory is not None:
             factory.session_factory = session_factory
-        return factory.build()
+        return factory.create()
 
+    build = create
 
 
 __all__ = ["ProductionRuntimeConfig", "ProductionRuntimeFactory"]
-
-# Backward-compatible construction alias used by existing CI smoke workflows.\nProductionRuntimeFactory.build = ProductionRuntimeFactory.create\n
