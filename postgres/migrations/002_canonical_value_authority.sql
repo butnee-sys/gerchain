@@ -2,7 +2,13 @@
 -- This migration is additive for fresh databases and deliberately fails on
 -- pre-existing escrow rows whose currency cannot be established safely.
 
-DO $$
+ALTER TABLE escrows
+    ADD COLUMN IF NOT EXISTS refund_destination TEXT,
+    ADD COLUMN IF NOT EXISTS currency TEXT,
+    ADD COLUMN IF NOT EXISTS version BIGINT NOT NULL DEFAULT 0,
+    ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT now();
+
+DO $
 BEGIN
     IF EXISTS (
         SELECT 1 FROM escrows
@@ -10,16 +16,7 @@ BEGIN
     ) THEN
         RAISE EXCEPTION 'canonical migration requires escrow currency backfill before authority cutover';
     END IF;
-EXCEPTION
-    WHEN undefined_column THEN
-        NULL;
-END $$;
-
-ALTER TABLE escrows
-    ADD COLUMN IF NOT EXISTS refund_destination TEXT,
-    ADD COLUMN IF NOT EXISTS currency TEXT,
-    ADD COLUMN IF NOT EXISTS version BIGINT NOT NULL DEFAULT 0,
-    ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT now();
+END $;
 
 UPDATE escrows
 SET refund_destination = sender_address
