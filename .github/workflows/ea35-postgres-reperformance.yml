@@ -85,3 +85,4 @@ jobs:
 # EA-35.13 verification trigger
 # forced verification run
 # production-entrypoint-canonical-factory verification
+# EA-35.13 canonical factory + migration proof
