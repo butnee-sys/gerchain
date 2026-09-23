@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from typing import Any, Callable
+from pathlib import Path
 
 from sqlalchemy import create_engine
 from sqlalchemy.engine import Engine
@@ -42,22 +43,12 @@ class ProductionRuntimeFactory:
         )
 
     def initialize(self) -> None:
-        """Apply the repository's versioned PostgreSQL production schema."""
-        migration_dir = Path(__file__).resolve().parents[1] / "postgres" / "migrations"
+        """Apply versioned PostgreSQL migrations before production boot."""
         with self.engine.connect() as conn:
-            apply_migrations(conn, migration_dir)
-
-    def build(self) -> GerchainRuntime:
-        self.initialize()
-        runtime = GerchainRuntime(
-            escrow_id=self.config.escrow_id,
-            amount=self.config.amount,
-            currency=self.config.currency,
-            witness_id=self.config.witness_id,
-        )
-        runtime.configure_canonical_ledger(self.session_factory)
-        runtime.require_canonical_ledger_authority()
-        return runtime
+            apply_migrations(
+                conn,
+                Path(__file__).resolve().parents[1] / "postgres" / "migrations",
+            )
 
     def create(self) -> GerchainRuntime:
         """Create the canonical production runtime from this configured factory."""
