@@ -139,3 +139,5 @@ def test_production_factory_boots_against_postgresql():
         assert report.matched, report.issues
 
     engine.dispose()
+
+# PostgreSQL production verification gate: exercised in CI with a real PostgreSQL service.
