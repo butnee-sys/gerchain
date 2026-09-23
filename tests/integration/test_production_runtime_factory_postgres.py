@@ -46,9 +46,9 @@ def test_production_runtime_factory_boots_against_postgresql():
         "gerchain_ledger_accounts",
         "gerchain_ledger_movements",
         "escrows",
-        "transaction_witness",
-        "outbox_events",
-        "durable_idempotency",
+        "gerchain_transaction_witnesses",
+        "gerchain_outbox_events",
+        "gerchain_idempotency_records",
     }
     assert required <= tables
 
