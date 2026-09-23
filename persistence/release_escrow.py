@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from persistence.atomic_ledger import PostgreSQLAtomicLedger
 from persistence.atomic_value_transaction import AtomicValueTransaction
 from persistence.durable_idempotency import get_existing_in_transaction
-from persistence.escrow_aggregate import EscrowState
+from persistence.escrow_aggregate import EscrowState, get_escrow
 
 
 def release_escrow_in_transaction(
@@ -41,6 +41,16 @@ def release_escrow_in_transaction(
         raise ValueError("release requires AUTHORIZED status")
     if not all((trust, transparency, performance, evidence_verified)):
         raise ValueError("release requires complete trust evidence")
+
+    escrow = get_escrow(session, escrow_id, for_update=True)
+    if escrow.state != EscrowState.LOCKED.value:
+        raise ValueError(f"escrow {escrow_id} must be LOCKED")
+    if escrow.receiver_address != beneficiary:
+        raise ValueError("release beneficiary must match authoritative escrow beneficiary")
+    if int(escrow.amount) != int(amount):
+        raise ValueError("release amount must match authoritative escrow amount")
+    if escrow.currency and escrow.currency != currency:
+        raise ValueError("release currency must match authoritative escrow currency")
 
     idempotency_payload = {
         "escrow_id": escrow_id,
