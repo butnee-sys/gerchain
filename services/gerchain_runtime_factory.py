@@ -9,10 +9,7 @@ from sqlalchemy.engine import Engine
 from sqlalchemy.orm import sessionmaker
 
 from postgres.migrations import apply_migrations
-
-from postgres.migrations import apply_migrations
 from services.gerchain_runtime import GerchainRuntime
-from postgres.migrations import apply_migrations
 
 
 @dataclass(frozen=True)
