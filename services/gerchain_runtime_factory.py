@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+
+from postgres.migrations import apply_migrations
 from typing import Any, Callable
 
 from postgres.migrations import apply_migrations
