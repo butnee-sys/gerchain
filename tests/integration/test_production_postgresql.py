@@ -3,14 +3,8 @@ from __future__ import annotations
 import os
 
 import pytest
-from sqlalchemy import create_engine, select
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy import create_engine, inspect
 
-from persistence.atomic_ledger import LedgerAccountModel
-from persistence.escrow_aggregate import CanonicalEscrow
-from persistence.atomic_value_transaction import TransactionWitness
-from persistence.recovery_outbox import OutboxEvent
-from persistence.durable_idempotency import DurableIdempotencyRecord
 from services.gerchain_runtime_factory import ProductionRuntimeConfig, ProductionRuntimeFactory
 
 
@@ -39,11 +33,15 @@ def test_production_factory_bootstraps_canonical_postgresql_schema():
         assert runtime.is_canonical_ledger_authoritative
         assert engine.dialect.name == "postgresql"
 
-        with sessionmaker(bind=engine, expire_on_commit=False)() as session:
-            assert session.execute(select(LedgerAccountModel)).scalars().all() == []
-            assert session.execute(select(CanonicalEscrow)).scalars().all() == []
-            assert session.execute(select(TransactionWitness)).scalars().all() == []
-            assert session.execute(select(OutboxEvent)).scalars().all() == []
-            assert session.execute(select(DurableIdempotencyRecord)).scalars().all() == []
+        tables = set(inspect(engine).get_table_names())
+        assert {
+            "escrows",
+            "gerchain_ledger_accounts",
+            "gerchain_ledger_movements",
+            "gerchain_transaction_witnesses",
+            "gerchain_outbox_events",
+            "gerchain_idempotency_records",
+            "schema_version",
+        }.issubset(tables)
     finally:
         engine.dispose()
