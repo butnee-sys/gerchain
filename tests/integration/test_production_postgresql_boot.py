@@ -9,6 +9,13 @@ from sqlalchemy.orm import sessionmaker
 from persistence.atomic_ledger import LedgerAccountModel
 from persistence.escrow_aggregate import CanonicalEscrow, EscrowState
 from services.gerchain_runtime_factory import ProductionRuntimeConfig, ProductionRuntimeFactory
+from persistence.fund_escrow import fund_escrow_in_transaction
+from persistence.lock_escrow import lock_escrow_in_transaction
+from persistence.release_escrow import release_escrow_in_transaction
+from persistence.deep_value_reconciliation import deep_reconcile_value_truth
+from persistence.atomic_value_transaction import TransactionWitness
+from persistence.recovery_outbox import OutboxEvent
+from persistence.durable_idempotency import DurableIdempotencyRecord
 
 
 def test_production_factory_boots_against_postgresql():
@@ -50,6 +57,13 @@ def test_production_factory_boots_against_postgresql():
                     version=0,
                     updated_at=now,
                 ),
+                LedgerAccountModel(
+                    account_id="PG-DST",
+                    currency="MNT",
+                    balance=0,
+                    version=0,
+                    updated_at=now,
+                ),
             ]
         )
         session.add(
@@ -68,5 +82,60 @@ def test_production_factory_boots_against_postgresql():
             )
         )
         session.commit()
+
+    with Session() as session:
+        fund_escrow_in_transaction(
+            session,
+            transaction_id="pg-fund-1",
+            escrow_id="pg-boot-escrow",
+            source="PG-SRC",
+            amount=100,
+            currency="MNT",
+        )
+        session.commit()
+
+    with Session() as session:
+        lock_escrow_in_transaction(
+            session,
+            transaction_id="pg-lock-1",
+            escrow_id="pg-boot-escrow",
+        )
+        session.commit()
+
+    with Session() as session:
+        release_escrow_in_transaction(
+            session,
+            transaction_id="pg-release-1",
+            escrow_id="pg-boot-escrow",
+            beneficiary="PG-DST",
+            amount=100,
+            currency="MNT",
+            decision_status="APPROVE",
+            authorization_status="AUTHORIZED",
+            trust=True,
+            transparency=True,
+            performance=True,
+            evidence_verified=True,
+        )
+        session.commit()
+
+    with Session() as session:
+        src = session.execute(
+            select(LedgerAccountModel).where(LedgerAccountModel.account_id == "PG-SRC")
+        ).scalar_one()
+        dst = session.execute(
+            select(LedgerAccountModel).where(LedgerAccountModel.account_id == "PG-DST")
+        ).scalar_one()
+        escrow = session.execute(
+            select(CanonicalEscrow).where(CanonicalEscrow.id == "pg-boot-escrow")
+        ).scalar_one()
+        assert src.balance == 900
+        assert dst.balance == 100
+        assert escrow.state == EscrowState.RELEASED.value
+        assert session.execute(select(TransactionWitness)).scalars().all()
+        assert session.execute(select(OutboxEvent)).scalars().all()
+        assert session.execute(select(DurableIdempotencyRecord)).scalars().all()
+        report = deep_reconcile_value_truth(session)
+        assert report.matched, report.issues
 
     engine.dispose()
