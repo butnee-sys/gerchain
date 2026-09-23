@@ -61,7 +61,7 @@ def test_production_factory_executes_canonical_ledger_value_flow_on_real_postgre
         ledger.create_account_in_transaction(session, "PG-DEST", "MNT", 0)
         session.commit()
 
-    with factory.session_factory() as session:
+    with session_factory() as session:
         first = ledger.transfer_in_transaction(
             session,
             transaction_id="PG-FLOW-1",
