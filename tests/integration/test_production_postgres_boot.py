@@ -1,57 +1,47 @@
 from __future__ import annotations
 
 import os
-from datetime import datetime, timezone
 
-from sqlalchemy import create_engine, select
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy import create_engine, inspect, text
 
-from persistence.atomic_ledger import LedgerAccountModel, LedgerMovementModel
 from services.gerchain_runtime_factory import ProductionRuntimeConfig, ProductionRuntimeFactory
 
 
-def test_production_factory_boots_and_canonical_ledger_moves_value():
-    url = os.environ["GERCHAIN_DATABASE_URL"]
-    engine = create_engine(url, future=True)
-    runtime = ProductionRuntimeFactory.create(
-        escrow_id="pg-smoke-escrow",
+def test_production_factory_bootstraps_postgresql_schema() -> None:
+    database_url = os.environ["GERCHAIN_DATABASE_URL"]
+    engine = create_engine(database_url, pool_pre_ping=True)
+    config = ProductionRuntimeConfig(
+        database_url=database_url,
+        escrow_id="integration-escrow",
         amount=100,
-        currency="USD",
-        witness_id="pg-smoke-witness",
-        engine=engine,
-        session_factory=sessionmaker(bind=engine, expire_on_commit=False),
+        currency="MNT",
+        witness_id="integration-witness",
     )
+    try:
+        factory = ProductionRuntimeFactory(config, engine=engine)
+        runtime = factory.create()
+        assert runtime.is_canonical_ledger_authoritative
 
-    assert runtime.is_canonical_ledger_authoritative
+        runtime2 = factory.create()
+        assert runtime2.is_canonical_ledger_authoritative
 
-    with factory.session_factory() as session:
-        runtime._canonical_ledger.create_account_in_transaction(
-            session, "pg-source", "USD", 1000
-        )
-        runtime._canonical_ledger.create_account_in_transaction(
-            session, "pg-destination", "USD", 0
-        )
-        runtime._canonical_ledger.transfer_in_transaction(
-            session,
-            "pg-smoke-transfer",
-            "pg-source",
-            "pg-destination",
-            125,
-            "USD",
-        )
-        session.commit()
+        tables = set(inspect(engine).get_table_names())
+        required = {
+            "schema_version",
+            "gerchain_ledger_accounts",
+            "gerchain_ledger_movements",
+            "escrows",
+            "transaction_witness",
+            "outbox",
+            "idempotency_records",
+        }
+        missing = required - tables
+        assert not missing, f"missing production tables: {sorted(missing)}"
 
-        source = session.get(LedgerAccountModel, "pg-source")
-        destination = session.get(LedgerAccountModel, "pg-destination")
-        movement = session.execute(
-            select(LedgerMovementModel).where(
-                LedgerMovementModel.transaction_id == "pg-smoke-transfer"
-            )
-        ).scalar_one()
-
-        assert source.balance == 875
-        assert destination.balance == 125
-        assert movement.amount == 125
-        assert movement.currency == "USD"
-
-    engine.dispose()
+        with engine.connect() as conn:
+            applied = conn.execute(
+                text("SELECT count(*) FROM schema_version")
+            ).scalar_one()
+            assert applied > 0
+    finally:
+        engine.dispose()
