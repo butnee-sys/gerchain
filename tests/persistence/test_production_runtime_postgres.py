@@ -18,14 +18,16 @@ def test_production_postgresql_boot_and_value_truth():
     engine = create_engine(dsn, pool_pre_ping=True)
     session_factory = sessionmaker(bind=engine, expire_on_commit=False)
 
-    runtime = ProductionRuntimeFactory.create(
-        escrow_id="prod-esc-1",
-        amount=100,
-        currency="MNT",
-        witness_id="prod-witness-1",
+    runtime = ProductionRuntimeFactory(
+        ProductionRuntimeConfig(
+            database_url=dsn,
+            escrow_id="prod-esc-1",
+            amount=100,
+            currency="MNT",
+            witness_id="prod-witness-1",
+        ),
         engine=engine,
-        session_factory=session_factory,
-    )
+    ).create()
     assert runtime.is_canonical_ledger_authoritative
     assert runtime.runtime_mode == "production-postgresql"
 
