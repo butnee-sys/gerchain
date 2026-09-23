@@ -33,4 +33,4 @@ jobs:
       - name: Install runtime dependencies
         run: python -m pip install --upgrade pip && pip install -r requirements-dee-security.txt pytest
       - name: Run EA-35 deep reconciliation against PostgreSQL
-        run: pytest -q tests/persistence/test_deep_value_reconciliation.py
+        run: pytest -q tests/persistence/test_deep_value_reconciliation.py tests/services/test_production_runtime_factory_postgres.py
