@@ -29,7 +29,7 @@ def test_postgresql_eai_refund_cancel_and_settlement_paths():
             currency="USD",
             witness_id="eai-matrix-witness",
         )
-        runtime = ProductionRuntimeFactory(config, engine=engine).create()
+        runtime = ProductionRuntimeFactory(config, engine=engine).build()
         assert runtime.is_canonical_ledger_authoritative
         now = datetime.now(timezone.utc)
 
