@@ -1,17 +1,18 @@
--- Canonical production value-authority schema.
--- Non-destructive migration from the legacy escrow/outbox schema.
--- One authoritative Ledger, one durable Escrow aggregate, one witness evidence table,
--- one transactional outbox and one durable idempotency boundary.
-
+-- Canonical production persistence for EAI / value-flow authority.
 ALTER TABLE escrows
     ADD COLUMN IF NOT EXISTS refund_destination TEXT,
-    ADD COLUMN IF NOT EXISTS currency VARCHAR(16),
+    ADD COLUMN IF NOT EXISTS currency TEXT,
     ADD COLUMN IF NOT EXISTS version BIGINT NOT NULL DEFAULT 0,
-    ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT now();
+    ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ;
+
+UPDATE escrows
+SET created_at = COALESCE(created_at, updated_at, now())
+WHERE created_at IS NULL;
 
 ALTER TABLE escrows
-    DROP CONSTRAINT IF EXISTS escrows_state_check;
+    ALTER COLUMN created_at SET NOT NULL;
 
+ALTER TABLE escrows DROP CONSTRAINT IF EXISTS escrows_state_check;
 ALTER TABLE escrows
     ADD CONSTRAINT escrows_state_check
     CHECK (state IN ('CREATED', 'FUNDED', 'LOCKED', 'RELEASED', 'REFUNDED', 'CANCELLED'));
@@ -21,7 +22,7 @@ CREATE TABLE IF NOT EXISTS gerchain_ledger_accounts (
     currency VARCHAR(16) NOT NULL,
     balance INTEGER NOT NULL DEFAULT 0,
     version INTEGER NOT NULL DEFAULT 0,
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    updated_at TIMESTAMPTZ NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS gerchain_ledger_movements (
@@ -29,12 +30,12 @@ CREATE TABLE IF NOT EXISTS gerchain_ledger_movements (
     transaction_id VARCHAR(128) NOT NULL UNIQUE,
     source VARCHAR(128) NOT NULL,
     destination VARCHAR(128) NOT NULL,
-    amount INTEGER NOT NULL CHECK (amount > 0),
+    amount INTEGER NOT NULL,
     currency VARCHAR(16) NOT NULL,
-    operation VARCHAR(32) NOT NULL,
+    operation VARCHAR(32) NOT NULL DEFAULT 'TRANSFER',
     escrow_id VARCHAR(128),
     integrity_hash VARCHAR(128),
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    created_at TIMESTAMPTZ NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS gerchain_transaction_witnesses (
@@ -43,7 +44,7 @@ CREATE TABLE IF NOT EXISTS gerchain_transaction_witnesses (
     event_type VARCHAR(64) NOT NULL,
     escrow_id VARCHAR(255) NOT NULL,
     amount INTEGER NOT NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    created_at TIMESTAMPTZ NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS gerchain_outbox_events (
@@ -55,12 +56,9 @@ CREATE TABLE IF NOT EXISTS gerchain_outbox_events (
     state VARCHAR(32) NOT NULL DEFAULT 'PENDING',
     lease_until TIMESTAMPTZ,
     attempts INTEGER NOT NULL DEFAULT 0,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    created_at TIMESTAMPTZ NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL
 );
-
-CREATE INDEX IF NOT EXISTS ix_gerchain_outbox_claim
-    ON gerchain_outbox_events (state, lease_until, id);
 
 CREATE TABLE IF NOT EXISTS gerchain_idempotency_records (
     id SERIAL PRIMARY KEY,
@@ -68,6 +66,15 @@ CREATE TABLE IF NOT EXISTS gerchain_idempotency_records (
     fingerprint VARCHAR(64) NOT NULL,
     result_json TEXT,
     state VARCHAR(32) NOT NULL DEFAULT 'COMPLETED',
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    created_at TIMESTAMPTZ NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL
 );
+
+CREATE INDEX IF NOT EXISTS ix_gerchain_ledger_movements_escrow
+    ON gerchain_ledger_movements (escrow_id);
+CREATE INDEX IF NOT EXISTS ix_gerchain_witness_escrow
+    ON gerchain_transaction_witnesses (escrow_id);
+CREATE INDEX IF NOT EXISTS ix_gerchain_outbox_aggregate
+    ON gerchain_outbox_events (aggregate_id);
+CREATE INDEX IF NOT EXISTS ix_gerchain_idempotency_state
+    ON gerchain_idempotency_records (state);
