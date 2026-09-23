@@ -4,6 +4,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from pathlib import Path
 from typing import Any, Callable
+from pathlib import Path
+
+from postgres.migrations import apply_migrations
 
 from sqlalchemy import create_engine
 from sqlalchemy.engine import Engine
@@ -38,12 +41,10 @@ class ProductionRuntimeFactory:
         self.session_factory: Callable[[], Any] = sessionmaker(bind=self.engine, expire_on_commit=False)
 
     def initialize(self) -> None:
-        """Apply versioned canonical production migrations atomically."""
-        with self.engine.connect() as conn:
-            apply_migrations(
-                conn,
-                Path(__file__).resolve().parents[1] / "postgres" / "schema",
-            )
+        """Apply the repository's versioned PostgreSQL production schema."""
+        migration_dir = Path(__file__).resolve().parents[1] / "postgres" / "schema"
+        with self.engine.begin() as conn:
+            apply_migrations(conn, migration_dir)
 
     def create(self) -> GerchainRuntime:
         self.initialize()
