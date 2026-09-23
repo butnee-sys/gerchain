@@ -65,6 +65,9 @@ CREATE TABLE IF NOT EXISTS gerchain_outbox_events (
     updated_at TIMESTAMPTZ NOT NULL
 );
 
+CREATE INDEX IF NOT EXISTS ix_gerchain_outbox_claim
+    ON gerchain_outbox_events (state, lease_until, id);
+
 CREATE TABLE IF NOT EXISTS gerchain_idempotency_records (
     id BIGSERIAL PRIMARY KEY,
     key VARCHAR(255) NOT NULL UNIQUE,
