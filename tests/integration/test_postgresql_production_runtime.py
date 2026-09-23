@@ -5,7 +5,8 @@ import json
 import os
 from datetime import datetime, timezone
 
-from sqlalchemy import select
+from sqlalchemy import create_engine, select
+from sqlalchemy.orm import sessionmaker
 
 from persistence.atomic_ledger import LedgerAccountModel, LedgerMovementModel
 from persistence.atomic_value_transaction import TransactionWitness
@@ -37,15 +38,17 @@ def _hash(tx, operation, escrow_id, source, destination, amount, currency):
 def test_production_factory_boots_against_real_postgresql():
     url = os.environ["GERCHAIN_DATABASE_URL"]
     engine = create_engine(url, pool_pre_ping=True)
-    session_factory = __import__("sqlalchemy").orm.sessionmaker(bind=engine, expire_on_commit=False)
-    runtime = ProductionRuntimeFactory.create(
-        escrow_id="pg-escrow-1",
-        amount=10,
-        currency="USD",
-        witness_id="pg-witness-1",
+    session_factory = sessionmaker(bind=engine, expire_on_commit=False)
+    runtime = ProductionRuntimeFactory(
+        ProductionRuntimeConfig(
+            database_url=url,
+            escrow_id="pg-escrow-1",
+            amount=10,
+            currency="USD",
+            witness_id="pg-witness-1",
+        ),
         engine=engine,
-        session_factory=session_factory,
-    )
+    ).create()
     assert runtime.is_canonical_ledger_authoritative
     assert runtime.runtime_mode == "production-postgresql"
 
@@ -54,14 +57,16 @@ def test_postgresql_deep_value_truth_reconciliation():
     url = os.environ["GERCHAIN_DATABASE_URL"]
     engine = create_engine(url, pool_pre_ping=True)
     session_factory = __import__("sqlalchemy").orm.sessionmaker(bind=engine, expire_on_commit=False)
-    ProductionRuntimeFactory.create(
-        escrow_id="pg-escrow-2",
-        amount=10,
-        currency="USD",
-        witness_id="pg-witness-2",
+    ProductionRuntimeFactory(
+        ProductionRuntimeConfig(
+            database_url=url,
+            escrow_id="pg-escrow-2",
+            amount=10,
+            currency="USD",
+            witness_id="pg-witness-2",
+        ),
         engine=engine,
-        session_factory=session_factory,
-    )
+    ).create()
     now = datetime.now(timezone.utc)
     tx = "pg-release-1"
     escrow_id = "pg-escrow-2"
