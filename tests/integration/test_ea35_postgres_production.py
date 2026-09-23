@@ -26,7 +26,7 @@ def test_production_postgres_fund_lock_release_reconciles():
             witness_id="pg-ea35-witness",
         ),
         engine=engine,
-    ).create()
+    ).build()
     assert runtime.is_canonical_ledger_authoritative
     assert runtime.runtime_mode == "production-postgresql"
     with factory() as session:
