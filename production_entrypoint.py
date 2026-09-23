@@ -5,8 +5,6 @@ import signal
 import time
 
 from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-
 from services.gerchain_runtime_factory import ProductionRuntimeFactory
 
 
