@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass\nfrom pathlib import Path
 from pathlib import Path
 from pathlib import Path
 from pathlib import Path
@@ -14,7 +14,7 @@ from sqlalchemy.orm import sessionmaker
 
 from postgres.migrations import apply_migrations
 
-from services.gerchain_runtime import GerchainRuntime
+from services.gerchain_runtime import GerchainRuntime\nfrom postgres.migrations import apply_migrations
 
 
 @dataclass(frozen=True)
