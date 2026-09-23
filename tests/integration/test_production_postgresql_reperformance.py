@@ -19,8 +19,18 @@ def test_postgresql_production_runtime_boot_and_value_truth():
     url = os.environ["GERCHAIN_DATABASE_URL"]
     engine = create_engine(url, pool_pre_ping=True)
     sf = sessionmaker(bind=engine, expire_on_commit=False)
-    for base in (AtomicLedgerBase, EscrowBase, WitnessBase, IdempotencyBase, OutboxBase):
-        base.metadata.create_all(engine)
+    factory = ProductionRuntimeFactory(
+        ProductionRuntimeConfig(
+            database_url=url,
+            escrow_id="pg-escrow-1",
+            amount=40,
+            currency="USD",
+            witness_id="pg-w-1",
+        ),
+        engine=engine,
+    )
+    runtime = factory.create()
+    assert runtime.is_canonical_ledger_authoritative
 
     now = datetime.now(timezone.utc)
     with sf.begin() as session:
@@ -35,20 +45,6 @@ def test_postgresql_production_runtime_boot_and_value_truth():
                 created_at=now, updated_at=now,
             ),
         ])
-
-    session_factory = sessionmaker(bind=engine, expire_on_commit=False)
-    factory = ProductionRuntimeFactory(
-        ProductionRuntimeConfig(
-            database_url=url,
-            escrow_id="pg-escrow-1",
-            amount=40,
-            currency="USD",
-            witness_id="pg-w-1",
-        ),
-        engine=engine,
-    )
-    runtime = factory.create()
-    assert runtime.is_canonical_ledger_authoritative
 
     funded = runtime.fund("pg-fund-1", "pg-alice", "T0", {"evidence": "ok"})
     assert funded["replayed"] is False
