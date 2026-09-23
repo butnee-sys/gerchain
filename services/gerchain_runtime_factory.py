@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from pathlib import Path
 
 from typing import Any, Callable
 
@@ -10,8 +9,6 @@ from postgres.migrations import apply_migrations
 from sqlalchemy import create_engine
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import sessionmaker
-
-from postgres.migrations import apply_migrations
 
 from services.gerchain_runtime import GerchainRuntime
 
@@ -49,7 +46,7 @@ class ProductionRuntimeFactory:
         with self.engine.connect() as conn:
             apply_migrations(conn, migration_dir)
 
-    def create(self) -> GerchainRuntime:
+    def build(self) -> GerchainRuntime:
         self.initialize()
         runtime = GerchainRuntime(
             escrow_id=self.config.escrow_id,
@@ -60,6 +57,34 @@ class ProductionRuntimeFactory:
         runtime.configure_canonical_ledger(self.session_factory)
         runtime.require_canonical_ledger_authority()
         return runtime
+
+    @classmethod
+    def create(
+        cls,
+        *,
+        escrow_id: str,
+        amount: int,
+        currency: str,
+        witness_id: str,
+        engine: Engine | None = None,
+        session_factory: Callable[[], Any] | None = None,
+    ) -> GerchainRuntime:
+        """Backward-compatible construction entry point used by integration tests."""
+        if engine is None:
+            raise ValueError("engine is required")
+        factory = cls(
+            ProductionRuntimeConfig(
+                database_url=str(engine.url),
+                escrow_id=escrow_id,
+                amount=amount,
+                currency=currency,
+                witness_id=witness_id,
+            ),
+            engine=engine,
+        )
+        if session_factory is not None:
+            factory.session_factory = session_factory
+        return factory.build()
 
 
 __all__ = ["ProductionRuntimeConfig", "ProductionRuntimeFactory"]
