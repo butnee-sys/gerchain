@@ -29,9 +29,7 @@ def refund_escrow_in_transaction(
     from persistence.escrow_aggregate import CanonicalEscrow
 
     escrow = session.execute(
-        select(CanonicalEscrow)
-        .where(CanonicalEscrow.id == escrow_id)
-        .with_for_update()
+        select(CanonicalEscrow).where(CanonicalEscrow.id == escrow_id)
     ).scalar_one()
 
     if escrow.currency != currency:
@@ -52,6 +50,13 @@ def refund_escrow_in_transaction(
         **dict(payload or {}),
     }
 
+    replay = get_existing_in_transaction(session, key=transaction_id, payload=idempotency_payload)
+    if replay is not None:
+        return {"replayed": True, "result": replay}
+
+    escrow = session.execute(
+        select(CanonicalEscrow).where(CanonicalEscrow.id == escrow_id).with_for_update()
+    ).scalar_one()
     result = AtomicValueTransaction(session).transfer_and_transition(
         transaction_id=transaction_id,
         escrow_id=escrow_id,
