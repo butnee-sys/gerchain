@@ -3,7 +3,6 @@
 -- an existing table, so production schema must be migrated before cutover.
 -- Apply in a maintenance transaction after a pre-migration snapshot.
 
-BEGIN;
 
 -- Canonical escrow aggregate: extend the legacy escrows table without changing
 -- existing rows' value. State validation is replaced with the full lifecycle.
@@ -73,4 +72,3 @@ CREATE TABLE IF NOT EXISTS gerchain_idempotency_records (
     updated_at TIMESTAMPTZ NOT NULL
 );
 
-COMMIT;
