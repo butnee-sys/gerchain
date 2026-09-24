@@ -17,6 +17,8 @@ def checksum(sql: str) -> str:
 
 def _transaction(conn):
     """Support both SQLAlchemy and native psycopg connections."""
+    if hasattr(conn, "in_transaction"):
+        return nullcontext() if conn.in_transaction() else conn.begin()
     if hasattr(conn, "begin"):
         return conn.begin()
     if hasattr(conn, "transaction"):
