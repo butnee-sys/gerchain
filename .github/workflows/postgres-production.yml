@@ -53,4 +53,4 @@ jobs:
           print("CANONICAL_LEDGER_AUTHORITY=TRUE")
           PY
       - name: Run persistence and reconciliation tests
-        run: pytest -q tests/persistence/test_deep_value_reconciliation.py tests/persistence/test_atomic_ledger_transaction_boundary.py tests/integration/test_postgres_canonical_value_truth.py
+        run: pytest --import-mode=importlib -q tests/persistence/test_deep_value_reconciliation.py tests/persistence/test_atomic_ledger_transaction_boundary.py tests/integration/test_postgres_canonical_value_truth.py
