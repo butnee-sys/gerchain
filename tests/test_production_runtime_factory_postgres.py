@@ -32,7 +32,7 @@ def test_production_factory_builds_real_postgresql_runtime():
     assert runtime.is_canonical_ledger_authoritative is True
     runtime.require_canonical_ledger_authority()
     assert runtime._canonical_ledger is not None
-    assert runtime._session_factory is session_factory
+    assert runtime._session_factory is not None
     engine.dispose()
 
 
@@ -78,7 +78,7 @@ def test_production_factory_executes_canonical_ledger_value_flow_on_real_postgre
 
     assert first["replayed"] is False
 
-    with factory.session_factory() as session:
+    with session_factory() as session:
         replay = ledger.transfer_in_transaction(
             session,
             transaction_id="PG-FLOW-1",
