@@ -158,6 +158,35 @@ class GerchainRuntime:
         self.require_canonical_ledger_authority()
         return CanonicalLedgerRead(self._session_factory())
 
+    def create_escrow(
+        self,
+        *,
+        escrow_id: str,
+        source: str,
+        beneficiary: str,
+        refund_destination: str,
+        amount: int,
+        currency: str,
+        condition: str | None = None,
+    ) -> dict[str, Any]:
+        if not self.is_canonical_ledger_authoritative:
+            raise RuntimeError("production escrow creation requires Canonical Ledger authority")
+        from persistence.create_escrow import create_escrow_in_transaction
+
+        with self._session_factory() as session:
+            result = create_escrow_in_transaction(
+                session,
+                escrow_id=escrow_id,
+                source=source,
+                beneficiary=beneficiary,
+                refund_destination=refund_destination,
+                amount=amount,
+                currency=currency,
+                condition=condition,
+            )
+            session.commit()
+            return result
+
     def create_transaction(self, transaction_id: str) -> TransactionStateMachine:
         if not transaction_id:
             raise ValueError("transaction_id is required")
