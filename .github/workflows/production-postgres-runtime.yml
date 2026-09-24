@@ -37,4 +37,4 @@ jobs:
       - name: Verify production runtime and migrations
         env:
           GERCHAIN_POSTGRES_DSN: postgresql://gerchain:gerchain@127.0.0.1:5432/gerchain_test
-        run: python -m pytest -q tests/integration/test_production_runtime_factory_postgres.py
+        run: python -m pytest -q tests/integration/test_ea35_postgres_production.py
