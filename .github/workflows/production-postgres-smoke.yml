@@ -36,7 +36,11 @@ jobs:
           python-version: "3.13"
       - name: Install dependencies
         run: pip install -r requirements-dee-security.txt
-      - name: Verify production factory
+      - name: Run production PostgreSQL smoke test
+        env:
+          GERCHAIN_POSTGRES_DSN: ${{ env.GERCHAIN_DATABASE_URL }}
+        run: python -m pytest -q tests/production/test_production_runtime_postgres_smoke.py
+      - name: Verify production entrypoint boot
         run: |
           python - <<'PY'
           import os
