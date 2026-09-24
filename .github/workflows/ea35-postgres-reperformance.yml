@@ -83,7 +83,5 @@ jobs:
           python -m pytest -q             tests/services/test_gerchain_runtime_refund_canonical.py             tests/services/test_gerchain_runtime_cancel_canonical.py             tests/services/test_gerchain_runtime_settlement_canonical.py             tests/services/test_gerchain_runtime_canonical_ledger.py
 
 # EA-35.13 verification trigger
-# forced verification run
-# trigger: canonical runtime factory correction
-# production-entrypoint-canonical-factory verification
-# EA-35.13 canonical factory + migration proof
+# canonical runtime factory + production entrypoint correction verified in source
+# push-triggered PostgreSQL re-performance gate
