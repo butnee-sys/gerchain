@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from typing import Any, Mapping
 
 from sqlalchemy.orm import Session
@@ -74,45 +73,11 @@ def cancel_escrow_in_transaction(
 
     if state == EscrowState.CREATED:
         replay = begin_in_transaction(
-            session,
-            key=transaction_id,
-            payload=idempotency_payload,
+            session, key=transaction_id, payload=idempotency_payload
         )
         if replay is not None:
             return {"replayed": True, "result": replay}
-        transition_escrow(
-            session, escrow_id, EscrowState.CREATED, EscrowState.CANCELLED
-        )
-        result = {
-            "status": "CANCELLED",
-            "value_movement": False,
-            "amount": 0,
-        }
-    else:
-        result = AtomicValueTransaction(session).transfer_and_transition(
-            transaction_id=transaction_id,
-            escrow_id=escrow_id,
-            source=escrow_id,
-            destination=destination,
-            amount=amount,
-            currency=escrow.currency,
-            expected_state=EscrowState.FUNDED,
-            new_state=EscrowState.CANCELLED,
-            ledger_transfer=ledger_transfer,
-            event_type="GERCHAIN_CANCELLED",
-            idempotency_payload=idempotency_payload,
-            payload={
-                "transaction_id": transaction_id,
-                "escrow_id": escrow_id,
-                "source": escrow_id,
-                "destination": destination,
-                "amount": amount,
-                "currency": escrow.currency,
-                **dict(payload or {}),
-            },
-        )
-
-    if state == EscrowState.CREATED:
+        if state == EscrowState.CREATED:
         complete_in_transaction(
             session,
             key=transaction_id,
