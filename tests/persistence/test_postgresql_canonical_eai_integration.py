@@ -12,9 +12,8 @@ from persistence.durable_idempotency import IdempotencyBase, DurableIdempotencyR
 from persistence.escrow_aggregate import CanonicalEscrow, EscrowBase, EscrowState
 from persistence.fund_escrow import fund_escrow_in_transaction
 from persistence.lock_escrow import lock_escrow_in_transaction
-from persistence.outbox import OutboxBase
 from persistence.release_escrow import release_escrow_in_transaction
-from persistence.recovery_outbox import OutboxEvent
+from persistence.recovery_outbox import OutboxBase, OutboxEvent
 from persistence.deep_value_reconciliation import deep_reconcile_value_truth
 
 
