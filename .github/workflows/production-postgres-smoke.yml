@@ -35,7 +35,7 @@ jobs:
         with:
           python-version: "3.13"
       - name: Install dependencies
-        run: pip install -r requirements-dee-security.txt
+        run: pip install -r requirements-dee-security.txt -r postgres/requirements-test.txt
       - name: Run production PostgreSQL smoke test
         env:
           GERCHAIN_POSTGRES_DSN: ${{ env.GERCHAIN_DATABASE_URL }}
