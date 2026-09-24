@@ -49,5 +49,9 @@ jobs:
           print("EAI_PRODUCTION_FACTORY=PASS")
           engine.dispose()
           PY
+      - name: Run real PostgreSQL canonical lifecycle proof
+        env:
+          GERCHAIN_DATABASE_URL: postgresql+psycopg://gerchain:gerchain@127.0.0.1:5432/gerchain_test
+        run: python -m pytest -q tests/persistence/test_postgresql_canonical_eai_integration.py
       - name: Run deep value-truth reconciliation tests
         run: python -m pytest -q tests/persistence/test_deep_value_reconciliation.py
