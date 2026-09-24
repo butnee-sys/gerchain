@@ -57,7 +57,7 @@ class ProductionRuntimeFactory:
     def initialize(self) -> None:
         """Apply versioned canonical PostgreSQL migrations before boot."""
         migration_dir = Path(__file__).resolve().parents[1] / "postgres" / "schema"
-        with self.engine.begin() as connection:
+        with self.engine.connect() as connection:
             apply_migrations(connection, migration_dir)
 
     def create(self) -> GerchainRuntime:
