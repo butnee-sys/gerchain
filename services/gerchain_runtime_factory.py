@@ -51,29 +51,13 @@ class ProductionRuntimeFactory:
         )
 
     def initialize(self) -> None:
-        """Apply versioned canonical PostgreSQL migrations before boot."""
-        migration_dir = Path(__file__).resolve().parents[1] / "postgres" / "schema"
-        with self.engine.connect() as connection:
-            apply_migrations(connection, migration_dir)
+        """Apply the checked-in PostgreSQL production migration chain."""
+        from pathlib import Path
 
-    def validate_production_schema(self) -> None:
-        """Fail closed unless every canonical persistence table exists."""
-        from sqlalchemy import inspect
-
-        required = {
-            "escrows",
-            "gerchain_ledger_accounts",
-            "gerchain_ledger_movements",
-            "gerchain_transaction_witnesses",
-            "gerchain_outbox_events",
-            "gerchain_idempotency_records",
-        }
-        actual = set(inspect(self.engine).get_table_names())
-        missing = sorted(required - actual)
-        if missing:
-            raise RuntimeError(
-                "production schema incomplete; missing canonical tables: "
-                + ", ".join(missing)
+        with self.engine.begin() as conn:
+            apply_migrations(
+                conn,
+                Path(__file__).resolve().parents[1] / "postgres" / "schema",
             )
 
     def create(self) -> GerchainRuntime:
