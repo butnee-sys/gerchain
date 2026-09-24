@@ -143,3 +143,4 @@ def test_postgresql_deep_value_truth_reconciliation():
 
         report = deep_reconcile_value_truth(session)
         assert report.matched, report.issues
+
