@@ -8,7 +8,6 @@ from pathlib import Path
 from sqlalchemy import create_engine
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import sessionmaker
-from sqlalchemy import text
 from postgres.migrations import apply_migrations
 from postgres.migrations import apply_migrations
 from services.gerchain_runtime import GerchainRuntime
