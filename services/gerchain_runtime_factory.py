@@ -56,8 +56,34 @@ class ProductionRuntimeFactory:
         with self.engine.connect() as conn:
             apply_migrations(conn, migration_dir)
 
+    def validate_production_schema(self) -> None:
+        """Fail closed unless the canonical production schema is complete."""
+        from sqlalchemy import inspect
+
+        required = {
+            "gerchain_ledger_accounts": {"account_id", "currency", "balance", "version", "updated_at"},
+            "gerchain_ledger_movements": {"transaction_id", "source", "destination", "amount", "currency", "operation", "escrow_id", "integrity_hash", "created_at"},
+            "escrows": {"id", "sender_address", "receiver_address", "amount", "state", "condition_desc", "refund_destination", "currency", "version", "created_at", "updated_at"},
+            "gerchain_transaction_witnesses": {"transaction_id", "event_type", "escrow_id", "amount", "created_at"},
+            "gerchain_outbox_events": {"event_id", "event_type", "aggregate_id", "payload_json", "state", "lease_until", "attempts", "created_at", "updated_at"},
+            "gerchain_idempotency_records": {"key", "fingerprint", "result_json", "state", "created_at", "updated_at"},
+        }
+        inspector = inspect(self.engine)
+        missing_tables = [name for name in required if not inspector.has_table(name)]
+        if missing_tables:
+            raise RuntimeError("canonical production schema missing tables: " + ", ".join(sorted(missing_tables)))
+        missing_columns = []
+        for table, columns in required.items():
+            actual = {column["name"] for column in inspector.get_columns(table)}
+            absent = sorted(columns - actual)
+            if absent:
+                missing_columns.append(f"{table}: {", ".join(absent)}")
+        if missing_columns:
+            raise RuntimeError("canonical production schema incomplete: " + "; ".join(missing_columns))
+
     def create(self) -> GerchainRuntime:
         self.initialize()
+        self.validate_production_schema()
         runtime = GerchainRuntime(
             escrow_id=self.config.escrow_id,
             amount=self.config.amount,
