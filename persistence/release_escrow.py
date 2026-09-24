@@ -42,16 +42,7 @@ def release_escrow_in_transaction(
     if not all((trust, transparency, performance, evidence_verified)):
         raise ValueError("release requires complete trust evidence")
 
-    escrow = get_escrow(session, escrow_id, for_update=True)
-    if escrow.state != EscrowState.LOCKED.value:
-        raise ValueError(f"escrow {escrow_id} must be LOCKED")
-    if escrow.receiver_address != beneficiary:
-        raise ValueError("release beneficiary must match authoritative escrow beneficiary")
-    if int(escrow.amount) != int(amount):
-        raise ValueError("release amount must match authoritative escrow amount")
-    if escrow.currency and escrow.currency != currency:
-        raise ValueError("release currency must match authoritative escrow currency")
-
+    escrow = get_escrow(session, escrow_id, for_update=False)
     idempotency_payload = {
         "escrow_id": escrow_id,
         "beneficiary": beneficiary,
@@ -66,6 +57,19 @@ def release_escrow_in_transaction(
         "operation": "RELEASE",
         **dict(payload or {}),
     }
+    replay = get_existing_in_transaction(session, key=transaction_id, payload=idempotency_payload)
+    if replay is not None:
+        return {"replayed": True, "result": replay}
+
+    escrow = get_escrow(session, escrow_id, for_update=True)
+    if escrow.state != EscrowState.LOCKED.value:
+        raise ValueError(f"escrow {escrow_id} must be LOCKED")
+    if escrow.receiver_address != beneficiary:
+        raise ValueError("release beneficiary must match authoritative escrow beneficiary")
+    if int(escrow.amount) != int(amount):
+        raise ValueError("release amount must match authoritative escrow amount")
+    if escrow.currency and escrow.currency != currency:
+        raise ValueError("release currency must match authoritative escrow currency")
 
     value_tx = AtomicValueTransaction(session)
     result = value_tx.transfer_and_transition(
