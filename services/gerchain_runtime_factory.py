@@ -77,7 +77,7 @@ class ProductionRuntimeFactory:
             actual = {column["name"] for column in inspector.get_columns(table)}
             absent = sorted(columns - actual)
             if absent:
-                missing_columns.append(f"{table}: {", ".join(absent)}")
+                missing_columns.append(table + ": " + ", ".join(absent))
         if missing_columns:
             raise RuntimeError("canonical production schema incomplete: " + "; ".join(missing_columns))
 
