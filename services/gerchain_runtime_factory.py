@@ -62,7 +62,6 @@ class ProductionRuntimeFactory:
 
     def create(self) -> GerchainRuntime:
         self.initialize()
-        self.validate_production_schema()
         runtime = GerchainRuntime(
             escrow_id=self.config.escrow_id,
             amount=self.config.amount,
