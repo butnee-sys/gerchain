@@ -99,7 +99,6 @@ def test_production_postgres_factory_and_value_flow():
         assert escrow.balance == Decimal("0")
         assert ben.balance == Decimal("40")
         assert durable_escrow.state == EscrowState.RELEASED.value
-        assert session.scalar(select(LedgerMovementModel).count()) if False else True
         assert session.query(LedgerMovementModel).count() == 2
         assert session.query(TransactionWitness).count() == 3
         assert session.query(OutboxEvent).count() == 3
