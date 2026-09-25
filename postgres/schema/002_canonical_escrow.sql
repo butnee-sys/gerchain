@@ -24,9 +24,3 @@ ALTER TABLE escrows
         'REFUNDED',
         'CANCELLED'
     ));
-
-ALTER TABLE escrows
-    ALTER COLUMN currency SET NOT NULL;
-
-ALTER TABLE escrows
-    ALTER COLUMN refund_destination SET NOT NULL;
