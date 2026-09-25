@@ -1,0 +1,58 @@
+name: production-postgresql-smoke
+
+on:
+  push:
+    branches:
+      - "feat/ea21-transaction-aware-ledger"
+      - "main"
+  workflow_dispatch:
+
+jobs:
+  postgres-smoke:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: gerchain
+          POSTGRES_PASSWORD: gerchain
+          POSTGRES_DB: gerchain
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U gerchain -d gerchain"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      GERCHAIN_DATABASE_URL: postgresql+psycopg://gerchain:gerchain@127.0.0.1:5432/gerchain
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install production dependencies
+        run: python -m pip install -r requirements-dee-security.txt pytest
+      - name: Verify production runtime construction
+        run: |
+          python - <<'PY'
+          import os
+          from services.gerchain_runtime_factory import ProductionRuntimeConfig, ProductionRuntimeFactory
+          config = ProductionRuntimeConfig(
+              database_url=os.environ["GERCHAIN_DATABASE_URL"],
+              escrow_id="smoke-escrow",
+              amount=100,
+              currency="USD",
+              witness_id="smoke-witness",
+          )
+          runtime = ProductionRuntimeFactory(config).create()
+          assert runtime.is_canonical_ledger_authoritative
+          assert runtime.runtime_mode == "production-postgresql"
+          print("canonical production runtime: OK")
+          PY
+      - name: Run deep reconciliation and canonical value-flow tests
+        run: |
+          pytest -q \
+            tests/persistence/test_deep_value_reconciliation.py \
+            tests/services/test_gerchain_runtime_refund_canonical.py \
+            tests/services/test_gerchain_runtime_cancel_canonical.py
