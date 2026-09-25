@@ -37,7 +37,7 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r requirements-dee-security.txt pytest
       - name: Verify production PostgreSQL bootstrap
-        run: pytest -q tests/integration/test_production_postgres_boot.py
+        run: pytest -q tests/integration/test_production_postgresql_boot.py
       - name: Verify production full value flow
         run: pytest -q tests/integration/test_production_postgres_flow.py
       - name: Verify deep value reconciliation tests
