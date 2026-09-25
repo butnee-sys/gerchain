@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+from pathlib import Path
 from typing import Any, Callable
 
 from sqlalchemy import create_engine
@@ -50,10 +51,10 @@ class ProductionRuntimeFactory:
         )
 
     def initialize(self) -> None:
-        """Apply the versioned PostgreSQL production schema atomically."""
+        """Apply canonical PostgreSQL migrations before constructing the runtime."""
         migration_dir = Path(__file__).resolve().parents[1] / "postgres" / "schema"
-        with self.engine.begin() as connection:
-            apply_migrations(connection, migration_dir)
+        with self.engine.begin() as conn:
+            apply_migrations(conn, migration_dir)
 
     def create(self) -> GerchainRuntime:
         self.initialize()
