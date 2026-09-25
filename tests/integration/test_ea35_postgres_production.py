@@ -97,3 +97,113 @@ def test_production_postgres_fund_lock_release_reconciles():
         assert report.matched, [f"{i.code}: {i.detail}" for i in report.issues]
 
     engine.dispose()
+
+
+def test_production_postgres_restart_does_not_duplicate_release() -> None:
+    url = os.environ["GERCHAIN_DATABASE_URL"]
+    escrow_id = "pg-ea35-restart-escrow"
+    engine = create_engine(url, pool_pre_ping=True)
+    factory = sessionmaker(bind=engine, expire_on_commit=False)
+
+    ProductionRuntimeFactory(
+        ProductionRuntimeConfig(
+            database_url=url,
+            escrow_id=escrow_id,
+            amount=50,
+            currency="USD",
+            witness_id="pg-ea35-restart-witness",
+        ),
+        engine=engine,
+    ).create()
+
+    now = datetime.now(timezone.utc)
+    with factory.begin() as session:
+        PostgreSQLAtomicLedger.create_account_in_transaction(
+            session, "pg-restart-source", "USD", initial_balance=50
+        )
+        PostgreSQLAtomicLedger.create_account_in_transaction(
+            session, escrow_id, "USD", initial_balance=0
+        )
+        PostgreSQLAtomicLedger.create_account_in_transaction(
+            session, "pg-restart-beneficiary", "USD", initial_balance=0
+        )
+        session.add(CanonicalEscrow(
+            id=escrow_id,
+            sender_address="pg-restart-source",
+            receiver_address="pg-restart-beneficiary",
+            amount=50,
+            state=EscrowState.CREATED.value,
+            condition_desc="restart replay proof",
+            refund_destination="pg-restart-source",
+            currency="USD",
+            version=0,
+            created_at=now,
+            updated_at=now,
+        ))
+
+    runtime = ProductionRuntimeFactory(
+        ProductionRuntimeConfig(
+            database_url=url,
+            escrow_id=escrow_id,
+            amount=50,
+            currency="USD",
+            witness_id="pg-ea35-restart-witness",
+        ),
+        engine=engine,
+    ).create()
+    runtime.fund("pg-restart-fund", "pg-restart-source", "T0", {"proof": "restart"})
+    runtime.lock("pg-restart-lock", "T1", {"proof": "restart"})
+    first = runtime.release(
+        root=object(),
+        owner_id="pg-restart-owner",
+        transaction_id="pg-restart-release",
+        destination="pg-restart-beneficiary",
+        authorized=True,
+        trinity_proof={"trust": True, "transparency": True, "performance": True},
+        evidence_verified=True,
+        timestamp="T2",
+        evidence={"proof": "restart"},
+    )
+    assert first["replayed"] is False
+    engine.dispose()
+
+    restarted_engine = create_engine(url, pool_pre_ping=True)
+    restarted_factory = ProductionRuntimeFactory(
+        ProductionRuntimeConfig(
+            database_url=url,
+            escrow_id=escrow_id,
+            amount=50,
+            currency="USD",
+            witness_id="pg-ea35-restart-witness",
+        ),
+        engine=restarted_engine,
+    ).create()
+    replay = restarted_factory  # construction itself is the restart boundary
+    runtime_again = replay
+    result = runtime_again.release(
+        root=object(),
+        owner_id="pg-restart-owner",
+        transaction_id="pg-restart-release",
+        destination="pg-restart-beneficiary",
+        authorized=True,
+        trinity_proof={"trust": True, "transparency": True, "performance": True},
+        evidence_verified=True,
+        timestamp="T2",
+        evidence={"proof": "restart"},
+    )
+    assert result["replayed"] is True
+
+    with restarted_factory.session_factory() as session:
+        source = session.get(LedgerAccountModel, "pg-restart-source")
+        beneficiary = session.get(LedgerAccountModel, "pg-restart-beneficiary")
+        escrow = session.get(CanonicalEscrow, escrow_id)
+        movements = session.execute(select(LedgerMovementModel)).scalars().all()
+        report = deep_reconcile_value_truth(session)
+
+        assert source.balance == 0
+        assert beneficiary.balance == 50
+        assert escrow.state == EscrowState.RELEASED.value
+        assert len(movements) == 2
+        assert report.matched, [f"{i.code}: {i.detail}" for i in report.issues]
+
+    restarted_engine.dispose()
