@@ -2,6 +2,8 @@
 
 Status: IN PROGRESS / NOT LOCKED
 
+Current branch-tip under verification: `70173bf744db60402b4c0a6c4b71358c1c63d3ef`
+
 ## Verified repository facts
 
 Branch: `feat/ea21-transaction-aware-ledger`
@@ -23,23 +25,19 @@ The factory now attaches `configure_canonical_ledger(session_factory)` and requi
 
 ### Blocking evidence
 
-The factory's current initialization uses SQLAlchemy `metadata.create_all()`. The repository also contains `postgres/migrations.py`, whose `apply_migrations()` implements versioned SQL migrations with advisory locking and checksums.
+The factory now applies the versioned SQL migration chain from `postgres/schema` using `postgres.migrations.apply_migrations()` and then calls `assert_canonical_production_schema()`.
 
-The currently inspected legacy migration `postgres/schema/001_concurrency.sql` defines an `escrows` table restricted to:
+The canonical migration chain already present on the branch contains migrations 001 through 008; the duplicate version-002 file introduced during this verification pass was removed because the migration loader rejects duplicate versions.
 
-`CREATED, LOCKED, RELEASED`
+The production schema guard requires the canonical Ledger, Escrow, Witness, Outbox, and Durable Idempotency tables/columns and all six escrow states. This closes the previously identified construction-path/schema-definition gap at code level.
 
-while the canonical durable Escrow aggregate requires:
-
-`CREATED, FUNDED, LOCKED, RELEASED, REFUNDED, CANCELLED`
-
-Therefore a real PostgreSQL production re-performance cannot yet be declared verified merely from the repository construction path. `create_all()` is not a substitute for versioned production migration validation, and existing SQL schema evidence is not sufficient to prove the full canonical lifecycle.
+This still does not constitute execution-level proof. A fresh PostgreSQL run against the current branch tip is required because the last recorded successful PostgreSQL evidence was against an earlier SHA.
 
 ## Release gate
 
 Do not declare GREEN until all are evidenced against the exact branch tip:
 
-- PostgreSQL database starts successfully.
+- PostgreSQL database starts successfully against the current branch tip.
 - Versioned migrations apply successfully.
 - Canonical Ledger tables exist and are usable.
 - Canonical Escrow full lifecycle schema exists.
