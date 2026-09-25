@@ -28,6 +28,7 @@ def test_production_factory_boots_and_uses_canonical_ledger(postgres_engine):
 
     runtime.create_account("SMOKE-SOURCE", 1000)
     runtime.create_account("SMOKE-DEST", 0)
+    runtime.create_account("prod-smoke-escrow", 0)
 
     with factory.session_factory() as session:
         session.add(
