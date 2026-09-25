@@ -25,6 +25,8 @@ jobs:
           --health-timeout 5s
           --health-retries 20
     steps:
+      - name: Set repository import path
+        run: echo "PYTHONPATH=$GITHUB_WORKSPACE" >> "$GITHUB_ENV"
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
