@@ -65,4 +65,4 @@ jobs:
         env:
           GERCHAIN_TEST_DATABASE_URL: postgresql+psycopg://gerchain:gerchain@localhost:5432/gerchain_test
         run: |
-          pytest -q tests/persistence/test_deep_value_reconciliation.py
+          pytest -q tests/persistence/test_deep_value_reconciliation.py tests/test_ea35_postgres_reperformance.py
