@@ -1,0 +1,109 @@
+-- Canonical production persistence for EAI / value-flow authority.
+-- This migration extends the legacy escrow table in place and creates the
+-- single canonical Ledger, Witness, Outbox, and Idempotency stores.
+-- It intentionally fails rather than inventing missing currency/refund data.
+
+CREATE TABLE IF NOT EXISTS gerchain_ledger_accounts (
+    account_id VARCHAR(128) PRIMARY KEY,
+    currency VARCHAR(16) NOT NULL,
+    balance INTEGER NOT NULL DEFAULT 0 CHECK (balance >= 0),
+    version INTEGER NOT NULL DEFAULT 0 CHECK (version >= 0),
+    updated_at TIMESTAMPTZ NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS gerchain_ledger_movements (
+    id BIGSERIAL PRIMARY KEY,
+    transaction_id VARCHAR(128) NOT NULL UNIQUE,
+    source VARCHAR(128) NOT NULL,
+    destination VARCHAR(128) NOT NULL,
+    amount INTEGER NOT NULL CHECK (amount > 0),
+    currency VARCHAR(16) NOT NULL,
+    operation VARCHAR(32) NOT NULL,
+    escrow_id VARCHAR(128),
+    integrity_hash VARCHAR(128),
+    created_at TIMESTAMPTZ NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS ix_gerchain_ledger_movements_escrow
+    ON gerchain_ledger_movements (escrow_id);
+
+ALTER TABLE escrows ADD COLUMN IF NOT EXISTS refund_destination TEXT;
+ALTER TABLE escrows ADD COLUMN IF NOT EXISTS currency VARCHAR(16);
+ALTER TABLE escrows ADD COLUMN IF NOT EXISTS version BIGINT NOT NULL DEFAULT 0;
+ALTER TABLE escrows ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ;
+
+UPDATE escrows
+SET created_at = updated_at
+WHERE created_at IS NULL;
+
+DO $$
+DECLARE
+    invalid_count BIGINT;
+BEGIN
+    SELECT count(*) INTO invalid_count
+    FROM escrows
+    WHERE created_at IS NULL OR currency IS NULL;
+
+    IF invalid_count > 0 THEN
+        RAISE EXCEPTION
+            'canonical escrow migration blocked: % rows lack created_at or currency',
+            invalid_count;
+    END IF;
+END $$;
+
+ALTER TABLE escrows ALTER COLUMN created_at SET NOT NULL;
+ALTER TABLE escrows ALTER COLUMN currency SET NOT NULL;
+
+DO $$
+DECLARE
+    c RECORD;
+BEGIN
+    FOR c IN
+        SELECT conname
+        FROM pg_constraint
+        WHERE conrelid = 'escrows'::regclass
+          AND contype = 'c'
+          AND pg_get_constraintdef(oid) LIKE '%state%'
+    LOOP
+        EXECUTE format('ALTER TABLE escrows DROP CONSTRAINT %I', c.conname);
+    END LOOP;
+END $$;
+
+ALTER TABLE escrows
+    ADD CONSTRAINT ck_escrows_canonical_state
+    CHECK (state IN ('CREATED', 'FUNDED', 'LOCKED', 'RELEASED', 'REFUNDED', 'CANCELLED'));
+
+CREATE TABLE IF NOT EXISTS gerchain_transaction_witnesses (
+    id BIGSERIAL PRIMARY KEY,
+    transaction_id VARCHAR(128) NOT NULL UNIQUE,
+    event_type VARCHAR(64) NOT NULL,
+    escrow_id VARCHAR(255) NOT NULL,
+    amount INTEGER NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS gerchain_outbox_events (
+    id BIGSERIAL PRIMARY KEY,
+    event_id VARCHAR(255) NOT NULL UNIQUE,
+    event_type VARCHAR(128) NOT NULL,
+    aggregate_id VARCHAR(255) NOT NULL,
+    payload_json TEXT NOT NULL,
+    state VARCHAR(32) NOT NULL DEFAULT 'PENDING',
+    lease_until TIMESTAMPTZ,
+    attempts INTEGER NOT NULL DEFAULT 0 CHECK (attempts >= 0),
+    created_at TIMESTAMPTZ NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS ix_gerchain_outbox_claim
+    ON gerchain_outbox_events (state, lease_until, id);
+
+CREATE TABLE IF NOT EXISTS gerchain_idempotency_records (
+    id BIGSERIAL PRIMARY KEY,
+    key VARCHAR(255) NOT NULL UNIQUE,
+    fingerprint VARCHAR(64) NOT NULL,
+    result_json TEXT,
+    state VARCHAR(32) NOT NULL DEFAULT 'COMPLETED',
+    created_at TIMESTAMPTZ NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL
+);
