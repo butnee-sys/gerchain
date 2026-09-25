@@ -38,6 +38,17 @@ def test_ea35_real_postgresql_fund_lock_release_and_deep_reconciliation():
     ledger = runtime._canonical_ledger
     assert ledger is not None
 
+    # This is an isolated PostgreSQL re-performance database. Clear prior
+    # evidence so reconciliation covers exactly this execution graph.
+    with engine.begin() as connection:
+        connection.exec_driver_sql(
+            "TRUNCATE TABLE "
+            "gerchain_ledger_movements, gerchain_ledger_accounts, "
+            "escrows, gerchain_transaction_witnesses, "
+            "gerchain_outbox_events, gerchain_idempotency_records "
+            "RESTART IDENTITY CASCADE"
+        )
+
     now = datetime.now(timezone.utc)
     with factory() as session:
         ledger.create_account_in_transaction(session, "EA35-SOURCE", "MNT", 1000)
