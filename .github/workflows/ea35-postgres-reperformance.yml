@@ -85,6 +85,7 @@ jobs:
           python -m pytest -q             tests/services/test_gerchain_runtime_refund_canonical.py             tests/services/test_gerchain_runtime_cancel_canonical.py             tests/services/test_gerchain_runtime_settlement_canonical.py             tests/services/test_gerchain_runtime_canonical_ledger.py
 
 # EA-35.13 verification gate
+# Production PostgreSQL gate: factory construction + entrypoint boot + canonical value-flow tests
 # This push is the authoritative trigger for the PostgreSQL re-performance after
 # correcting the production factory constructor and canonical-ledger cutover.
 
