@@ -21,8 +21,8 @@ def test_production_factory_boots_and_uses_canonical_ledger(postgres_engine):
     assert runtime.is_canonical_ledger_authoritative
     assert runtime.runtime_mode == "production-postgresql"
 
-    runtime.create_account("SMOKE-SOURCE", "USD", 1000)
-    runtime.create_account("SMOKE-DEST", "USD", 0)
+    runtime.create_account("SMOKE-SOURCE", 1000)
+    runtime.create_account("SMOKE-DEST", 0)
 
     with factory.session_factory() as session:
         session.add(
