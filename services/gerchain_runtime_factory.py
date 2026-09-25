@@ -52,12 +52,10 @@ class ProductionRuntimeFactory:
         )
 
     def initialize(self) -> None:
-        """Apply the checked-in PostgreSQL production migration chain."""
-        with self.engine.begin() as conn:
-            apply_migrations(
-                conn,
-                Path(__file__).resolve().parents[1] / "postgres" / "schema",
-            )
+        """Apply the versioned PostgreSQL production schema before boot."""
+        migration_dir = Path(__file__).resolve().parent.parent / "postgres" / "schema"
+        with self.engine.begin() as connection:
+            apply_migrations(connection, migration_dir)
 
     def create(self) -> GerchainRuntime:
         self.initialize()
