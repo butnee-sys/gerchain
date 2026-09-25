@@ -52,4 +52,8 @@ jobs:
       - name: Run production PostgreSQL value-flow proof
         env:
           GERCHAIN_DATABASE_URL: postgresql+psycopg://gerchain:gerchain@127.0.0.1:5432/gerchain_test
-        run: python -m pytest -q tests/integration/test_production_runtime_postgresql.py
+        run: >-
+          python -m pytest -q
+          tests/integration/test_production_runtime_postgresql.py
+          tests/services/test_production_runtime_factory_contract.py
+          tests/services/test_production_runtime_factory_postgres.py
