@@ -15,7 +15,7 @@ from services.gerchain_runtime_factory import ProductionRuntimeConfig, Productio
 
 
 def _factory():
-    url = os.environ["GERCHAIN_TEST_DATABASE_URL"]
+    url = os.environ.get("GERCHAIN_TEST_DATABASE_URL", os.environ["GERCHAIN_DATABASE_URL"])
     return ProductionRuntimeFactory(
         ProductionRuntimeConfig(
             database_url=url,
