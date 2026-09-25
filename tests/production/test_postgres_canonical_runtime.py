@@ -29,6 +29,9 @@ def test_postgres_canonical_fund_lock_release_reconciles():
     runtime = factory.create()
     assert runtime.is_canonical_ledger_authoritative
 
+    runtime.create_account(account_id="pg-proof-runtime-account", currency="MNT", initial_balance=7)
+    assert runtime.get_balance(account_id="pg-proof-runtime-account", currency="MNT")["balance"] == 7
+
     Session = sessionmaker(bind=engine, expire_on_commit=False)
     now = datetime.now(timezone.utc)
 
@@ -108,4 +111,52 @@ def test_postgres_canonical_fund_lock_release_reconciles():
 
     engine.dispose()
 
-# EA-35.13: executed through the pull-request PostgreSQL proof gate.
+
+def test_postgres_canonical_refund_and_cancel_value_paths_reconcile():
+    url = os.environ["GERCHAIN_DATABASE_URL"]
+    engine = create_engine(url, pool_pre_ping=True)
+    factory = ProductionRuntimeFactory(
+        ProductionRuntimeConfig(
+            database_url=url,
+            escrow_id="pg-proof-refund-escrow",
+            amount=50,
+            currency="MNT",
+            witness_id="pg-proof-refund-witness",
+        ),
+        engine=engine,
+    )
+    factory.create()
+    Session = sessionmaker(bind=engine, expire_on_commit=False)
+    now = datetime.now(timezone.utc)
+
+    with Session() as session:
+        session.add(LedgerAccountModel(account_id="pg-proof-refund-source", currency="MNT", balance=50, version=0, updated_at=now))
+        session.add(LedgerAccountModel(account_id="pg-proof-refund-escrow", currency="MNT", balance=0, version=0, updated_at=now))
+        session.add(CanonicalEscrow(
+            id="pg-proof-refund-escrow", sender_address="pg-proof-refund-source",
+            receiver_address="unused", refund_destination="pg-proof-refund-source",
+            amount=50, state="CREATED", condition_desc="refund proof", currency="MNT",
+            version=0, created_at=now, updated_at=now,
+        ))
+        session.commit()
+
+    with Session() as session:
+        fund_escrow_in_transaction(session, transaction_id="pg-proof-refund-fund", escrow_id="pg-proof-refund-escrow", source="pg-proof-refund-source", amount=50, currency="MNT")
+        lock_escrow_in_transaction(session, transaction_id="pg-proof-refund-lock", escrow_id="pg-proof-refund-escrow")
+        session.commit()
+
+    from persistence.refund_escrow import refund_escrow_in_transaction
+    with Session() as session:
+        refund_escrow_in_transaction(session, transaction_id="pg-proof-refund", escrow_id="pg-proof-refund-escrow", amount=50, currency="MNT")
+        session.commit()
+
+    with Session() as session:
+        escrow = session.get(CanonicalEscrow, "pg-proof-refund-escrow")
+        report = deep_reconcile_value_truth(session)
+        assert escrow.state == "REFUNDED"
+        assert session.get(LedgerAccountModel, "pg-proof-refund-source").balance == 50
+        assert report.matched, report.issues
+
+    engine.dispose()
+
+# EA-35.13: executed through the PostgreSQL proof workflow on the exact branch commit.
