@@ -41,6 +41,7 @@ jobs:
             tests/test_core_structure.py \
             tests/test_production_runtime_factory.py \
             tests/test_production_runtime_factory_postgres.py \
+            tests/test_ea35_postgres_reperformance.py \
             tests/test_nef_core_structure.py \
             tests/test_boundary_adapters.py \
             tests/test_de_dee_adapter.py \
