@@ -485,3 +485,38 @@ def test_deep_reconciliation_does_not_false_positive_state_only_idempotency():
         report = deep_reconcile_value_truth(session)
         assert not any(i.code == "ORPHAN_IDEMPOTENCY" for i in report.issues)
     engine.dispose()
+
+
+def test_production_runtime_factory_boots_against_postgresql_when_configured() -> None:
+    import os
+
+    database_url = os.environ.get("GERCHAIN_DATABASE_URL")
+    if not database_url:
+        return
+
+    from sqlalchemy import inspect
+    from services.gerchain_runtime_factory import ProductionRuntimeConfig, ProductionRuntimeFactory
+
+    factory = ProductionRuntimeFactory(
+        ProductionRuntimeConfig(
+            database_url=database_url,
+            escrow_id="ea35-proof-escrow",
+            amount=100,
+            currency="USD",
+            witness_id="ea35-proof-witness",
+        )
+    )
+    runtime = factory.create()
+    assert runtime.is_canonical_ledger_authoritative
+
+    tables = set(inspect(factory.engine).get_table_names())
+    assert {
+        "gerchain_ledger_accounts",
+        "gerchain_ledger_movements",
+        "escrows",
+        "gerchain_outbox_events",
+        "gerchain_idempotency_records",
+        "gerchain_transaction_witnesses",
+    }.issubset(tables)
+
+    factory.engine.dispose()
