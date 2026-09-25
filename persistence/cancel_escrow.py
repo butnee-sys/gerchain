@@ -25,6 +25,7 @@ def cancel_escrow_in_transaction(
 ) -> dict[str, Any]:
     """Cancel CREATED/FUNDED escrow with one durable idempotency boundary."""
     from sqlalchemy import select
+    from persistence.atomic_ledger import LedgerMovementModel
     from persistence.escrow_aggregate import CanonicalEscrow, transition_escrow
 
     escrow = session.execute(
@@ -35,6 +36,26 @@ def cancel_escrow_in_transaction(
 
     state = EscrowState(escrow.state)
     if state not in (EscrowState.CREATED, EscrowState.FUNDED):
+        movement = session.execute(
+            select(LedgerMovementModel)
+            .where(LedgerMovementModel.transaction_id == transaction_id)
+        ).scalar_one_or_none()
+        original_state = EscrowState.FUNDED if movement is not None else EscrowState.CREATED
+        original_destination = escrow.sender_address if original_state == EscrowState.FUNDED else None
+        original_amount = int(escrow.amount) if original_state == EscrowState.FUNDED else 0
+        replay_payload = {
+            "escrow_id": escrow_id,
+            "operation": "CANCEL",
+            "state": original_state.value,
+            "source": escrow_id if original_state == EscrowState.FUNDED else None,
+            "destination": original_destination,
+            "amount": original_amount,
+            "currency": escrow.currency,
+            **dict(payload or {}),
+        }
+        replay = get_existing_in_transaction(session, key=transaction_id, payload=replay_payload)
+        if replay is not None:
+            return {"replayed": True, "result": replay}
         raise ValueError(f"escrow {escrow_id} cannot be cancelled from {state.value}")
 
     destination = escrow.sender_address if state == EscrowState.FUNDED else None
