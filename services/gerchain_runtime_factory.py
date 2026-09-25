@@ -10,8 +10,6 @@ from sqlalchemy.orm import sessionmaker
 
 from postgres.migrations import apply_migrations
 from services.gerchain_runtime import GerchainRuntime
-from postgres.migrations import apply_migrations
-from pathlib import Path
 
 
 @dataclass(frozen=True)
