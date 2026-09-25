@@ -6,7 +6,7 @@ from sqlalchemy.orm import sessionmaker
 
 from services.gerchain_runtime_factory import ProductionRuntimeConfig, ProductionRuntimeFactory
 from persistence.escrow_aggregate import CanonicalEscrow, EscrowState
-from persistence.atomic_ledger import PostgreSQLAtomicLedger, LedgerAccountModel
+from persistence.atomic_ledger import PostgreSQLAtomicLedger, LedgerAccountModel, LedgerMovementModel
 from persistence.fund_escrow import fund_escrow_in_transaction
 from persistence.lock_escrow import lock_escrow_in_transaction
 from persistence.release_escrow import release_escrow_in_transaction
