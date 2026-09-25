@@ -35,7 +35,7 @@ def _session_factory():
             connection.execute(text(
                 "TRUNCATE TABLE "
                 "gerchain_ledger_movements, gerchain_ledger_accounts, "
-                "gerchain_escrows, gerchain_transaction_witnesses, "
+                "escrows, gerchain_transaction_witnesses, "
                 "gerchain_outbox_events, gerchain_idempotency_records "
                 "RESTART IDENTITY CASCADE"
             ))
