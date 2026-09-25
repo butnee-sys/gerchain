@@ -29,6 +29,7 @@ def test_real_postgresql_canonical_eai_fund_lock_release_reconciles() -> None:
         session.add_all([
             LedgerAccountModel(account_id="pg-source", currency="USD", balance=100, version=0, updated_at=now),
             LedgerAccountModel(account_id="pg-beneficiary", currency="USD", balance=0, version=0, updated_at=now),
+            LedgerAccountModel(account_id="pg-escrow-1", currency="USD", balance=0, version=0, updated_at=now),
             CanonicalEscrow(
                 id="pg-escrow-1",
                 sender_address="pg-source",
