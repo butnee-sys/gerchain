@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 
 from persistence.atomic_ledger import LedgerAccountModel, PostgreSQLAtomicLedger, LedgerMovementModel
 from persistence.escrow_aggregate import CanonicalEscrow, EscrowState
@@ -34,6 +34,53 @@ def test_production_postgresql_fund_lock_release_truth_graph(
     )
 
     with session_factory() as session:
+        session.execute(
+            delete(DurableIdempotencyRecord).where(
+                DurableIdempotencyRecord.key.in_([
+                    "production-fund-1",
+                    "production-lock-1",
+                    "production-release-1",
+                ])
+            )
+        )
+        session.execute(
+            delete(TransactionWitness).where(
+                TransactionWitness.transaction_id.in_([
+                    "production-fund-1",
+                    "production-lock-1",
+                    "production-release-1",
+                ])
+            )
+        )
+        session.execute(
+            delete(OutboxEvent).where(
+                OutboxEvent.aggregate_id == "production-lifecycle-escrow"
+            )
+        )
+        session.execute(
+            delete(LedgerMovementModel).where(
+                LedgerMovementModel.transaction_id.in_([
+                    "production-fund-1",
+                    "production-release-1",
+                ])
+            )
+        )
+        session.execute(
+            delete(CanonicalEscrow).where(
+                CanonicalEscrow.id == "production-lifecycle-escrow"
+            )
+        )
+        session.execute(
+            delete(LedgerAccountModel).where(
+                LedgerAccountModel.account_id.in_([
+                    "production-source",
+                    "production-lifecycle-escrow",
+                    "production-beneficiary",
+                ])
+            )
+        )
+        session.commit()
+
         now = datetime.now(timezone.utc)
         session.add_all([
             LedgerAccountModel(
