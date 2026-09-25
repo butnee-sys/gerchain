@@ -57,7 +57,7 @@ def test_coordinator_rolls_back_ledger_escrow_witness_and_outbox():
         assert session.get(LedgerAccountModel, "B").balance == 0
         assert session.get(CanonicalEscrow, "E1").state == EscrowState.LOCKED.value
         assert session.execute(select(TransactionWitness)).first() is None
-        assert session.execute(session.query(OutboxEvent)).first() is None
+        assert session.execute(select(OutboxEvent)).first() is None
 
 
 def test_coordinator_commits_all_components_once():
