@@ -27,6 +27,11 @@ ALTER TABLE escrows ADD COLUMN IF NOT EXISTS currency VARCHAR(16);
 ALTER TABLE escrows ADD COLUMN IF NOT EXISTS version BIGINT NOT NULL DEFAULT 0;
 ALTER TABLE escrows ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT now();
 
+-- Preserve the pre-canonical sender as the historical refund destination.
+UPDATE escrows
+SET refund_destination = COALESCE(refund_destination, sender_address),
+    created_at = COALESCE(created_at, updated_at);
+
 ALTER TABLE escrows DROP CONSTRAINT IF EXISTS escrows_state_check;
 ALTER TABLE escrows ADD CONSTRAINT escrows_state_check
     CHECK (state IN ('CREATED','FUNDED','LOCKED','RELEASED','REFUNDED','CANCELLED'));
