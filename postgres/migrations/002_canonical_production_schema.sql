@@ -2,17 +2,6 @@
 -- This migration reconciles the legacy escrow table with the canonical aggregate
 -- and creates the single production value/evidence stores used by the runtime.
 
-DO $$
-BEGIN
-    IF EXISTS (
-        SELECT 1 FROM escrows
-        WHERE refund_destination IS NULL OR currency IS NULL
-    ) THEN
-        RAISE EXCEPTION
-            'Cannot promote legacy escrow rows: refund_destination/currency backfill is required';
-    END IF;
-END $$;
-
 ALTER TABLE escrows
     ADD COLUMN IF NOT EXISTS refund_destination TEXT,
     ADD COLUMN IF NOT EXISTS currency VARCHAR(16),
@@ -22,6 +11,17 @@ ALTER TABLE escrows
 UPDATE escrows
 SET created_at = updated_at
 WHERE created_at IS NULL;
+
+DO $
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM escrows
+        WHERE refund_destination IS NULL OR currency IS NULL
+    ) THEN
+        RAISE EXCEPTION
+            'Cannot promote legacy escrow rows: refund_destination/currency backfill is required';
+    END IF;
+END $;
 
 ALTER TABLE escrows
     ALTER COLUMN created_at SET NOT NULL,
