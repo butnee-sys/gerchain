@@ -21,14 +21,16 @@ def test_postgresql_canonical_runtime_end_to_end():
     engine = create_engine(url, pool_pre_ping=True)
     factory = sessionmaker(bind=engine, expire_on_commit=False)
 
-    runtime = ProductionRuntimeFactory.create(
-        escrow_id="pg-e2e-escrow",
-        amount=40,
-        currency="MNT",
-        witness_id="pg-e2e-witness",
+    runtime = ProductionRuntimeFactory(
+        ProductionRuntimeConfig(
+            database_url=url,
+            escrow_id="pg-e2e-escrow",
+            amount=40,
+            currency="MNT",
+            witness_id="pg-e2e-witness",
+        ),
         engine=engine,
-        session_factory=factory,
-    )
+    ).create()
     assert runtime.is_canonical_ledger_authoritative
 
     with factory() as session:
