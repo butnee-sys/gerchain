@@ -15,20 +15,8 @@ WHERE created_at IS NULL;
 ALTER TABLE escrows
     ALTER COLUMN created_at SET NOT NULL;
 
-DO $$
-DECLARE
-    constraint_name TEXT;
-BEGIN
-    SELECT conname INTO constraint_name
-    FROM pg_constraint
-    WHERE conrelid = 'escrows'::regclass
-      AND contype = 'c'
-      AND pg_get_constraintdef(oid) LIKE '%state IN%';
-
-    IF constraint_name IS NOT NULL THEN
-        EXECUTE format('ALTER TABLE escrows DROP CONSTRAINT %I', constraint_name);
-    END IF;
-END $$;
+ALTER TABLE escrows
+    DROP CONSTRAINT IF EXISTS escrows_state_check;
 
 ALTER TABLE escrows
     ADD CONSTRAINT escrows_state_check
