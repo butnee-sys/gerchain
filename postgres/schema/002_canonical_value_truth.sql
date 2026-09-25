@@ -83,4 +83,6 @@ BEGIN
         RAISE EXCEPTION
             'canonical migration blocked: existing escrows contain NULL currency; reconcile before production cutover';
     END IF;
-END $$;
+END $;
+
+ALTER TABLE escrows ALTER COLUMN currency SET NOT NULL;
