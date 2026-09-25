@@ -19,7 +19,7 @@ from persistence.durable_idempotency import DurableIdempotencyRecord
 
 
 def test_production_factory_boots_against_postgresql():
-    database_url = os.environ["GERCHAIN_TEST_DATABASE_URL"]
+    database_url = os.environ["GERCHAIN_DATABASE_URL"]
     engine = create_engine(database_url, pool_pre_ping=True)
 
     factory = ProductionRuntimeFactory(
