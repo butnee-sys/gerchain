@@ -7,7 +7,6 @@ from typing import Any, Callable
 from sqlalchemy import create_engine
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import sessionmaker
-from pathlib import Path
 from postgres.migrations import apply_migrations
 from services.gerchain_runtime import GerchainRuntime
 
@@ -52,8 +51,6 @@ class ProductionRuntimeFactory:
 
     def initialize(self) -> None:
         """Apply the checked-in PostgreSQL production migration chain."""
-        from pathlib import Path
-
         with self.engine.begin() as conn:
             apply_migrations(
                 conn,
