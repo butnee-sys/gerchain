@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 import hashlib
 import json
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 
 from core.idempotency import IdempotencyEngine
@@ -30,6 +30,15 @@ def _session_factory():
     OutboxBase.metadata.create_all(engine)
     IdempotencyBase.metadata.create_all(engine)
     TransactionWitness.metadata.create_all(engine)
+    if database_url.startswith("postgresql"):
+        with engine.begin() as connection:
+            connection.execute(text(
+                "TRUNCATE TABLE "
+                "gerchain_ledger_movements, gerchain_ledger_accounts, "
+                "gerchain_escrows, gerchain_transaction_witnesses, "
+                "gerchain_outbox_events, gerchain_idempotency_records "
+                "RESTART IDENTITY CASCADE"
+            ))
     return engine, sessionmaker(bind=engine)
 
 
