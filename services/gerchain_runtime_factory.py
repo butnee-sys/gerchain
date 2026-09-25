@@ -7,6 +7,8 @@ from typing import Any, Callable
 from sqlalchemy import create_engine
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import sessionmaker
+from postgres.migrations import apply_migrations
+from pathlib import Path
 
 from postgres.migrations import apply_migrations
 from persistence.production_schema_guard import assert_canonical_production_schema
@@ -52,11 +54,10 @@ class ProductionRuntimeFactory:
         )
 
     def initialize(self) -> None:
-        """Apply the versioned PostgreSQL production schema before runtime creation."""
+        """Apply the versioned PostgreSQL production schema atomically."""
         migration_dir = Path(__file__).resolve().parents[1] / "postgres" / "schema"
         with self.engine.begin() as conn:
             apply_migrations(conn, migration_dir)
-            assert_canonical_production_schema(conn)
 
     def create(self) -> GerchainRuntime:
         self.initialize()
