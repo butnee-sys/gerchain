@@ -37,3 +37,14 @@ def isolate_postgresql_core_state():
         connection.execute(text("TRUNCATE TABLE " + ", ".join(tables) + " RESTART IDENTITY CASCADE"))
     yield
     engine.dispose()
+
+
+@pytest.fixture
+def canonical_postgresql_engine():
+    """Provide a real PostgreSQL engine when production re-performance is enabled."""
+    url = os.getenv("GERCHAIN_TEST_DATABASE_URL")
+    if not url or not url.startswith("postgresql"):
+        pytest.skip("GERCHAIN_TEST_DATABASE_URL is not configured")
+    engine = create_engine(url, pool_pre_ping=True)
+    yield engine
+    engine.dispose()
