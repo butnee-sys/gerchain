@@ -48,8 +48,8 @@ def test_production_factory_boots_and_uses_canonical_ledger(postgres_engine):
         session.commit()
 
     read = CanonicalLedgerRead(factory.session_factory())
-    assert read.get_balance("SMOKE-SOURCE", "USD")["balance"] == 1000
-    assert read.get_balance("SMOKE-DEST", "USD")["balance"] == 0
+    assert read.get_balance("SMOKE-SOURCE", "USD") == 1000
+    assert read.get_balance("SMOKE-DEST", "USD") == 0
 
 
     with factory.session_factory() as session:
@@ -121,5 +121,5 @@ def test_production_factory_boots_and_uses_canonical_ledger(postgres_engine):
         assert report.matched, [f"{i.code}: {i.detail}" for i in report.issues]
 
     read = CanonicalLedgerRead(factory.session_factory())
-    assert read.get_balance("SMOKE-SOURCE", "USD")["balance"] == 900
-    assert read.get_balance("SMOKE-DEST", "USD")["balance"] == 100
+    assert read.get_balance("SMOKE-SOURCE", "USD") == 900
+    assert read.get_balance("SMOKE-DEST", "USD") == 100
