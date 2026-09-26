@@ -19,7 +19,7 @@ ALTER TABLE gerchain_ledger_movements
 
 ALTER TABLE gerchain_ledger_movements
     ADD CONSTRAINT gerchain_movement_escrow_binding_check
-    CHECK (operation = 'SETTLEMENT' OR (escrow_id IS NOT NULL AND length(escrow_id) > 0));
+    CHECK (escrow_id IS NOT NULL AND length(escrow_id) > 0);
 
 ALTER TABLE gerchain_ledger_movements
     ADD CONSTRAINT gerchain_movement_distinct_accounts_check
