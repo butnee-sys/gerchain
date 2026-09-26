@@ -1,0 +1,53 @@
+name: canonical-postgres
+
+on:
+  push:
+    branches:
+      - '**'
+  pull_request:
+
+jobs:
+  canonical-postgres:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: gerchain
+          POSTGRES_PASSWORD: gerchain
+          POSTGRES_DB: gerchain
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U gerchain -d gerchain"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      GERCHAIN_DATABASE_URL: postgresql+psycopg://gerchain:gerchain@localhost:5432/gerchain
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -r requirements-dee-security.txt
+      - run: python -m pytest tests/persistence/test_deep_value_reconciliation.py -q
+      - run: python - <<'PY'
+          import os
+          from sqlalchemy import create_engine, text
+          from services.gerchain_runtime_factory import ProductionRuntimeConfig, ProductionRuntimeFactory
+          url = os.environ['GERCHAIN_DATABASE_URL']
+          engine = create_engine(url)
+          factory = ProductionRuntimeFactory(ProductionRuntimeConfig(
+              database_url=url, escrow_id='ci-escrow', amount=10, currency='USD', witness_id='ci-witness'
+          ), engine=engine)
+          runtime = factory.create()
+          assert runtime.is_canonical_ledger_authoritative
+          with engine.connect() as conn:
+              tables = set(conn.execute(text("SELECT tablename FROM pg_tables WHERE schemaname='public'")).scalars())
+          required = {'escrows','gerchain_ledger_accounts','gerchain_ledger_movements','gerchain_transaction_witnesses','gerchain_outbox_events','gerchain_idempotency_records'}
+          missing = required - tables
+          assert not missing, missing
+          print('CANONICAL_POSTGRES_BOOT_OK')
+          engine.dispose()
+        PY
