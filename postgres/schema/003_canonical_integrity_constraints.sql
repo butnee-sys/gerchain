@@ -22,12 +22,21 @@ ALTER TABLE gerchain_ledger_movements
     CHECK (escrow_id IS NOT NULL AND length(escrow_id) > 0);
 
 ALTER TABLE gerchain_ledger_movements
+    DROP CONSTRAINT IF EXISTS gerchain_movement_distinct_accounts_check;
+
+ALTER TABLE gerchain_ledger_movements
     ADD CONSTRAINT gerchain_movement_distinct_accounts_check
     CHECK (source <> destination);
 
 ALTER TABLE gerchain_idempotency_records
+    DROP CONSTRAINT IF EXISTS gerchain_idempotency_state_check;
+
+ALTER TABLE gerchain_idempotency_records
     ADD CONSTRAINT gerchain_idempotency_state_check
     CHECK (state IN ('PROCESSING', 'COMPLETED'));
+
+ALTER TABLE gerchain_outbox_events
+    DROP CONSTRAINT IF EXISTS gerchain_outbox_state_check;
 
 ALTER TABLE gerchain_outbox_events
     ADD CONSTRAINT gerchain_outbox_state_check
