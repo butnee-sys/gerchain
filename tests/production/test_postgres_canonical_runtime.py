@@ -29,7 +29,7 @@ def test_postgres_canonical_fund_lock_release_reconciles():
     runtime = factory.create()
     assert runtime.is_canonical_ledger_authoritative
 
-    runtime.create_account(account_id="pg-proof-runtime-account", currency="MNT", initial_balance=7)
+    runtime.create_account(account_id="pg-proof-runtime-account", initial_balance=7)
     assert runtime.get_balance(account_id="pg-proof-runtime-account", currency="MNT")["balance"] == 7
 
     Session = sessionmaker(bind=engine, expire_on_commit=False)
