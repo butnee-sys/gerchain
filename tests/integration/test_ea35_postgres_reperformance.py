@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 import pytest
 from sqlalchemy import select
 
-from persistence.atomic_ledger import LedgerAccountModel
+from persistence.atomic_ledger import LedgerAccountModel, LedgerMovementModel
 from persistence.atomic_value_transaction import TransactionWitness
 from persistence.escrow_aggregate import CanonicalEscrow, EscrowState
 from persistence.fund_escrow import fund_escrow_in_transaction
@@ -14,6 +14,8 @@ from persistence.lock_escrow import lock_escrow_in_transaction
 from persistence.release_escrow import release_escrow_in_transaction
 from persistence.recovery_outbox import OutboxEvent
 from persistence.durable_idempotency import DurableIdempotencyRecord
+from persistence.settlement_coordinator import SettlementCoordinator
+from persistence.deep_value_reconciliation import deep_reconcile_value_truth
 from services.gerchain_runtime_factory import ProductionRuntimeConfig, ProductionRuntimeFactory
 
 
@@ -76,6 +78,16 @@ def test_postgresql_factory_and_fund_lock_release(production):
         assert locked["replayed"] is False
 
     with sf.begin() as session:
+        settled = SettlementCoordinator(session).settle_in_transaction(
+            transaction_id="EA35-SETTLEMENT-1",
+            source="EA35-SOURCE",
+            destination="EA35-BEN",
+            amount=50,
+            currency="MNT",
+        )
+        assert settled["replayed"] is False
+
+    with sf.begin() as session:
         released = release_escrow_in_transaction(
             session,
             transaction_id="EA35-RELEASE-1",
@@ -93,9 +105,13 @@ def test_postgresql_factory_and_fund_lock_release(production):
         assert released["replayed"] is False
 
     with sf() as session:
-        assert session.get(LedgerAccountModel, "EA35-SOURCE").balance == 900
-        assert session.get(LedgerAccountModel, "EA35-BEN").balance == 100
+        assert session.get(LedgerAccountModel, "EA35-SOURCE").balance == 850
+        assert session.get(LedgerAccountModel, "EA35-BEN").balance == 150
         assert session.get(CanonicalEscrow, "ea35-main-escrow").state == EscrowState.RELEASED.value
         assert session.execute(select(TransactionWitness)).scalars().all()
         assert session.execute(select(OutboxEvent)).scalars().all()
         assert session.execute(select(DurableIdempotencyRecord)).scalars().all()
+        settlement = session.execute(select(LedgerMovementModel).where(LedgerMovementModel.transaction_id == "EA35-SETTLEMENT-1")).scalar_one()
+        assert settlement.operation == "SETTLEMENT"
+        assert settlement.escrow_id is None
+        assert deep_reconcile_value_truth(session).matched
