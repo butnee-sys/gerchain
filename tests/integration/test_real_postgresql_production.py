@@ -44,7 +44,7 @@ def test_real_postgresql_production_lifecycle() -> None:
     engine = create_engine(database_url, pool_pre_ping=True, future=True)
     _reset_database(engine)
 
-    migration_dir = Path(__file__).resolve().parents[1] / "postgres" / "schema"
+    migration_dir = Path(__file__).resolve().parents[2] / "postgres" / "schema"
     with engine.begin() as connection:
         apply_migrations(connection, migration_dir)
         assert_canonical_production_schema(connection)
