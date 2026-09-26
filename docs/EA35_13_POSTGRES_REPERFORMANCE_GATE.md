@@ -58,3 +58,8 @@ Current conclusion: **BLOCKED FOR PRODUCTION LOCK — evidence gap, not a claime
 - Production entrypoint now uses `ProductionRuntimeFactory.from_engine(...)`.
 - Versioned PostgreSQL migrations and the canonical production schema guard run before runtime construction.
 - This document does not declare GREEN until a fresh GitHub Actions PostgreSQL execution is observed for this branch/commit.
+
+
+## Re-performance rerun trigger — 2026-09-26
+
+The first real PostgreSQL run exposed two test-contract defects; both were corrected without changing the production authority boundary. This commit triggers a fresh execution for confirmation.
