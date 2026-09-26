@@ -93,3 +93,5 @@ jobs:
 # Triggered after production factory/entrypoint constructor correction.
 # canonical runtime factory + production entrypoint correction verified in source
 # push-triggered PostgreSQL re-performance gate
+
+# EA-35.13 trigger marker: canonical production factory/entrypoint verified before PostgreSQL re-performance.
