@@ -84,5 +84,5 @@ def test_postgresql_funded_cancel_reverses_to_original_sender(factory):
         assert result["replayed"] is False
     with sf() as session:
         assert session.get(LedgerAccountModel, "C-SOURCE").balance == 100
-        assert session.get(LedgerAccountModel, "C-ESCROW").balance == 0
+        assert session.get(LedgerAccountModel, "ea35-cancel-escrow").balance == 0
         assert session.get(CanonicalEscrow, "ea35-cancel-escrow").state == EscrowState.CANCELLED.value
