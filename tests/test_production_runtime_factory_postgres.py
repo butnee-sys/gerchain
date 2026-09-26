@@ -43,7 +43,6 @@ def test_production_factory_executes_canonical_ledger_value_flow_on_real_postgre
         pytest.skip("GERCHAIN_TEST_DATABASE_URL is required")
 
     from sqlalchemy import create_engine
-    from sqlalchemy.orm import sessionmaker
     engine = create_engine(database_url, pool_pre_ping=True)
     runtime = ProductionRuntimeFactory(
         ProductionRuntimeConfig(
@@ -64,7 +63,18 @@ def test_production_factory_executes_canonical_ledger_value_flow_on_real_postgre
         ledger.create_account_in_transaction(session, "FACTORY-PG-FLOW-DEST", "MNT", 0)
         session.commit()
 
-    with session_factory() as session:
+    material = json.dumps({
+        "transaction_id": "PG-FLOW-1",
+        "operation": "SETTLEMENT",
+        "escrow_id": None,
+        "source": "FACTORY-PG-FLOW-SOURCE",
+        "destination": "FACTORY-PG-FLOW-DEST",
+        "amount": 100,
+        "currency": "MNT",
+    }, sort_keys=True, separators=(",", ":"))
+    integrity_hash = hashlib.sha256(material.encode()).hexdigest()
+
+    with runtime._session_factory() as session:
         first = ledger.transfer_in_transaction(
             session,
             transaction_id="PG-FLOW-1",
@@ -80,7 +90,7 @@ def test_production_factory_executes_canonical_ledger_value_flow_on_real_postgre
 
     assert first["replayed"] is False
 
-    with session_factory() as session:
+    with runtime._session_factory() as session:
         replay = ledger.transfer_in_transaction(
             session,
             transaction_id="PG-FLOW-1",
