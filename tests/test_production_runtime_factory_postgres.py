@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import os
+import hashlib
+import json
 
 import pytest
 
@@ -14,7 +16,6 @@ def test_production_factory_builds_real_postgresql_runtime():
         pytest.skip("GERCHAIN_TEST_DATABASE_URL is required")
 
     from sqlalchemy import create_engine
-    from sqlalchemy.orm import sessionmaker
     engine = create_engine(database_url, pool_pre_ping=True)
     runtime = ProductionRuntimeFactory(
         ProductionRuntimeConfig(
@@ -58,7 +59,7 @@ def test_production_factory_executes_canonical_ledger_value_flow_on_real_postgre
     ledger = runtime._canonical_ledger
     assert ledger is not None
 
-    with session_factory() as session:
+    with runtime._session_factory() as session:
         ledger.create_account_in_transaction(session, "FACTORY-PG-FLOW-SOURCE", "MNT", 1000)
         ledger.create_account_in_transaction(session, "FACTORY-PG-FLOW-DEST", "MNT", 0)
         session.commit()
@@ -71,6 +72,9 @@ def test_production_factory_executes_canonical_ledger_value_flow_on_real_postgre
             destination="FACTORY-PG-FLOW-DEST",
             amount=100,
             currency="MNT",
+            operation="SETTLEMENT",
+            escrow_id=None,
+            integrity_hash=integrity_hash,
         )
         session.commit()
 
@@ -80,10 +84,13 @@ def test_production_factory_executes_canonical_ledger_value_flow_on_real_postgre
         replay = ledger.transfer_in_transaction(
             session,
             transaction_id="PG-FLOW-1",
-            source="PG-SOURCE",
-            destination="PG-DEST",
+            source="FACTORY-PG-FLOW-SOURCE",
+            destination="FACTORY-PG-FLOW-DEST",
             amount=100,
             currency="MNT",
+            operation="SETTLEMENT",
+            escrow_id=None,
+            integrity_hash=integrity_hash,
         )
         session.rollback()
 
