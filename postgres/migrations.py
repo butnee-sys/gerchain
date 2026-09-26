@@ -50,6 +50,11 @@ def _execute(conn, sql: str, params=None):
     return conn.execute(sql, params)
 
 
+def _connection_in_transaction(conn) -> bool:
+    value = getattr(conn, "in_transaction", False)
+    return value() if callable(value) else bool(value)
+
+
 def apply_migrations(conn, migration_dir: str | Path) -> None:
     """Apply migrations atomically for SQLAlchemy or native psycopg connections."""
     path = Path(migration_dir)
@@ -67,7 +72,7 @@ def apply_migrations(conn, migration_dir: str | Path) -> None:
     # Migration locking must span the entire migration transaction. PostgreSQL
     # session-level advisory locks do that deterministically across independent
     # client transactions and are released automatically if the session dies.
-    if getattr(conn, "in_transaction", False):
+    if _connection_in_transaction(conn):
         raise RuntimeError("apply_migrations requires an idle database connection")
 
     _execute(conn, "SELECT pg_advisory_lock(%s)", (MIGRATION_LOCK_KEY,))
