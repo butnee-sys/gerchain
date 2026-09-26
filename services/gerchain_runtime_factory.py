@@ -10,7 +10,6 @@ from sqlalchemy.orm import sessionmaker
 
 from postgres.migrations import apply_migrations
 from persistence.production_schema_guard import assert_canonical_production_schema
-from persistence.production_schema_guard import assert_canonical_production_schema
 from services.gerchain_runtime import GerchainRuntime
 
 
