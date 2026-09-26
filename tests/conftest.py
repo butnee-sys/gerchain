@@ -24,12 +24,15 @@ def isolate_postgresql_core_state():
         return
 
     engine = create_engine(url, pool_pre_ping=True)
+    # Legacy test fixtures remain available for legacy compatibility tests.
     initialize_atomic_release_schema(engine)
     IdempotencyBase.metadata.create_all(engine)
-    DurableIdempotencyBase.metadata.create_all(engine)
     initialize_outbox_schema(engine)
     with engine.begin() as connection:
         apply_migrations(connection, "postgres/schema")
+    # Canonical durable idempotency is production-owned by the migration chain;
+    # create_all is only a test-fixture safety net for mixed legacy/core suites.
+    DurableIdempotencyBase.metadata.create_all(engine)
     tables = (
         "gerchain_release_witnesses",
         "gerchain_outbox_events",
