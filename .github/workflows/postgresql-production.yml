@@ -43,10 +43,4 @@ jobs:
       - name: Docker production entrypoint smoke
         run: |
           docker build -t gerchain-production-smoke .
-          timeout 20s docker run --rm --network host \\
-            -e GERCHAIN_DATABASE_URL=postgresql+psycopg://postgres:postgres@localhost:5432/gerchain_test \\
-            -e GERCHAIN_ESCROW_ID=docker-smoke-escrow \\
-            -e GERCHAIN_ESCROW_AMOUNT=100 \\
-            -e GERCHAIN_CURRENCY=USD \\
-            -e GERCHAIN_WITNESS_ID=docker-smoke-witness \\
-            gerchain-production-smoke
+          timeout 20s docker run --rm --network host -e GERCHAIN_DATABASE_URL=postgresql+psycopg://postgres:postgres@localhost:5432/gerchain_test -e GERCHAIN_ESCROW_ID=docker-smoke-escrow -e GERCHAIN_ESCROW_AMOUNT=100 -e GERCHAIN_CURRENCY=USD -e GERCHAIN_WITNESS_ID=docker-smoke-witness gerchain-production-smoke
