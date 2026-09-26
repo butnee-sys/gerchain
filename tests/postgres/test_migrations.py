@@ -6,7 +6,7 @@ from postgres.migrations import apply_migrations
 
 
 def test_repository_migration_versions_are_unique() -> None:
-    migration_dir = Path(__file__).resolve().parents[2] / "postgres" / "schema"
+    migration_dir = Path(__file__).resolve().parents[2] / "postgres" / "migrations"
     versions = [int(path.name.split("_", 1)[0]) for path in migration_dir.glob("*.sql")]
     assert versions == sorted(set(versions))
 
