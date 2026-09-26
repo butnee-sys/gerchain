@@ -30,8 +30,14 @@ jobs:
         with:
           python-version: "3.13"
       - name: Install PostgreSQL test dependencies
-        run: python -m pip install -r postgres/requirements-test.txt
+        run: |
+          python -m pip install -r requirements-dee-security.txt
+          python -m pip install -r postgres/requirements-test.txt
       - name: Run PostgreSQL concurrency suite
         env:
           GERCHAIN_POSTGRES_DSN: postgresql://gerchain:gerchain@127.0.0.1:5432/gerchain_test
         run: python -m pytest -q postgres/tests/test_concurrency.py
+      - name: Run production runtime PostgreSQL boot gate
+        env:
+          GERCHAIN_POSTGRES_DSN: postgresql://gerchain:gerchain@127.0.0.1:5432/gerchain_test
+        run: python -m pytest -q tests/postgres/test_production_runtime_boot.py

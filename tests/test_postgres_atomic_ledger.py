@@ -1,4 +1,6 @@
 import os
+import hashlib
+import json
 
 import pytest
 
@@ -27,7 +29,23 @@ def ledger():
 
 
 def test_duplicate_transaction_id_moves_value_once(ledger):
-    first = ledger.transfer("TX-PG-LEDGER-001", "PG-SOURCE", "PG-DEST", 100, "MNT")
-    second = ledger.transfer("TX-PG-LEDGER-001", "PG-SOURCE", "PG-DEST", 100, "MNT")
+    material = json.dumps({
+        "transaction_id": "TX-PG-LEDGER-001",
+        "operation": "SETTLEMENT",
+        "escrow_id": None,
+        "source": "PG-SOURCE",
+        "destination": "PG-DEST",
+        "amount": 100,
+        "currency": "MNT",
+    }, sort_keys=True, separators=(",", ":"))
+    integrity_hash = hashlib.sha256(material.encode()).hexdigest()
+    first = ledger.transfer(
+        "TX-PG-LEDGER-001", "PG-SOURCE", "PG-DEST", 100, "MNT",
+        operation="SETTLEMENT", escrow_id=None, integrity_hash=integrity_hash,
+    )
+    second = ledger.transfer(
+        "TX-PG-LEDGER-001", "PG-SOURCE", "PG-DEST", 100, "MNT",
+        operation="SETTLEMENT", escrow_id=None, integrity_hash=integrity_hash,
+    )
     assert first["replayed"] is False
     assert second["replayed"] is True

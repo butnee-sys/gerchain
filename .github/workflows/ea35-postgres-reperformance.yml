@@ -1,0 +1,100 @@
+name: EA-35 PostgreSQL re-performance
+
+on:
+  push:
+    branches:
+      - feat/ea21-transaction-aware-ledger
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  postgres-reperformance:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: gerchain
+          POSTGRES_USER: gerchain
+          POSTGRES_PASSWORD: gerchain
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U gerchain -d gerchain"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set repository import path
+        run: echo "PYTHONPATH=$GITHUB_WORKSPACE" >> "$GITHUB_ENV"
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install production dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements-dee-security.txt
+          python -m pip install 'cryptography>=43,<47' pytest
+      - name: Verify production factory construction
+        env:
+          GERCHAIN_DATABASE_URL: postgresql+psycopg://gerchain:gerchain@localhost:5432/gerchain
+        run: |
+          python - <<'PY'
+          from services.gerchain_runtime_factory import ProductionRuntimeConfig, ProductionRuntimeFactory
+          config = ProductionRuntimeConfig(
+              database_url="postgresql+psycopg://gerchain:gerchain@localhost:5432/gerchain",
+              escrow_id="ea35-smoke-escrow",
+              amount=100,
+              currency="USD",
+              witness_id="ea35-smoke-witness",
+          )
+          runtime = ProductionRuntimeFactory(config).create()
+          assert runtime.is_canonical_ledger_authoritative
+          print("CANONICAL_LEDGER_AUTHORITY=TRUE")
+          PY
+      - name: Boot production entrypoint against PostgreSQL
+        env:
+          GERCHAIN_DATABASE_URL: postgresql+psycopg://gerchain:gerchain@localhost:5432/gerchain
+          GERCHAIN_ESCROW_ID: ea35-entrypoint-escrow
+          GERCHAIN_ESCROW_AMOUNT: "100"
+          GERCHAIN_CURRENCY: USD
+          GERCHAIN_WITNESS_ID: ea35-entrypoint-witness
+        run: |
+          set +e
+          timeout 10s python production_entrypoint.py
+          code=$?
+          if [ "$code" -ne 124 ]; then
+            echo "Production entrypoint failed before controlled timeout (exit=$code)"
+            exit "$code"
+          fi
+          echo "PRODUCTION_ENTRYPOINT_BOOT=TRUE"
+      - name: Run PostgreSQL canonical value-flow re-performance
+        env:
+          GERCHAIN_DATABASE_URL: postgresql+psycopg://gerchain:gerchain@localhost:5432/gerchain
+        run: python -m pytest -q tests/integration/test_ea35_postgres_reperformance.py
+      - name: Run PostgreSQL refund and cancel re-performance
+        env:
+          GERCHAIN_DATABASE_URL: postgresql+psycopg://gerchain:gerchain@localhost:5432/gerchain
+        run: python -m pytest -q tests/integration/test_ea35_postgres_refund_cancel.py
+      - name: Run EA-35 reconciliation tests
+        run: python -m pytest -q tests/persistence/test_deep_value_reconciliation.py
+      - name: Run canonical value-flow tests
+        run: |
+          python -m pytest -q             tests/services/test_gerchain_runtime_refund_canonical.py             tests/services/test_gerchain_runtime_cancel_canonical.py             tests/services/test_gerchain_runtime_settlement_canonical.py             tests/services/test_gerchain_runtime_canonical_ledger.py
+
+# EA-35.13 verification gate
+# Production PostgreSQL gate: factory construction + entrypoint boot + canonical value-flow tests
+# This push is the authoritative trigger for the PostgreSQL re-performance after
+# correcting the production factory constructor and canonical-ledger cutover.
+
+# EA-35.13 verification trigger
+# Triggered after production factory/entrypoint constructor correction.
+# canonical runtime factory + production entrypoint correction verified in source
+# push-triggered PostgreSQL re-performance gate
+
+# EA-35.14 trigger marker: PostgreSQL re-performance requested after canonical factory/entrypoint correction.

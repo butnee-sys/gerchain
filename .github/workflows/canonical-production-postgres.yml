@@ -1,0 +1,56 @@
+name: canonical-production-postgres
+
+on:
+  push:
+    branches:
+      - "feat/ea21-transaction-aware-ledger"
+  pull_request:
+
+jobs:
+  postgres-canonical:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: gerchain
+          POSTGRES_PASSWORD: gerchain
+          POSTGRES_DB: gerchain_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U gerchain -d gerchain_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install runtime and test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dee-security.txt pytest
+      - name: Verify production entrypoint construction
+        env:
+          GERCHAIN_DATABASE_URL: postgresql+psycopg://gerchain:gerchain@localhost:5432/gerchain_test
+          GERCHAIN_ESCROW_ID: ci-escrow
+          GERCHAIN_ESCROW_AMOUNT: "100"
+          GERCHAIN_CURRENCY: USD
+          GERCHAIN_WITNESS_ID: ci-witness
+        run: |
+          python - <<'PY'
+          import os
+          from services.gerchain_runtime_factory import ProductionRuntimeConfig, ProductionRuntimeFactory
+          from sqlalchemy import create_engine
+          dsn = os.environ["GERCHAIN_DATABASE_URL"]
+          engine = create_engine(dsn)
+          runtime = ProductionRuntimeFactory(ProductionRuntimeConfig(database_url=dsn, escrow_id=os.environ["GERCHAIN_ESCROW_ID"], amount=int(os.environ["GERCHAIN_ESCROW_AMOUNT"]), currency=os.environ["GERCHAIN_CURRENCY"], witness_id=os.environ["GERCHAIN_WITNESS_ID"]), engine=engine).create()
+          assert runtime.is_canonical_ledger_authoritative
+          print("CANONICAL_LEDGER_AUTHORITY=TRUE")
+          engine.dispose()
+          PY
+      - name: Run deep value truth tests
+        run: pytest -q tests/persistence/test_deep_value_reconciliation.py

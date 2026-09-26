@@ -1,44 +1,101 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Callable
 
-from sqlalchemy import Engine
+from sqlalchemy import create_engine
+from sqlalchemy.engine import Engine
+from sqlalchemy.orm import sessionmaker
 
-from persistence.atomic_release import initialize_atomic_release_schema
+from postgres.migrations import apply_migrations
+from persistence.production_schema_guard import assert_canonical_production_schema
 from services.gerchain_runtime import GerchainRuntime
 
 
-class ProductionRuntimeFactory:
-    """Create the production GerChain runtime with PostgreSQL as authority."""
+@dataclass(frozen=True)
+class ProductionRuntimeConfig:
+    database_url: str
+    escrow_id: str
+    amount: int
+    currency: str
+    witness_id: str
 
-    @staticmethod
-    def create(
+
+class ProductionRuntimeFactory:
+    """Construct the production GerChain runtime with Canonical Ledger authority."""
+
+    def __init__(
+        self,
+        config: ProductionRuntimeConfig,
+        *,
+        engine: Engine | None = None,
+    ) -> None:
+        if not config.database_url:
+            raise ValueError("database_url is required")
+        if not config.database_url.startswith(
+            ("postgresql://", "postgresql+psycopg://", "postgresql+psycopg2://")
+        ):
+            raise ValueError(
+                "ProductionRuntimeFactory requires PostgreSQL database URL"
+            )
+
+        self.config = config
+        self.engine = engine or create_engine(config.database_url, future=True)
+        if self.engine.dialect.name != "postgresql":
+            raise ValueError(
+                "ProductionRuntimeFactory requires a PostgreSQL engine"
+            )
+        self.session_factory: Callable[[], Any] = sessionmaker(
+            bind=self.engine,
+            expire_on_commit=False,
+        )
+
+    def initialize(self) -> None:
+        """Apply the versioned PostgreSQL production migrations."""
+        migration_dir = Path(__file__).resolve().parents[1] / "postgres" / "migrations"
+        with self.engine.connect() as connection:
+            apply_migrations(connection, migration_dir)
+            assert_canonical_production_schema(connection)
+
+    def create(self) -> GerchainRuntime:
+        self.initialize()
+        runtime = GerchainRuntime(
+            escrow_id=self.config.escrow_id,
+            amount=self.config.amount,
+            currency=self.config.currency,
+            witness_id=self.config.witness_id,
+        )
+        runtime.configure_canonical_ledger(self.session_factory)
+        runtime.require_canonical_ledger_authority()
+        return runtime
+
+    @classmethod
+    def from_engine(
+        cls,
         *,
         escrow_id: str,
         amount: int,
         currency: str,
         witness_id: str,
         engine: Engine,
-        session_factory: Callable[[], Any],
-        initial_state: dict[str, Any] | None = None,
-        manifest: dict[str, Any] | None = None,
-        initial_money_state: dict[str, Any] | None = None,
+        session_factory: Callable[[], Any] | None = None,
     ) -> GerchainRuntime:
-        if engine is None or session_factory is None:
-            raise ValueError("production runtime requires PostgreSQL engine and session factory")
-        initialize_atomic_release_schema(engine)
-        runtime = GerchainRuntime(
-            escrow_id=escrow_id,
-            amount=amount,
-            currency=currency,
-            witness_id=witness_id,
-            initial_state=initial_state,
-            manifest=manifest,
-            initial_money_state=initial_money_state,
+        factory = cls(
+            ProductionRuntimeConfig(
+                database_url=str(engine.url),
+                escrow_id=escrow_id,
+                amount=amount,
+                currency=currency,
+                witness_id=witness_id,
+            ),
+            engine=engine,
         )
-        runtime.configure_postgres_release(session_factory)
-        runtime.runtime_mode = "production-postgresql"
-        return runtime
+        if session_factory is not None:
+            factory.session_factory = session_factory
+        return factory.create()
+
+    build = create
 
 
-__all__ = ["ProductionRuntimeFactory"]
+__all__ = ["ProductionRuntimeConfig", "ProductionRuntimeFactory"]

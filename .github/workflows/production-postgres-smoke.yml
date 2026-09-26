@@ -1,0 +1,80 @@
+name: production-postgres-smoke
+
+on:
+  push:
+    branches:
+      - "feat/ea21-transaction-aware-ledger"
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  postgres-smoke:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: gerchain
+          POSTGRES_USER: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d gerchain"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      GERCHAIN_DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/gerchain
+      GERCHAIN_ESCROW_ID: smoke-escrow
+      GERCHAIN_ESCROW_AMOUNT: "100"
+      GERCHAIN_CURRENCY: USD
+      GERCHAIN_WITNESS_ID: smoke-witness
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install dependencies
+        run: pip install -r requirements-dee-security.txt -r postgres/requirements-test.txt
+      - name: Run production PostgreSQL smoke test
+        env:
+          GERCHAIN_POSTGRES_DSN: ${{ env.GERCHAIN_DATABASE_URL }}
+        run: python -m pytest -q tests/production/test_production_runtime_postgres_smoke.py
+      - name: Verify production entrypoint boot
+        run: |
+          python - <<'PY'
+          import os
+          from sqlalchemy import inspect
+          from services.gerchain_runtime_factory import ProductionRuntimeConfig, ProductionRuntimeFactory
+
+          url = os.environ["GERCHAIN_DATABASE_URL"]
+          factory = ProductionRuntimeFactory(
+              ProductionRuntimeConfig(
+                  database_url=url,
+                  escrow_id=os.environ["GERCHAIN_ESCROW_ID"],
+                  amount=int(os.environ["GERCHAIN_ESCROW_AMOUNT"]),
+                  currency=os.environ["GERCHAIN_CURRENCY"],
+                  witness_id=os.environ["GERCHAIN_WITNESS_ID"],
+              )
+          )
+          runtime = factory.create()
+          assert runtime.is_canonical_ledger_authoritative
+          names = set(inspect(factory.engine).get_table_names())
+          required = {
+              "gerchain_ledger_accounts",
+              "gerchain_ledger_movements",
+              "escrows",
+              "gerchain_outbox_events",
+              "gerchain_idempotency_records",
+              "gerchain_transaction_witnesses",
+          }
+          missing = required - names
+          assert not missing, f"missing canonical tables: {sorted(missing)}"
+          print("PRODUCTION_POSTGRES_FACTORY_SMOKE=PASS")
+          print("CANONICAL_LEDGER_AUTHORITATIVE=TRUE")
+          print("TABLES_VERIFIED=TRUE")
+          factory.engine.dispose()
+          PY

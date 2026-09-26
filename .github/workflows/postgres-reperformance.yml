@@ -1,0 +1,72 @@
+name: PostgreSQL production re-performance
+
+on:
+  push:
+    branches:
+      - feat/ea21-transaction-aware-ledger
+  pull_request:
+
+jobs:
+  postgres-reperformance:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: gerchain
+          POSTGRES_PASSWORD: gerchain
+          POSTGRES_DB: gerchain_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U gerchain -d gerchain_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dee-security.txt
+          pip install pytest
+
+      - name: Verify production runtime construction
+        env:
+          GERCHAIN_DATABASE_URL: postgresql+psycopg://gerchain:gerchain@localhost:5432/gerchain_test
+          GERCHAIN_ESCROW_ID: ci-escrow
+          GERCHAIN_ESCROW_AMOUNT: "100"
+          GERCHAIN_CURRENCY: USD
+          GERCHAIN_WITNESS_ID: ci-witness
+        run: |
+          python - <<'PY'
+          from services.gerchain_runtime_factory import ProductionRuntimeConfig, ProductionRuntimeFactory
+          cfg = ProductionRuntimeConfig(
+              database_url="postgresql+psycopg://gerchain:gerchain@localhost:5432/gerchain_test",
+              escrow_id="ci-escrow",
+              amount=100,
+              currency="USD",
+              witness_id="ci-witness",
+          )
+          runtime = ProductionRuntimeFactory(cfg).create()
+          assert runtime.is_canonical_ledger_authoritative
+          print("canonical production runtime: OK")
+          PY
+
+      - name: Run PostgreSQL production re-performance
+        env:
+          GERCHAIN_TEST_DATABASE_URL: postgresql+psycopg://gerchain:gerchain@localhost:5432/gerchain_test
+        run: |
+          pytest -q tests/test_ea35_postgres_reperformance.py
+
+      - name: Run deep value-truth unit tests on isolated SQLite
+        run: |
+          env -u GERCHAIN_TEST_DATABASE_URL pytest -q tests/persistence/test_deep_value_reconciliation.py
