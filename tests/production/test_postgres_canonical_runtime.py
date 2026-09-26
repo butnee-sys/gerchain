@@ -23,7 +23,7 @@ def _reset_canonical_test_state(engine):
 
 
 def test_postgres_canonical_fund_lock_release_reconciles():
-    url = os.environ["GERCHAIN_DATABASE_URL"]
+    url = os.environ.get("GERCHAIN_DATABASE_URL") or os.environ["GERCHAIN_TEST_DATABASE_URL"]
     engine = create_engine(url, pool_pre_ping=True)
     factory = ProductionRuntimeFactory(
         ProductionRuntimeConfig(
