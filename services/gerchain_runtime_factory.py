@@ -48,4 +48,13 @@ class ProductionRuntimeFactory:
         return runtime
 
 
-__all__ = ["ProductionRuntimeFactory"]
+__all__ = ["ProductionRuntimeFactory"]    def initialize(self) -> None:
+        """Apply the versioned PostgreSQL schema, then reconcile ORM metadata."""
+        migration_dir = Path(__file__).resolve().parents[1] / "postgres" / "schema"
+        with self.engine.begin() as connection:
+            apply_migrations(connection, migration_dir)
+
+        for base in (AtomicLedgerBase, EscrowBase, OutboxBase, IdempotencyBase, TransactionWitness):
+            base.metadata.create_all(self.engine)
+
+
