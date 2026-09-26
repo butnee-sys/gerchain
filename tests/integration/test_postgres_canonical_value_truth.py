@@ -67,6 +67,12 @@ def _create_escrow(factory, escrow_id, sender, beneficiary, refund_destination, 
 
 def test_postgres_boot_and_canonical_release_refund_cancel_truth():
     factory = _factory()
+    with factory.engine.begin() as connection:
+        connection.exec_driver_sql(
+            "TRUNCATE TABLE gerchain_outbox_events, gerchain_transaction_witnesses, "
+            "gerchain_idempotency_records, gerchain_ledger_movements, "
+            "gerchain_ledger_accounts, escrows RESTART IDENTITY CASCADE"
+        )
     runtime = factory.create()
     assert runtime.is_canonical_ledger_authoritative
 
