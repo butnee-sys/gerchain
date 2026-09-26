@@ -51,7 +51,14 @@ class ProductionRuntimeFactory:
             expire_on_commit=False,
         )
 
-    def initialize(self) -> None:\n        """Apply the checked-in PostgreSQL migration set atomically."""\n        migration_dir = Path(__file__).resolve().parents[1] / "postgres" / "schema"\n        with self.engine.connect() as connection:\n            apply_migrations(connection, migration_dir)\n            assert_canonical_production_schema(connection)\n\n    def create(self) -> GerchainRuntime:
+    def initialize(self) -> None:
+        """Apply the checked-in PostgreSQL migration set atomically."""
+        migration_dir = Path(__file__).resolve().parents[1] / "postgres" / "schema"
+        with self.engine.connect() as connection:
+            apply_migrations(connection, migration_dir)
+            assert_canonical_production_schema(connection)
+
+    def create(self) -> GerchainRuntime:
         self.initialize()
         runtime = GerchainRuntime(
             escrow_id=self.config.escrow_id,
