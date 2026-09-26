@@ -13,6 +13,15 @@ from persistence.release_escrow import release_escrow_in_transaction
 from services.gerchain_runtime_factory import ProductionRuntimeConfig, ProductionRuntimeFactory
 
 
+def _reset_canonical_test_state(engine):
+    with engine.begin() as connection:
+        connection.exec_driver_sql(
+            "TRUNCATE TABLE gerchain_ledger_movements, gerchain_ledger_accounts, "
+            "escrows, gerchain_transaction_witnesses, gerchain_outbox_events, "
+            "gerchain_idempotency_records RESTART IDENTITY CASCADE"
+        )
+
+
 def test_postgres_canonical_fund_lock_release_reconciles():
     url = os.environ["GERCHAIN_DATABASE_URL"]
     engine = create_engine(url, pool_pre_ping=True)
@@ -27,6 +36,7 @@ def test_postgres_canonical_fund_lock_release_reconciles():
         engine=engine,
     )
     runtime = factory.create()
+    _reset_canonical_test_state(engine)
     assert runtime.is_canonical_ledger_authoritative
 
     runtime.create_account(account_id="pg-proof-runtime-account", initial_balance=7)
@@ -126,6 +136,7 @@ def test_postgres_canonical_refund_and_cancel_value_paths_reconcile():
         engine=engine,
     )
     factory.create()
+    _reset_canonical_test_state(engine)
     Session = sessionmaker(bind=engine, expire_on_commit=False)
     now = datetime.now(timezone.utc)
 
