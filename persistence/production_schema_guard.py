@@ -45,3 +45,16 @@ def assert_canonical_production_schema(connection: Connection) -> None:
             'canonical production schema movement integrity constraints incomplete: '
             + ', '.join(missing_movement_constraints)
         )
+
+    # SETTLEMENT is a direct Canonical Ledger movement, not an escrow
+    # transition. Its escrow_id is therefore intentionally NULL; escrow-bound
+    # operations FUND/RELEASE/REFUND/CANCEL must carry a non-empty escrow_id.
+    binding_constraint = next(
+        (item for item in movement_constraints if item.get('name') == 'gerchain_movement_escrow_binding_check'),
+        None,
+    )
+    binding_sql = str((binding_constraint or {}).get('sqltext', '')).upper()
+    if 'SETTLEMENT' not in binding_sql or 'ESCROW_ID IS NOT NULL' not in binding_sql:
+        raise RuntimeError(
+            'canonical production schema settlement/escrow binding contract is incomplete'
+        )
