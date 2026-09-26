@@ -10,6 +10,13 @@ from sqlalchemy import text
 
 MIGRATION_LOCK_KEY = 73546501
 
+# Version 004 previously shipped with explicit BEGIN/COMMIT wrappers. Keep its
+# historical checksum accepted so existing databases can migrate to the
+# runner-compatible source without rewriting schema history.
+LEGACY_CHECKSUMS = {
+    4: {"729c586234c0b630cce6edd9feab694f4d589dcb5e9321e44f7d22ab556799a0"},
+}
+
 
 def checksum(sql: str) -> str:
     return hashlib.sha256(sql.encode("utf-8")).hexdigest()
@@ -86,7 +93,7 @@ def apply_migrations(conn, migration_dir: str | Path) -> None:
             digest = checksum(sql)
 
             if version in applied:
-                if applied[version] != digest:
+                if applied[version] != digest and applied[version] not in LEGACY_CHECKSUMS.get(version, set()):
                     raise RuntimeError(
                         f"Migration checksum mismatch for version {version}"
                     )
