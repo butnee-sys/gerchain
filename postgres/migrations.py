@@ -64,55 +64,59 @@ def apply_migrations(conn, migration_dir: str | Path) -> None:
             )
         versions[version] = migration
 
+    # Serialize the entire migration critical section at session level.
+    # PostgreSQL releases this lock automatically if the session disappears.
     _execute(conn, "SELECT pg_advisory_lock(%s)", (MIGRATION_LOCK_KEY,))
     try:
         with _transaction(conn):
             _execute(conn, "SELECT pg_advisory_xact_lock(%s)", (MIGRATION_LOCK_KEY,))
-        _execute(
-            conn,
-            """
-            CREATE TABLE IF NOT EXISTS schema_version (
-                version BIGINT PRIMARY KEY,
-                checksum TEXT NOT NULL,
-                applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
-            )
-            """
-        )
-
-        rows = _execute(
-            conn,
-            "SELECT version, checksum FROM schema_version ORDER BY version",
-        ).fetchall()
-        applied = {int(row[0]): row[1] for row in rows}
-
-        for migration in files:
-            version = int(migration.name.split("_", 1)[0])
-            sql = migration.read_text(encoding="utf-8")
-            digest = checksum(sql)
-
-            if version in applied:
-                if applied[version] != digest and applied[version] not in LEGACY_CHECKSUMS.get(version, set()):
-                    raise RuntimeError(
-                        f"Migration checksum mismatch for version {version}"
-                    )
-                continue
-
-            _execute(conn, sql)
             _execute(
                 conn,
                 """
-                INSERT INTO schema_version(version, checksum)
-                VALUES (%s, %s)
-                ON CONFLICT (version) DO NOTHING
-                """,
-                (version, digest),
-            )
-            recorded = _execute(
-                conn,
-                "SELECT checksum FROM schema_version WHERE version = %s",
-                (version,),
-            ).fetchone()
-            if recorded is None or recorded[0] != digest:
-                raise RuntimeError(
-                    f"Migration checksum mismatch for version {version}"
+                CREATE TABLE IF NOT EXISTS schema_version (
+                    version BIGINT PRIMARY KEY,
+                    checksum TEXT NOT NULL,
+                    applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
                 )
+                """
+            )
+
+            rows = _execute(
+                conn,
+                "SELECT version, checksum FROM schema_version ORDER BY version",
+            ).fetchall()
+            applied = {int(row[0]): row[1] for row in rows}
+
+            for migration in files:
+                version = int(migration.name.split("_", 1)[0])
+                sql = migration.read_text(encoding="utf-8")
+                digest = checksum(sql)
+
+                if version in applied:
+                    if applied[version] != digest and applied[version] not in LEGACY_CHECKSUMS.get(version, set()):
+                        raise RuntimeError(
+                            f"Migration checksum mismatch for version {version}"
+                        )
+                    continue
+
+                _execute(conn, sql)
+                _execute(
+                    conn,
+                    """
+                    INSERT INTO schema_version(version, checksum)
+                    VALUES (%s, %s)
+                    ON CONFLICT (version) DO NOTHING
+                    """,
+                    (version, digest),
+                )
+                recorded = _execute(
+                    conn,
+                    "SELECT checksum FROM schema_version WHERE version = %s",
+                    (version,),
+                ).fetchone()
+                if recorded is None or recorded[0] != digest:
+                    raise RuntimeError(
+                        f"Migration checksum mismatch for version {version}"
+                    )
+    finally:
+        _execute(conn, "SELECT pg_advisory_unlock(%s)", (MIGRATION_LOCK_KEY,))
