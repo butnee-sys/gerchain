@@ -37,7 +37,7 @@ jobs:
         env:
           GERCHAIN_POSTGRES_DSN: postgresql://gerchain:gerchain@127.0.0.1:5432/gerchain_test
         run: python -m pytest -q postgres/tests/test_concurrency.py
-      - name: Run production runtime PostgreSQL boot gate
+      - name: Run canonical production PostgreSQL value-truth gate
         env:
-          GERCHAIN_POSTGRES_DSN: postgresql://gerchain:gerchain@127.0.0.1:5432/gerchain_test
-        run: python -m pytest -q tests/postgres/test_production_runtime_boot.py
+          GERCHAIN_DATABASE_URL: postgresql://gerchain:gerchain@127.0.0.1:5432/gerchain_test
+        run: python -m pytest -q tests/production/test_postgresql_production_value_truth.py
