@@ -1,33 +1,74 @@
 # EA-35 Production PostgreSQL Evidence
 
-## Scope
-This evidence gate covers the production runtime construction and PostgreSQL re-performance for the canonical value-flow path.
+Date: 2026-09-26
 
-## Verified in source
-- `ProductionRuntimeFactory` requires PostgreSQL.
-- Factory construction creates canonical persistence metadata for Ledger, Escrow, Outbox, Idempotency, and Witness.
-- Factory configures `GerchainRuntime` through `configure_canonical_ledger()`.
-- Factory requires canonical ledger authority before returning.
-- `production_entrypoint.py` constructs `ProductionRuntimeConfig` and invokes the factory instance correctly.
-- The EA-35 PostgreSQL workflow includes:
-  1. factory construction against PostgreSQL 16;
-  2. production entrypoint boot;
-  3. FUND → LOCK → RELEASE re-performance;
-  4. REFUND and CANCEL re-performance;
-  5. deep reconciliation tests;
-  6. canonical runtime tests.
+## Exact execution commit
+08d260af1f921f038c93786007bd92d2199c6145
 
-## Exact source correction
-Production runtime construction correction commit:
-`e860f502f3e1a2d56fd873ad2faab7b1ab630740`
+Open verification PR: #90 — EA-35.13 PostgreSQL production smoke gate.
 
-## Verification state
-Repository source verification: **IMPLEMENTED**.
+## Direct PostgreSQL production evidence
 
-GitHub Actions execution for the exact correction commit has not produced a retrievable workflow-run/status record through the available repository interface at this checkpoint. Therefore PostgreSQL execution evidence is **UNVERIFIED**, not GREEN.
+GitHub Actions run 36231750283 — Production PostgreSQL verification:
+- PostgreSQL 16 service
+- production dependencies installed
+- production PostgreSQL bootstrap: 1 passed
+- production full value flow: 2 passed
+- deep value reconciliation: 19 passed
+- complete job conclusion: success
 
-## Release gate
-EA-35 remains **IN PROGRESS / NOT LOCKED** until an exact-SHA PostgreSQL workflow execution demonstrates the complete gate successfully.
+GitHub Actions run 36231750320 — Production PostgreSQL Runtime:
+- production entrypoint boot against PostgreSQL: success
+- production PostgreSQL value-flow proof: success
+- runtime contract suite: 4 passed
+- complete job conclusion: success
 
-## Non-claims
-This document does not constitute an external audit, certification, or production deployment attestation.
+## Re-performance evidence
+
+GitHub Actions run 36231750336 — production-postgres-reperformance:
+- real PostgreSQL service
+- tests/postgres/test_production_postgres_reperformance.py -m postgres
+- 1 passed
+- complete job conclusion: success
+
+The re-performance test independently exercises the PostgreSQL persistence boundary and verifies:
+- Canonical Ledger authority
+- FUND
+- LOCK
+- RELEASE
+- escrow terminal state
+- canonical balances
+- movement count
+- Witness evidence
+- Outbox evidence
+
+GitHub Actions run 36231750279 — EAI PostgreSQL Reperformance: success.
+GitHub Actions run 36231750333 — PostgreSQL production re-performance: success.
+GitHub Actions run 36231750255 — production-postgresql-proof: success.
+
+## EAI matrix evidence
+
+GitHub Actions run 36231750286 — PostgreSQL production proof: success.
+The EAI matrix covers FUND → LOCK → REFUND, FUND → CANCEL, SETTLEMENT, canonical balances, terminal escrow states, and deep value reconciliation.
+
+## Architecture conclusion
+
+The verified PostgreSQL production path exercises:
+Canonical Ledger → Canonical Escrow → Witness → Outbox → Durable Idempotency → Deep Value Truth Reconciliation
+
+No legacy in-memory balance authority is required for the verified PostgreSQL production path.
+
+## Status
+
+EA-35 PostgreSQL production verification: VERIFIED at exact commit 08d260af1f921f038c93786007bd92d2199c6145.
+
+This is repository/CI technical evidence, not external certification or independent organizational audit.
+
+EA-35 overall: IN PROGRESS / NOT LOCKED.
+
+Remaining closure gates:
+1. reconcile all overlapping/open EA-35 PRs into one canonical execution baseline;
+2. formally record independent re-performance evidence with exact SHA and methodology;
+3. verify production entrypoint/recovery semantics after final branch consolidation;
+4. update final evidence index;
+5. only then consider production lock.
