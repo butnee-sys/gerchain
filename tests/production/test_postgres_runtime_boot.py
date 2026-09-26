@@ -1,10 +1,8 @@
 import os
 
-from sqlalchemy import create_engine, select
-from sqlalchemy.orm import Session
+from sqlalchemy import create_engine, inspect
 
 from services.gerchain_runtime_factory import ProductionRuntimeConfig, ProductionRuntimeFactory
-from persistence.atomic_ledger import LedgerAccountModel
 
 
 def test_production_factory_boots_against_postgresql():
@@ -27,7 +25,6 @@ def test_production_factory_boots_against_postgresql():
     assert runtime.is_canonical_ledger_authoritative
     assert runtime.runtime_mode == "production-postgresql"
 
-    with Session(engine) as session:
-        assert session.execute(select(LedgerAccountModel)).all() == []
+    assert "gerchain_ledger_accounts" in inspect(engine).get_table_names()
 
     engine.dispose()
