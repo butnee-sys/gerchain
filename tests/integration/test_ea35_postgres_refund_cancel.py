@@ -39,7 +39,7 @@ def test_postgresql_refund_uses_authoritative_destination(factory):
         session.query(CanonicalEscrow).delete()
         session.add_all([
             LedgerAccountModel(account_id="R-SOURCE", currency="MNT", balance=0, version=0, updated_at=now),
-            LedgerAccountModel(account_id="R-ESCROW", currency="MNT", balance=100, version=0, updated_at=now),
+            LedgerAccountModel(account_id="ea35-refund-escrow", currency="MNT", balance=100, version=0, updated_at=now),
             LedgerAccountModel(account_id="R-OTHER", currency="MNT", balance=0, version=0, updated_at=now),
             CanonicalEscrow(
                 id="ea35-refund-escrow", sender_address="R-SOURCE", receiver_address="R-BEN",
@@ -69,7 +69,7 @@ def test_postgresql_funded_cancel_reverses_to_original_sender(factory):
         session.query(CanonicalEscrow).delete()
         session.add_all([
             LedgerAccountModel(account_id="C-SOURCE", currency="MNT", balance=0, version=0, updated_at=now),
-            LedgerAccountModel(account_id="C-ESCROW", currency="MNT", balance=100, version=0, updated_at=now),
+            LedgerAccountModel(account_id="ea35-cancel-escrow", currency="MNT", balance=100, version=0, updated_at=now),
             CanonicalEscrow(
                 id="ea35-cancel-escrow", sender_address="C-SOURCE", receiver_address="C-BEN",
                 amount=100, state=EscrowState.FUNDED.value, condition_desc="cancel proof",
