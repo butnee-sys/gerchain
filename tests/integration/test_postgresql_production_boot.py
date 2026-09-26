@@ -30,7 +30,7 @@ def test_production_runtime_full_fund_lock_release_graph():
         runtime = ProductionRuntimeFactory(config, engine=engine).create()
         assert runtime.is_canonical_ledger_authoritative
         # A second construction must validate migration checksums and remain idempotent.
-        runtime_again = ProductionRuntimeFactory(config, engine=engine).build()
+        runtime_again = ProductionRuntimeFactory(config, engine=engine).create()
         assert runtime_again.is_canonical_ledger_authoritative
 
         Session = sessionmaker(bind=engine, expire_on_commit=False)
