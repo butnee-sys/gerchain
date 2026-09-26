@@ -34,4 +34,4 @@ jobs:
           pip install -r postgres/requirements-test.txt
           pip install "sqlalchemy>=2" "psycopg[binary]" pytest
       - name: Run operating reconciliation integration suite
-        run: python -m pytest -q tests/test_operating_reconciliation.py
+        run: python -m pytest -q tests/persistence/test_deep_value_reconciliation.py tests/production/test_postgres_canonical_runtime.py
