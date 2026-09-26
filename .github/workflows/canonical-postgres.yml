@@ -32,7 +32,8 @@ jobs:
           python-version: '3.12'
       - run: pip install -r requirements-dee-security.txt
       - run: python -m pytest tests/persistence/test_deep_value_reconciliation.py -q
-      - run: python - <<'PY'
+      - run: |
+          python - <<'PY'
           import os
           from sqlalchemy import create_engine, text
           from services.gerchain_runtime_factory import ProductionRuntimeConfig, ProductionRuntimeFactory
