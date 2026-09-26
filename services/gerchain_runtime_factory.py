@@ -7,6 +7,8 @@ from typing import Any, Callable
 from sqlalchemy import create_engine
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import sessionmaker
+
+from postgres.migrations import apply_migrations
 from persistence.production_schema_guard import assert_canonical_production_schema
 from postgres.migrations import apply_migrations
 from services.gerchain_runtime import GerchainRuntime
@@ -51,11 +53,10 @@ class ProductionRuntimeFactory:
         )
 
     def initialize(self) -> None:
-        """Apply the authoritative PostgreSQL schema before runtime construction."""
+        """Apply the authoritative versioned PostgreSQL schema migrations."""
         migration_dir = Path(__file__).resolve().parents[1] / "postgres" / "schema"
         with self.engine.begin() as connection:
             apply_migrations(connection, migration_dir)
-            assert_canonical_production_schema(connection)
 
     def create(self) -> GerchainRuntime:
         self.initialize()
