@@ -33,7 +33,8 @@ UPDATE escrows
 SET refund_destination = COALESCE(refund_destination, sender_address),
     created_at = COALESCE(created_at, updated_at);
 
-ALTER TABLE escrows ALTER COLUMN currency SET NOT NULL;
+-- Existing deployments may not yet have authoritative currency metadata for every
+-- historical escrow. Keep this nullable until an explicit data backfill is verified.
 
 ALTER TABLE escrows DROP CONSTRAINT IF EXISTS escrows_state_check;
 ALTER TABLE escrows DROP CONSTRAINT IF EXISTS gerchain_escrow_state_check;
