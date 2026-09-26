@@ -4,7 +4,15 @@ from persistence.atomic_ledger import AtomicLedgerBase, LedgerAccountModel, Ledg
 from services.gerchain_runtime import GerchainRuntime
 
 def test_production_runtime_settlement_uses_canonical_ledger():
-    e=create_engine("sqlite+pysqlite:///:memory:"); AtomicLedgerBase.metadata.create_all(e); sf=sessionmaker(bind=e)
+    e=create_engine("sqlite+pysqlite:///:memory:")
+    from persistence.atomic_value_transaction import WitnessBase
+    from persistence.durable_idempotency import IdempotencyBase
+    from persistence.recovery_outbox import OutboxBase
+    AtomicLedgerBase.metadata.create_all(e)
+    WitnessBase.metadata.create_all(e)
+    IdempotencyBase.metadata.create_all(e)
+    OutboxBase.metadata.create_all(e)
+    sf=sessionmaker(bind=e)
     from datetime import datetime, timezone
     now=datetime.now(timezone.utc)
     with sf.begin() as s:
