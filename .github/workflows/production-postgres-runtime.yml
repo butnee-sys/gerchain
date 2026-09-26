@@ -32,7 +32,9 @@ jobs:
           python-version: "3.13"
 
       - name: Install production PostgreSQL test dependencies
-        run: python -m pip install -r postgres/requirements-test.txt
+        run: |
+          python -m pip install -r postgres/requirements-test.txt
+          python -m pip install 'cryptography>=43,<47'
 
       - name: Verify production runtime and migrations
         env:
