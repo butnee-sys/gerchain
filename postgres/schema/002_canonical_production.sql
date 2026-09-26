@@ -36,7 +36,8 @@ SET refund_destination = COALESCE(refund_destination, sender_address),
 ALTER TABLE escrows ALTER COLUMN currency SET NOT NULL;
 
 ALTER TABLE escrows DROP CONSTRAINT IF EXISTS escrows_state_check;
-ALTER TABLE escrows ADD CONSTRAINT escrows_state_check
+ALTER TABLE escrows DROP CONSTRAINT IF EXISTS gerchain_escrow_state_check;
+ALTER TABLE escrows ADD CONSTRAINT gerchain_escrow_state_check
     CHECK (state IN ('CREATED','FUNDED','LOCKED','RELEASED','REFUNDED','CANCELLED'));
 
 CREATE TABLE IF NOT EXISTS gerchain_transaction_witnesses (
@@ -75,12 +76,12 @@ ALTER TABLE gerchain_ledger_movements
     DROP CONSTRAINT IF EXISTS gerchain_movement_operation_check;
 ALTER TABLE gerchain_ledger_movements
     ADD CONSTRAINT gerchain_movement_operation_check
-    CHECK (operation IN ('TRANSFER','FUND','RELEASE','REFUND','CANCEL','SETTLEMENT'));
+    CHECK (operation IN ('FUND','RELEASE','REFUND','CANCEL','SETTLEMENT'));
 ALTER TABLE gerchain_ledger_movements
     DROP CONSTRAINT IF EXISTS gerchain_movement_integrity_hash_check;
 ALTER TABLE gerchain_ledger_movements
     ADD CONSTRAINT gerchain_movement_integrity_hash_check
-    CHECK (integrity_hash IS NOT NULL);
+    CHECK (length(integrity_hash) = 64);
 ALTER TABLE gerchain_ledger_movements
     DROP CONSTRAINT IF EXISTS gerchain_movement_escrow_binding_check;
 ALTER TABLE gerchain_ledger_movements
@@ -88,7 +89,7 @@ ALTER TABLE gerchain_ledger_movements
     CHECK (
         (operation = 'SETTLEMENT' AND escrow_id IS NULL)
         OR (operation IN ('FUND','RELEASE','REFUND','CANCEL') AND escrow_id IS NOT NULL)
-        OR operation IN ('TRANSFER')
+         
     );
 
 CREATE INDEX IF NOT EXISTS ix_gerchain_ledger_movements_escrow
