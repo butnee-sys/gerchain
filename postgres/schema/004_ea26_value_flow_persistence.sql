@@ -15,6 +15,9 @@ CREATE TABLE IF NOT EXISTS gerchain_ledger_movements (
     destination VARCHAR(128) NOT NULL,
     amount INTEGER NOT NULL CHECK (amount > 0),
     currency VARCHAR(16) NOT NULL,
+    operation VARCHAR(32) NOT NULL DEFAULT 'TRANSFER',
+    escrow_id VARCHAR(255),
+    integrity_hash VARCHAR(128),
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
