@@ -29,7 +29,7 @@ def isolate_postgresql_core_state():
     IdempotencyBase.metadata.create_all(engine)
     initialize_outbox_schema(engine)
     with engine.connect() as connection:
-        apply_migrations(connection, "postgres/schema")
+        apply_migrations(connection, "postgres/migrations")
     # Canonical durable idempotency is production-owned by the migration chain;
     # create_all is only a test-fixture safety net for mixed legacy/core suites.
     DurableIdempotencyBase.metadata.create_all(engine)
