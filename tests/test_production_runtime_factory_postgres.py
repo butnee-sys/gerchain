@@ -16,7 +16,6 @@ def test_production_factory_builds_real_postgresql_runtime():
     from sqlalchemy import create_engine
     from sqlalchemy.orm import sessionmaker
     engine = create_engine(database_url, pool_pre_ping=True)
-    session_factory = sessionmaker(bind=engine, expire_on_commit=False)
     runtime = ProductionRuntimeFactory(
         ProductionRuntimeConfig(
             database_url=database_url,
@@ -45,7 +44,6 @@ def test_production_factory_executes_canonical_ledger_value_flow_on_real_postgre
     from sqlalchemy import create_engine
     from sqlalchemy.orm import sessionmaker
     engine = create_engine(database_url, pool_pre_ping=True)
-    session_factory = sessionmaker(bind=engine, expire_on_commit=False)
     runtime = ProductionRuntimeFactory(
         ProductionRuntimeConfig(
             database_url=database_url,
@@ -61,16 +59,16 @@ def test_production_factory_executes_canonical_ledger_value_flow_on_real_postgre
     assert ledger is not None
 
     with session_factory() as session:
-        ledger.create_account_in_transaction(session, "PG-SOURCE", "MNT", 1000)
-        ledger.create_account_in_transaction(session, "PG-DEST", "MNT", 0)
+        ledger.create_account_in_transaction(session, "FACTORY-PG-FLOW-SOURCE", "MNT", 1000)
+        ledger.create_account_in_transaction(session, "FACTORY-PG-FLOW-DEST", "MNT", 0)
         session.commit()
 
     with session_factory() as session:
         first = ledger.transfer_in_transaction(
             session,
             transaction_id="PG-FLOW-1",
-            source="PG-SOURCE",
-            destination="PG-DEST",
+            source="FACTORY-PG-FLOW-SOURCE",
+            destination="FACTORY-PG-FLOW-DEST",
             amount=100,
             currency="MNT",
         )
@@ -91,8 +89,8 @@ def test_production_factory_executes_canonical_ledger_value_flow_on_real_postgre
 
     assert replay.get("replayed") is True
 
-    source = runtime.get_balance("PG-SOURCE")
-    destination = runtime.get_balance("PG-DEST")
+    source = runtime.get_balance("FACTORY-PG-FLOW-SOURCE")
+    destination = runtime.get_balance("FACTORY-PG-FLOW-DEST")
     assert source == 900
     assert destination == 100
     engine.dispose()
