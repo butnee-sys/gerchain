@@ -64,12 +64,21 @@ def apply_migrations(conn, migration_dir: str | Path) -> None:
             )
         versions[version] = migration
 
-    # Serialize the entire migration critical section at session level.
-    # PostgreSQL releases this lock automatically if the session disappears.
+    # Migration locking must span the entire migration transaction. PostgreSQL
+    # session-level advisory locks do that deterministically across independent
+    # client transactions and are released automatically if the session dies.
+    if getattr(conn, "in_transaction", False):
+        raise RuntimeError("apply_migrations requires an idle database connection")
+
     _execute(conn, "SELECT pg_advisory_lock(%s)", (MIGRATION_LOCK_KEY,))
+    # The advisory-lock SELECT starts an implicit transaction on psycopg and
+    # SQLAlchemy DBAPI connections. Commit it so the actual migration gets its
+    # own atomic transaction while the session-level lock remains held.
+    if hasattr(conn, "commit"):
+        conn.commit()
+
     try:
         with _transaction(conn):
-            _execute(conn, "SELECT pg_advisory_xact_lock(%s)", (MIGRATION_LOCK_KEY,))
             _execute(
                 conn,
                 """
@@ -120,3 +129,5 @@ def apply_migrations(conn, migration_dir: str | Path) -> None:
                     )
     finally:
         _execute(conn, "SELECT pg_advisory_unlock(%s)", (MIGRATION_LOCK_KEY,))
+        if hasattr(conn, "commit"):
+            conn.commit()
