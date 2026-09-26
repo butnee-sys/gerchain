@@ -35,6 +35,7 @@ jobs:
           pip install -r requirements-dee-security.txt pytest
       - name: Run PostgreSQL canonical re-performance
         env:
+          GERCHAIN_DATABASE_URL: postgresql+psycopg://gerchain:gerchain@localhost:5432/gerchain_test
           GERCHAIN_TEST_DATABASE_URL: postgresql+psycopg://gerchain:gerchain@localhost:5432/gerchain_test
         run: |
           pytest -q tests/integration/test_ea35_postgres_production.py
