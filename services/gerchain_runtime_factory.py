@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Callable
 from pathlib import Path
 
@@ -48,15 +49,13 @@ class ProductionRuntimeFactory:
             )
         self.session_factory: Callable[[], Any] = sessionmaker(
             bind=self.engine,
-            expire_on_commit=False,
-        )
+            expire_on_    def initialize(self) -> None:
+        """Apply the canonical PostgreSQL migration set atomically."""
+        migration_dir = Path(__file__).resolve().parents[1] / "postgres" / "migrations"
+        with self.engine.connect() as conn:
+            apply_migrations(conn, migration_dir)
 
-    def initialize(self) -> None:
-        """Apply the checked-in PostgreSQL migration set atomically."""
-        migration_dir = Path(__file__).resolve().parents[1] / "postgres" / "schema"
-        with self.engine.connect() as connection:
-            apply_migrations(connection, migration_dir)
-            assert_canonical_production_schema(connection)
+tion_schema(connection)
 
     def create(self) -> GerchainRuntime:
         self.initialize()
