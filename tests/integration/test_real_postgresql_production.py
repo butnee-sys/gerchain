@@ -38,7 +38,9 @@ def _reset_database(engine) -> None:
 
 
 def test_real_postgresql_production_lifecycle() -> None:
-    database_url = os.environ["TEST_DATABASE_URL"]
+    database_url = os.environ.get("TEST_DATABASE_URL") or os.environ.get("GERCHAIN_DATABASE_URL")
+    if not database_url:
+        raise RuntimeError("TEST_DATABASE_URL or GERCHAIN_DATABASE_URL is required")
     engine = create_engine(database_url, pool_pre_ping=True, future=True)
     _reset_database(engine)
 
