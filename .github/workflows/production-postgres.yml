@@ -39,6 +39,6 @@ jobs:
       - name: Verify production PostgreSQL bootstrap
         run: pytest -q tests/integration/test_production_postgresql_boot.py
       - name: Verify production full value flow
-        run: pytest -q tests/integration/test_production_postgres_flow.py
+        run: pytest -q tests/integration/test_production_postgres_flow.py tests/integration/test_real_postgresql_production.py
       - name: Verify deep value reconciliation tests
         run: pytest -q tests/persistence/test_deep_value_reconciliation.py
