@@ -41,7 +41,7 @@ class SettlementCoordinator:
         }
         replay = get_existing_in_transaction(self.session, key=transaction_id, payload=idempotency_payload)
         if replay is not None:
-            return {"replayed": True, "result": replay}
+            return {**json.loads(replay), "replayed": True}
 
         begin_in_transaction(self.session, key=transaction_id, payload=idempotency_payload)
 
@@ -98,7 +98,7 @@ class SettlementCoordinator:
             payload=idempotency_payload,
             result_json=result_json,
         )
-        return {"replayed": False, "result": result}
+        return {**result, "replayed": False}
 
 
 __all__ = ["SettlementCoordinator"]
