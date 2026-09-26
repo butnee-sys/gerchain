@@ -64,12 +64,10 @@ def apply_migrations(conn, migration_dir: str | Path) -> None:
             )
         versions[version] = migration
 
-    with _transaction(conn):
-        _execute(
-            conn,
-            "SELECT pg_advisory_xact_lock(%s)",
-            (MIGRATION_LOCK_KEY,),
-        )
+    _execute(conn, "SELECT pg_advisory_lock(%s)", (MIGRATION_LOCK_KEY,))
+    try:
+        with _transaction(conn):
+            _execute(conn, "SELECT pg_advisory_xact_lock(%s)", (MIGRATION_LOCK_KEY,))
         _execute(
             conn,
             """
