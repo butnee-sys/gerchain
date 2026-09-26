@@ -352,7 +352,8 @@ def test_deep_reconciliation_accepts_lock_as_state_only_evidence():
     engine.dispose()
 
 
-def test_deep_reconciliation_detects_missing_hash():
+def test_deep_reconciliation_detects_missing_hash(monkeypatch):
+    monkeypatch.delenv("GERCHAIN_TEST_DATABASE_URL", raising=False)
     engine, factory = _session_factory()
     with factory() as session:
         _seed_clean(session)
@@ -362,7 +363,8 @@ def test_deep_reconciliation_detects_missing_hash():
     engine.dispose()
 
 
-def test_deep_reconciliation_detects_hash_mismatch():
+def test_deep_reconciliation_detects_hash_mismatch(monkeypatch):
+    monkeypatch.delenv("GERCHAIN_TEST_DATABASE_URL", raising=False)
     engine, factory = _session_factory()
     with factory() as session:
         _seed_clean(session)
