@@ -52,10 +52,11 @@ class ProductionRuntimeFactory:
         )
 
     def initialize(self) -> None:
-        """Apply the authoritative PostgreSQL migration chain before boot."""
+        """Apply and verify the authoritative PostgreSQL migration chain before boot."""
         migration_dir = Path(__file__).resolve().parents[1] / "postgres" / "schema"
-        with self.engine.begin() as connection:
+        with self.engine.connect() as connection:
             apply_migrations(connection, migration_dir)
+        with self.engine.connect() as connection:
             assert_canonical_production_schema(connection)
 
     def create(self) -> GerchainRuntime:
