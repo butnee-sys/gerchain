@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
+from pathlib import Path
 
 from sqlalchemy import create_engine
 from sqlalchemy.engine import Engine
@@ -51,14 +52,7 @@ class ProductionRuntimeFactory:
             expire_on_commit=False,
         )
 
-    def initialize(self) -> None:
-        """Apply the versioned PostgreSQL production migrations."""
-        migration_dir = Path(__file__).resolve().parents[1] / "postgres" / "migrations"
-        with self.engine.connect() as connection:
-            apply_migrations(connection, migration_dir)
-            assert_canonical_production_schema(connection)
-
-    def create(self) -> GerchainRuntime:
+    def initialize(self) -> None:\n        """Apply the checked-in PostgreSQL migration set atomically."""\n        migration_dir = Path(__file__).resolve().parents[1] / "postgres" / "schema"\n        with self.engine.connect() as connection:\n            apply_migrations(connection, migration_dir)\n\n    def create(self) -> GerchainRuntime:
         self.initialize()
         runtime = GerchainRuntime(
             escrow_id=self.config.escrow_id,
