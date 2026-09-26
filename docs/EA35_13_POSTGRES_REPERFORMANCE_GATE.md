@@ -51,3 +51,10 @@ Do not declare GREEN until all are evidenced against the exact branch tip:
 - Independent re-performance confirms the same result.
 
 Current conclusion: **BLOCKED FOR PRODUCTION LOCK — evidence gap, not a claimed runtime failure.**
+
+## Current verification gate — 2026-09-26
+
+- ProductionRuntimeFactory now constructs and requires Canonical Ledger authority.
+- Production entrypoint now uses `ProductionRuntimeFactory.from_engine(...)`.
+- Versioned PostgreSQL migrations and the canonical production schema guard run before runtime construction.
+- This document does not declare GREEN until a fresh GitHub Actions PostgreSQL execution is observed for this branch/commit.
