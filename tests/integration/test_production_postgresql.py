@@ -84,10 +84,11 @@ def test_production_postgresql_boot_and_canonical_value_flow():
         assert report.matched, [f"{i.code}:{i.transaction_id}:{i.detail}" for i in report.issues]
 
         source = session.get(LedgerAccountModel, "source-integration")
-        escrow = session.get(LedgerAccountModel, "escrow-integration-1")
+        escrow_account = session.get(LedgerAccountModel, "escrow-integration-1")
         beneficiary = session.get(LedgerAccountModel, "beneficiary-integration")
-        assert (source.balance, escrow.balance, beneficiary.balance) == (0, 0, 100)
-        assert escrow is not None and escrow.state == "RELEASED"
+        durable_escrow = session.get(CanonicalEscrow, "escrow-integration-1")
+        assert (source.balance, escrow_account.balance, beneficiary.balance) == (0, 0, 100)
+        assert durable_escrow is not None and durable_escrow.state == "RELEASED"
         assert session.execute(select(TransactionWitness)).scalars().all()
         assert session.execute(select(OutboxEvent)).scalars().all()
         assert session.execute(select(DurableIdempotencyRecord)).scalars().all()
