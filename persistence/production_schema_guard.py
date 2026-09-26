@@ -32,3 +32,16 @@ def assert_canonical_production_schema(connection: Connection) -> None:
     for state in sorted(REQUIRED_ESCROW_STATES):
         if state not in state_sql:
             raise RuntimeError('canonical production schema escrow state constraint incomplete; required state ' + state)
+    movement_constraints = inspector.get_check_constraints('gerchain_ledger_movements')
+    movement_names = {str(item.get('name')) for item in movement_constraints}
+    required_movement_constraints = {
+        'gerchain_movement_operation_check',
+        'gerchain_movement_integrity_hash_check',
+        'gerchain_movement_escrow_binding_check',
+    }
+    missing_movement_constraints = sorted(required_movement_constraints - movement_names)
+    if missing_movement_constraints:
+        raise RuntimeError(
+            'canonical production schema movement integrity constraints incomplete: '
+            + ', '.join(missing_movement_constraints)
+        )
