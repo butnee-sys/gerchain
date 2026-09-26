@@ -1,5 +1,9 @@
 import pytest
-import database
+
+try:
+    import database
+except ModuleNotFoundError:
+    database = None
 
 Base = getattr(database, "Base", None)
 
