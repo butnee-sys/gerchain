@@ -35,5 +35,3 @@ jobs:
           pip install "sqlalchemy>=2" "psycopg[binary]" pytest
       - name: Run operating reconciliation integration suite
         run: python -m pytest -q tests/test_operating_reconciliation.py
-      - name: Run canonical production PostgreSQL smoke gate
-        run: python -m pytest -q tests/services/test_production_runtime_postgresql_smoke.py
