@@ -33,13 +33,6 @@ UPDATE escrows
 SET refund_destination = COALESCE(refund_destination, sender_address),
     created_at = COALESCE(created_at, updated_at);
 
-DO $
-BEGIN
-    IF EXISTS (SELECT 1 FROM escrows WHERE currency IS NULL) THEN
-        RAISE EXCEPTION 'canonical escrow migration requires explicit currency for every existing escrow';
-    END IF;
-END $;
-
 ALTER TABLE escrows ALTER COLUMN currency SET NOT NULL;
 
 ALTER TABLE escrows DROP CONSTRAINT IF EXISTS escrows_state_check;
