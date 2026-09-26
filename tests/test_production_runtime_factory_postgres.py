@@ -26,7 +26,7 @@ def test_production_factory_builds_real_postgresql_runtime():
             witness_id="FACTORY-PG-W",
         ),
         engine=engine,
-    )
+    ).create()
 
     assert runtime.runtime_mode == "production-postgresql"
     assert runtime.is_canonical_ledger_authoritative is True
@@ -53,7 +53,7 @@ def test_production_factory_executes_canonical_ledger_value_flow_on_real_postgre
             witness_id="FACTORY-PG-W-FLOW",
         ),
         engine=engine,
-    )
+    ).create()
 
     ledger = runtime._canonical_ledger
     assert ledger is not None
