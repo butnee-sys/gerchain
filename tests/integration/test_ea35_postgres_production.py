@@ -177,9 +177,8 @@ def test_production_postgres_restart_does_not_duplicate_release() -> None:
             witness_id="pg-ea35-restart-witness",
         ),
         engine=restarted_engine,
-    ).create()
-    replay = restarted_factory  # construction itself is the restart boundary
-    runtime_again = replay
+    )
+    runtime_again = restarted_factory.create()  # construction itself is the restart boundary
     result = runtime_again.release(
         root=object(),
         owner_id="pg-restart-owner",
@@ -193,7 +192,7 @@ def test_production_postgres_restart_does_not_duplicate_release() -> None:
     )
     assert result["replayed"] is True
 
-    with restarted_factory.session_factory() as session:
+    with sessionmaker(bind=restarted_engine, expire_on_commit=False)() as session:
         source = session.get(LedgerAccountModel, "pg-restart-source")
         beneficiary = session.get(LedgerAccountModel, "pg-restart-beneficiary")
         escrow = session.get(CanonicalEscrow, escrow_id)
