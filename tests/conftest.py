@@ -7,6 +7,8 @@ from sqlalchemy import create_engine, text
 
 from persistence.atomic_release import initialize_atomic_release_schema
 from persistence.idempotency_store import IdempotencyBase
+from persistence.durable_idempotency import IdempotencyBase as DurableIdempotencyBase
+from postgres.migrations import apply_migrations
 from persistence.recovery_outbox import initialize_outbox_schema
 
 
@@ -24,7 +26,10 @@ def isolate_postgresql_core_state():
     engine = create_engine(url, pool_pre_ping=True)
     initialize_atomic_release_schema(engine)
     IdempotencyBase.metadata.create_all(engine)
+    DurableIdempotencyBase.metadata.create_all(engine)
     initialize_outbox_schema(engine)
+    with engine.begin() as connection:
+        apply_migrations(connection, "postgres/schema")
     tables = (
         "gerchain_release_witnesses",
         "gerchain_outbox_events",
