@@ -11,16 +11,20 @@ ALTER TABLE escrows
 ALTER TABLE escrows
     ALTER COLUMN condition_desc DROP NOT NULL;
 
-DO $$
+DO $
+DECLARE
+    constraint_name TEXT;
 BEGIN
-    IF EXISTS (
-        SELECT 1 FROM pg_constraint
+    FOR constraint_name IN
+        SELECT conname
+        FROM pg_constraint
         WHERE conrelid = 'escrows'::regclass
-          AND conname = 'escrows_state_check'
-    ) THEN
-        ALTER TABLE escrows DROP CONSTRAINT escrows_state_check;
-    END IF;
-END $$;
+          AND contype = 'c'
+          AND pg_get_constraintdef(oid) ILIKE '%state%'
+    LOOP
+        EXECUTE format('ALTER TABLE escrows DROP CONSTRAINT %I', constraint_name);
+    END LOOP;
+END $;
 
 ALTER TABLE escrows
     ADD CONSTRAINT escrows_state_check
