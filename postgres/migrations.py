@@ -1,8 +1,12 @@
 from __future__ import annotations
 
 import hashlib
+from contextlib import nullcontext
 from pathlib import Path
-from typing import Iterable
+
+import psycopg.sql
+from sqlalchemy import text
+
 
 MIGRATION_LOCK_KEY = 73546501
 
@@ -11,18 +15,54 @@ def checksum(sql: str) -> str:
     return hashlib.sha256(sql.encode("utf-8")).hexdigest()
 
 
-def apply_migrations(conn, migration_dir: str | Path) -> None:
-    """Apply migrations serially across all application instances.
+def _transaction(conn):
+    """Support both SQLAlchemy and native psycopg connections."""
+    if hasattr(conn, "begin"):
+        return conn.begin()
+    if hasattr(conn, "transaction"):
+        return conn.transaction()
+    return nullcontext()
 
-    The advisory lock is transaction-scoped so a crashed process releases it
-    automatically. A migration and its schema_version row commit atomically.
-    """
+
+def _execute(conn, sql: str, params=None):
+    # Non-parameterized DDL/PLpgSQL may contain literal percent signs.
+    # Avoid psycopg's pyformat parser when there are no parameters.
+    if hasattr(conn, "exec_driver_sql"):
+        if params is None:
+            # SQLAlchemy's PostgreSQL driver still interprets literal % signs
+            # when using exec_driver_sql. text() preserves PL/pgSQL format
+            # strings such as format('%I', ...) as literal SQL.
+            return conn.execute(text(sql))
+        return conn.exec_driver_sql(sql, params)
+    if params is None:
+        # Native psycopg parses % as a placeholder even for literal DDL.
+        # SQL() marks the migration as literal SQL without changing its source text.
+        return conn.execute(psycopg.sql.SQL(sql))
+    return conn.execute(sql, params)
+
+
+def apply_migrations(conn, migration_dir: str | Path) -> None:
+    """Apply migrations atomically for SQLAlchemy or native psycopg connections."""
     path = Path(migration_dir)
     files = sorted(path.glob("*.sql"))
+    versions: dict[int, Path] = {}
+    for migration in files:
+        version = int(migration.name.split("_", 1)[0])
+        if version in versions:
+            raise RuntimeError(
+                f"Duplicate migration version {version}: "
+                f"{versions[version].name} and {migration.name}"
+            )
+        versions[version] = migration
 
-    with conn.transaction():
-        conn.execute("SELECT pg_advisory_xact_lock(%s)", (MIGRATION_LOCK_KEY,))
-        conn.execute(
+    with _transaction(conn):
+        _execute(
+            conn,
+            "SELECT pg_advisory_xact_lock(%s)",
+            (MIGRATION_LOCK_KEY,),
+        )
+        _execute(
+            conn,
             """
             CREATE TABLE IF NOT EXISTS schema_version (
                 version BIGINT PRIMARY KEY,
@@ -32,8 +72,9 @@ def apply_migrations(conn, migration_dir: str | Path) -> None:
             """
         )
 
-        rows = conn.execute(
-            "SELECT version, checksum FROM schema_version ORDER BY version"
+        rows = _execute(
+            conn,
+            "SELECT version, checksum FROM schema_version ORDER BY version",
         ).fetchall()
         applied = {int(row[0]): row[1] for row in rows}
 
@@ -49,8 +90,22 @@ def apply_migrations(conn, migration_dir: str | Path) -> None:
                     )
                 continue
 
-            conn.execute(sql)
-            conn.execute(
-                "INSERT INTO schema_version(version, checksum) VALUES (%s, %s)",
+            _execute(conn, sql)
+            _execute(
+                conn,
+                """
+                INSERT INTO schema_version(version, checksum)
+                VALUES (%s, %s)
+                ON CONFLICT (version) DO NOTHING
+                """,
                 (version, digest),
             )
+            recorded = _execute(
+                conn,
+                "SELECT checksum FROM schema_version WHERE version = %s",
+                (version,),
+            ).fetchone()
+            if recorded is None or recorded[0] != digest:
+                raise RuntimeError(
+                    f"Migration checksum mismatch for version {version}"
+                )

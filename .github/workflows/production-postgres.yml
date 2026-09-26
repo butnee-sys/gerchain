@@ -1,0 +1,44 @@
+name: Production PostgreSQL verification
+
+on:
+  push:
+    branches:
+      - "feat/ea21-transaction-aware-ledger"
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  postgres-production:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: gerchain
+          POSTGRES_USER: gerchain
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U gerchain -d gerchain"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+    env:
+      GERCHAIN_DATABASE_URL: postgresql+psycopg://gerchain:postgres@localhost:5432/gerchain
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - name: Install production dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements-dee-security.txt pytest
+      - name: Verify production PostgreSQL bootstrap
+        run: pytest -q tests/integration/test_production_postgres_boot.py
+      - name: Verify production full value flow
+        run: pytest -q tests/integration/test_production_postgres_flow.py
+      - name: Verify deep value reconciliation tests
+        run: pytest -q tests/persistence/test_deep_value_reconciliation.py
