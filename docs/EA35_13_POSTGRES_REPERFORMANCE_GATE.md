@@ -63,3 +63,28 @@ Current conclusion: **BLOCKED FOR PRODUCTION LOCK — evidence gap, not a claime
 ## Re-performance rerun trigger — 2026-09-26
 
 The first real PostgreSQL run exposed two test-contract defects; both were corrected without changing the production authority boundary. This commit triggers a fresh execution for confirmation.
+
+## Fresh PostgreSQL evidence — 2026-09-26
+
+Exact branch-tip tested: `70173bf744db60402b4c0a6c4b71358c1c63d3ef`.
+
+Observed GitHub Actions results for that exact SHA:
+- `Production PostgreSQL Runtime` — run `36166230718` — SUCCESS. The job booted `production_entrypoint.py` against PostgreSQL with the required production environment and then ran production PostgreSQL value-flow tests.
+- `PostgreSQL production proof` — run `36166230788` — SUCCESS. The job executed the canonical PostgreSQL flow proof.
+- `PostgreSQL production re-performance` — run `36166230598` — SUCCESS. The job executed `tests/integration/test_production_postgresql_reperformance.py`.
+- `production-postgresql-runtime` — run `36166230664` — SUCCESS. The job completed both production-entrypoint boot and production value-flow proof.
+- `production-postgres-smoke` — run `36166230683` — SUCCESS. Production factory boot and deep reconciliation tests completed.
+- `CodeQL Advanced` — run `36166230621` — SUCCESS.
+- `security/snyk` commit status — SUCCESS.
+
+The successful re-performance test proves on PostgreSQL:
+`ProductionRuntimeFactory.create()` → Canonical Ledger authority → FUND → LOCK → RELEASE → durable balances → RELEASED escrow → `deep_reconcile_value_truth().matched == True`.
+
+The successful production-runtime job additionally proves the actual production entrypoint reaches controlled timeout after successful initialization, rather than exiting early.
+
+Important non-green evidence:
+- `core-gates` — run `36166230702` — FAILURE. Its failing step is the broad core structure/boundary test suite. The available job-step metadata does not expose the individual failing assertion, so this is not classified further without logs.
+- `production-postgres-reperformance` — run `36166230715` — FAILURE at dependency-install step before its pytest step. This is a workflow/setup failure, not evidence that the PostgreSQL value-flow test failed; a separate production re-performance workflow succeeded as recorded above.
+
+Conclusion for EA-35.13:
+**PostgreSQL runtime re-performance is VERIFIED for the tested value-flow scope, but the overall production lock remains NOT LOCKED because broad core-gates and remaining lifecycle/recovery evidence are not yet closed.**
