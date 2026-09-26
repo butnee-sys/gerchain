@@ -62,4 +62,4 @@ jobs:
           GERCHAIN_TEST_DATABASE_URL: postgresql+psycopg://gerchain:gerchain@localhost:5432/gerchain_test
           GERCHAIN_POSTGRES_DSN: postgresql+psycopg://gerchain:gerchain@localhost:5432/gerchain_test
         run: |
-          pytest --import-mode=importlib -q tests/persistence tests/production/test_production_runtime_postgres_smoke.py tests/integration/test_production_postgresql_boot.py
+          python -m pytest -q tests/persistence tests/production/test_production_runtime_postgres_smoke.py tests/integration/test_production_postgresql_boot.py
