@@ -1,7 +1,7 @@
 import os
 from datetime import datetime, timezone
 
-from sqlalchemy import select, create_engine
+from sqlalchemy import select, create_engine, text
 from sqlalchemy.orm import sessionmaker
 
 from services.gerchain_runtime_factory import ProductionRuntimeConfig, ProductionRuntimeFactory
@@ -118,6 +118,10 @@ def test_production_postgres_restart_does_not_duplicate_release() -> None:
 
     now = datetime.now(timezone.utc)
     with factory.begin() as session:
+        # Each PostgreSQL integration test owns an isolated logical dataset.
+        # The service database is shared for the job, so remove prior test rows
+        # before asserting exactly-once movement counts.
+        session.execute(text("TRUNCATE TABLE gerchain_outbox_events, gerchain_transaction_witnesses, gerchain_idempotency_records, gerchain_ledger_movements, gerchain_ledger_accounts, escrows RESTART IDENTITY CASCADE"))
         PostgreSQLAtomicLedger.create_account_in_transaction(
             session, "pg-restart-source", "USD", initial_balance=50
         )
