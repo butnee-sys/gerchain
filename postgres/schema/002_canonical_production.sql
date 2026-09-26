@@ -33,6 +33,15 @@ UPDATE escrows
 SET refund_destination = COALESCE(refund_destination, sender_address),
     created_at = COALESCE(created_at, updated_at);
 
+DO $
+BEGIN
+    IF EXISTS (SELECT 1 FROM escrows WHERE currency IS NULL) THEN
+        RAISE EXCEPTION 'canonical escrow migration requires explicit currency for every existing escrow';
+    END IF;
+END $;
+
+ALTER TABLE escrows ALTER COLUMN currency SET NOT NULL;
+
 ALTER TABLE escrows DROP CONSTRAINT IF EXISTS escrows_state_check;
 ALTER TABLE escrows ADD CONSTRAINT escrows_state_check
     CHECK (state IN ('CREATED','FUNDED','LOCKED','RELEASED','REFUNDED','CANCELLED'));
@@ -68,6 +77,26 @@ CREATE TABLE IF NOT EXISTS gerchain_idempotency_records (
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+ALTER TABLE gerchain_ledger_movements
+    DROP CONSTRAINT IF EXISTS gerchain_movement_operation_check;
+ALTER TABLE gerchain_ledger_movements
+    ADD CONSTRAINT gerchain_movement_operation_check
+    CHECK (operation IN ('TRANSFER','FUND','RELEASE','REFUND','CANCEL','SETTLEMENT'));
+ALTER TABLE gerchain_ledger_movements
+    DROP CONSTRAINT IF EXISTS gerchain_movement_integrity_hash_check;
+ALTER TABLE gerchain_ledger_movements
+    ADD CONSTRAINT gerchain_movement_integrity_hash_check
+    CHECK (integrity_hash IS NOT NULL);
+ALTER TABLE gerchain_ledger_movements
+    DROP CONSTRAINT IF EXISTS gerchain_movement_escrow_binding_check;
+ALTER TABLE gerchain_ledger_movements
+    ADD CONSTRAINT gerchain_movement_escrow_binding_check
+    CHECK (
+        (operation = 'SETTLEMENT' AND escrow_id IS NULL)
+        OR (operation IN ('FUND','RELEASE','REFUND','CANCEL') AND escrow_id IS NOT NULL)
+        OR operation IN ('TRANSFER')
+    );
 
 CREATE INDEX IF NOT EXISTS ix_gerchain_ledger_movements_escrow
     ON gerchain_ledger_movements (escrow_id);
