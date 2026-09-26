@@ -8,6 +8,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import sessionmaker
 from persistence.production_schema_guard import assert_canonical_production_schema
+from postgres.migrations import apply_migrations
 from services.gerchain_runtime import GerchainRuntime
 
 
