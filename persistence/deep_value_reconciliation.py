@@ -95,9 +95,9 @@ def deep_reconcile_value_truth(session: Session) -> DeepValueTruthReport:
         if not movement.operation:
             issue("MISSING_OPERATION", tx, "canonical movement operation is missing")
 
-        # Escrow-bound value operations require the canonical escrow/evidence
-        # graph. SETTLEMENT is a direct ledger operation by design and therefore
-        # has no escrow aggregate, witness, outbox, or escrow-scoped idempotency.
+        # Escrow-bound operations bind evidence to the canonical escrow.
+        # SETTLEMENT has no escrow aggregate, but still requires the same
+        # transaction evidence path; its witness/outbox aggregate is tx.
         escrow_bound = movement.operation != "SETTLEMENT"
         if escrow_bound:
             if not movement.escrow_id:
@@ -135,6 +135,23 @@ def deep_reconcile_value_truth(session: Session) -> DeepValueTruthReport:
             elif idem.state != "COMPLETED":
                 issue("INCOMPLETE_IDEMPOTENCY", tx, "movement idempotency record is not COMPLETED")
 
+        if movement.operation == "SETTLEMENT":
+            witness = witness_by_tx.get(tx)
+            if witness is None:
+                issue("UNWITNESSED_MOVEMENT", tx, "settlement movement has no witness")
+            elif (witness.event_type, witness.escrow_id, witness.amount) != ("GERCHAIN_SETTLED", tx, movement.amount):
+                issue("WITNESS_MISMATCH", tx, "settlement witness does not match canonical movement")
+            matching_outboxes = outbox_by_tx.get(tx, [])
+            if not matching_outboxes:
+                issue("UNOUTBOXED_MOVEMENT", tx, "settlement movement has no outbox evidence")
+            elif not any(e.aggregate_id == tx and e.event_type == "GERCHAIN_SETTLED" for e in matching_outboxes):
+                issue("OUTBOX_AGGREGATE_MISMATCH", tx, "settlement outbox does not match canonical movement")
+            idem = idem_by_key.get(tx)
+            if idem is None:
+                issue("MISSING_IDEMPOTENCY_EVIDENCE", tx, "settlement movement has no durable idempotency record")
+            elif idem.state != "COMPLETED":
+                issue("INCOMPLETE_IDEMPOTENCY", tx, "settlement idempotency record is not COMPLETED")
+
         if not movement.integrity_hash:
             issue("MISSING_INTEGRITY_HASH", tx, "movement integrity hash is missing")
         elif movement.integrity_hash != _expected_integrity_hash(movement):
@@ -147,6 +164,7 @@ def deep_reconcile_value_truth(session: Session) -> DeepValueTruthReport:
         "GERCHAIN_RELEASED",
         "GERCHAIN_REFUNDED",
         "GERCHAIN_CANCELLED",
+        "GERCHAIN_SETTLED",
     }
 
     for witness in witnesses:
