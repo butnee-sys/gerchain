@@ -2,19 +2,19 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from pathlib import Path
 from typing import Any, Callable
-from pathlib import Path
-
-from postgres.migrations import apply_migrations
 
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import sessionmaker
 
-from postgres.migrations import apply_migrations
-
+from persistence.atomic_ledger import AtomicLedgerBase
+from persistence.atomic_value_transaction import WitnessBase
+from persistence.durable_idempotency import IdempotencyBase
+from persistence.escrow_aggregate import EscrowBase
+from persistence.recovery_outbox import OutboxBase
 from persistence.production_schema_guard import assert_canonical_production_schema
+from postgres.migrations import apply_migrations
 from services.gerchain_runtime import GerchainRuntime
 
 
@@ -28,7 +28,7 @@ class ProductionRuntimeConfig:
 
 
 class ProductionRuntimeFactory:
-    """Construct the production GerChain runtime with Canonical Ledger authority."""
+    """Construct the production runtime with Canonical Ledger authority."""
 
     def __init__(self, config: ProductionRuntimeConfig, *, engine: Engine | None = None) -> None:
         if not config.database_url:
@@ -37,7 +37,6 @@ class ProductionRuntimeFactory:
             ("postgresql://", "postgresql+psycopg://", "postgresql+psycopg2://")
         ):
             raise ValueError("ProductionRuntimeFactory requires PostgreSQL database URL")
-
         self.config = config
         self.engine = engine or create_engine(config.database_url, future=True)
         if self.engine.dialect.name != "postgresql":
@@ -47,7 +46,22 @@ class ProductionRuntimeFactory:
         )
 
     def initialize(self) -> None:
-        """Reconcile the durable PostgreSQL schema required by the canonical runtime."""
+        migration_dir = Path(__file__).resolve().parents[1] / "postgres" / "migrations"
+        with self.engine.connect() as conn:
+            apply_migrations(conn, migration_dir)
+
+        # The migration runner owns historical schema versions. The ORM metadata
+        # below supplies the canonical tables used by the current runtime.
+        for base in (
+            AtomicLedgerBase,
+            EscrowBase,
+            WitnessBase,
+            OutboxBase,
+            IdempotencyBase,
+        ):
+            base.metadata.create_all(self.engine)
+
+        # Reconcile the legacy escrow table to the full canonical aggregate.
         with self.engine.begin() as conn:
             conn.execute(text("""
                 ALTER TABLE escrows
@@ -59,9 +73,9 @@ class ProductionRuntimeFactory:
             conn.execute(text("""
                 UPDATE escrows
                 SET created_at = COALESCE(created_at, updated_at, now()),
-                    currency = COALESCE(currency, 'MNT'),
+                    currency = COALESCE(currency, :currency),
                     refund_destination = COALESCE(refund_destination, sender_address)
-            """))
+            """), {"currency": self.config.currency})
             conn.execute(text("ALTER TABLE escrows ALTER COLUMN created_at SET NOT NULL"))
             conn.execute(text("ALTER TABLE escrows ALTER COLUMN currency SET NOT NULL"))
             conn.execute(text("ALTER TABLE escrows DROP CONSTRAINT IF EXISTS escrows_state_check"))
@@ -70,8 +84,33 @@ class ProductionRuntimeFactory:
                 ADD CONSTRAINT escrows_state_check
                 CHECK (state IN ('CREATED','FUNDED','LOCKED','RELEASED','REFUNDED','CANCELLED'))
             """))
-        for base in (AtomicLedgerBase, EscrowBase, OutboxBase, IdempotencyBase, TransactionWitness):
-            base.metadata.create_all(self.engine)
+
+            conn.execute(text("""
+                ALTER TABLE gerchain_ledger_movements
+                ADD CONSTRAINT gerchain_movement_operation_check
+                CHECK (operation IN ('FUND','RELEASE','REFUND','CANCEL','SETTLEMENT'))
+                NOT VALID
+            """))
+            conn.execute(text("""
+                ALTER TABLE gerchain_ledger_movements
+                ADD CONSTRAINT gerchain_movement_integrity_hash_check
+                CHECK (integrity_hash IS NOT NULL AND length(integrity_hash) = 64)
+                NOT VALID
+            """))
+            conn.execute(text("""
+                ALTER TABLE gerchain_ledger_movements
+                ADD CONSTRAINT gerchain_movement_escrow_binding_check
+                CHECK (
+                    (operation = 'SETTLEMENT' AND escrow_id IS NULL)
+                    OR
+                    (operation IN ('FUND','RELEASE','REFUND','CANCEL') AND escrow_id IS NOT NULL)
+                )
+                NOT VALID
+            """))
+
+        with self.engine.connect() as conn:
+            assert_canonical_production_schema(conn)
+
     def create(self) -> GerchainRuntime:
         self.initialize()
         runtime = GerchainRuntime(
