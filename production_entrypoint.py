@@ -5,6 +5,7 @@ import signal
 import time
 
 from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
 
 from services.gerchain_runtime_factory import ProductionRuntimeFactory
 
@@ -42,12 +43,14 @@ def main() -> None:
 
     engine = create_engine(database_url, pool_pre_ping=True)
     try:
-        runtime = ProductionRuntimeFactory.from_engine(
+        session_factory = sessionmaker(bind=engine, expire_on_commit=False)
+        runtime = ProductionRuntimeFactory.create(
             escrow_id=escrow_id,
             amount=amount,
             currency=currency,
             witness_id=witness_id,
             engine=engine,
+            session_factory=session_factory,
         )
 
         if not runtime.is_canonical_ledger_authoritative:
