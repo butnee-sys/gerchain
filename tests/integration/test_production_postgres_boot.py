@@ -1,24 +1,37 @@
 from __future__ import annotations
 
 import os
+from pathlib import Path
 
-from sqlalchemy import create_engine, inspect, text
+import pytest
+from sqlalchemy import create_engine, inspect
 
+from postgres.migrations import apply_migrations
 from services.gerchain_runtime_factory import ProductionRuntimeConfig, ProductionRuntimeFactory
 
 
-def test_production_factory_bootstraps_postgresql_schema() -> None:
-    database_url = os.environ["GERCHAIN_DATABASE_URL"]
+pytestmark = pytest.mark.integration
+
+
+def test_production_postgres_migration_and_canonical_boot() -> None:
+    database_url = os.environ.get("GERCHAIN_DATABASE_URL")
+    if not database_url:
+        pytest.skip("GERCHAIN_DATABASE_URL is not configured")
+
     engine = create_engine(database_url, pool_pre_ping=True)
-    config = ProductionRuntimeConfig(
-        database_url=database_url,
-        escrow_id="integration-escrow",
-        amount=100,
-        currency="MNT",
-        witness_id="integration-witness",
-    )
     try:
+        with engine.connect() as conn:
+            apply_migrations(conn, Path(__file__).parents[2] / "postgres" / "schema")
+
+        config = ProductionRuntimeConfig(
+            database_url=database_url,
+            escrow_id="integration-escrow",
+            amount=100,
+            currency="MNT",
+            witness_id="integration-witness",
+        )
         factory = ProductionRuntimeFactory(config, engine=engine)
+
         runtime = factory.create()
         assert runtime.is_canonical_ledger_authoritative
 
@@ -34,8 +47,6 @@ def test_production_factory_bootstraps_postgresql_schema() -> None:
             "gerchain_outbox_events",
             "gerchain_idempotency_records",
         }
-        missing = required - tables
-        assert not missing, f"missing production tables: {sorted(missing)}"
-
+        assert not (required - tables)
     finally:
         engine.dispose()
