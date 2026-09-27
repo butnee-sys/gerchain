@@ -3,7 +3,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
-from pathlib import Path
 
 from sqlalchemy import create_engine
 from sqlalchemy.engine import Engine
@@ -26,36 +25,28 @@ class ProductionRuntimeConfig:
 class ProductionRuntimeFactory:
     """Construct the production GerChain runtime with Canonical Ledger authority."""
 
-    def __init__(
-        self,
-        config: ProductionRuntimeConfig,
-        *,
-        engine: Engine | None = None,
-    ) -> None:
+    def __init__(self, config: ProductionRuntimeConfig, *, engine: Engine | None = None) -> None:
         if not config.database_url:
             raise ValueError("database_url is required")
         if not config.database_url.startswith(
             ("postgresql://", "postgresql+psycopg://", "postgresql+psycopg2://")
         ):
-            raise ValueError(
-                "ProductionRuntimeFactory requires PostgreSQL database URL"
-            )
+            raise ValueError("ProductionRuntimeFactory requires PostgreSQL database URL")
 
         self.config = config
         self.engine = engine or create_engine(config.database_url, future=True)
         if self.engine.dialect.name != "postgresql":
-            raise ValueError(
-                "ProductionRuntimeFactory requires a PostgreSQL engine"
-            )
+            raise ValueError("ProductionRuntimeFactory requires a PostgreSQL engine")
         self.session_factory: Callable[[], Any] = sessionmaker(
-            bind=self.engine,
-            expire_on_    def initialize(self) -> None:
-        """Apply the canonical PostgreSQL migration set atomically."""
-        migration_dir = Path(__file__).resolve().parents[1] / "postgres" / "migrations"
-        with self.engine.connect() as conn:
-            apply_migrations(conn, migration_dir)
+            bind=self.engine, expire_on_commit=False
+        )
 
-tion_schema(connection)
+    def initialize(self) -> None:
+        """Apply the canonical PostgreSQL migration set, then verify its contract."""
+        migration_dir = Path(__file__).resolve().parents[1] / "postgres" / "migrations"
+        with self.engine.connect() as connection:
+            apply_migrations(connection, migration_dir)
+            assert_canonical_production_schema(connection)
 
     def create(self) -> GerchainRuntime:
         self.initialize()
