@@ -53,5 +53,7 @@ jobs:
           assert runtime.is_canonical_ledger_authoritative
           print("CANONICAL_PRODUCTION_BOOT=PASS")
           PY
-      - name: Deep reconciliation tests
-        run: pytest -q tests/persistence/test_deep_value_reconciliation.py
+      - name: Production lifecycle and deep reconciliation tests
+        run: >-
+          pytest -q tests/production/test_postgresql_runtime_e2e.py
+          tests/persistence/test_deep_value_reconciliation.py
