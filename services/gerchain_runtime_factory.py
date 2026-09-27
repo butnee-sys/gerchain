@@ -86,7 +86,7 @@ class ProductionRuntimeFactory:
             """))
 
             conn.execute(text("""
-                DO $
+                DO $$
                 BEGIN
                     IF NOT EXISTS (
                         SELECT 1 FROM pg_constraint
@@ -97,10 +97,10 @@ class ProductionRuntimeFactory:
                         CHECK (operation IN ('FUND','RELEASE','REFUND','CANCEL','SETTLEMENT'))
                         NOT VALID;
                     END IF;
-                END $;
+                END $$;
             """))
             conn.execute(text("""
-                DO $
+                DO $$
                 BEGIN
                     IF NOT EXISTS (
                         SELECT 1 FROM pg_constraint
@@ -111,10 +111,10 @@ class ProductionRuntimeFactory:
                         CHECK (integrity_hash IS NOT NULL AND length(integrity_hash) = 64)
                         NOT VALID;
                     END IF;
-                END $;
+                END $$;
             """))
             conn.execute(text("""
-                DO $
+                DO $$
                 BEGIN
                     IF NOT EXISTS (
                         SELECT 1 FROM pg_constraint
@@ -129,7 +129,7 @@ class ProductionRuntimeFactory:
                         )
                         NOT VALID;
                     END IF;
-                END $;
+                END $$;
             """))
 
         with self.engine.connect() as conn:
