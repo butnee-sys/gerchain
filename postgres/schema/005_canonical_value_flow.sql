@@ -63,6 +63,24 @@ CREATE TABLE IF NOT EXISTS gerchain_idempotency_records (
     updated_at TIMESTAMPTZ NOT NULL
 );
 
+ALTER TABLE gerchain_ledger_movements
+    ADD CONSTRAINT gerchain_movement_operation_check
+    CHECK (operation IN ('FUND', 'RELEASE', 'REFUND', 'CANCEL', 'SETTLEMENT'));
+
+ALTER TABLE gerchain_ledger_movements
+    ADD CONSTRAINT gerchain_movement_integrity_hash_check
+    CHECK (
+        (operation IN ('FUND', 'RELEASE', 'REFUND', 'CANCEL') AND integrity_hash IS NOT NULL)
+        OR operation = 'SETTLEMENT'
+    );
+
+ALTER TABLE gerchain_ledger_movements
+    ADD CONSTRAINT gerchain_movement_escrow_binding_check
+    CHECK (
+        (operation = 'SETTLEMENT' AND escrow_id IS NULL)
+        OR (operation IN ('FUND', 'RELEASE', 'REFUND', 'CANCEL') AND escrow_id IS NOT NULL AND escrow_id <> '')
+    );
+
 CREATE INDEX IF NOT EXISTS ix_gerchain_ledger_movements_escrow
     ON gerchain_ledger_movements (escrow_id);
 CREATE INDEX IF NOT EXISTS ix_gerchain_outbox_state_lease
