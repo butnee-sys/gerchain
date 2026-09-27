@@ -63,15 +63,38 @@ def apply_migrations(conn, migration_dir: str | Path) -> None:
     """Apply migrations atomically for SQLAlchemy or native psycopg connections."""
     path = Path(migration_dir)
     files = sorted(path.glob("*.sql"))
-    versions: dict[int, Path] = {}
+    # A few early canonical migrations were shipped under the same numeric
+    # version before the migration history was frozen. Treat those files as
+    # historical aliases: one deterministic file is applied on a fresh
+    # database, while an already-applied checksum from any alias remains
+    # accepted.
+    preferred_names = {
+        2: "002_canonical_production.sql",
+        5: "005_canonical_production.sql",
+        6: "006_canonical_escrow_lifecycle_hardening.sql",
+    }
+    versions: dict[int, list[Path]] = {}
     for migration in files:
         version = int(migration.name.split("_", 1)[0])
-        if version in versions:
+        versions.setdefault(version, []).append(migration)
+
+    preferred: dict[int, Path] = {}
+    for version, candidates in versions.items():
+        preferred_name = preferred_names.get(version)
+        if preferred_name:
+            selected = next((p for p in candidates if p.name == preferred_name), None)
+            if selected is None:
+                raise RuntimeError(
+                    f"Preferred migration {preferred_name} for version {version} is missing"
+                )
+            preferred[version] = selected
+        elif len(candidates) == 1:
+            preferred[version] = candidates[0]
+        else:
             raise RuntimeError(
-                f"Duplicate migration version {version}: "
-                f"{versions[version].name} and {migration.name}"
+                f"Unresolved duplicate migration version {version}: "
+                + ", ".join(p.name for p in candidates)
             )
-        versions[version] = migration
 
     # Migration locking must span the entire migration transaction. PostgreSQL
     # session-level advisory locks do that deterministically across independent
@@ -105,13 +128,18 @@ def apply_migrations(conn, migration_dir: str | Path) -> None:
             ).fetchall()
             applied = {int(row[0]): row[1] for row in rows}
 
-            for migration in files:
-                version = int(migration.name.split("_", 1)[0])
+            for version in sorted(preferred):
+                migration = preferred[version]
                 sql = migration.read_text(encoding="utf-8")
                 digest = checksum(sql)
+                accepted_digests = {
+                    checksum(candidate.read_text(encoding="utf-8"))
+                    for candidate in versions[version]
+                }
+                accepted_digests.update(LEGACY_CHECKSUMS.get(version, set()))
 
                 if version in applied:
-                    if applied[version] != digest and applied[version] not in LEGACY_CHECKSUMS.get(version, set()):
+                    if applied[version] not in accepted_digests:
                         raise RuntimeError(
                             f"Migration checksum mismatch for version {version}"
                         )
