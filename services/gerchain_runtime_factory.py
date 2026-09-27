@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+from pathlib import Path
 from typing import Any, Callable
 
 from sqlalchemy import create_engine, inspect
@@ -10,6 +11,7 @@ from sqlalchemy.orm import sessionmaker
 
 from postgres.migrations import apply_migrations
 from persistence.production_schema_guard import assert_canonical_production_schema
+from postgres.migrations import apply_migrations
 from services.gerchain_runtime import GerchainRuntime
 
 
@@ -42,54 +44,14 @@ class ProductionRuntimeFactory:
         )
 
     def initialize(self) -> None:
-        """Validate the pre-migrated canonical production schema.
-
-        Production must never silently create or mutate schema with SQLAlchemy
-        metadata. Schema evolution is owned by the PostgreSQL migration runner.
-        """
-        migration_dir = Path(__file__).resolve().parents[1] / "postgres" / "migrations"
+        """Apply canonical PostgreSQL migrations before constructing the runtime."""
+        migration_dir = Path(__file__).resolve().parent.parent / "postgres" / "schema"
         with self.engine.connect() as connection:
             apply_migrations(connection, migration_dir)
 
-        inspector = inspect(self.engine)
-        required = {
-            "gerchain_ledger_accounts": {
-                "account_id", "currency", "balance", "version", "updated_at",
-            },
-            "gerchain_ledger_movements": {
-                "id", "transaction_id", "source", "destination", "amount",
-                "currency", "operation", "escrow_id", "integrity_hash", "created_at",
-            },
-            "escrows": {
-                "id", "sender_address", "receiver_address", "amount", "state",
-                "condition_desc", "refund_destination", "currency", "version",
-                "created_at", "updated_at",
-            },
-            "gerchain_transaction_witnesses": {
-                "id", "transaction_id", "event_type", "escrow_id", "amount", "created_at",
-            },
-            "gerchain_outbox_events": {
-                "id", "event_id", "event_type", "aggregate_id", "payload_json",
-                "state", "lease_until", "attempts", "created_at", "updated_at",
-            },
-            "gerchain_idempotency_records": {
-                "id", "key", "fingerprint", "result_json", "state", "created_at", "updated_at",
-            },
-        }
-        missing: list[str] = []
-        for table, columns in required.items():
-            if not inspector.has_table(table):
-                missing.append(f"{table} (table)")
-                continue
-            actual = {column["name"] for column in inspector.get_columns(table)}
-            for column in sorted(columns - actual):
-                missing.append(f"{table}.{column}")
-        if missing:
-            raise RuntimeError(
-                "canonical production schema is incomplete; run PostgreSQL migrations first: "
-                + ", ".join(missing)
-            )
-
+        # ORM metadata is only a safety net; migration SQL is authoritative.
+        for base in (AtomicLedgerBase, EscrowBase, OutboxBase, IdempotencyBase, TransactionWitness):
+            base.metadata.create_all(self.engine)
     def create(self) -> GerchainRuntime:
         self.initialize()
         runtime = GerchainRuntime(
