@@ -14,6 +14,10 @@ MIGRATION_LOCK_KEY = 73546501
 # historical checksum accepted so existing databases can migrate to the
 # runner-compatible source without rewriting schema history.
 LEGACY_CHECKSUMS = {
+    # Version 001 was historically recorded from postgres/schema/001_concurrency.sql.
+    # The migration runner now owns that schema history; accept the known legacy
+    # digest so existing databases can migrate without rewriting version 1.
+    1: {"6eea24dae8b3ac9aa9413a32da1617250f14725bdb19f50e5d8300308ad173d4"},
     4: {"729c586234c0b630cce6edd9feab694f4d589dcb5e9321e44f7d22ab556799a0"},
 }
 
