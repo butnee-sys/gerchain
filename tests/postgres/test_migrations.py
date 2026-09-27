@@ -21,3 +21,16 @@ def test_duplicate_migration_version_fails_closed(tmp_path: Path) -> None:
 
     with pytest.raises(RuntimeError, match="Duplicate migration version 1"):
         apply_migrations(DummyConnection(), tmp_path)
+
+
+def test_canonical_migration_005_uses_valid_postgresql_dollar_quoting() -> None:
+    migration = (
+        Path(__file__).resolve().parents[2]
+        / "postgres"
+        / "migrations"
+        / "005_canonical_production_persistence.sql"
+    ).read_text(encoding="utf-8")
+    assert "DO $$" in migration
+    assert "END $$;" in migration
+    assert "DO $\n" not in migration
+    assert "END $;" not in migration
