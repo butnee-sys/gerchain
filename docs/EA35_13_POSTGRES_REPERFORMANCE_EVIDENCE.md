@@ -2,42 +2,79 @@
 
 Status: VERIFIED / NOT LOCKED
 
-## Exact source
+## Exact execution commit
 - Branch: `feat/ea21-transaction-aware-ledger`
-- Head SHA: `45579c0112fb3a3a3a76d3895832eb67ce280e99`
+- Exact execution SHA: `890a78f36dcfe161e195da649b3cd124133d6535`
+- Production factory/entrypoint correction commit `e860f502f3e1a2d56fd873ad2faab7b1ab630740` is an ancestor of the execution SHA.
 
-## Authoritative verification run
+## Authoritative verification runs
 - Workflow: PostgreSQL production re-performance
-- Run ID: `36213114696`
-- Run number: `1368`
+- Run ID: `36317914217`
+- Run number: `699`
 - Conclusion: SUCCESS
-- Head SHA: `45579c0112fb3a3a3a76d3895832eb67ce280e99`
+- Job: `postgres-reperformance`
+- Verified steps: production runtime construction, PostgreSQL production re-performance, deep value-truth tests.
 
-## Verified gates
-The successful workflow executed:
-1. PostgreSQL 16 service startup and health check.
-2. ProductionRuntimeFactory construction.
-3. Canonical Ledger authority assertion.
-4. Production entrypoint boot against PostgreSQL with controlled timeout.
-5. PostgreSQL canonical value-flow re-performance.
-6. PostgreSQL refund/cancel re-performance.
-7. EA-35 deep value-truth reconciliation tests.
-8. Canonical runtime value-flow tests including refund, cancel, settlement and canonical-ledger runtime behavior.
-
-## Independent EAI PostgreSQL evidence
-- Workflow: EAI Production PostgreSQL Re-performance
-- Run ID: `36213114630`
-- Run number: `1841`
+- Workflow: Production PostgreSQL Runtime
+- Run ID: `36317914351`
+- Run number: `1113`
 - Conclusion: SUCCESS
-- Head SHA: `45579c0112fb3a3a3a76d3895832eb67ce280e99`
-- Verified steps included production factory construction, real PostgreSQL canonical lifecycle proof, and deep value-truth reconciliation.
+- Job: `production-postgres-runtime`
+- Verified steps: production runtime and migrations.
 
-## Important qualification
-This evidence verifies the EA-35 PostgreSQL gate at the exact SHA above. It does NOT by itself establish the final production lock. Other repository-wide workflows on the same branch include unrelated or broader failures; those remain separate release gates and must not be represented as EA-35 GREEN.
+- Workflow: production-postgres-smoke
+- Run ID: `36317914313`
+- Run number: `810`
+- Conclusion: SUCCESS
+- Verified steps: real PostgreSQL smoke test and production entrypoint boot.
 
-## Next locked work
-1. Preserve this evidence.
-2. Resolve/triage repository-wide failures that affect the fundamental production gate.
-3. Repeat the exact-SHA verification after any corrective change.
-4. Independent re-performance and final production-lock evidence remain open.
+- Workflow: production-postgres-proof
+- Run ID: `36317914446`
+- Run number: `1053`
+- Conclusion: SUCCESS
+- Verified step: PostgreSQL canonical proof.
 
+- Workflow: production-postgresql-gate
+- Run ID: `36317914344`
+- Run number: `87`
+- Conclusion: SUCCESS
+- Verified step: PostgreSQL production value-truth gate.
+
+- Workflow: PostgreSQL production verification
+- Run ID: `36317914254`
+- Run number: `1968`
+- Conclusion: SUCCESS
+- Verified steps: production factory construction and persistence/reconciliation tests.
+
+## Verified EA-35 execution properties
+1. PostgreSQL 16 service starts and becomes healthy.
+2. ProductionRuntimeFactory constructs successfully.
+3. Canonical Ledger authority is established.
+4. Production entrypoint boots against real PostgreSQL.
+5. Canonical value-flow execution succeeds.
+6. REFUND and CANCEL re-performance succeeds.
+7. SETTLEMENT uses the Canonical Ledger path.
+8. Replay/idempotency behavior succeeds.
+9. Deep value-truth reconciliation succeeds.
+10. Canonical runtime value-flow tests succeed.
+
+## EAI re-performance
+- Workflow: EAI PostgreSQL Reperformance
+- Run ID: `36317914266`
+- Run number: `863`
+- Conclusion: SUCCESS
+- Job: `eai-postgres-reperformance`
+- Verified on the same exact execution commit through a real PostgreSQL service.
+- This is an independent execution workflow; it is not an independent implementation/oracle.
+
+## Qualification
+This evidence proves the PostgreSQL production execution gate for EA-35.13 on the exact execution SHA above. It does not by itself establish the final production lock.
+
+Repository-wide unrelated/broader workflows may still be open or failing. Those are separate release gates and must be resolved or explicitly accepted before the overall fundamental architecture can be locked.
+
+## Next gate
+- Preserve exact-SHA evidence.
+- Reconcile repository-wide production gates.
+- Perform final independent re-performance/oracle review.
+- Repeat verification after any corrective change.
+- Final production lock remains OPEN.
