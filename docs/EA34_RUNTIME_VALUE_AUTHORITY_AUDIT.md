@@ -55,17 +55,42 @@ database/db.py and gerchain/database.py expose SQLite stores. They are not produ
 EA-34.11 is NOT LOCKED. Direct legacy mutation surfaces identified above are now fail-closed, but production entrypoint, durable escrow READ, full movement reconciliation, legacy-store freeze/removal, CI evidence, and independent re-performance remain open.
 
 
-## EA-35.13 verification update — 2026-09-22
+## EA-35.13 verification update — 2026-09-27
 
-### Verified by source inspection
+### Exact PostgreSQL execution evidence
 
-- `ProductionRuntimeFactory.create()` is an instance method; the production entrypoint now constructs `ProductionRuntimeConfig` and an explicit `ProductionRuntimeFactory` instance before calling `create()`.
-- Factory initialization now attaches the canonical persistence metadata and calls `configure_canonical_ledger()`, followed by `require_canonical_ledger_authority()`.
-- The production entrypoint independently asserts `runtime.is_canonical_ledger_authoritative`.
-- Canonical schema migration `postgres/schema/002_canonical_production.sql` creates the Ledger, Witness, Outbox and Idempotency stores and extends the durable Escrow aggregate to the full lifecycle.
+The production runtime/value-authority gate was executed against a real PostgreSQL 16 service on exact execution SHA `890a78f36dcfe161e195da649b3cd124133d6535`.
 
-### Verification boundary
+Successful workflow evidence includes:
+- PostgreSQL production re-performance — run `36317914217`
+- Production PostgreSQL Runtime — run `36317914351`
+- production-postgres-smoke — run `36317914313`
+- production-postgres-proof — run `36317914446`
+- production-postgresql-gate — run `36317914344`
+- PostgreSQL production verification — run `36317914254`
+- EAI PostgreSQL Reperformance — run `36317914266`
 
-GitHub Actions has no workflow run associated with commit `68f0eb69a96fbd1369f1a8ea0570cc8f3f6af396` (`[]` returned). Therefore PostgreSQL execution is **not yet independently runtime-verified**. Source-level construction is corrected; production boot and end-to-end PostgreSQL execution remain OPEN.
+All listed runs completed with conclusion `success`.
 
-Status remains: **IN PROGRESS / NOT LOCKED**.
+### Verified boundary
+
+The exact execution verified:
+1. PostgreSQL migration/schema initialization.
+2. Canonical Ledger authority establishment.
+3. Production entrypoint boot.
+4. FUND / LOCK / RELEASE value-flow execution.
+5. REFUND / CANCEL re-performance.
+6. SETTLEMENT through the Canonical Ledger.
+7. Durable replay/idempotency.
+8. Deep value-truth reconciliation.
+9. EAI PostgreSQL re-performance.
+
+### Remaining closure gates
+
+EA-34 / EA-35 is still **VERIFIED / NOT LOCKED** because:
+- physical legacy-store removal/archive has not been independently closed;
+- organizational IAM/MFA evidence remains a CORE assurance gap;
+- branch/main governance evidence remains open;
+- final independent oracle/re-performance package remains a separate assurance step;
+- overall fundamental architecture lock requires reconciliation of these broader gates.
+
