@@ -4,7 +4,7 @@ Status: **VERIFIED TECHNICAL EVIDENCE / NOT PRODUCTION LOCK**
 
 ## Exact verified commit
 - Branch: `feat/ea21-transaction-aware-ledger`
-- Commit: `7131a4f101c88772a74397be06b6db45615f3274`
+- Commit: `a3bc73d9258300b07201a141006415185125e64a`
 - Execution date: 2026-09-27
 - PostgreSQL service: 16
 
@@ -13,14 +13,14 @@ Status: **VERIFIED TECHNICAL EVIDENCE / NOT PRODUCTION LOCK**
 All primary runs below are associated with the exact commit above.
 
 1. **PostgreSQL production runtime**
-   - Run: `36288456437`
+   - Run: `36288686456`
    - Conclusion: **success**
    - PostgreSQL 16 service initialized
    - Dependencies installed
    - Real PostgreSQL production boot completed successfully
 
 2. **canonical-production-postgres**
-   - Run: `36288456426`
+   - Run: `36288686504`
    - Conclusion: **success**
    - Production factory construction succeeded
    - Canonical production schema verification succeeded
@@ -28,7 +28,7 @@ All primary runs below are associated with the exact commit above.
    - Deep value-truth test suite completed successfully
 
 3. **EA-35 PostgreSQL production re-performance**
-   - Run: `36288453943`
+   - Run: `36288686428`
    - Conclusion: **success**
    - Canonical PostgreSQL migrations applied successfully
    - Real PostgreSQL production integration suite completed successfully
@@ -39,18 +39,18 @@ All primary runs below are associated with the exact commit above.
    - Restart/replay RELEASE idempotency verified without duplicate value movement
 
 Additional same-commit production evidence also completed successfully:
-- PostgreSQL production smoke: `36288456338`
-- EAI Production PostgreSQL Re-performance: `36288456415`
-- EAI PostgreSQL Reperformance: `36288456335`
-- production-postgres-proof: `36288456436`
-- production-postgres-reperformance: `36288456392`
+- PostgreSQL production smoke: `36288686386`
+- EAI Production PostgreSQL Re-performance: `36288686490`
+- EAI PostgreSQL Reperformance: `36288686465`
+- production-postgres-proof: `36288686589`
+- production-postgres-reperformance: `36288686508`
 - Production PostgreSQL Runtime: `36288456388`
 - production-postgres-smoke: `36288456442`
-- PostgreSQL production proof: `36288456414`
-- production-postgres-evidence: `36288456446`
-- Production Runtime PostgreSQL: `36288456337`
-- CodeQL Advanced: `36288456429`
-- core-gates: `36288456394`
+- PostgreSQL production proof: `36288686563`
+- production-postgres-evidence: `36288686515`
+- Production Runtime PostgreSQL: `36288686550`
+- CodeQL Advanced: `36288686502`
+- core-gates: `36288686479`
 
 ## Verified production construction
 
@@ -118,4 +118,8 @@ Therefore:
 
 **EAI / overall production lock = NOT YET**
 
-Next gate: classify and resolve the remaining same-commit failing workflow paths, then complete independent re-performance and final production-control evidence.
+Latest primary EA-35 re-performance evidence is now verified on exact branch tip `a3bc73d9258300b07201a141006415185125e64a`.
+
+The primary EA-35 gate executed against real PostgreSQL 16 and verified factory construction, production entrypoint boot, FUND→LOCK→RELEASE, REFUND/CANCEL, deep value-truth reconciliation, and canonical runtime tests. However, several duplicate/legacy workflow paths still report failures on the same SHA. These are not reclassified as GREEN and are not treated as part of the primary EA-35 evidence until their scope is explicitly retired or corrected.
+
+Next gate: independent re-performance and final production-control evidence. Overall production lock remains NOT YET.
