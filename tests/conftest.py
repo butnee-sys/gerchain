@@ -34,12 +34,16 @@ def isolate_postgresql_core_state():
     # create_all is only a test-fixture safety net for mixed legacy/core suites.
     DurableIdempotencyBase.metadata.create_all(engine)
     tables = (
-        "gerchain_release_witnesses",
+        "gerchain_transaction_witnesses",
         "gerchain_outbox_events",
+        "gerchain_idempotency_records",
+        "gerchain_ledger_movements",
+        "gerchain_ledger_accounts",
+        "escrows",
+        "gerchain_release_witnesses",
         "gerchain_release_operations",
         "gerchain_release_escrows",
         "gerchain_release_accounts",
-        "gerchain_idempotency_records",
     )
     with engine.begin() as connection:
         connection.execute(text("TRUNCATE TABLE " + ", ".join(tables) + " RESTART IDENTITY CASCADE"))
