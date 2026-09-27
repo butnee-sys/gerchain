@@ -44,7 +44,7 @@ jobs:
           from postgres.migrations import apply_migrations
           engine = create_engine(os.environ["GERCHAIN_DATABASE_URL"])
           with engine.connect() as connection:
-              apply_migrations(connection, "postgres/migrations")
+              apply_migrations(connection, "postgres/schema")
           print("CANONICAL_POSTGRES_MIGRATIONS=TRUE")
           PY
       - name: Verify production PostgreSQL bootstrap
