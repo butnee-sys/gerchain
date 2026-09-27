@@ -48,7 +48,7 @@ jobs:
           import psycopg
           from postgres.migrations import apply_migrations
           with psycopg.connect("postgresql://gerchain:gerchain@localhost:5432/gerchain") as conn:
-              apply_migrations(conn, "postgres/schema")
+              apply_migrations(conn, "postgres/migrations")
           print("CANONICAL_POSTGRES_MIGRATIONS=TRUE")
           PY
 
