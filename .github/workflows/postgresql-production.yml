@@ -43,4 +43,11 @@ jobs:
       - name: Docker production entrypoint smoke
         run: |
           docker build -t gerchain-production-smoke .
+          set +e
           timeout 20s docker run --rm --network host -e GERCHAIN_DATABASE_URL=postgresql+psycopg://postgres:postgres@localhost:5432/gerchain_test -e GERCHAIN_ESCROW_ID=docker-smoke-escrow -e GERCHAIN_ESCROW_AMOUNT=100 -e GERCHAIN_CURRENCY=USD -e GERCHAIN_WITNESS_ID=docker-smoke-witness gerchain-production-smoke
+          code=$?
+          if [ "$code" -ne 124 ]; then
+            echo "Docker production entrypoint failed before controlled timeout (exit=$code)"
+            exit "$code"
+          fi
+          echo "DOCKER_PRODUCTION_ENTRYPOINT_BOOT=TRUE"
