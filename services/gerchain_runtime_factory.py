@@ -86,26 +86,50 @@ class ProductionRuntimeFactory:
             """))
 
             conn.execute(text("""
-                ALTER TABLE gerchain_ledger_movements
-                ADD CONSTRAINT gerchain_movement_operation_check
-                CHECK (operation IN ('FUND','RELEASE','REFUND','CANCEL','SETTLEMENT'))
-                NOT VALID
+                DO $
+                BEGIN
+                    IF NOT EXISTS (
+                        SELECT 1 FROM pg_constraint
+                        WHERE conname = 'gerchain_movement_operation_check'
+                    ) THEN
+                        ALTER TABLE gerchain_ledger_movements
+                        ADD CONSTRAINT gerchain_movement_operation_check
+                        CHECK (operation IN ('FUND','RELEASE','REFUND','CANCEL','SETTLEMENT'))
+                        NOT VALID;
+                    END IF;
+                END $;
             """))
             conn.execute(text("""
-                ALTER TABLE gerchain_ledger_movements
-                ADD CONSTRAINT gerchain_movement_integrity_hash_check
-                CHECK (integrity_hash IS NOT NULL AND length(integrity_hash) = 64)
-                NOT VALID
+                DO $
+                BEGIN
+                    IF NOT EXISTS (
+                        SELECT 1 FROM pg_constraint
+                        WHERE conname = 'gerchain_movement_integrity_hash_check'
+                    ) THEN
+                        ALTER TABLE gerchain_ledger_movements
+                        ADD CONSTRAINT gerchain_movement_integrity_hash_check
+                        CHECK (integrity_hash IS NOT NULL AND length(integrity_hash) = 64)
+                        NOT VALID;
+                    END IF;
+                END $;
             """))
             conn.execute(text("""
-                ALTER TABLE gerchain_ledger_movements
-                ADD CONSTRAINT gerchain_movement_escrow_binding_check
-                CHECK (
-                    (operation = 'SETTLEMENT' AND escrow_id IS NULL)
-                    OR
-                    (operation IN ('FUND','RELEASE','REFUND','CANCEL') AND escrow_id IS NOT NULL)
-                )
-                NOT VALID
+                DO $
+                BEGIN
+                    IF NOT EXISTS (
+                        SELECT 1 FROM pg_constraint
+                        WHERE conname = 'gerchain_movement_escrow_binding_check'
+                    ) THEN
+                        ALTER TABLE gerchain_ledger_movements
+                        ADD CONSTRAINT gerchain_movement_escrow_binding_check
+                        CHECK (
+                            (operation = 'SETTLEMENT' AND escrow_id IS NULL)
+                            OR
+                            (operation IN ('FUND','RELEASE','REFUND','CANCEL') AND escrow_id IS NOT NULL)
+                        )
+                        NOT VALID;
+                    END IF;
+                END $;
             """))
 
         with self.engine.connect() as conn:
