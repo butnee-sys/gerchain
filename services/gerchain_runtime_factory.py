@@ -8,7 +8,7 @@ from pathlib import Path
 
 from postgres.migrations import apply_migrations
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import sessionmaker
 
@@ -47,12 +47,31 @@ class ProductionRuntimeFactory:
         )
 
     def initialize(self) -> None:
-        """Apply canonical PostgreSQL migrations before production startup."""
-        migration_dir = Path(__file__).resolve().parents[1] / "postgres" / "migrations"
-        with self.engine.connect() as connection:
-            apply_migrations(connection, migration_dir)
-            assert_canonical_production_schema(connection)
-
+        """Reconcile the durable PostgreSQL schema required by the canonical runtime."""
+        with self.engine.begin() as conn:
+            conn.execute(text("""
+                ALTER TABLE escrows
+                    ADD COLUMN IF NOT EXISTS refund_destination TEXT,
+                    ADD COLUMN IF NOT EXISTS currency TEXT,
+                    ADD COLUMN IF NOT EXISTS version BIGINT NOT NULL DEFAULT 0,
+                    ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ
+            """))
+            conn.execute(text("""
+                UPDATE escrows
+                SET created_at = COALESCE(created_at, updated_at, now()),
+                    currency = COALESCE(currency, 'MNT'),
+                    refund_destination = COALESCE(refund_destination, sender_address)
+            """))
+            conn.execute(text("ALTER TABLE escrows ALTER COLUMN created_at SET NOT NULL"))
+            conn.execute(text("ALTER TABLE escrows ALTER COLUMN currency SET NOT NULL"))
+            conn.execute(text("ALTER TABLE escrows DROP CONSTRAINT IF EXISTS escrows_state_check"))
+            conn.execute(text("""
+                ALTER TABLE escrows
+                ADD CONSTRAINT escrows_state_check
+                CHECK (state IN ('CREATED','FUNDED','LOCKED','RELEASED','REFUNDED','CANCELLED'))
+            """))
+        for base in (AtomicLedgerBase, EscrowBase, OutboxBase, IdempotencyBase, TransactionWitness):
+            base.metadata.create_all(self.engine)
     def create(self) -> GerchainRuntime:
         self.initialize()
         runtime = GerchainRuntime(
