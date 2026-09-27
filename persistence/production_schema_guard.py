@@ -11,7 +11,7 @@ REQUIRED_COLUMNS = {
     'gerchain_outbox_events': {'id','event_id','event_type','aggregate_id','payload_json','state','lease_until','attempts','created_at','updated_at'},
     'gerchain_idempotency_records': {'id','key','fingerprint','result_json','state','created_at','updated_at'},
 }
-REQUIRED_ESCROW_STATES = {'CREATED','FUNDED','LOCKED','RELEASED','REFUNDED','CANCELLED'}
+REQUIRED_ESCROW_STATES = {'CREATED','FUNDED','LOCKED','RELEASED','REFUNDED','CANCELLED'}  # canonical lifecycle gate
 
 def assert_canonical_production_schema(connection: Connection) -> None:
     if connection.dialect.name != 'postgresql':
