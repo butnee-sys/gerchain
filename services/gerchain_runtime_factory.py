@@ -47,6 +47,10 @@ class ProductionRuntimeFactory:
         Production must never silently create or mutate schema with SQLAlchemy
         metadata. Schema evolution is owned by the PostgreSQL migration runner.
         """
+        migration_dir = Path(__file__).resolve().parents[1] / "postgres" / "migrations"
+        with self.engine.connect() as connection:
+            apply_migrations(connection, migration_dir)
+
         inspector = inspect(self.engine)
         required = {
             "gerchain_ledger_accounts": {
