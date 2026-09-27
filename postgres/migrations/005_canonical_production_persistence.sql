@@ -28,12 +28,12 @@ ALTER TABLE escrows
     ADD COLUMN IF NOT EXISTS version BIGINT NOT NULL DEFAULT 0,
     ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT now();
 
-ALTER TABLE escrows
-    ALTER COLUMN currency SET DEFAULT 'MNT';
-
-UPDATE escrows
-SET currency = 'MNT'
-WHERE currency IS NULL;
+DO $
+BEGIN
+    IF EXISTS (SELECT 1 FROM escrows WHERE currency IS NULL) THEN
+        RAISE EXCEPTION 'canonical migration blocked: existing escrow rows have unknown currency';
+    END IF;
+END $;
 
 ALTER TABLE escrows
     ALTER COLUMN currency SET NOT NULL;
