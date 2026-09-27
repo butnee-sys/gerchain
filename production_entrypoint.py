@@ -6,8 +6,6 @@ import time
 
 from sqlalchemy import create_engine
 
-from postgres.migrations import apply_migrations
-
 from services.gerchain_runtime_factory import ProductionRuntimeConfig, ProductionRuntimeFactory
 
 
@@ -44,9 +42,6 @@ def main() -> None:
 
     engine = create_engine(database_url, pool_pre_ping=True)
     try:
-        with engine.connect() as connection:
-            apply_migrations(connection, "postgres/migrations")
-
         factory = ProductionRuntimeFactory(
             ProductionRuntimeConfig(
                 database_url=database_url,
