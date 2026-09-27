@@ -40,6 +40,18 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r requirements-dee-security.txt
           python -m pip install 'cryptography>=43,<47' pytest
+      - name: Apply canonical PostgreSQL migrations
+        env:
+          GERCHAIN_DATABASE_URL: postgresql+psycopg://gerchain:gerchain@localhost:5432/gerchain
+        run: |
+          python - <<'PY'
+          import psycopg
+          from postgres.migrations import apply_migrations
+          with psycopg.connect("postgresql://gerchain:gerchain@localhost:5432/gerchain") as conn:
+              apply_migrations(conn, "postgres/migrations")
+          print("CANONICAL_POSTGRES_MIGRATIONS=TRUE")
+          PY
+
       - name: Verify production factory construction
         env:
           GERCHAIN_DATABASE_URL: postgresql+psycopg://gerchain:gerchain@localhost:5432/gerchain
