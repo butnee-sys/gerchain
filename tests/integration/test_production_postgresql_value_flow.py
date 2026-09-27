@@ -4,6 +4,7 @@ import os
 from sqlalchemy import select
 
 from persistence.escrow_aggregate import CanonicalEscrow, EscrowState
+from persistence.atomic_ledger import LedgerMovementModel
 from persistence.deep_value_reconciliation import deep_reconcile_value_truth
 from services.gerchain_runtime_factory import ProductionRuntimeConfig, ProductionRuntimeFactory
 
@@ -78,7 +79,7 @@ def test_production_postgresql_fund_lock_release_and_deep_truth():
     with factory.session_factory() as session:
         report = deep_reconcile_value_truth(session)
         assert report.matched, [f"{i.code}:{i.transaction_id}:{i.detail}" for i in report.issues]
-        movement_count = len(session.execute(select(__import__("persistence.atomic_ledger", fromlist=["LedgerMovementModel"]).LedgerMovementModel)).scalars().all())
+        movement_count = len(session.execute(select(LedgerMovementModel)).scalars().all())
         assert movement_count == 2
 
     factory.engine.dispose()
