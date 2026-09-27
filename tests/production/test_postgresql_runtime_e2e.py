@@ -56,10 +56,13 @@ def test_production_postgresql_runtime_full_value_flow():
 
     accounts = {
         "sender-release": 100,
+        "e2e-release": 0,
         "receiver-release": 0,
         "sender-refund": 100,
+        "e2e-refund": 0,
         "receiver-refund": 0,
         "sender-cancel": 100,
+        "e2e-cancel": 0,
         "receiver-cancel": 0,
         "settlement-source": 100,
         "settlement-destination": 0,
