@@ -113,3 +113,5 @@ jobs:
 
 # EA-35.17 verification trigger
 # Canonical PostgreSQL re-performance is intentionally retriggered after constructor correction.
+
+# EA-35.18 trigger: canonical migration directory correction is now part of the production boot gate.
