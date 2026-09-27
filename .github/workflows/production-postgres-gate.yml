@@ -1,0 +1,46 @@
+name: production-postgres-gate
+
+on:
+  push:
+    branches:
+      - feat/ea21-transaction-aware-ledger
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  postgres-production-gate:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: gerchain
+          POSTGRES_USER: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d gerchain"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install production dependencies
+        run: pip install -r requirements-dee-security.txt pytest
+
+      - name: Apply migrations and verify canonical production boot
+        env:
+          GERCHAIN_DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/gerchain
+        run: pytest -q tests/integration/test_production_postgres_boot.py
+
+      - name: Run deep value-truth reconciliation tests
+        run: pytest -q tests/persistence/test_deep_value_reconciliation.py
