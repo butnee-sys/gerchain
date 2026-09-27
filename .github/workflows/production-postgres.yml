@@ -36,6 +36,17 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install -r requirements-dee-security.txt pytest
+      - name: Apply canonical PostgreSQL migrations
+        run: |
+          python - <<'PY'
+          import os
+          from sqlalchemy import create_engine
+          from postgres.migrations import apply_migrations
+          engine = create_engine(os.environ["GERCHAIN_DATABASE_URL"])
+          with engine.connect() as connection:
+              apply_migrations(connection, "postgres/migrations")
+          print("CANONICAL_POSTGRES_MIGRATIONS=TRUE")
+          PY
       - name: Verify production PostgreSQL bootstrap
         run: pytest -q tests/integration/test_production_postgresql_boot.py
       - name: Verify production full value flow
