@@ -65,7 +65,7 @@ def test_postgresql_atomic_value_graph():
             expected_state=EscrowState.LOCKED,
             new_state=EscrowState.RELEASED,
             ledger_transfer=PostgreSQLAtomicLedger.transfer_in_transaction,
-            event_type="GERCHAIN_RELEASE",
+            event_type="GERCHAIN_RELEASED",
             payload=payload,
             idempotency_payload={
                 "escrow_id": escrow_id,
@@ -85,15 +85,15 @@ def test_postgresql_atomic_value_graph():
         movement = session.execute(select(LedgerMovementModel).where(LedgerMovementModel.transaction_id == tx)).scalar_one()
         escrow = session.get(CanonicalEscrow, escrow_id)
         witness = session.execute(select(TransactionWitness).where(TransactionWitness.transaction_id == tx)).scalar_one()
-        outbox = session.execute(select(OutboxEvent).where(OutboxEvent.event_id == "gerchain_release:"+tx)).scalar_one()
+        outbox = session.execute(select(OutboxEvent).where(OutboxEvent.event_id == "gerchain_released:"+tx)).scalar_one()
         assert source.balance == 0
         assert destination.balance == 40
         assert movement.operation == "RELEASE"
         assert movement.escrow_id == escrow_id
         assert movement.integrity_hash
         assert escrow.state == EscrowState.RELEASED.value
-        assert witness.event_type == "GERCHAIN_RELEASE"
-        assert outbox.event_type == "GERCHAIN_RELEASE"
+        assert witness.event_type == "GERCHAIN_RELEASED"
+        assert outbox.event_type == "GERCHAIN_RELEASED"
         assert deep_reconcile_value_truth(session).matched
 
     engine.dispose()
