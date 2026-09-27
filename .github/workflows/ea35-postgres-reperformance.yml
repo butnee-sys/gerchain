@@ -110,3 +110,6 @@ jobs:
 # push-triggered PostgreSQL re-performance gate
 
 # EA-35.16 trigger marker: PostgreSQL re-performance requested after canonical factory/entrypoint correction.
+
+# EA-35.17 verification trigger
+# Canonical PostgreSQL re-performance is intentionally retriggered after constructor correction.
