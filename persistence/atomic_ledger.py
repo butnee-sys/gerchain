@@ -110,7 +110,7 @@ class PostgreSQLAtomicLedger:
             .with_for_update()
         ).scalar_one_or_none()
         if existing is not None:
-            if (existing.source, existing.destination, existing.amount, existing.currency, existing.operation, existing.escrow_id) != (source, destination, amount, currency, operation, escrow_id):
+            if (existing.source, existing.destination, existing.amount, existing.currency, existing.operation, existing.escrow_id, existing.integrity_hash) != (source, destination, amount, currency, operation, escrow_id, integrity_hash):
                 raise ValueError("Transaction ID was reused with different movement")
             return {"transaction_id": transaction_id, "source": source, "destination": destination, "amount": amount, "currency": currency, "replayed": True}
 
