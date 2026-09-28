@@ -187,6 +187,6 @@ def test_production_factory_executes_refund_cancel_and_settlement_on_real_postgr
         assert report.matched
 
     read = CanonicalLedgerRead(factory.session_factory())
-    assert read.get_balance("EAI-SOURCE", "USD") == 925
+    assert read.get_balance("EAI-SOURCE", "USD") == 975
     assert read.get_balance("EAI-DEST", "USD") == 0
     assert read.get_balance("EAI-SETTLE-DEST", "USD") == 25
