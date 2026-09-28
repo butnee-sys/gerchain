@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from typing import Any, Mapping
 
 from sqlalchemy.orm import Session
@@ -85,12 +84,6 @@ def cancel_escrow_in_transaction(
             session, escrow_id, EscrowState.CREATED, EscrowState.CANCELLED
         )
         result = {"status": "CANCELLED", "value_movement": False, "amount": 0}
-        complete_in_transaction(
-            session,
-            key=transaction_id,
-            payload=idempotency_payload,
-            result_json=json.dumps(result, sort_keys=True, separators=(",", ":")),
-        )
         return {"replayed": False, "result": result}
 
     result = AtomicValueTransaction(session).transfer_and_transition(
