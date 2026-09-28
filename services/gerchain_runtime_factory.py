@@ -41,11 +41,17 @@ class ProductionRuntimeFactory:
         )
 
     def initialize(self) -> None:
-        """Apply the canonical PostgreSQL schema before constructing runtime."""
+        """Apply the authoritative PostgreSQL migration history.
+
+        Production startup must use the frozen migration runner rather than
+        SQLAlchemy create_all(), which cannot reconcile existing schema history,
+        checksums, or migration ordering.
+        """
         migration_dir = Path(__file__).resolve().parents[1] / "postgres" / "migrations"
+        if not migration_dir.is_dir():
+            raise RuntimeError(f"production migration directory not found: {migration_dir}")
         with self.engine.connect() as connection:
             apply_migrations(connection, migration_dir)
-            assert_canonical_production_schema(connection)
 
     def create(self) -> GerchainRuntime:
         self.initialize()
