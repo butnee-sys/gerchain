@@ -84,11 +84,19 @@ def apply_migrations(conn, migration_dir: str | Path) -> None:
         preferred_name = preferred_names.get(version)
         if preferred_name:
             selected = next((p for p in candidates if p.name == preferred_name), None)
-            if selected is None:
+            if selected is not None:
+                preferred[version] = selected
+            elif len(candidates) == 1:
+                # The preferred alias may be absent on a rebased migration history.
+                preferred[version] = candidates[0]
+            elif not candidates:
+                # A preferred historical version has no physical migration here.
+                continue
+            else:
                 raise RuntimeError(
-                    f"Preferred migration {preferred_name} for version {version} is missing"
+                    f"Preferred migration {preferred_name} is missing and "
+                    f"version {version} has multiple candidates"
                 )
-            preferred[version] = selected
         elif len(candidates) == 1:
             preferred[version] = candidates[0]
         else:
