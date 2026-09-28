@@ -42,13 +42,17 @@ def main() -> None:
 
     engine = create_engine(database_url, pool_pre_ping=True)
     try:
-        runtime = ProductionRuntimeFactory.from_engine(
-            escrow_id=escrow_id,
-            amount=amount,
-            currency=currency,
-            witness_id=witness_id,
+        factory = ProductionRuntimeFactory(
+            ProductionRuntimeConfig(
+                database_url=database_url,
+                escrow_id=escrow_id,
+                amount=amount,
+                currency=currency,
+                witness_id=witness_id,
+            ),
             engine=engine,
         )
+        runtime = factory.create()
 
         if not runtime.is_canonical_ledger_authoritative:
             raise RuntimeError("canonical ledger authority was not established")
