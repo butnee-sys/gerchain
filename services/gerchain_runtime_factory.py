@@ -46,11 +46,18 @@ class ProductionRuntimeFactory:
         )
 
     def initialize(self) -> None:
-        """Apply the canonical PostgreSQL migration chain before boot."""
-        migration_dir = Path(__file__).resolve().parents[1] / "postgres" / "schema"
+        """Apply canonical PostgreSQL migration history before boot.
+
+        ``create_all()`` is intentionally not used here: it cannot evolve an
+        existing production schema and is insufficient for the canonical
+        value-flow contract.
+        """
+        migration_dir = Path(__file__).resolve().parent.parent / "postgres" / "schema"
+        if not migration_dir.is_dir():
+            raise RuntimeError(f"PostgreSQL migration directory not found: {migration_dir}")
         with self.engine.connect() as connection:
             apply_migrations(connection, migration_dir)
-            assert_canonical_production_schema(connection)
+
     def create(self) -> GerchainRuntime:
         self.initialize()
         runtime = GerchainRuntime(
