@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, inspect
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import sessionmaker
 
@@ -46,18 +46,22 @@ class ProductionRuntimeFactory:
         )
 
     def initialize(self) -> None:
-        """Apply canonical PostgreSQL migration history before boot.
-
-        ``create_all()`` is intentionally not used here: it cannot evolve an
-        existing production schema and is insufficient for the canonical
-        value-flow contract.
-        """
-        migration_dir = Path(__file__).resolve().parent.parent / "postgres" / "schema"
-        if not migration_dir.is_dir():
-            raise RuntimeError(f"PostgreSQL migration directory not found: {migration_dir}")
-        with self.engine.connect() as connection:
-            apply_migrations(connection, migration_dir)
-            assert_canonical_production_schema(connection)
+        """Fail closed unless the canonical production schema is already migrated."""
+        required = {
+            "escrows",
+            "gerchain_ledger_accounts",
+            "gerchain_ledger_movements",
+            "gerchain_transaction_witnesses",
+            "gerchain_outbox_events",
+            "gerchain_idempotency_records",
+        }
+        present = set(inspect(self.engine).get_table_names())
+        missing = sorted(required - present)
+        if missing:
+            raise RuntimeError(
+                "canonical production schema is incomplete; missing tables: "
+                + ", ".join(missing)
+            )
 
     def create(self) -> GerchainRuntime:
         self.initialize()
