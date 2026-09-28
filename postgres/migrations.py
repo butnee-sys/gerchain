@@ -71,7 +71,7 @@ def apply_migrations(conn, migration_dir: str | Path) -> None:
     preferred_names = {
         2: "002_canonical_production.sql",
         5: "005_canonical_production.sql",
-        6: "006_canonical_escrow_lifecycle_hardening.sql",
+        6: "006_canonical_movement_integrity.sql",
     }
     versions: dict[int, list[Path]] = {}
     for migration in files:
