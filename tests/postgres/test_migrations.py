@@ -6,7 +6,7 @@ from postgres.migrations import apply_migrations
 
 
 def test_repository_migration_versions_are_ordered():
-    migration_dir = Path(__file__).resolve().parents[2] / "postgres" / "schema"
+    migration_dir = Path(__file__).resolve().parents[2] / "postgres" / "migrations"
     versions = [int(path.name.split("_", 1)[0]) for path in migration_dir.glob("*.sql")]
     assert versions == sorted(versions)
 
@@ -28,7 +28,7 @@ def test_known_canonical_alias_versions_have_deterministic_preferred_files():
     expected = {
         2: "002_canonical_production.sql",
         5: "005_canonical_production.sql",
-        6: "006_canonical_escrow_lifecycle_hardening.sql",
+        6: "006_canonical_movement_integrity.sql",
     }
     for version, name in expected.items():
         candidates = [p for p in migration_dir.glob(f"{version:03d}_*.sql")]
