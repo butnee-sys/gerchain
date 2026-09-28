@@ -44,3 +44,12 @@ The following remain required before production lock:
 6. Independent re-performance.
 
 No production lock is declared until all release gates have evidence.
+
+## Latest GitHub Actions observation — 2026-09-28
+
+- Branch tip observed: `65837b311dc1b68d1e368fbd3f3c023b9885642f`.
+- `canonical-production-postgres` run: `36376807081` — **QUEUED**, conclusion `null`.
+- Its `postgres-canonical` job: **QUEUED**.
+- Multiple PostgreSQL/EAI production workflows for the same branch tip are also queued; no completed execution result was available at verification time.
+
+This is positive evidence that the gate was triggered, but it is **not execution evidence of success**.
