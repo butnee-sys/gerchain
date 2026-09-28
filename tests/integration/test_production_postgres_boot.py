@@ -21,7 +21,7 @@ def test_production_postgres_migration_and_canonical_boot() -> None:
     engine = create_engine(database_url, pool_pre_ping=True)
     try:
         with engine.connect() as conn:
-            apply_migrations(conn, Path(__file__).parents[2] / "postgres" / "schema")
+            apply_migrations(conn, Path(__file__).parents[2] / "postgres" / "migrations")
 
         config = ProductionRuntimeConfig(
             database_url=database_url,
@@ -48,5 +48,6 @@ def test_production_postgres_migration_and_canonical_boot() -> None:
             "gerchain_idempotency_records",
         }
         assert not (required - tables)
+        assert "schema_version" in tables
     finally:
         engine.dispose()
