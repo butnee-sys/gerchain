@@ -33,6 +33,17 @@ jobs:
           python -m pip install -r postgres/requirements-test.txt
           python -m pip install -r requirements-dee-security.txt
           python -m pip install "psycopg[binary]"
+      - name: Apply canonical PostgreSQL migrations
+        env:
+          GERCHAIN_DATABASE_URL: postgresql+psycopg://gerchain:gerchain@127.0.0.1:5432/gerchain_test
+        run: |
+          python - <<'PY'
+          import psycopg
+          from postgres.migrations import apply_migrations
+          with psycopg.connect("postgresql://gerchain:gerchain@127.0.0.1:5432/gerchain_test") as conn:
+              apply_migrations(conn, "postgres/schema")
+          print("CANONICAL_POSTGRES_MIGRATIONS=TRUE")
+          PY
       - name: Boot production entrypoint against PostgreSQL
         env:
           GERCHAIN_DATABASE_URL: postgresql+psycopg://gerchain:gerchain@127.0.0.1:5432/gerchain_test
