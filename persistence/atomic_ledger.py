@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any
 
-from sqlalchemy import DateTime, Integer, String, UniqueConstraint, select
+from sqlalchemy import BigInteger, DateTime, Integer, String, UniqueConstraint, select
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
 
 
@@ -16,7 +16,7 @@ class LedgerAccountModel(AtomicLedgerBase):
 
     account_id: Mapped[str] = mapped_column(String(128), primary_key=True)
     currency: Mapped[str] = mapped_column(String(16), nullable=False)
-    balance: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    balance: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
     version: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
@@ -29,7 +29,7 @@ class LedgerMovementModel(AtomicLedgerBase):
     transaction_id: Mapped[str] = mapped_column(String(128), nullable=False)
     source: Mapped[str] = mapped_column(String(128), nullable=False)
     destination: Mapped[str] = mapped_column(String(128), nullable=False)
-    amount: Mapped[int] = mapped_column(Integer, nullable=False)
+    amount: Mapped[int] = mapped_column(BigInteger, nullable=False)
     currency: Mapped[str] = mapped_column(String(16), nullable=False)
     operation: Mapped[str] = mapped_column(String(32), nullable=False, default="TRANSFER")
     escrow_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
