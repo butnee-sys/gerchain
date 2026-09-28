@@ -12,19 +12,22 @@ from persistence.release_escrow import release_escrow_in_transaction
 from persistence.atomic_value_transaction import TransactionWitness
 from persistence.recovery_outbox import OutboxEvent
 from persistence.durable_idempotency import DurableIdempotencyRecord
-from services.gerchain_runtime_factory import ProductionRuntimeFactory
+from services.gerchain_runtime_factory import ProductionRuntimeConfig, ProductionRuntimeFactory
 
 
 def test_production_postgresql_fund_lock_release_truth_graph(
     canonical_postgresql_engine,
 ):
-    runtime = ProductionRuntimeFactory.from_engine(
-        escrow_id="production-lifecycle-escrow",
-        amount=100,
-        currency="MNT",
-        witness_id="production-lifecycle-witness",
+    runtime = ProductionRuntimeFactory(
+        ProductionRuntimeConfig(
+            database_url=str(canonical_postgresql_engine.url),
+            escrow_id="production-lifecycle-escrow",
+            amount=100,
+            currency="MNT",
+            witness_id="production-lifecycle-witness",
+        ),
         engine=canonical_postgresql_engine,
-    )
+    ).create()
     assert runtime.is_canonical_ledger_authoritative
 
     from sqlalchemy.orm import sessionmaker
