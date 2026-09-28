@@ -41,7 +41,7 @@ jobs:
           import os
           engine = create_engine(os.environ["GERCHAIN_DATABASE_URL"])
           with engine.connect() as connection:
-              apply_migrations(connection, Path("postgres/migrations"))
+              apply_migrations(connection, Path("postgres/schema"))
           print("POSTGRES_MIGRATIONS=APPLIED")
           PY
       - name: PostgreSQL production re-performance
