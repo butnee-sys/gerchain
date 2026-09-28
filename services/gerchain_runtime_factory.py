@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+from pathlib import Path
 from typing import Any, Callable
 
 from sqlalchemy import create_engine, inspect
@@ -46,22 +47,15 @@ class ProductionRuntimeFactory:
         )
 
     def initialize(self) -> None:
-        """Fail closed unless the canonical production schema is already migrated."""
-        required = {
-            "escrows",
-            "gerchain_ledger_accounts",
-            "gerchain_ledger_movements",
-            "gerchain_transaction_witnesses",
-            "gerchain_outbox_events",
-            "gerchain_idempotency_records",
-        }
-        present = set(inspect(self.engine).get_table_names())
-        missing = sorted(required - present)
-        if missing:
-            raise RuntimeError(
-                "canonical production schema is incomplete; missing tables: "
-                + ", ".join(missing)
-            )
+        """Apply the canonical versioned PostgreSQL migration set.
+
+        Production startup must use the migration authority rather than
+        SQLAlchemy metadata creation, so schema history, checksums and
+        migration locking remain authoritative.
+        """
+        migration_dir = Path(__file__).resolve().parent.parent / "postgres" / "migrations"
+        with self.engine.connect() as connection:
+            apply_migrations(connection, migration_dir)
 
     def create(self) -> GerchainRuntime:
         self.initialize()
