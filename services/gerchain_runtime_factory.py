@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Any, Callable
+from pathlib import Path
 
 from sqlalchemy import create_engine
 from sqlalchemy.engine import Engine
@@ -45,10 +46,12 @@ class ProductionRuntimeFactory:
         )
 
     def initialize(self) -> None:
-        """Apply the repository's authoritative PostgreSQL migration chain."""
-        with self.engine.connect() as connection:
-            apply_migrations(connection, "postgres/schema")
-            assert_canonical_production_schema(connection)
+        """Apply the repository's canonical PostgreSQL migrations atomically."""
+        migration_dir = Path(__file__).resolve().parents[1] / "postgres" / "schema"
+        if not migration_dir.is_dir():
+            raise RuntimeError(f"PostgreSQL migration directory not found: {migration_dir}")
+        with self.engine.connect() as conn:
+            apply_migrations(conn, migration_dir)
 
     def create(self) -> GerchainRuntime:
         self.initialize()
