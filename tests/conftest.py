@@ -33,6 +33,10 @@ def isolate_postgresql_core_state():
     # Canonical durable idempotency is production-owned by the migration chain;
     # create_all is only a test-fixture safety net for mixed legacy/core suites.
     DurableIdempotencyBase.metadata.create_all(engine)
+    # Ensure the canonical table is visible on the exact connection used by
+    # the isolation boundary before issuing TRUNCATE statements.
+    with engine.begin() as connection:
+        DurableIdempotencyBase.metadata.create_all(connection)
     tables = (
         "gerchain_transaction_witnesses",
         "gerchain_outbox_events",
