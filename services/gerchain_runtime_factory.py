@@ -43,57 +43,10 @@ class ProductionRuntimeFactory:
         )
 
     def initialize(self) -> None:
-        """Apply the authoritative PostgreSQL migration history.
-
-        Production startup must use the frozen migration runner rather than
-        SQLAlchemy create_all(), which cannot reconcile existing schema history,
-        checksums, or migration ordering.
-        """
+        """Apply the canonical production schema and verify its contract."""
         migration_dir = Path(__file__).resolve().parents[1] / "postgres" / "migrations"
-        if not migration_dir.is_dir():
-            raise RuntimeError(f"production migration directory not found: {migration_dir}")
         with self.engine.connect() as connection:
             apply_migrations(connection, migration_dir)
             assert_canonical_production_schema(connection)
 
-    def create(self) -> GerchainRuntime:
-        self.initialize()
-        runtime = GerchainRuntime(
-            escrow_id=self.config.escrow_id,
-            amount=self.config.amount,
-            currency=self.config.currency,
-            witness_id=self.config.witness_id,
-        )
-        runtime.configure_canonical_ledger(self.session_factory)
-        runtime.require_canonical_ledger_authority()
-        return runtime
-
-    @classmethod
-    def from_engine(
-        cls,
-        *,
-        escrow_id: str,
-        amount: int,
-        currency: str,
-        witness_id: str,
-        engine: Engine,
-        session_factory: Callable[[], Any] | None = None,
-    ) -> GerchainRuntime:
-        factory = cls(
-            ProductionRuntimeConfig(
-                database_url=str(engine.url),
-                escrow_id=escrow_id,
-                amount=amount,
-                currency=currency,
-                witness_id=witness_id,
-            ),
-            engine=engine,
-        )
-        if session_factory is not None:
-            factory.session_factory = session_factory
-        return factory.create()
-
-    build = create
-
-
-__all__ = ["ProductionRuntimeConfig", "ProductionRuntimeFactory"]
+    def create(self) -> GerchainRuntime:undefined
