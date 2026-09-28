@@ -44,5 +44,12 @@ jobs:
       - name: Production PostgreSQL boot
         run: pytest -q tests/production/test_postgresql_boot.py
 
+      - name: PostgreSQL value-flow integration and re-performance
+        run: >-
+          pytest -q
+          tests/integration/test_ea35_postgres_production.py
+          tests/integration/test_ea35_postgres_refund_cancel.py
+          tests/integration/test_ea35_postgres_reperformance.py
+
       - name: Production entrypoint syntax
         run: python -m py_compile production_entrypoint.py services/gerchain_runtime_factory.py
