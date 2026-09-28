@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from pathlib import Path
 from typing import Any, Callable
 
 from sqlalchemy import create_engine
@@ -10,11 +9,13 @@ from sqlalchemy.engine import Engine
 from sqlalchemy.orm import sessionmaker
 
 from postgres.migrations import apply_migrations
-
-
+from persistence.atomic_ledger import AtomicLedgerBase
+from persistence.escrow_aggregate import EscrowBase
+from persistence.recovery_outbox import OutboxBase
+from persistence.durable_idempotency import IdempotencyBase
+from persistence.atomic_value_transaction import TransactionWitness
 from persistence.production_schema_guard import assert_canonical_production_schema
 from services.gerchain_runtime import GerchainRuntime
-from postgres.migrations import apply_migrations
 
 
 @dataclass(frozen=True)
@@ -49,8 +50,7 @@ class ProductionRuntimeFactory:
         migration_dir = Path(__file__).resolve().parents[1] / "postgres" / "schema"
         with self.engine.connect() as connection:
             apply_migrations(connection, migration_dir)
-        for base in (AtomicLedgerBase, EscrowBase, OutboxBase, IdempotencyBase, TransactionWitness):
-            base.metadata.create_all(self.engine)
+            assert_canonical_production_schema(connection)
     def create(self) -> GerchainRuntime:
         self.initialize()
         runtime = GerchainRuntime(
