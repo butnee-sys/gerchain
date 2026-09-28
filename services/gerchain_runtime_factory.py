@@ -8,6 +8,8 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import sessionmaker
 
+from postgres.migrations import apply_migrations
+
 from persistence.atomic_ledger import AtomicLedgerBase
 from persistence.atomic_value_transaction import WitnessBase
 from persistence.durable_idempotency import IdempotencyBase
@@ -46,27 +48,9 @@ class ProductionRuntimeFactory:
         )
 
     def initialize(self) -> None:
-        migration_dir = Path(__file__).resolve().parents[1] / "postgres" / "migrations"
-        with self.engine.connect() as conn:
-            apply_migrations(conn, migration_dir)
-
-        # The migration runner owns historical schema versions. The ORM metadata
-        # below supplies the canonical tables used by the current runtime.
-        for base in (
-            AtomicLedgerBase,
-            EscrowBase,
-            WitnessBase,
-            OutboxBase,
-            IdempotencyBase,
-        ):
-            base.metadata.create_all(self.engine)
-
-        # Do not synthesize or overwrite historical escrow truth at runtime.
-        # Canonical migrations must prove required historical fields are known;
-        # production boot fails closed when migration invariants are not satisfied.
-
-        with self.engine.connect() as conn:
-            assert_canonical_production_schema(conn)
+        """Apply the repository's authoritative PostgreSQL migration chain."""
+        with self.engine.connect() as connection:
+            apply_migrations(connection, "postgres/schema")
 
     def create(self) -> GerchainRuntime:
         self.initialize()
