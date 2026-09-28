@@ -1,22 +1,19 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Any, Callable
 
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import sessionmaker
 
 from postgres.migrations import apply_migrations
-
 from persistence.atomic_ledger import AtomicLedgerBase
 from persistence.atomic_value_transaction import WitnessBase
 from persistence.durable_idempotency import IdempotencyBase
 from persistence.escrow_aggregate import EscrowBase
 from persistence.recovery_outbox import OutboxBase
 from persistence.production_schema_guard import assert_canonical_production_schema
-from postgres.migrations import apply_migrations
 from services.gerchain_runtime import GerchainRuntime
 
 
@@ -51,6 +48,7 @@ class ProductionRuntimeFactory:
         """Apply the repository's authoritative PostgreSQL migration chain."""
         with self.engine.connect() as connection:
             apply_migrations(connection, "postgres/schema")
+            assert_canonical_production_schema(connection)
 
     def create(self) -> GerchainRuntime:
         self.initialize()
