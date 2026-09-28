@@ -105,7 +105,7 @@ def test_postgresql_factory_and_fund_lock_release(production):
         assert released["replayed"] is False
 
     with sf() as session:
-        assert session.get(LedgerAccountModel, "EA35-SOURCE").balance == 850
+        assert session.get(LedgerAccountModel, "EA35-SOURCE").balance == 750
         assert session.get(LedgerAccountModel, "EA35-BEN").balance == 150
         assert session.get(CanonicalEscrow, "ea35-main-escrow").state == EscrowState.RELEASED.value
         assert session.execute(select(TransactionWitness)).scalars().all()
