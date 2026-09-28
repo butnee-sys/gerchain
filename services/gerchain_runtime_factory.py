@@ -4,8 +4,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
 
-from postgres.migrations import apply_migrations
-
 from sqlalchemy import create_engine
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import sessionmaker
@@ -49,4 +47,17 @@ class ProductionRuntimeFactory:
             apply_migrations(connection, migration_dir)
             assert_canonical_production_schema(connection)
 
-    def create(self) -> GerchainRuntime:undefined
+    def create(self) -> GerchainRuntime:
+        self.initialize()
+        runtime = GerchainRuntime(
+            escrow_id=self.config.escrow_id,
+            amount=self.config.amount,
+            currency=self.config.currency,
+            witness_id=self.config.witness_id,
+        )
+        runtime.configure_canonical_ledger(self.session_factory)
+        runtime.require_canonical_ledger_authority()
+        return runtime
+
+
+__all__ = ["ProductionRuntimeConfig", "ProductionRuntimeFactory"]
