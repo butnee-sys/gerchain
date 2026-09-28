@@ -69,10 +69,10 @@ def apply_migrations(conn, migration_dir: str | Path) -> None:
     # database, while an already-applied checksum from any alias remains
     # accepted.
     preferred_names = {
-        2: "002_canonical_production.sql",
-        5: "005_ea35_canonical_runtime_completion.sql",
-        6: "006_canonical_escrow_lifecycle_hardening.sql",
-        7: "007_canonical_production.sql",
+        2: "002_canonical_production_persistence.sql",
+        5: "005_canonical_production.sql",
+        6: "006_canonical_movement_integrity.sql",
+        7: "007_canonical_production_reconciliation.sql",
     }
     versions: dict[int, list[Path]] = {}
     for migration in files:
