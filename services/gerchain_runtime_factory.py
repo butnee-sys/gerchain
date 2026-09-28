@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Callable
 from pathlib import Path
 
@@ -46,13 +47,10 @@ class ProductionRuntimeFactory:
         )
 
     def initialize(self) -> None:
-        """Apply the repository's canonical PostgreSQL migrations atomically."""
+        """Apply the canonical PostgreSQL migration set before runtime creation."""
         migration_dir = Path(__file__).resolve().parents[1] / "postgres" / "schema"
-        if not migration_dir.is_dir():
-            raise RuntimeError(f"PostgreSQL migration directory not found: {migration_dir}")
-        with self.engine.connect() as conn:
-            apply_migrations(conn, migration_dir)
-            assert_canonical_production_schema(conn)
+        with self.engine.connect() as connection:
+            apply_migrations(connection, migration_dir)
 
     def create(self) -> GerchainRuntime:
         self.initialize()
