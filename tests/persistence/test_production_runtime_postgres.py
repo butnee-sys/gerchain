@@ -14,6 +14,7 @@ from services.gerchain_runtime_factory import ProductionRuntimeConfig, Productio
 
 
 def test_production_postgresql_boot_and_value_truth():
+    # EA-35.16: branch-tip production PostgreSQL re-performance evidence.
     dsn = os.environ["GERCHAIN_DATABASE_URL"]
     engine = create_engine(dsn, pool_pre_ping=True)
     session_factory = sessionmaker(bind=engine, expire_on_commit=False)
