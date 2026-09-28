@@ -144,7 +144,8 @@ def apply_migrations(conn, migration_dir: str | Path) -> None:
                         )
                     continue
 
-                _execute(conn, sql)
+                migration_sql = sql.replace("BEGIN;", "").replace("COMMIT;", "")
+                _execute(conn, migration_sql)
                 _execute(
                     conn,
                     """
