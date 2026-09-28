@@ -7,15 +7,8 @@ from typing import Any, Callable
 from sqlalchemy import create_engine
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import sessionmaker
-from pathlib import Path
-from postgres.migrations import apply_migrations
 
 from postgres.migrations import apply_migrations
-from persistence.atomic_ledger import AtomicLedgerBase
-from persistence.atomic_value_transaction import WitnessBase
-from persistence.durable_idempotency import IdempotencyBase
-from persistence.escrow_aggregate import EscrowBase
-from persistence.recovery_outbox import OutboxBase
 from persistence.production_schema_guard import assert_canonical_production_schema
 from services.gerchain_runtime import GerchainRuntime
 
@@ -49,7 +42,7 @@ class ProductionRuntimeFactory:
 
     def initialize(self) -> None:
         """Apply the canonical PostgreSQL schema before constructing runtime."""
-        migration_dir = Path(__file__).resolve().parents[1] / "postgres" / "schema"
+        migration_dir = Path(__file__).resolve().parents[1] / "postgres" / "migrations"
         with self.engine.connect() as connection:
             apply_migrations(connection, migration_dir)
             assert_canonical_production_schema(connection)
