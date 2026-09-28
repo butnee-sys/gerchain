@@ -130,8 +130,8 @@ def test_real_postgresql_production_lifecycle() -> None:
 
     release = runtime
     release.escrow_engine.escrow_id = "E-RELEASE"
-    release.fund("FUND-1", "ALICE", "T1", {"verified": True})
-    release.lock("LOCK-1", "T2", {"verified": True})
+    release.fund("FUND-RELEASE", "ALICE", "T1", {"verified": True})
+    release.lock("LOCK-RELEASE", "T2", {"verified": True})
     release.release(
         transaction_id="REL-1",
         destination="BOB",
@@ -145,8 +145,8 @@ def test_real_postgresql_production_lifecycle() -> None:
     )
 
     release.escrow_engine.escrow_id = "E-REFUND"
-    release.fund("FUND-2", "CAROL", "T1", {"verified": True})
-    release.lock("LOCK-2", "T2", {"verified": True})
+    release.fund("FUND-REFUND", "CAROL", "T4", {"verified": True})
+    release.lock("LOCK-REFUND", "T5", {"verified": True})
     release.refund(
         transaction_id="REF-1",
         destination="ATTACKER",
@@ -160,8 +160,8 @@ def test_real_postgresql_production_lifecycle() -> None:
     )
 
     release.escrow_engine.escrow_id = "E-CANCEL"
-    release.fund("FUND-3", "DAVE", "T1", {"verified": True})
-    release.cancel(transaction_id="CAN-1", timestamp="T2", evidence={"reason": "cancel"})
+    release.fund("FUND-CANCEL", "DAVE", "T7", {"verified": True})
+    release.cancel(transaction_id="CAN-1", timestamp="T8", evidence={"reason": "cancel"})
 
     release.settle(
         transaction_id="SET-1",
