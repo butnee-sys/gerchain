@@ -52,6 +52,7 @@ class ProductionRuntimeFactory:
             raise RuntimeError(f"PostgreSQL migration directory not found: {migration_dir}")
         with self.engine.connect() as conn:
             apply_migrations(conn, migration_dir)
+            assert_canonical_production_schema(conn)
 
     def create(self) -> GerchainRuntime:
         self.initialize()
