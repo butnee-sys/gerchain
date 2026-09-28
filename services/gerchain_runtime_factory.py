@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from pathlib import Path
 from typing import Any, Callable
 
 from sqlalchemy import create_engine
@@ -45,7 +44,7 @@ class ProductionRuntimeFactory:
 
     def initialize(self) -> None:
         """Apply the authoritative PostgreSQL migration set before runtime boot."""
-        migration_dir = Path(__file__).resolve().parents[1] / "postgres" / "schema"
+        migration_dir = Path(__file__).resolve().parents[1] / "postgres" / "migrations"
         with self.engine.connect() as conn:
             apply_migrations(conn, migration_dir)
             assert_canonical_production_schema(conn)
