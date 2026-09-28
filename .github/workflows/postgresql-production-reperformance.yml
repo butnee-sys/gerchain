@@ -40,4 +40,4 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements-dee-security.txt pytest
       - name: Production PostgreSQL re-performance
-        run: pytest -q tests/integration/test_production_postgresql_reperformance.py
+        run: pytest -q tests/integration/test_postgresql_production_reperformance.py
