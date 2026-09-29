@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 from pathlib import Path
+from pathlib import Path
 from typing import Any, Callable
 from pathlib import Path
 
@@ -45,10 +46,13 @@ class ProductionRuntimeFactory:
         )
 
     def initialize(self) -> None:
-        """Apply the authoritative PostgreSQL migration history."""
-        migration_dir = Path(__file__).resolve().parents[1] / "postgres" / "migrations"
-        with self.engine.begin() as connection:
+        """Apply canonical PostgreSQL migrations before runtime construction."""
+        migration_dir = Path(__file__).resolve().parents[1] / "postgres" / "schema"
+        with self.engine.connect() as connection:
             apply_migrations(connection, migration_dir)
+
+        for base in (AtomicLedgerBase, EscrowBase, OutboxBase, IdempotencyBase, TransactionWitness):
+            base.metadata.create_all(self.engine)
 
     def create(self) -> GerchainRuntime:
         self.initialize()
