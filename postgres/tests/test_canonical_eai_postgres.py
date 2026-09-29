@@ -26,8 +26,8 @@ def test_canonical_postgres_transaction_and_deep_truth():
 
     with factory() as session:
         ledger = PostgreSQLAtomicLedger(factory)
-        ledger.create_account_in_transaction(session, "SRC", "USD", 100)
-        ledger.create_account_in_transaction(session, "escrow-1", "USD", 0)
+        ledger.create_account_in_transaction(session, "SRC", "USD", 60)
+        ledger.create_account_in_transaction(session, "escrow-1", "USD", 40)
         ledger.create_account_in_transaction(session, "BENEFICIARY", "USD", 0)
 
         session.add(
@@ -69,7 +69,7 @@ def test_canonical_postgres_transaction_and_deep_truth():
         assert result["replayed"] is False
         assert session.execute(
             select(LedgerAccountModel).where(LedgerAccountModel.account_id == "SRC")
-        ).scalar_one().balance == 100
+        ).scalar_one().balance == 60
         assert session.execute(
             select(LedgerAccountModel).where(
                 LedgerAccountModel.account_id == "BENEFICIARY"
