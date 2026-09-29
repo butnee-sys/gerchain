@@ -49,7 +49,8 @@ def apply_migrations(conn, migration_dir: str | Path) -> None:
                     )
                 continue
 
-            conn.execute(sql)
+            migration_sql = sql.replace("BEGIN;", "").replace("COMMIT;", "")
+            conn.execute(migration_sql)
             conn.execute(
                 "INSERT INTO schema_version(version, checksum) VALUES (%s, %s)",
                 (version, digest),
