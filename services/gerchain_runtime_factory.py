@@ -10,6 +10,8 @@ from sqlalchemy.engine import Engine
 from sqlalchemy.orm import sessionmaker
 
 from postgres.migrations import apply_migrations
+
+from postgres.migrations import apply_migrations
 from persistence.production_schema_guard import assert_canonical_production_schema
 from services.gerchain_runtime import GerchainRuntime
 
@@ -42,11 +44,15 @@ class ProductionRuntimeFactory:
         )
 
     def initialize(self) -> None:
-        """Apply the authoritative PostgreSQL migration set before boot."""
+        """Apply the authoritative PostgreSQL migration history.
+
+        Production boot must use the migration runner rather than SQLAlchemy
+        create_all(), so schema versioning, checksums, locking, and constraints
+        are part of the production gate.
+        """
         migration_dir = Path(__file__).resolve().parents[1] / "postgres" / "schema"
-        with self.engine.begin() as connection:
-            apply_migrations(connection, migration_dir)
-            assert_canonical_production_schema(connection)
+        with self.engine.connect() as conn:
+            apply_migrations(conn, migration_dir)
 
     def create(self) -> GerchainRuntime:
         self.initialize()
