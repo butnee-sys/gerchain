@@ -171,3 +171,5 @@ def apply_migrations(conn, migration_dir: str | Path) -> None:
                 raise RuntimeError(
                     f"Migration checksum mismatch for version {version}"
                 )
+
+# migration runner source is under production verification.
