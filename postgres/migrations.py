@@ -121,46 +121,46 @@ def apply_migrations(conn, migration_dir: str | Path) -> None:
             )
             """
         )
-            rows = _execute(
+    rows = _execute(
+            conn,
+            "SELECT version, checksum FROM schema_version ORDER BY version",
+        ).fetchall()
+        applied = {int(row[0]): row[1] for row in rows}
+
+        for version in sorted(preferred):
+            migration = preferred[version]
+            sql = migration.read_text(encoding="utf-8")
+            digest = checksum(sql)
+            accepted_digests = {
+                checksum(candidate.read_text(encoding="utf-8"))
+                for candidate in versions[version]
+            }
+            accepted_digests.update(LEGACY_CHECKSUMS.get(version, set()))
+
+            if version in applied:
+                if applied[version] not in accepted_digests:
+                    raise RuntimeError(
+                        f"Migration checksum mismatch for version {version}"
+                    )
+                continue
+
+            migration_sql = sql.replace("BEGIN;", "").replace("COMMIT;", "")
+            _execute(conn, migration_sql)
+            _execute(
                 conn,
-                "SELECT version, checksum FROM schema_version ORDER BY version",
-            ).fetchall()
-            applied = {int(row[0]): row[1] for row in rows}
-
-            for version in sorted(preferred):
-                migration = preferred[version]
-                sql = migration.read_text(encoding="utf-8")
-                digest = checksum(sql)
-                accepted_digests = {
-                    checksum(candidate.read_text(encoding="utf-8"))
-                    for candidate in versions[version]
-                }
-                accepted_digests.update(LEGACY_CHECKSUMS.get(version, set()))
-
-                if version in applied:
-                    if applied[version] not in accepted_digests:
-                        raise RuntimeError(
-                            f"Migration checksum mismatch for version {version}"
-                        )
-                    continue
-
-                migration_sql = sql.replace("BEGIN;", "").replace("COMMIT;", "")
-                _execute(conn, migration_sql)
-                _execute(
-                    conn,
-                    """
-                    INSERT INTO schema_version(version, checksum)
-                    VALUES (%s, %s)
-                    ON CONFLICT (version) DO NOTHING
-                    """,
-                    (version, digest),
-                )
-                recorded = _execute(
-                    conn,
-                    "SELECT checksum FROM schema_version WHERE version = %s",
-                    (version,),
-                ).fetchone()
-                if recorded is None or recorded[0] != digest:
+                """
+                INSERT INTO schema_version(version, checksum)
+                VALUES (%s, %s)
+                ON CONFLICT (version) DO NOTHING
+                """,
+                (version, digest),
+            )
+            recorded = _execute(
+                conn,
+                "SELECT checksum FROM schema_version WHERE version = %s",
+                (version,),
+            ).fetchone()
+            if recorded is None or recorded[0] != digest:
                     raise RuntimeError(
                         f"Migration checksum mismatch for version {version}"
                     )
