@@ -9,14 +9,26 @@ from persistence.recovery_outbox import OutboxBase
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker
 
+from services.gerchain_runtime_factory import ProductionRuntimeConfig, ProductionRuntimeFactory
+
 
 def _factory():
     import os
 
     url = os.environ["GERCHAIN_POSTGRES_DSN"]
     engine = create_engine(url, future=True)
-    for base in (AtomicLedgerBase, EscrowBase, WitnessBase, OutboxBase, IdempotencyBase):
-        base.metadata.create_all(engine)
+    factory = ProductionRuntimeFactory(
+        ProductionRuntimeConfig(
+            database_url=url,
+            escrow_id="escrow-1",
+            amount=40,
+            currency="USD",
+            witness_id="witness-ea3513",
+        ),
+        engine=engine,
+    )
+    runtime = factory.create()
+    assert runtime.is_canonical_ledger_authoritative
     return engine, sessionmaker(bind=engine, expire_on_commit=False)
 
 
