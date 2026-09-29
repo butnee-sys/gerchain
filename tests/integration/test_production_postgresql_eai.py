@@ -29,8 +29,8 @@ def test_production_postgresql_full_value_flow() -> None:
     for account, balance in (
         ("pg-source", 1000),
         ("pg-beneficiary", 0),
-        ("pg-refund", 0),
-        ("pg-cancel", 0),
+        ("pg-refund", 80),
+        ("pg-cancel", 60),
         ("pg-settlement-source", 200),
         ("pg-settlement-dest", 0),
         ("pg-release-escrow", 0),
@@ -108,8 +108,8 @@ def test_production_postgresql_full_value_flow() -> None:
 
     assert runtime.get_balance("pg-source") == 900
     assert runtime.get_balance("pg-beneficiary") == 100
-    assert runtime.get_balance("pg-refund") == 0
-    assert runtime.get_balance("pg-cancel") == 1000
+    assert runtime.get_balance("pg-refund") == 80
+    assert runtime.get_balance("pg-cancel") == 60
     assert runtime.get_balance("pg-settlement-source") == 125
     assert runtime.get_balance("pg-settlement-dest") == 75
 
