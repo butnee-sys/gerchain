@@ -50,6 +50,7 @@ class ProductionRuntimeFactory:
         """Apply the authoritative PostgreSQL migration history before runtime use."""
         with self.engine.begin() as connection:
             apply_migrations(connection, Path(__file__).resolve().parents[1] / "postgres" / "migrations")
+            assert_canonical_production_schema(connection)
         for base in (AtomicLedgerBase, EscrowBase, OutboxBase, IdempotencyBase, TransactionWitness):
             base.metadata.create_all(self.engine)
 
