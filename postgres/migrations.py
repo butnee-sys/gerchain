@@ -113,11 +113,11 @@ def apply_migrations(conn, migration_dir: str | Path) -> None:
                 + ", ".join(p.name for p in candidates)
             )
 
-    # Serialize migration runners with a transaction-scoped advisory lock.
+    # Serialize migration runners with a session-scoped advisory lock.
     # The lock remains held until schema_version writes commit, preventing a
     # second runner from racing against uncommitted migration history.
     with _transaction(conn):
-        _execute(conn, "SELECT pg_advisory_xact_lock(%s)", (MIGRATION_LOCK_KEY,))
+        _execute(conn, "SELECT pg_advisory_lock(%s)", (MIGRATION_LOCK_KEY,))
         _execute(
             conn,
             """
