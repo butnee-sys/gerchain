@@ -116,12 +116,12 @@ def apply_migrations(conn, migration_dir: str | Path) -> None:
                 + ", ".join(p.name for p in candidates)
             )
 
-    # Serialize migration runners with a session-level advisory lock before
-    # entering the migration transaction. This avoids implicit-transaction
-    # boundary differences between concurrent psycopg callers.
-    _execute(conn, "SELECT pg_advisory_lock(%s)", (MIGRATION_LOCK_KEY,))
-    try:
-        with _transaction(conn):
+    # Serialize migration runners inside the same transaction that mutates
+    # schema_version. A transaction-scoped advisory lock removes the race
+    # between concurrent fresh psycopg connections while avoiding a separate
+    # implicit transaction for the lock itself.
+    with _transaction(conn):
+        _execute(conn, "SELECT pg_advisory_xact_lock(%s)", (MIGRATION_LOCK_KEY,))
             _execute(
                 conn,
                 """
@@ -175,7 +175,4 @@ def apply_migrations(conn, migration_dir: str | Path) -> None:
                     raise RuntimeError(
                         f"Migration checksum mismatch for version {version}"
                     )
-    finally:
-        _execute(conn, "SELECT pg_advisory_unlock(%s)", (MIGRATION_LOCK_KEY,))
-
 # migration runner source is under production verification.
