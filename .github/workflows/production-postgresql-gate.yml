@@ -81,7 +81,7 @@ jobs:
           }
           missing = required - tables
           assert not missing, f"missing canonical tables: {sorted(missing)}"
-          from persistence.atomic_ledger import PostgreSQLAtomicLedger, LedgerMovementModel
+          from persistence.atomic_ledger import PostgreSQLAtomicLedger, LedgerAccountModel, LedgerMovementModel
           from sqlalchemy import select
 
           ledger = PostgreSQLAtomicLedger(factory.session_factory)
