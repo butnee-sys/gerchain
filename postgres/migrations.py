@@ -105,22 +105,22 @@ def apply_migrations(conn, migration_dir: str | Path) -> None:
                 + ", ".join(p.name for p in candidates)
             )
 
-    # Serialize migration runners with a session-scoped advisory lock. This
-    # remains deterministic even when the DB driver has already opened an
-    # implicit transaction before this function is entered.
-    _execute(conn, "SELECT pg_advisory_lock(%s)", (MIGRATION_LOCK_KEY,))
-    try:
-        with _transaction(conn):
-            _execute(
-                conn,
-                """
-                CREATE TABLE IF NOT EXISTS schema_version (
-                    version BIGINT PRIMARY KEY,
-                    checksum TEXT NOT NULL,
-                    applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
-                )
-                """
+    # Serialize migration runners with a transaction-scoped advisory lock.
+    # The lock must remain held until the schema_version writes commit; a
+    # session-scoped lock released before COMMIT would allow a second runner
+    # to race against uncommitted migration history.
+    with _transaction(conn):
+        _execute(conn, "SELECT pg_advisory_xact_lock(%s)", (MIGRATION_LOCK_KEY,))
+        _execute(
+            conn,
+            """
+            CREATE TABLE IF NOT EXISTS schema_version (
+                version BIGINT PRIMARY KEY,
+                checksum TEXT NOT NULL,
+                applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
             )
+            """
+        )
             rows = _execute(
                 conn,
                 "SELECT version, checksum FROM schema_version ORDER BY version",
@@ -164,5 +164,3 @@ def apply_migrations(conn, migration_dir: str | Path) -> None:
                     raise RuntimeError(
                         f"Migration checksum mismatch for version {version}"
                     )
-    finally:
-        _execute(conn, "SELECT pg_advisory_unlock(%s)", (MIGRATION_LOCK_KEY,))
