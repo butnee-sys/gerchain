@@ -28,6 +28,7 @@ def test_production_postgresql_fund_lock_release_and_deep_truth():
 
     assert runtime.is_canonical_ledger_authoritative
     runtime.create_account("PG-SOURCE", initial_balance=100)
+    runtime.create_account("PG-DEST", initial_balance=0)
     runtime.create_account(escrow_id, initial_balance=0)
 
     now = datetime.now(timezone.utc)
