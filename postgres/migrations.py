@@ -27,13 +27,17 @@ def checksum(sql: str) -> str:
 
 
 def _transaction(conn):
-    """Support both SQLAlchemy and native psycopg connections."""
-    if hasattr(conn, "in_transaction"):
+    """Return one explicit transaction boundary for each supported connection."""
+    # SQLAlchemy Connection exposes in_transaction() and begin().
+    if hasattr(conn, "exec_driver_sql"):
         return nullcontext() if conn.in_transaction() else conn.begin()
-    if hasattr(conn, "begin"):
-        return conn.begin()
+    # Native psycopg exposes a transaction() context manager.  Do not use
+    # conn.begin() here: nested/implicit transaction state can otherwise leave
+    # the advisory lock outside the intended migration transaction.
     if hasattr(conn, "transaction"):
         return conn.transaction()
+    if hasattr(conn, "begin"):
+        return conn.begin()
     return nullcontext()
 
 
