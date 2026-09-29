@@ -105,76 +105,61 @@ def apply_migrations(conn, migration_dir: str | Path) -> None:
                 + ", ".join(p.name for p in candidates)
             )
 
-    # Migration locking must span the entire migration transaction. PostgreSQL
-    # session-level advisory locks do that deterministically across independent
-    # client transactions and are released automatically if the session dies.
-    if _connection_in_transaction(conn):
-        raise RuntimeError("apply_migrations requires an idle database connection")
-
-    _execute(conn, "SELECT pg_advisory_lock(%s)", (MIGRATION_LOCK_KEY,))
-    # The advisory-lock SELECT starts an implicit transaction on psycopg and
-    # SQLAlchemy DBAPI connections. Commit it so the actual migration gets its
-    # own atomic transaction while the session-level lock remains held.
-    if hasattr(conn, "commit"):
-        conn.commit()
-
-    try:
-        with _transaction(conn):
-            _execute(
-                conn,
-                """
-                CREATE TABLE IF NOT EXISTS schema_version (
-                    version BIGINT PRIMARY KEY,
-                    checksum TEXT NOT NULL,
-                    applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
-                )
-                """
+    # Hold the advisory lock inside the same transaction as the migration
+    # writes. Transaction-level locking prevents concurrent clients from
+    # observing the same schema_version state.
+    with _transaction(conn):
+        _execute(conn, "SELECT pg_advisory_xact_lock(%s)", (MIGRATION_LOCK_KEY,))
+        _execute(
+            conn,
+            """
+            CREATE TABLE IF NOT EXISTS schema_version (
+                version BIGINT PRIMARY KEY,
+                checksum TEXT NOT NULL,
+                applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
             )
+            """
+        )
+        rows = _execute(
+            conn,
+            "SELECT version, checksum FROM schema_version ORDER BY version",
+        ).fetchall()
+        applied = {int(row[0]): row[1] for row in rows}
 
-            rows = _execute(
-                conn,
-                "SELECT version, checksum FROM schema_version ORDER BY version",
-            ).fetchall()
-            applied = {int(row[0]): row[1] for row in rows}
+        for version in sorted(preferred):
+            migration = preferred[version]
+            sql = migration.read_text(encoding="utf-8")
+            digest = checksum(sql)
+            accepted_digests = {
+                checksum(candidate.read_text(encoding="utf-8"))
+                for candidate in versions[version]
+            }
+            accepted_digests.update(LEGACY_CHECKSUMS.get(version, set()))
 
-            for version in sorted(preferred):
-                migration = preferred[version]
-                sql = migration.read_text(encoding="utf-8")
-                digest = checksum(sql)
-                accepted_digests = {
-                    checksum(candidate.read_text(encoding="utf-8"))
-                    for candidate in versions[version]
-                }
-                accepted_digests.update(LEGACY_CHECKSUMS.get(version, set()))
-
-                if version in applied:
-                    if applied[version] not in accepted_digests:
-                        raise RuntimeError(
-                            f"Migration checksum mismatch for version {version}"
-                        )
-                    continue
-
-                migration_sql = sql.replace("BEGIN;", "").replace("COMMIT;", "")
-                _execute(conn, migration_sql)
-                _execute(
-                    conn,
-                    """
-                    INSERT INTO schema_version(version, checksum)
-                    VALUES (%s, %s)
-                    ON CONFLICT (version) DO NOTHING
-                    """,
-                    (version, digest),
-                )
-                recorded = _execute(
-                    conn,
-                    "SELECT checksum FROM schema_version WHERE version = %s",
-                    (version,),
-                ).fetchone()
-                if recorded is None or recorded[0] != digest:
+            if version in applied:
+                if applied[version] not in accepted_digests:
                     raise RuntimeError(
                         f"Migration checksum mismatch for version {version}"
                     )
-    finally:
-        _execute(conn, "SELECT pg_advisory_unlock(%s)", (MIGRATION_LOCK_KEY,))
-        if hasattr(conn, "commit"):
-            conn.commit()
+                continue
+
+            migration_sql = sql.replace("BEGIN;", "").replace("COMMIT;", "")
+            _execute(conn, migration_sql)
+            _execute(
+                conn,
+                """
+                INSERT INTO schema_version(version, checksum)
+                VALUES (%s, %s)
+                ON CONFLICT (version) DO NOTHING
+                """,
+                (version, digest),
+            )
+            recorded = _execute(
+                conn,
+                "SELECT checksum FROM schema_version WHERE version = %s",
+                (version,),
+            ).fetchone()
+            if recorded is None or recorded[0] != digest:
+                raise RuntimeError(
+                    f"Migration checksum mismatch for version {version}"
+                )
