@@ -5,9 +5,10 @@ from pathlib import Path
 
 import pytest
 from sqlalchemy import create_engine, inspect
+from sqlalchemy.orm import sessionmaker
 
 from postgres.migrations import apply_migrations
-from services.gerchain_runtime_factory import ProductionRuntimeConfig, ProductionRuntimeFactory
+from services.gerchain_runtime_factory import ProductionRuntimeFactory
 
 
 pytestmark = pytest.mark.integration
@@ -23,19 +24,24 @@ def test_production_postgres_migration_and_canonical_boot() -> None:
         with engine.connect() as conn:
             apply_migrations(conn, Path(__file__).parents[2] / "postgres" / "migrations")
 
-        config = ProductionRuntimeConfig(
-            database_url=database_url,
+        runtime = ProductionRuntimeFactory.create(
             escrow_id="integration-escrow",
             amount=100,
             currency="MNT",
             witness_id="integration-witness",
+            engine=engine,
+            session_factory=sessionmaker(bind=engine, expire_on_commit=False),
         )
-        factory = ProductionRuntimeFactory(config, engine=engine)
-
-        runtime = factory.create()
         assert runtime.is_canonical_ledger_authoritative
 
-        runtime2 = factory.create()
+        runtime2 = ProductionRuntimeFactory.create(
+            escrow_id="integration-escrow",
+            amount=100,
+            currency="MNT",
+            witness_id="integration-witness",
+            engine=engine,
+            session_factory=lambda: __import__("sqlalchemy.orm", fromlist=["sessionmaker"]).sessionmaker(bind=engine, expire_on_commit=False)(),
+        )
         assert runtime2.is_canonical_ledger_authoritative
 
         tables = set(inspect(engine).get_table_names())
