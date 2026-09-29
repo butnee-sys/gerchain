@@ -43,6 +43,10 @@ def test_postgresql_factory_and_fund_lock_release(production):
     sf = factory.session_factory
     now = datetime.now(timezone.utc)
     with sf.begin() as session:
+        session.query(LedgerMovementModel).delete()
+        session.query(TransactionWitness).delete()
+        session.query(OutboxEvent).delete()
+        session.query(DurableIdempotencyRecord).delete()
         session.query(LedgerAccountModel).delete()
         session.query(CanonicalEscrow).delete()
         session.add_all([
