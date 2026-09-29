@@ -5,7 +5,7 @@ import os
 import pytest
 from sqlalchemy import create_engine, text
 
-from services.gerchain_runtime_factory import ProductionRuntimeFactory
+from services.gerchain_runtime_factory import ProductionRuntimeConfig, ProductionRuntimeFactory
 
 
 DATABASE_URL = os.environ.get("GERCHAIN_POSTGRES_DSN")
@@ -19,13 +19,16 @@ pytestmark = pytest.mark.skipif(
 def test_production_runtime_boot_establishes_canonical_ledger_authority() -> None:
     engine = create_engine(DATABASE_URL, pool_pre_ping=True)
     try:
-        runtime = ProductionRuntimeFactory.from_engine(
-            escrow_id="production-boot-escrow",
-            amount=100,
-            currency="MNT",
-            witness_id="production-boot-witness",
+        runtime = ProductionRuntimeFactory(
+            ProductionRuntimeConfig(
+                database_url=DATABASE_URL,
+                escrow_id="production-boot-escrow",
+                amount=100,
+                currency="MNT",
+                witness_id="production-boot-witness",
+            ),
             engine=engine,
-        )
+        ).create()
 
         assert runtime.is_canonical_ledger_authoritative
         assert runtime.runtime_mode == "production-postgresql"
