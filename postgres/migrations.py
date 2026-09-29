@@ -70,6 +70,7 @@ def apply_migrations(conn, migration_dir: str | Path) -> None:
     # There is one authoritative migration history. The legacy postgres/schema
     # tree is a compatibility view; when present, resolve it to postgres/migrations
     # so concurrent callers can never record two different version-1 histories.
+    legacy_schema_path = path if path.name == "schema" else None
     canonical_migrations = path.parent / "migrations" if path.name == "schema" else None
     if canonical_migrations is not None and canonical_migrations.is_dir():
         path = canonical_migrations
@@ -147,6 +148,19 @@ def apply_migrations(conn, migration_dir: str | Path) -> None:
                 for candidate in versions[version]
             }
             accepted_digests.update(LEGACY_CHECKSUMS.get(version, set()))
+            # When callers still pass the legacy postgres/schema directory,
+            # accept the exact legacy file checksum as migration-history
+            # compatibility evidence. The SQL is not re-executed: the
+            # canonical postgres/migrations file remains authoritative for
+            # future application.
+            if legacy_schema_path is not None:
+                legacy_candidates = sorted(
+                    legacy_schema_path.glob(f"{version:03d}_*.sql")
+                )
+                accepted_digests.update(
+                    checksum(candidate.read_text(encoding="utf-8"))
+                    for candidate in legacy_candidates
+                )
 
             if version in applied:
                 if applied[version] not in accepted_digests:
