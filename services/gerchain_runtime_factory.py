@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+from pathlib import Path
 from typing import Any, Callable
 
 from sqlalchemy import create_engine
@@ -41,10 +42,8 @@ class ProductionRuntimeFactory:
         )
 
     def initialize(self) -> None:
-        """Apply the authoritative PostgreSQL migration set before boot."""
-        migration_dir = Path(__file__).resolve().parent.parent / "postgres" / "migrations"
-        if not migration_dir.is_dir():
-            raise RuntimeError(f"PostgreSQL migration directory not found: {migration_dir}")
+        """Apply the repository's versioned PostgreSQL production migrations."""
+        migration_dir = Path(__file__).resolve().parents[1] / "postgres" / "schema"
         with self.engine.connect() as connection:
             apply_migrations(connection, migration_dir)
 
