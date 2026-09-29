@@ -67,6 +67,12 @@ def _connection_in_transaction(conn) -> bool:
 def apply_migrations(conn, migration_dir: str | Path) -> None:
     """Apply migrations atomically for SQLAlchemy or native psycopg connections."""
     path = Path(migration_dir)
+    # There is one authoritative migration history. The legacy postgres/schema
+    # tree is a compatibility view; when present, resolve it to postgres/migrations
+    # so concurrent callers can never record two different version-1 histories.
+    canonical_migrations = path.parent / "migrations" if path.name == "schema" else None
+    if canonical_migrations is not None and canonical_migrations.is_dir():
+        path = canonical_migrations
     files = sorted(path.glob("*.sql"))
     # A few early canonical migrations were shipped under the same numeric
     # version before the migration history was frozen. Treat those files as
@@ -140,13 +146,6 @@ def apply_migrations(conn, migration_dir: str | Path) -> None:
                 for candidate in versions[version]
             }
             accepted_digests.update(LEGACY_CHECKSUMS.get(version, set()))
-            # Version 1 existed in both the legacy postgres/migrations tree and
-            # the canonical postgres/schema tree. Accept only the explicit
-            # historical alias, never an arbitrary checksum.
-            if version == 1 and path.name == "schema":
-                legacy_v1 = path.parent.parent / "migrations" / "001_concurrency.sql"
-                if legacy_v1.exists():
-                    accepted_digests.add(checksum(legacy_v1.read_text(encoding="utf-8")))
 
             if version in applied:
                 if applied[version] not in accepted_digests:
