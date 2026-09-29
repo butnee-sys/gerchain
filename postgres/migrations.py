@@ -117,7 +117,7 @@ def apply_migrations(conn, migration_dir: str | Path) -> None:
     # The lock remains held until schema_version writes commit, preventing a
     # second runner from racing against uncommitted migration history.
     with _transaction(conn):
-        _execute(conn, "SELECT pg_advisory_lock(%s)", (MIGRATION_LOCK_KEY,))
+        _execute(conn, "SELECT pg_advisory_xact_lock(%s)", (MIGRATION_LOCK_KEY,))
         _execute(
             conn,
             """
