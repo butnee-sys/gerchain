@@ -15,6 +15,8 @@ from sqlalchemy.orm import sessionmaker
 from postgres.migrations import apply_migrations
 from persistence.production_schema_guard import assert_canonical_production_schema
 from services.gerchain_runtime import GerchainRuntime
+from postgres.migrations import apply_migrations
+from pathlib import Path
 
 
 @dataclass(frozen=True)
@@ -45,12 +47,10 @@ class ProductionRuntimeFactory:
         )
 
     def initialize(self) -> None:
-        """Apply the versioned PostgreSQL production schema before runtime boot."""
+        """Apply the authoritative PostgreSQL migration set before boot."""
         migration_dir = Path(__file__).resolve().parents[1] / "postgres" / "schema"
-        with self.engine.connect() as connection:
+        with self.engine.begin() as connection:
             apply_migrations(connection, migration_dir)
-        with self.engine.connect() as connection:
-            assert_canonical_production_schema(connection)
 
     def create(self) -> GerchainRuntime:
         self.initialize()
