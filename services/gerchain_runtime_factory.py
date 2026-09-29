@@ -42,7 +42,7 @@ class ProductionRuntimeFactory:
 
     def initialize(self) -> None:
         """Apply canonical PostgreSQL migrations before runtime construction."""
-        migration_dir = Path(__file__).resolve().parents[1] / "postgres" / "migrations"
+        migration_dir = Path(__file__).resolve().parents[1] / "postgres" / "schema"
         with self.engine.connect() as connection:
             apply_migrations(connection, migration_dir)
             assert_canonical_production_schema(connection)
