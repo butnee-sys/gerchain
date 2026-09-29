@@ -70,7 +70,9 @@ def apply_migrations(conn, migration_dir: str | Path) -> None:
     # There is one authoritative migration history. The legacy postgres/schema
     # tree is a compatibility view; when present, resolve it to postgres/migrations
     # so concurrent callers can never record two different version-1 histories.
-    legacy_schema_path = path if path.name == "schema" else None
+    legacy_schema_path = (path if path.name == "schema" else path.parent / "schema")
+    if not legacy_schema_path.is_dir():
+        legacy_schema_path = None
     canonical_migrations = path.parent / "migrations" if path.name == "schema" else None
     if canonical_migrations is not None and canonical_migrations.is_dir():
         path = canonical_migrations
