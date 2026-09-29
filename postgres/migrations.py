@@ -114,11 +114,17 @@ def apply_migrations(conn, migration_dir: str | Path) -> None:
                 + ", ".join(p.name for p in candidates)
             )
 
-    # Serialize migration runners with a session-scoped advisory lock.
-    # The lock remains held until schema_version writes commit, preventing a
-    # second runner from racing against uncommitted migration history.
-    with _transaction(conn):
-        _execute(conn, "SELECT pg_advisory_xact_lock(%s)", (MIGRATION_LOCK_KEY,))
+    # Serialize migration runners. SQLAlchemy callers already own an explicit
+    # transaction, so use an xact-scoped lock there. Native psycopg callers
+    # need a session-scoped lock because psycopg may already have an implicit
+    # transaction before the migration boundary is entered.
+    native_psycopg = not hasattr(conn, "exec_driver_sql")
+    if native_psycopg:
+        _execute(conn, "SELECT pg_advisory_lock(%s)", (MIGRATION_LOCK_KEY,))
+    try:
+        with _transaction(conn):
+            if not native_psycopg:
+                _execute(conn, "SELECT pg_advisory_xact_lock(%s)", (MIGRATION_LOCK_KEY,))
         _execute(
             conn,
             """
@@ -172,5 +178,9 @@ def apply_migrations(conn, migration_dir: str | Path) -> None:
                 raise RuntimeError(
                     f"Migration checksum mismatch for version {version}"
                 )
+    finally:
+        if native_psycopg:
+            _execute(conn, "SELECT pg_advisory_unlock(%s)", (MIGRATION_LOCK_KEY,))
+            conn.commit()
 
 # migration runner source is under production verification.
