@@ -18,6 +18,7 @@ LEGACY_CHECKSUMS = {
     # The migration runner now owns that schema history; accept the known legacy
     # digest so existing databases can migrate without rewriting version 1.
 
+    1: {"494763e210c8a3839972ba21e8705dcf2e6564e5abca9c76161f2f49c6664ec8"},
     4: {"729c586234c0b630cce6edd9feab694f4d589dcb5e9321e44f7d22ab556799a0"},
 }
 
