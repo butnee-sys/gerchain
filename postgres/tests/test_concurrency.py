@@ -35,7 +35,7 @@ def connect():
 def reset_db():
     with connect() as conn:
         with conn.transaction():
-            conn.execute("TRUNCATE audit_logs, outbox, processed_events, escrows CASCADE")
+            conn.execute("TRUNCATE gerchain_outbox_events, gerchain_transaction_witnesses, gerchain_idempotency_records, gerchain_ledger_movements, gerchain_ledger_accounts, audit_logs, outbox, processed_events, escrows CASCADE")
 
 
 def seed_escrow(escrow_id="race-1"):
@@ -43,8 +43,12 @@ def seed_escrow(escrow_id="race-1"):
         with conn.transaction():
             conn.execute(
                 """
-                INSERT INTO escrows(id, sender_address, receiver_address, amount, state)
-                VALUES (%s, 'sender', 'receiver', 100, 'CREATED')
+                INSERT INTO escrows(
+                    id, sender_address, receiver_address, amount, state,
+                    refund_destination, currency, version, created_at, updated_at
+                )
+                VALUES (%s, 'sender', 'receiver', 100, 'CREATED',
+                        'sender', 'MNT', 0, now(), now())
                 """,
                 (escrow_id,),
             )
@@ -61,7 +65,7 @@ def test_concurrent_state_transition_has_one_winner():
             repo = EscrowRepository(conn)
             try:
                 repo.transition(
-                    "race-1", "CREATED", "LOCKED", "worker",
+                    "race-1", "CREATED", "FUNDED", "worker",
                     uuid4(), {"case": "race"}, uuid4().hex,
                 )
                 return "won"
@@ -74,7 +78,7 @@ def test_concurrent_state_transition_has_one_winner():
     assert sorted(results) == ["lost", "won"]
     with connect() as conn:
         row = conn.execute("SELECT state FROM escrows WHERE id = 'race-1'").fetchone()
-        assert row[0] == "LOCKED"
+        assert row[0] == "FUNDED"
         assert conn.execute("SELECT count(*) FROM audit_logs").fetchone()[0] == 1
         assert conn.execute("SELECT count(*) FROM outbox").fetchone()[0] == 1
 
@@ -176,7 +180,7 @@ def test_migrations_are_serialized_and_checksum_is_stable():
 
     with connect() as conn:
         rows = conn.execute("SELECT version, checksum FROM schema_version ORDER BY version").fetchall()
-        assert [row[0] for row in rows] == [1]
+        assert [row[0] for row in rows] == list(range(1, 8))
         assert len(rows[0][1]) == 64
 
 
