@@ -52,3 +52,29 @@ def test_factory_rejects_non_postgresql_engine() -> None:
         assert str(exc) == "ProductionRuntimeFactory requires a PostgreSQL engine"
     else:
         raise AssertionError("non-PostgreSQL engine must be rejected")
+
+
+
+def test_factory_initialize_uses_canonical_migration_runner() -> None:
+    engine = Mock()
+    engine.dialect.name = "postgresql"
+    connection = Mock()
+    engine.begin.return_value.__enter__.return_value = connection
+
+    factory = ProductionRuntimeFactory(
+        ProductionRuntimeConfig(
+            database_url="postgresql+psycopg://test/test",
+            escrow_id="esc-1",
+            amount=100,
+            currency="MNT",
+            witness_id="wit-1",
+        ),
+        engine=engine,
+    )
+
+    with patch("services.gerchain_runtime_factory.apply_migrations") as apply:
+        factory.initialize()
+
+    apply.assert_called_once()
+    assert apply.call_args.args[0] is connection
+    assert str(apply.call_args.args[1]).endswith("postgres/migrations")
