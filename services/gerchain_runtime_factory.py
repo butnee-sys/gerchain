@@ -54,9 +54,6 @@ class ProductionRuntimeFactory:
         with self.engine.begin() as connection:
             apply_migrations(connection, Path(__file__).resolve().parents[1] / "postgres" / "migrations")
             assert_canonical_production_schema(connection)
-        migration_dir = Path(__file__).resolve().parents[1] / "postgres" / "migrations"
-        with self.engine.begin() as connection:
-            apply_migrations(connection, migration_dir)
 
     def create(self) -> GerchainRuntime:
         self.initialize()
