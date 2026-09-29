@@ -114,13 +114,11 @@ def apply_migrations(conn, migration_dir: str | Path) -> None:
                 + ", ".join(p.name for p in candidates)
             )
 
-    # Serialize migration runners with a session-scoped advisory lock.
-    # A session lock is used instead of pg_advisory_xact_lock because supported
-    # psycopg/SQLAlchemy connection states may already have an implicit
-    # transaction before the runner enters its explicit boundary.
-    _execute(conn, "SELECT pg_advisory_lock(%s)", (MIGRATION_LOCK_KEY,))
-    try:
-        with _transaction(conn):
+    # Serialize migration runners inside the same transaction that reads and
+    # writes schema_version. A transaction-scoped advisory lock makes the
+    # migration critical section indivisible across concurrent connections.
+    with _transaction(conn):
+        _execute(conn, "SELECT pg_advisory_xact_lock(%s)", (MIGRATION_LOCK_KEY,))
             _execute(
                 conn,
                 """
@@ -174,7 +172,5 @@ def apply_migrations(conn, migration_dir: str | Path) -> None:
                     raise RuntimeError(
                         f"Migration checksum mismatch for version {version}"
                     )
-    finally:
-        _execute(conn, "SELECT pg_advisory_unlock(%s)", (MIGRATION_LOCK_KEY,))
 
 # migration runner source is under production verification.
