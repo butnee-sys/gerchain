@@ -140,6 +140,13 @@ def apply_migrations(conn, migration_dir: str | Path) -> None:
                 for candidate in versions[version]
             }
             accepted_digests.update(LEGACY_CHECKSUMS.get(version, set()))
+            # Version 1 existed in both the legacy postgres/migrations tree and
+            # the canonical postgres/schema tree. Accept only the explicit
+            # historical alias, never an arbitrary checksum.
+            if version == 1 and path.name == "schema":
+                legacy_v1 = path.parent.parent / "migrations" / "001_concurrency.sql"
+                if legacy_v1.exists():
+                    accepted_digests.add(checksum(legacy_v1.read_text(encoding="utf-8")))
 
             if version in applied:
                 if applied[version] not in accepted_digests:
