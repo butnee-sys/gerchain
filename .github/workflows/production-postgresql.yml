@@ -39,7 +39,7 @@ jobs:
           python-version: "3.13"
 
       - name: Install dependencies
-        run: pip install -r requirements-dee-security.txt
+        run: pip install -r requirements-dee-security.txt pytest
 
       - name: Production PostgreSQL boot
         run: pytest -q tests/production/test_postgresql_boot.py
