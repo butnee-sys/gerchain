@@ -91,7 +91,7 @@ jobs:
           first = ledger.transfer(
               "ci-tx-1", "ci-source", "ci-destination", 100,
               "USD", operation="FUND", escrow_id="ci-escrow-1",
-              integrity_hash="ci-integrity-1",
+              integrity_hash="9f1d6d0d5e2f5d5e4f0f1c4b0a9f4d8d7f6e5c4b3a291817161514131211100f",
           )
           second = ledger.transfer(
               "ci-tx-1", "ci-source", "ci-destination", 100,
