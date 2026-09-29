@@ -81,8 +81,38 @@ jobs:
           }
           missing = required - tables
           assert not missing, f"missing canonical tables: {sorted(missing)}"
+          from persistence.atomic_ledger import PostgreSQLAtomicLedger, LedgerMovementModel
+          from sqlalchemy import select
+
+          ledger = PostgreSQLAtomicLedger(factory.session_factory)
+          ledger.create_account("ci-source", "USD", 1000)
+          ledger.create_account("ci-destination", "USD", 0)
+
+          first = ledger.transfer(
+              "ci-tx-1", "ci-source", "ci-destination", 100,
+              "USD", operation="FUND", escrow_id="ci-escrow-1",
+              integrity_hash="ci-integrity-1",
+          )
+          second = ledger.transfer(
+              "ci-tx-1", "ci-source", "ci-destination", 100,
+              "USD", operation="FUND", escrow_id="ci-escrow-1",
+              integrity_hash="ci-integrity-1",
+          )
+          assert first["replayed"] is False
+          assert second["replayed"] is True
+
+          with factory.session_factory() as session:
+              source = session.get(LedgerAccountModel, "ci-source")
+              destination = session.get(LedgerAccountModel, "ci-destination")
+              movements = session.execute(select(LedgerMovementModel).where(LedgerMovementModel.transaction_id == "ci-tx-1")).scalars().all()
+              assert source.balance == 900
+              assert destination.balance == 100
+              assert len(movements) == 1
+
           print("PRODUCTION_FACTORY_GATE=PASS")
           print("CANONICAL_TABLES_GATE=PASS")
+          print("CANONICAL_LEDGER_MOVEMENT_GATE=PASS")
+          print("CANONICAL_LEDGER_REPLAY_GATE=PASS")
           engine.dispose()
           PY
 
