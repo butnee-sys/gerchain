@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 import os
 
-from sqlalchemy import select
+from sqlalchemy import select, text
 
 from persistence.escrow_aggregate import CanonicalEscrow, EscrowState
 from persistence.atomic_ledger import LedgerMovementModel
@@ -25,6 +25,17 @@ def test_production_postgresql_fund_lock_release_and_deep_truth():
         )
     )
     runtime = factory.create()
+
+    # Isolate this evidence graph from other PostgreSQL integration tests sharing the service DB.
+    with factory.engine.begin() as connection:
+        connection.execute(
+            text(
+                "TRUNCATE TABLE "
+                "gerchain_outbox_events, gerchain_transaction_witnesses, "
+                "gerchain_idempotency_records, gerchain_ledger_movements, "
+                "gerchain_ledger_accounts, escrows CASCADE"
+            )
+        )
 
     assert runtime.is_canonical_ledger_authoritative
     runtime.create_account("PG-SOURCE", initial_balance=100)
