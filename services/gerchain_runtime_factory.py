@@ -42,11 +42,10 @@ class ProductionRuntimeFactory:
         )
 
     def initialize(self) -> None:
-        """Apply canonical PostgreSQL migrations before runtime construction."""
-        migration_dir = Path(__file__).resolve().parents[1] / "postgres" / "migrations"
-        with self.engine.begin() as connection:
-            apply_migrations(connection, migration_dir)
-        assert_canonical_production_schema(self.engine)
+        """Apply the versioned PostgreSQL production schema before runtime boot."""
+        migration_dir = Path(__file__).resolve().parents[1] / "postgres" / "schema"
+        with psycopg.connect(self.config.database_url) as conn:
+            apply_migrations(conn, migration_dir)
 
     def create(self) -> GerchainRuntime:
         self.initialize()
