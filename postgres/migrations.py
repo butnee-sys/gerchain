@@ -105,7 +105,7 @@ def apply_migrations(conn, migration_dir: str | Path) -> None:
                 + ", ".join(p.name for p in candidates)
             )
 
-    # Serialize migration runners with a session-scoped advisory lock.
+    # Serialize migration runners with a session-scoped advisory lock.\n    # EA-35.13 verification: concurrent runners must observe one migration history.
     # The previous transaction-scoped lock did not reliably serialize concurrent
     # psycopg callers because transaction state can differ across callers.
     # Keep the lock for the complete migration run and release it explicitly.
