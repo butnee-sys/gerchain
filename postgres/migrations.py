@@ -123,19 +123,19 @@ def apply_migrations(conn, migration_dir: str | Path) -> None:
     with _transaction(conn):
         _execute(conn, "SELECT pg_advisory_xact_lock(%s)", (MIGRATION_LOCK_KEY,))
         _execute(
-                conn,
-                """
-                CREATE TABLE IF NOT EXISTS schema_version (
-                    version BIGINT PRIMARY KEY,
-                    checksum TEXT NOT NULL,
-                    applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
-                )
-                """,
+            conn,
+            """
+            CREATE TABLE IF NOT EXISTS schema_version (
+                version BIGINT PRIMARY KEY,
+                checksum TEXT NOT NULL,
+                applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
             )
+            """,
+        )
         rows = _execute(
-                conn,
-                "SELECT version, checksum FROM schema_version ORDER BY version",
-            ).fetchall()
+            conn,
+            "SELECT version, checksum FROM schema_version ORDER BY version",
+        ).fetchall()
         applied = {int(row[0]): row[1] for row in rows}
 
         for version in sorted(preferred):
@@ -150,9 +150,9 @@ def apply_migrations(conn, migration_dir: str | Path) -> None:
 
             if version in applied:
                 if applied[version] not in accepted_digests:
-                raise RuntimeError(
-                    f"Migration checksum mismatch for version {version}"
-                )
+                    raise RuntimeError(
+                        f"Migration checksum mismatch for version {version}"
+                    )
                 continue
 
             migration_sql = sql.replace("BEGIN;", "").replace("COMMIT;", "")
@@ -169,10 +169,9 @@ def apply_migrations(conn, migration_dir: str | Path) -> None:
             recorded = _execute(
                 conn,
                 "SELECT checksum FROM schema_version WHERE version = %s",
-                    (version,),
+                (version,),
             ).fetchone()
             if recorded is None or recorded[0] != digest:
-                    raise RuntimeError(
-                        f"Migration checksum mismatch for version {version}"
-                    )
-# migration runner source is under production verification.
+                raise RuntimeError(
+                    f"Migration checksum mismatch for version {version}"
+                )
