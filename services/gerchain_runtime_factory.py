@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+from pathlib import Path
 from typing import Any, Callable
 
 from sqlalchemy import create_engine
@@ -44,15 +45,10 @@ class ProductionRuntimeFactory:
         )
 
     def initialize(self) -> None:
-        """Apply the authoritative PostgreSQL migration history.
-
-        Production boot must use the migration runner rather than SQLAlchemy
-        create_all(), so schema versioning, checksums, locking, and constraints
-        are part of the production gate.
-        """
+        """Apply the repository's versioned PostgreSQL production schema."""
         migration_dir = Path(__file__).resolve().parents[1] / "postgres" / "schema"
-        with self.engine.connect() as conn:
-            apply_migrations(conn, migration_dir)
+        with self.engine.begin() as connection:
+            apply_migrations(connection, migration_dir)
 
     def create(self) -> GerchainRuntime:
         self.initialize()
