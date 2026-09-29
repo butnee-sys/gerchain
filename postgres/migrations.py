@@ -141,7 +141,7 @@ def apply_migrations(conn, migration_dir: str | Path) -> None:
                 if version in applied:
                     if applied[version] not in accepted_digests:
                         raise RuntimeError(
-                            f"Migration checksum mismatch for version {version}"
+                            f"Migration checksum mismatch for version {version}: applied={applied[version]} expected={digest}"
                         )
                     continue
 
