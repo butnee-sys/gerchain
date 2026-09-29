@@ -17,7 +17,11 @@ LEGACY_CHECKSUMS = {
     # Version 001 was historically recorded from postgres/schema/001_concurrency.sql.
     # The migration runner now owns that schema history; accept the known legacy
     # digest so existing databases can migrate without rewriting version 1.
-    1: {"6eea24dae8b3ac9aa9413a32da1617250f14725bdb19f50e5d8300308ad173d4"},
+    1: {
+        "6eea24dae8b3ac9aa9413a32da1617250f14725bdb19f50e5d8300308ad173d4",
+        "756fdeb66011e66070071763231c12b43a2125929279a982adf22d9eb6935c2e",
+        "5c2eb856d051177d25ae8beddebeb5b3c37e19f42a4579ce912b3e4f05df2dc0",
+    },
     4: {"729c586234c0b630cce6edd9feab694f4d589dcb5e9321e44f7d22ab556799a0"},
 }
 
