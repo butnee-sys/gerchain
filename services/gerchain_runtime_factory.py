@@ -4,6 +4,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from pathlib import Path
 from typing import Any, Callable
+from pathlib import Path
+
+from postgres.migrations import apply_migrations
 
 from sqlalchemy import create_engine
 from sqlalchemy.engine import Engine
