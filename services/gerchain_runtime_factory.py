@@ -42,7 +42,7 @@ class ProductionRuntimeFactory:
 
     def initialize(self) -> None:
         """Apply the authoritative PostgreSQL migration set before boot."""
-        migration_dir = Path(__file__).resolve().parent.parent / "postgres" / "schema"
+        migration_dir = Path(__file__).resolve().parent.parent / "postgres" / "migrations"
         if not migration_dir.is_dir():
             raise RuntimeError(f"PostgreSQL migration directory not found: {migration_dir}")
         with self.engine.connect() as connection:
