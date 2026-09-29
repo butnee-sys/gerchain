@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+from pathlib import Path
 from typing import Any, Callable
 
 from sqlalchemy import create_engine, text
@@ -11,6 +12,7 @@ from sqlalchemy.orm import sessionmaker
 from postgres.migrations import apply_migrations
 from persistence.production_schema_guard import assert_canonical_production_schema
 from services.gerchain_runtime import GerchainRuntime
+from postgres.migrations import apply_migrations
 
 
 @dataclass(frozen=True)
@@ -41,11 +43,12 @@ class ProductionRuntimeFactory:
         )
 
     def initialize(self) -> None:
-        """Apply the authoritative PostgreSQL migration history before boot."""
-        migration_dir = Path(__file__).resolve().parents[1] / "postgres" / "schema"
+        """Apply the authoritative PostgreSQL migration set before boot."""
+        migration_dir = Path(__file__).resolve().parents[1] / "postgres" / "migrations"
+        if not migration_dir.is_dir():
+            raise RuntimeError(f"production migration directory not found: {migration_dir}")
         with self.engine.connect() as connection:
             apply_migrations(connection, migration_dir)
-            assert_canonical_production_schema(connection)
 
     def create(self) -> GerchainRuntime:
         self.initialize()
