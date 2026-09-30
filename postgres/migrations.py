@@ -36,7 +36,6 @@ def _transaction(conn):
     Session locks are released explicitly after the transaction ends, including
     when a migration raises.
     """
-    locked = False
     try:
         if hasattr(conn, "exec_driver_sql"):
             if conn.in_transaction():
@@ -44,21 +43,21 @@ def _transaction(conn):
                     "apply_migrations requires a connection without an active transaction"
                 )
             with conn.begin():
+                # Serialize the entire migration batch inside one transaction.
+                # Transaction-scoped locking cannot leak across commits.
                 conn.execute(
-                    text("SELECT pg_advisory_lock(:lock_key)"),
+                    text("SELECT pg_advisory_xact_lock(:lock_key)"),
                     {"lock_key": MIGRATION_LOCK_KEY},
                 )
-                locked = True
                 yield
             return
 
         if hasattr(conn, "transaction"):
             with conn.transaction():
                 conn.execute(
-                    "SELECT pg_advisory_lock(%s)",
+                    "SELECT pg_advisory_xact_lock(%s)",
                     (MIGRATION_LOCK_KEY,),
                 )
-                locked = True
                 yield
             return
 
@@ -69,18 +68,8 @@ def _transaction(conn):
 
         yield
     finally:
-        if locked:
-            if hasattr(conn, "exec_driver_sql"):
-                conn.execute(
-                    text("SELECT pg_advisory_unlock(:lock_key)"),
-                    {"lock_key": MIGRATION_LOCK_KEY},
-                )
-            elif hasattr(conn, "execute"):
-                conn.execute(
-                    "SELECT pg_advisory_unlock(%s)",
-                    (MIGRATION_LOCK_KEY,),
-                )
-
+        # Transaction-scoped advisory locks are released automatically.
+        pass
 
 def _execute(conn, sql: str, params=None):
     # Non-parameterized DDL/PLpgSQL may contain literal percent signs.
