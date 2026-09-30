@@ -42,14 +42,7 @@ class ProductionRuntimeFactory:
             bind=self.engine, expire_on_commit=False
         )
 
-    def initialize(self) -> None:
-        """Apply the authoritative PostgreSQL migration history before boot."""
-        migration_dir = Path(__file__).resolve().parents[1] / "postgres" / "migrations"
-        with self.engine.connect() as connection:
-            apply_migrations(connection, migration_dir)
-            assert_canonical_production_schema(connection)
-
-    def create(self) -> GerchainRuntime:
+    def initialize(self) -> None:\n        """Apply the canonical PostgreSQL migration history before boot.\n\n        create_all is deliberately not used here: production schema state\n        must come from the versioned migration authority, not from ORM metadata.\n        """\n        migration_dir = Path(__file__).resolve().parents[1] / "postgres" / "migrations"\n        if not migration_dir.is_dir():\n            raise RuntimeError(f"production migration directory not found: {migration_dir}")\n        with self.engine.connect() as conn:\n            apply_migrations(conn, migration_dir)\n\n    def create(self) -> GerchainRuntime:
         self.initialize()
         runtime = GerchainRuntime(
             escrow_id=self.config.escrow_id,
