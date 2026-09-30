@@ -11,23 +11,21 @@ from persistence.atomic_ledger import LedgerAccountModel, LedgerMovementModel
 from persistence.atomic_value_transaction import TransactionWitness
 from persistence.recovery_outbox import OutboxEvent
 from persistence.durable_idempotency import DurableIdempotencyRecord
-from services.gerchain_runtime_factory import ProductionRuntimeConfig, ProductionRuntimeFactory
+from services.gerchain_runtime_factory import ProductionRuntimeFactory
 
 
 def test_production_runtime_boots_and_executes_canonical_postgresql_flow() -> None:
     database_url = os.environ["GERCHAIN_DATABASE_URL"]
     engine = create_engine(database_url, pool_pre_ping=True)
-    factory = ProductionRuntimeFactory(
-        ProductionRuntimeConfig(
-            database_url=database_url,
-            escrow_id="pg-e2e-escrow",
-            amount=100,
-            currency="USD",
-            witness_id="pg-e2e-witness",
-        ),
+    session_factory = sessionmaker(bind=engine, expire_on_commit=False)
+    runtime = ProductionRuntimeFactory.create(
+        escrow_id="pg-e2e-escrow",
+        amount=100,
+        currency="USD",
+        witness_id="pg-e2e-witness",
         engine=engine,
+        session_factory=session_factory,
     )
-    runtime = factory.create()
     assert runtime.is_canonical_ledger_authoritative
 
     tables = set(inspect(engine).get_table_names())
@@ -41,7 +39,7 @@ def test_production_runtime_boots_and_executes_canonical_postgresql_flow() -> No
     ):
         assert table in tables
 
-    session_factory = factory.session_factory
+    session_factory = session_factory
     now = datetime.now(timezone.utc)
     with session_factory() as session:
         session.add(
