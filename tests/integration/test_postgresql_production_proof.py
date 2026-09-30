@@ -47,10 +47,8 @@ def test_postgresql_production_runtime_boot_and_value_flow() -> None:
     assert runtime.is_canonical_ledger_authoritative
     assert runtime._postgres_release is None
 
-    for base in (AtomicLedgerBase, EscrowBase, OutboxBase, IdempotencyBase, TransactionWitness):
-        base.metadata.drop_all(engine)
-
-    # Recreate only through the production factory path.
+    # Boot again against the same migration state; the factory must remain
+    # idempotent and keep the Canonical Ledger authoritative.
     runtime = factory.create()
     assert runtime.is_canonical_ledger_authoritative
 
