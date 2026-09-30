@@ -176,7 +176,8 @@ def test_migrations_are_serialized_and_checksum_is_stable():
 
     with connect() as conn:
         rows = conn.execute("SELECT version, checksum FROM schema_version ORDER BY version").fetchall()
-        assert [row[0] for row in rows] == list(range(1, 11))
+        expected_versions = sorted({int(path.name.split("_", 1)[0]) for path in MIGRATION_DIR.glob("*.sql")})
+        assert [row[0] for row in rows] == expected_versions
         assert all(len(row[1]) == 64 for row in rows)
 
 
