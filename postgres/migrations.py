@@ -115,16 +115,18 @@ def apply_migrations(conn, migration_dir: str | Path) -> None:
                 + ", ".join(p.name for p in candidates)
             )
 
-    # Serialize concurrent migration runners with a transaction-scoped advisory lock.
-    # The lock is acquired INSIDE the same transaction that creates/updates
-    # schema_version. This prevents a second runner from observing an
-    # uncommitted migration and then racing the schema_version primary key.
+    # Serialize concurrent migration runners with a session-scoped advisory lock.
+    # The lock is deliberately held for the entire apply_migrations call rather
+    # than only for one transaction. This makes the invariant explicit even
+    # when callers/driver state already contains an implicit transaction.
     if _connection_in_transaction(conn) and hasattr(conn, "commit"):
         conn.commit()
 
+    lock_acquired = False
     try:
+        _execute(conn, "SELECT pg_advisory_lock(%s)", (MIGRATION_LOCK_KEY,))
+        lock_acquired = True
         with _transaction(conn):
-            _execute(conn, "SELECT pg_advisory_xact_lock(%s)", (MIGRATION_LOCK_KEY,))
             _execute(
                 conn,
                 """
@@ -189,3 +191,6 @@ def apply_migrations(conn, migration_dir: str | Path) -> None:
     else:
         if hasattr(conn, "commit"):
             conn.commit()
+    finally:
+        if lock_acquired:
+            _execute(conn, "SELECT pg_advisory_unlock(%s)", (MIGRATION_LOCK_KEY,))
