@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from sqlalchemy import select, create_engine, text
 from sqlalchemy.orm import sessionmaker
 
-from services.gerchain_runtime_factory import ProductionRuntimeConfig, ProductionRuntimeFactory
+from services.gerchain_runtime_factory import ProductionRuntimeFactory
 from persistence.escrow_aggregate import CanonicalEscrow, EscrowState
 from persistence.atomic_ledger import PostgreSQLAtomicLedger, LedgerAccountModel, LedgerMovementModel
 from persistence.fund_escrow import fund_escrow_in_transaction
@@ -17,16 +17,14 @@ def test_production_postgres_fund_lock_release_reconciles():
     url = os.environ.get("GERCHAIN_DATABASE_URL") or os.environ["GERCHAIN_TEST_DATABASE_URL"]
     engine = create_engine(url, pool_pre_ping=True)
     factory = sessionmaker(bind=engine, expire_on_commit=False)
-    runtime = ProductionRuntimeFactory(
-        ProductionRuntimeConfig(
-            database_url=url,
-            escrow_id="pg-ea35-escrow",
-            amount=100,
-            currency="USD",
-            witness_id="pg-ea35-witness",
-        ),
+    runtime = ProductionRuntimeFactory.create(
+        escrow_id="pg-ea35-escrow",
+        amount=100,
+        currency="USD",
+        witness_id="pg-ea35-witness",
         engine=engine,
-    ).create()
+        session_factory=factory,
+    )
     assert runtime.is_canonical_ledger_authoritative
     assert runtime.runtime_mode == "production-postgresql"
     with factory() as session:
