@@ -47,9 +47,14 @@ class ProductionRuntimeFactory:
         )
 
     def initialize(self) -> None:
-        """Apply the authoritative PostgreSQL migration history before runtime use."""
-        with self.engine.begin() as connection:
-            apply_migrations(connection, Path(__file__).resolve().parents[1] / "postgres" / "migrations")
+        """Apply and validate the authoritative PostgreSQL schema before runtime use."""
+        migration_dir = Path(__file__).resolve().parents[1] / "postgres" / "schema"
+        raw = self.engine.raw_connection()
+        try:
+            apply_migrations(raw, migration_dir)
+        finally:
+            raw.close()
+        with self.engine.connect() as connection:
             assert_canonical_production_schema(connection)
 
     def create(self) -> GerchainRuntime:
