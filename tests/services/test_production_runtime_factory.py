@@ -60,7 +60,7 @@ def test_factory_initialize_uses_canonical_migration_runner() -> None:
     engine = Mock()
     engine.dialect.name = "postgresql"
     connection = Mock()
-    engine.begin.return_value.__enter__.return_value = connection
+    engine.connect.return_value.__enter__.return_value = connection
 
     factory = ProductionRuntimeFactory(
         ProductionRuntimeConfig(
@@ -73,9 +73,11 @@ def test_factory_initialize_uses_canonical_migration_runner() -> None:
         engine=engine,
     )
 
-    with patch("services.gerchain_runtime_factory.apply_migrations") as apply:
+    with patch("services.gerchain_runtime_factory.apply_migrations") as apply, \
+         patch("services.gerchain_runtime_factory.assert_canonical_production_schema") as guard:
         factory.initialize()
 
     apply.assert_called_once()
     assert apply.call_args.args[0] is connection
     assert str(apply.call_args.args[1]).endswith("postgres/migrations")
+    guard.assert_called_once_with(connection)
