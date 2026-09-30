@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 import os
 
-from sqlalchemy import create_engine, select
+from sqlalchemy import create_engine, select, text
 from sqlalchemy.orm import sessionmaker
 
 from persistence.atomic_ledger import LedgerAccountModel, PostgreSQLAtomicLedger, AtomicLedgerBase
@@ -31,6 +31,23 @@ def test_production_postgresql_boot_and_value_truth():
     ).create()
     assert runtime.is_canonical_ledger_authoritative
     assert runtime.runtime_mode == "production-postgresql"
+
+    with engine.connect() as connection:
+        tables = {
+            row[0]
+            for row in connection.execute(
+                text("SELECT tablename FROM pg_catalog.pg_tables WHERE schemaname = 'public'")
+            )
+        }
+    assert {
+        "schema_version",
+        "escrows",
+        "gerchain_ledger_accounts",
+        "gerchain_ledger_movements",
+        "gerchain_transaction_witnesses",
+        "gerchain_outbox_events",
+        "gerchain_idempotency_records",
+    }.issubset(tables)
 
     now = datetime.now(timezone.utc)
     with session_factory() as session:
