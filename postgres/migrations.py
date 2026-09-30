@@ -120,11 +120,9 @@ def apply_migrations(conn, migration_dir: str | Path) -> None:
     # a session-level lock while an implicit transaction is already open can leave a
     # waiting connection with a stale READ COMMITTED snapshot and cause duplicate
     # schema_version inserts after the first runner commits.
-    lock_acquired = False
     try:
         with _transaction(conn):
             _execute(conn, "SELECT pg_advisory_xact_lock(%s)", (MIGRATION_LOCK_KEY,))
-            lock_acquired = True
             _execute(
                 conn,
                 """
@@ -183,4 +181,4 @@ def apply_migrations(conn, migration_dir: str | Path) -> None:
     except Exception:
         if hasattr(conn, "rollback"):
             conn.rollback()
-        raise            _execute(conn, "SELECT pg_advisory_unlock(%s)", (MIGRATION_LOCK_KEY,))
+        raise
