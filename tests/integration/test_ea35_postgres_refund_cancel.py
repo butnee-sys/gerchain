@@ -9,31 +9,31 @@ from sqlalchemy.orm import sessionmaker
 
 from persistence.atomic_ledger import LedgerAccountModel
 from persistence.escrow_aggregate import CanonicalEscrow, EscrowState
-from persistence.fund_escrow import fund_escrow_in_transaction
-from persistence.lock_escrow import lock_escrow_in_transaction
 from persistence.refund_escrow import refund_escrow_in_transaction
 from persistence.cancel_escrow import cancel_escrow_in_transaction
-from services.gerchain_runtime_factory import ProductionRuntimeFactory
+from services.gerchain_runtime_factory import ProductionRuntimeConfig, ProductionRuntimeFactory
 
 
 @pytest.fixture()
-def factory():
+def runtime():
     url = os.environ.get("GERCHAIN_DATABASE_URL")
     if not url:
         pytest.skip("GERCHAIN_DATABASE_URL is required")
     engine = create_engine(url, pool_pre_ping=True)
-    return ProductionRuntimeFactory.create(
-        escrow_id="ea35-refund-escrow",
-        amount=100,
-        currency="MNT",
-        witness_id="ea35-refund-witness",
+    return ProductionRuntimeFactory(
+        ProductionRuntimeConfig(
+            database_url=url,
+            escrow_id="ea35-refund-escrow",
+            amount=100,
+            currency="MNT",
+            witness_id="ea35-refund-witness",
+        ),
         engine=engine,
-        session_factory=sessionmaker(bind=engine, expire_on_commit=False),
-    )
+    ).create()
 
 
-def test_postgresql_refund_uses_authoritative_destination(factory):
-    sf = factory._session_factory
+def test_postgresql_refund_uses_authoritative_destination(runtime):
+    sf = runtime._session_factory
     now = datetime.now(timezone.utc)
     with sf.begin() as session:
         session.query(LedgerAccountModel).delete()
@@ -61,9 +61,8 @@ def test_postgresql_refund_uses_authoritative_destination(factory):
         assert session.get(CanonicalEscrow, "ea35-refund-escrow").state == EscrowState.REFUNDED.value
 
 
-def test_postgresql_funded_cancel_reverses_to_original_sender(factory):
-    factory.create()
-    sf = factory._session_factory
+def test_postgresql_funded_cancel_reverses_to_original_sender(runtime):
+    sf = runtime._session_factory
     now = datetime.now(timezone.utc)
     with sf.begin() as session:
         session.query(LedgerAccountModel).delete()
