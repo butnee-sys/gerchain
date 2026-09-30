@@ -14,7 +14,7 @@ from postgres.migrations import apply_migrations
 from postgres.repository import ConcurrentStateTransition, EscrowRepository
 
 DATABASE_URL = os.environ.get("GERCHAIN_POSTGRES_DSN")
-MIGRATION_DIR = Path(__file__).resolve().parents[1] / "schema"
+MIGRATION_DIR = Path(__file__).resolve().parents[1] / "migrations"
 
 pytestmark = pytest.mark.skipif(
     not DATABASE_URL,
