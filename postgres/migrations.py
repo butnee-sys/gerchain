@@ -115,7 +115,10 @@ def apply_migrations(conn, migration_dir: str | Path) -> None:
     # Serialize concurrent migration runners inside the same transaction that
     # reads/writes schema_version. A transaction-scoped advisory lock removes
     # the race window between lock acquisition and schema_version insertion.
-    _execute(conn, "SELECT pg_advisory_xact_lock(%s)", (MIGRATION_LOCK_KEY,))
+    _execute(conn, "SELECT pg_advisory_lock(%s)", (MIGRATION_LOCK_KEY,))
+
+    if _connection_in_transaction(conn) and hasattr(conn, "commit"):
+        conn.commit()
 
     try:
         with _transaction(conn):
@@ -183,3 +186,4 @@ def apply_migrations(conn, migration_dir: str | Path) -> None:
         # snapshot and race to insert the same version.
         if hasattr(conn, "commit"):
             conn.commit()
+        _execute(conn, "SELECT pg_advisory_unlock(%s)", (MIGRATION_LOCK_KEY,))
