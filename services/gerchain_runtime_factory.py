@@ -43,6 +43,8 @@ class ProductionRuntimeFactory:
     def initialize(self) -> None:
         """Apply the authoritative PostgreSQL migration history."""
         migration_dir = Path(__file__).resolve().parents[1] / "postgres" / "migrations"
+        if not migration_dir.is_dir():
+            raise RuntimeError(f"canonical PostgreSQL migration directory missing: {migration_dir}")
         with self.engine.begin() as connection:
             apply_migrations(connection, migration_dir)
 
