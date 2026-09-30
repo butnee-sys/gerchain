@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from sqlalchemy import inspect
+from sqlalchemy import inspect, text
 from sqlalchemy.engine import Connection
 
 REQUIRED_COLUMNS = {
@@ -14,7 +14,7 @@ REQUIRED_COLUMNS = {
 REQUIRED_ESCROW_STATES = {'CREATED','FUNDED','LOCKED','RELEASED','REFUNDED','CANCELLED'}  # canonical lifecycle gate
 
 def assert_canonical_production_schema(connection: Connection) -> None:
-    version = connection.execute(__import__('sqlalchemy').text('SELECT MAX(version) FROM schema_version')).scalar_one()
+    version = connection.execute(text('SELECT MAX(version) FROM schema_version')).scalar_one()
     if version is None or int(version) < 11:
         raise RuntimeError('canonical production schema migration history incomplete; version 11 required')
     if connection.dialect.name != 'postgresql':
