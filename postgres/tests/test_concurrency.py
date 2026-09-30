@@ -86,8 +86,8 @@ def test_transition_rolls_back_audit_and_outbox_on_failure():
         repo = EscrowRepository(conn)
         with pytest.raises(Exception):
             repo.transition(
-                "race-1", "CREATED", "NOT_A_STATE", "worker",
-                uuid4(), {"case": "rollback"}, uuid4().hex,
+                "race-1", "CREATED", "LOCKED", "worker",
+                uuid4(), {"case": "rollback"}, None,
             )
 
     with connect() as conn:
