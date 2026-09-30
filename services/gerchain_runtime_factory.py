@@ -3,7 +3,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from pathlib import Path
 from typing import Any, Callable
 
 from sqlalchemy import create_engine
@@ -11,12 +10,6 @@ from sqlalchemy.engine import Engine
 from sqlalchemy.orm import sessionmaker
 
 from postgres.migrations import apply_migrations
-from persistence.atomic_ledger import AtomicLedgerBase
-from persistence.atomic_value_transaction import TransactionWitness
-from persistence.durable_idempotency import IdempotencyBase
-from persistence.escrow_aggregate import EscrowBase
-from persistence.recovery_outbox import OutboxBase
-
 from services.gerchain_runtime import GerchainRuntime
 
 
@@ -53,9 +46,6 @@ class ProductionRuntimeFactory:
         with self.engine.begin() as connection:
             apply_migrations(connection, migration_dir)
 
-        # Metadata creation is defensive only; migration history remains authoritative.
-        for base in (AtomicLedgerBase, EscrowBase, OutboxBase, IdempotencyBase, TransactionWitness):
-            base.metadata.create_all(self.engine)
 
     def create(self) -> GerchainRuntime:
         self.initialize()
