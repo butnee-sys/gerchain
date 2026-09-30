@@ -37,6 +37,7 @@ jobs:
         run: pytest -q postgres/tests/test_concurrency.py
       - name: PostgreSQL canonical runtime boot
         env:
+          GERCHAIN_TEST_DATABASE_URL: postgresql+psycopg://gerchain:gerchain@localhost:5432/gerchain_test
           GERCHAIN_DATABASE_URL: postgresql+psycopg://gerchain:gerchain@localhost:5432/gerchain_test
         run: pytest -q tests/integration/test_production_runtime_postgresql.py
 
