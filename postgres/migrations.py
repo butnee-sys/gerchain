@@ -105,12 +105,12 @@ def apply_migrations(conn, migration_dir: str | Path) -> None:
                 + ", ".join(p.name for p in candidates)
             )
 
-    # Serialize migration runners with a session-scoped advisory lock.
-    # The lock is acquired before BEGIN and released only after COMMIT/ROLLBACK,
-    # so a concurrent runner cannot observe an uncommitted schema_version row.
-    _execute(conn, "SELECT pg_advisory_lock(%s)", (MIGRATION_LOCK_KEY,))
-    try:
-        with _transaction(conn):
+    # Serialize migration runners with a transaction-scoped advisory lock.
+    # Acquiring it inside the same transaction that writes schema_version makes
+    # the serialization boundary explicit: the lock is held until COMMIT/ROLLBACK,
+    # and a concurrent runner cannot observe an uncommitted schema_version row.
+    with _transaction(conn):
+        _execute(conn, "SELECT pg_advisory_xact_lock(%s)", (MIGRATION_LOCK_KEY,))
             _execute(
                 conn,
                 """
@@ -164,5 +164,3 @@ def apply_migrations(conn, migration_dir: str | Path) -> None:
                     raise RuntimeError(
                         f"Migration checksum mismatch for version {version}"
                     )
-    finally:
-        _execute(conn, "SELECT pg_advisory_unlock(%s)", (MIGRATION_LOCK_KEY,))
