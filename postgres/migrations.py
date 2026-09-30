@@ -138,6 +138,161 @@ def apply_migrations(conn, migration_dir: str | Path) -> None:
                 + ", ".join(p.name for p in candidates)
             )
 
+    # Serialize migration runners with a session-scoped advisory lock held for the complete run.\n    with _transaction(conn):\n        _execute(conn, "SELECT pg_advisory_lock(%s)", (MIGRATION_LOCK_KEY,))\n        try:\n        _execute(
+            conn,
+            """
+            CREATE TABLE IF NOT EXISTS schema_version (
+                version BIGINT PRIMARY KEY,
+                checksum TEXT NOT NULL,
+                applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
+            )
+            """,
+        )
+        rows = _execute(
+            conn,
+            "SELECT version, checksum FROM schema_version ORDER BY version",
+        ).fetchall()
+        applied = {int(row[0]): row[1] for row in rows}
+
+        for version in sorted(preferred):
+            migration = preferred[version]
+            sql = migration.read_text(encoding="utf-8")
+            digest = checksum(sql)
+            accepted_digests = {
+                checksum(candidate.read_text(encoding="utf-8"))
+                for candidate in versions[version]
+            }
+            accepted_digests.update(LEGACY_CHECKSUMS.get(version, set()))
+            # When callers still pass the legacy postgres/schema directory,
+            # accept the exact legacy file checksum as migration-history
+            # compatibility evidence. The SQL is not re-executed: the
+            # canonical postgres/migrations file remains authoritative for
+            # future application.
+            if legacy_schema_path is not None:
+                legacy_candidates = sorted(
+                    legacy_schema_path.glob(f"{version:03d}_*.sql")
+                )
+                accepted_digests.update(
+                    checksum(candidate.read_text(encoding="utf-8"))
+                    for candidate in legacy_candidates
+                )
+
+            if version in applied:
+                if applied[version] not in accepted_digests:
+                    raise RuntimeError(
+                        f"Migration checksum mismatch for version {version}"
+                    )
+                continue
+
+            migration_sql = sql.replace("BEGIN;", "").replace("COMMIT;", "")
+            _execute(conn, migration_sql)
+            _execute(
+                conn,
+                """
+                INSERT INTO schema_version(version, checksum)
+                VALUES (%s, %s)
+                ON CONFLICT (version) DO NOTHING
+                """,
+                (version, digest),
+            )
+            recorded = _execute(
+                conn,
+                "SELECT checksum FROM schema_version WHERE version = %s",
+                (version,),
+            ).fetchone()
+            if recorded is None or recorded[0] != digest:
+                raise RuntimeError(
+                    f"Migration checksum mismatch for version {version}"
+                )\n        finally:\n            _execute(conn, "SELECT pg_advisory_unlock(%s)", (MIGRATION_LOCK_KEY,))def _transaction(conn):
+    """Provide the migration transaction boundary without owning the advisory lock."""
+    if hasattr(conn, "exec_driver_sql"):
+        if conn.in_transaction():
+            raise RuntimeError(
+                "apply_migrations requires a connection without an active transaction"
+            )
+        return conn.begin()
+    if hasattr(conn, "transaction"):
+        return conn.transaction()
+    raise TypeError("unsupported PostgreSQL connection type")
+
+
+def _execute(conn, sql: str, params=None):
+    # Non-parameterized DDL/PLpgSQL may contain literal percent signs.
+    # Avoid psycopg's pyformat parser when there are no parameters.
+    if hasattr(conn, "exec_driver_sql"):
+        if params is None:
+            # SQLAlchemy's PostgreSQL driver still interprets literal % signs
+            # when using exec_driver_sql. text() preserves PL/pgSQL format
+            # strings such as format('%I', ...) as literal SQL.
+            return conn.execute(text(sql))
+        return conn.exec_driver_sql(sql, params)
+    if params is None:
+        # Native psycopg parses % as a placeholder even for literal DDL.
+        # SQL() marks the migration as literal SQL without changing its source text.
+        return conn.execute(psycopg.sql.SQL(sql))
+    return conn.execute(sql, params)
+
+
+def _connection_in_transaction(conn) -> bool:
+    value = getattr(conn, "in_transaction", False)
+    return value() if callable(value) else bool(value)
+
+
+def apply_migrations(conn, migration_dir: str | Path) -> None:
+    """Apply migrations atomically for SQLAlchemy or native psycopg connections."""
+    path = Path(migration_dir)
+    # There is one authoritative migration history. The legacy postgres/schema
+    # tree is a compatibility view; when present, resolve it to postgres/migrations
+    # so concurrent callers can never record two different version-1 histories.
+    legacy_schema_path = (path if path.name == "schema" else path.parent / "schema")
+    if not legacy_schema_path.is_dir():
+        legacy_schema_path = None
+    canonical_migrations = path.parent / "migrations" if path.name == "schema" else None
+    if canonical_migrations is not None and canonical_migrations.is_dir():
+        path = canonical_migrations
+    files = sorted(path.glob("*.sql"))
+    # A few early canonical migrations were shipped under the same numeric
+    # version before the migration history was frozen. Treat those files as
+    # historical aliases: one deterministic file is applied on a fresh
+    # database, while an already-applied checksum from any alias remains
+    # accepted.
+    preferred_names = {
+        2: "002_canonical_production.sql",
+        5: "005_canonical_production.sql",
+        6: "006_canonical_production.sql",
+        7: "007_canonical_production.sql",
+    }
+    versions: dict[int, list[Path]] = {}
+    for migration in files:
+        version = int(migration.name.split("_", 1)[0])
+        versions.setdefault(version, []).append(migration)
+
+    preferred: dict[int, Path] = {}
+    for version, candidates in versions.items():
+        preferred_name = preferred_names.get(version)
+        if preferred_name:
+            selected = next((p for p in candidates if p.name == preferred_name), None)
+            if selected is not None:
+                preferred[version] = selected
+            elif len(candidates) == 1:
+                # The preferred alias may be absent on a rebased migration history.
+                preferred[version] = candidates[0]
+            elif not candidates:
+                # A preferred historical version has no physical migration here.
+                continue
+            else:
+                raise RuntimeError(
+                    f"Preferred migration {preferred_name} is missing and "
+                    f"version {version} has multiple candidates"
+                )
+        elif len(candidates) == 1:
+            preferred[version] = candidates[0]
+        else:
+            raise RuntimeError(
+                f"Unresolved duplicate migration version {version}: "
+                + ", ".join(p.name for p in candidates)
+            )
+
     # Serialize migration runners while preserving one atomic schema transaction.
     with _transaction(conn):
         _execute(
