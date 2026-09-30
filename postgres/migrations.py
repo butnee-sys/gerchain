@@ -35,48 +35,22 @@ def _transaction(conn):
             raise RuntimeError(
                 "apply_migrations requires a connection without an active transaction"
             )
-        locked = False
         with conn.begin():
             conn.execute(
-                text("SELECT pg_advisory_lock(:lock_key)"),
+                text("SELECT pg_advisory_xact_lock(:lock_key)"),
                 {"lock_key": MIGRATION_LOCK_KEY},
             )
-            locked = True
-            try:
-                yield
-            finally:
-                pass
-        if locked:
-            with conn.begin():
-                conn.execute(
-                    text("SELECT pg_advisory_unlock(:lock_key)"),
-                    {"lock_key": MIGRATION_LOCK_KEY},
-                )
+            yield
         return
 
     if hasattr(conn, "transaction"):
-        locked = False
         with conn.transaction():
             conn.execute(
-                "SELECT pg_advisory_lock(%s)",
+                "SELECT pg_advisory_xact_lock(%s)",
                 (MIGRATION_LOCK_KEY,),
             )
-            locked = True
-            yield
-        if locked:
-            with conn.transaction():
-                conn.execute(
-                    "SELECT pg_advisory_unlock(%s)",
-                    (MIGRATION_LOCK_KEY,),
-                )
-        return
-
-    if hasattr(conn, "begin"):
-        with conn.begin():
             yield
         return
-
-    yield
 
 def _execute(conn, sql: str, params=None):
     # Non-parameterized DDL/PLpgSQL may contain literal percent signs.
