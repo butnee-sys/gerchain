@@ -176,9 +176,11 @@ def apply_migrations(conn, migration_dir: str | Path) -> None:
                     raise RuntimeError(
                         f"Migration checksum mismatch for version {version}"
                     )
+    except Exception:
+        if hasattr(conn, "rollback"):
+            conn.rollback()
+        raise
     finally:
-        if hasattr(conn, "commit"):
-            conn.commit()
         _execute(conn, "SELECT pg_advisory_unlock(%s)", (MIGRATION_LOCK_KEY,))
         if hasattr(conn, "commit"):
             conn.commit()
