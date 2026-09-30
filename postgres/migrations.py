@@ -27,11 +27,13 @@ def checksum(sql: str) -> str:
 
 
 def _transaction(conn):
-    """Support both SQLAlchemy and native psycopg connections."""
-    if hasattr(conn, "in_transaction"):
+    """Return a real transaction context for SQLAlchemy or native psycopg."""
+    # SQLAlchemy Connection exposes exec_driver_sql/begin; native psycopg
+    # exposes transaction(). Do not infer the transaction API from the
+    # in_transaction attribute: psycopg may already have an implicit
+    # transaction before the runner reaches this boundary.
+    if hasattr(conn, "exec_driver_sql") and hasattr(conn, "begin"):
         return nullcontext() if conn.in_transaction() else conn.begin()
-    if hasattr(conn, "begin"):
-        return conn.begin()
     if hasattr(conn, "transaction"):
         return conn.transaction()
     return nullcontext()
