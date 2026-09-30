@@ -105,13 +105,12 @@ def apply_migrations(conn, migration_dir: str | Path) -> None:
                 + ", ".join(p.name for p in candidates)
             )
 
-    # Serialize migration runners with a session-scoped advisory lock.\n    # EA-35.13 verification: concurrent runners must observe one migration history.
-    # The previous transaction-scoped lock did not reliably serialize concurrent
-    # psycopg callers because transaction state can differ across callers.
-    # Keep the lock for the complete migration run and release it explicitly.
-    with _transaction(conn):
-        _execute(conn, "SELECT pg_advisory_lock(%s)", (MIGRATION_LOCK_KEY,))
-        try:
+    # Serialize migration runners with a session-scoped advisory lock.
+    # The lock is acquired before BEGIN and released only after COMMIT/ROLLBACK,
+    # so a concurrent runner cannot observe an uncommitted schema_version row.
+    _execute(conn, "SELECT pg_advisory_lock(%s)", (MIGRATION_LOCK_KEY,))
+    try:
+        with _transaction(conn):
             _execute(
                 conn,
                 """
@@ -165,5 +164,5 @@ def apply_migrations(conn, migration_dir: str | Path) -> None:
                     raise RuntimeError(
                         f"Migration checksum mismatch for version {version}"
                     )
-        finally:
-            _execute(conn, "SELECT pg_advisory_unlock(%s)", (MIGRATION_LOCK_KEY,))
+    finally:
+        _execute(conn, "SELECT pg_advisory_unlock(%s)", (MIGRATION_LOCK_KEY,))
