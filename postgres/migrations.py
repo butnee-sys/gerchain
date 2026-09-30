@@ -110,7 +110,7 @@ def apply_migrations(conn, migration_dir: str | Path) -> None:
     # psycopg callers because transaction state can differ across callers.
     # Keep the lock for the complete migration run and release it explicitly.
     with _transaction(conn):
-        _execute(conn, "SELECT pg_advisory_xact_lock(%s)", (MIGRATION_LOCK_KEY,))
+        _execute(conn, "SELECT pg_advisory_lock(%s)", (MIGRATION_LOCK_KEY,))
         try:
             _execute(
                 conn,
@@ -166,4 +166,4 @@ def apply_migrations(conn, migration_dir: str | Path) -> None:
                         f"Migration checksum mismatch for version {version}"
                     )
         finally:
-            _execute(conn, "SELECT 1", (MIGRATION_LOCK_KEY,))
+            _execute(conn, "SELECT pg_advisory_unlock(%s)", (MIGRATION_LOCK_KEY,))
