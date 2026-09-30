@@ -31,6 +31,12 @@ def test_production_runtime_boots_and_executes_canonical_postgresql_flow() -> No
     session_factory = sessionmaker(bind=engine, expire_on_commit=False)
     assert runtime.is_canonical_ledger_authoritative
 
+    with engine.connect() as connection:
+        migration_version = connection.execute(
+            text("SELECT MAX(version) FROM schema_version")
+        ).scalar_one()
+    assert migration_version >= 11
+
     tables = set(inspect(engine).get_table_names())
     for table in (
         "escrows",
