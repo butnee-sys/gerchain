@@ -112,11 +112,10 @@ def apply_migrations(conn, migration_dir: str | Path) -> None:
                 + ", ".join(p.name for p in candidates)
             )
 
-    # Serialize concurrent migration runners inside the same transaction
-    # that reads/writes schema_version. The lock MUST be transaction-scoped:
-    # pg_advisory_lock() is session-scoped and can outlive the transaction
-    # boundary, while pg_advisory_xact_lock() cannot leak across pooled
-    # connections or create a race between schema_version reads and writes.
+    # Serialize concurrent migration runners with a session-scoped advisory
+    # lock held for the complete migration critical section. The migration
+    # runner uses a dedicated connection, so the lock lifetime intentionally
+    # follows that connection rather than an application transaction.
     if _connection_in_transaction(conn) and hasattr(conn, "commit"):
         conn.commit()
 
@@ -191,3 +190,5 @@ def apply_migrations(conn, migration_dir: str | Path) -> None:
     finally:
         if lock_acquired:
             _execute(conn, "SELECT pg_advisory_unlock(%s)", (MIGRATION_LOCK_KEY,))
+            if hasattr(conn, "commit") and _connection_in_transaction(conn):
+                conn.commit()
