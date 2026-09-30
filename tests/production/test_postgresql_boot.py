@@ -4,23 +4,22 @@ import os
 
 from sqlalchemy import create_engine, inspect
 
-from services.gerchain_runtime_factory import ProductionRuntimeConfig, ProductionRuntimeFactory
+from services.gerchain_runtime_factory import ProductionRuntimeFactory
+from sqlalchemy.orm import sessionmaker
 
 
 def test_production_postgresql_boot_establishes_canonical_authority() -> None:
     database_url = os.environ["GERCHAIN_DATABASE_URL"]
     engine = create_engine(database_url, future=True)
     try:
-        runtime = ProductionRuntimeFactory(
-            ProductionRuntimeConfig(
-                database_url=os.environ["GERCHAIN_DATABASE_URL"],
-                escrow_id="ci-escrow",
-                amount=100,
-                currency="MNT",
-                witness_id="ci-witness",
-            ),
+        runtime = ProductionRuntimeFactory.create(
+            escrow_id="ci-escrow",
+            amount=100,
+            currency="MNT",
+            witness_id="ci-witness",
             engine=engine,
-        ).create()
+            session_factory=sessionmaker(bind=engine, expire_on_commit=False),
+        )
 
         assert runtime.is_canonical_ledger_authoritative is True
 
