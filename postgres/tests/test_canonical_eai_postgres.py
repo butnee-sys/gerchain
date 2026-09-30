@@ -15,6 +15,7 @@ from persistence.cancel_escrow import cancel_escrow_in_transaction
 from persistence.fund_escrow import fund_escrow_in_transaction
 from persistence.lock_escrow import lock_escrow_in_transaction
 from persistence.refund_escrow import refund_escrow_in_transaction
+from persistence.release_escrow import release_escrow_in_transaction
 from persistence.settlement_coordinator import SettlementCoordinator
 
 
