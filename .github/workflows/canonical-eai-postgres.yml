@@ -35,4 +35,8 @@ jobs:
       - name: Run canonical EAI PostgreSQL gate
         env:
           GERCHAIN_POSTGRES_DSN: postgresql://gerchain:gerchain@127.0.0.1:5432/gerchain_test
-        run: python -m pytest -q postgres/tests/test_concurrency.py postgres/tests/test_canonical_eai_postgres.py
+          GERCHAIN_DATABASE_URL: postgresql+psycopg://gerchain:gerchain@127.0.0.1:5432/gerchain_test
+          GERCHAIN_TEST_DATABASE_URL: postgresql+psycopg://gerchain:gerchain@127.0.0.1:5432/gerchain_test
+        run: |
+          python -m pytest -q postgres/tests/test_concurrency.py postgres/tests/test_canonical_eai_postgres.py
+          python -m pytest -q tests/integration/test_production_runtime_postgresql.py
