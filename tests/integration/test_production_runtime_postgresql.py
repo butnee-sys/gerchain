@@ -12,21 +12,23 @@ from persistence.atomic_ledger import LedgerAccountModel, LedgerMovementModel
 from persistence.atomic_value_transaction import TransactionWitness
 from persistence.recovery_outbox import OutboxEvent
 from persistence.durable_idempotency import DurableIdempotencyRecord
-from services.gerchain_runtime_factory import ProductionRuntimeFactory
+from services.gerchain_runtime_factory import ProductionRuntimeConfig, ProductionRuntimeFactory
 
 
 def test_production_runtime_boots_and_executes_canonical_postgresql_flow() -> None:
     database_url = os.environ["GERCHAIN_DATABASE_URL"]
     engine = create_engine(database_url, pool_pre_ping=True)
-    session_factory = sessionmaker(bind=engine, expire_on_commit=False)
-    runtime = ProductionRuntimeFactory.create(
-        escrow_id="pg-e2e-escrow",
-        amount=100,
-        currency="USD",
-        witness_id="pg-e2e-witness",
+    runtime = ProductionRuntimeFactory(
+        ProductionRuntimeConfig(
+            database_url=database_url,
+            escrow_id="pg-e2e-escrow",
+            amount=100,
+            currency="USD",
+            witness_id="pg-e2e-witness",
+        ),
         engine=engine,
-        session_factory=session_factory,
-    )
+    ).create()
+    session_factory = sessionmaker(bind=engine, expire_on_commit=False)
     assert runtime.is_canonical_ledger_authoritative
 
     tables = set(inspect(engine).get_table_names())
@@ -59,9 +61,9 @@ def test_production_runtime_boots_and_executes_canonical_postgresql_flow() -> No
         )
         session.commit()
 
-    runtime.create_account("SRC", 200)
-    runtime.create_account("pg-e2e-escrow", 0)
-    runtime.create_account("BENEFICIARY", 0)
+    runtime.create_account("SRC", "USD", 200)
+    runtime.create_account("pg-e2e-escrow", "USD", 0)
+    runtime.create_account("BENEFICIARY", "USD", 0)
 
     funded = runtime.fund("pg-fund-1", "SRC", "T1", {"test": "fund"})
     assert funded["replayed"] is False
