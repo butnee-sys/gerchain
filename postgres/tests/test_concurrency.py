@@ -44,7 +44,7 @@ def seed_escrow(escrow_id="race-1"):
             conn.execute(
                 """
                 INSERT INTO escrows(id, sender_address, receiver_address, amount, state, refund_destination, currency)
-                VALUES (%s, 'sender', 'receiver', 100, 'CREATED', 'sender', 'MNT')
+                VALUES (%s, 'sender', 'receiver', 100, 'FUNDED', 'sender', 'MNT')
                 """,
                 (escrow_id,),
             )
@@ -61,7 +61,7 @@ def test_concurrent_state_transition_has_one_winner():
             repo = EscrowRepository(conn)
             try:
                 repo.transition(
-                    "race-1", "CREATED", "LOCKED", "worker",
+                    "race-1", "FUNDED", "LOCKED", "worker",
                     uuid4(), {"case": "race"}, uuid4().hex,
                 )
                 return "won"
@@ -91,7 +91,7 @@ def test_transition_rolls_back_audit_and_outbox_on_failure():
             )
 
     with connect() as conn:
-        assert conn.execute("SELECT state FROM escrows WHERE id = 'race-1'").fetchone()[0] == "CREATED"
+        assert conn.execute("SELECT state FROM escrows WHERE id = 'race-1'").fetchone()[0] == "FUNDED"
         assert conn.execute("SELECT count(*) FROM audit_logs").fetchone()[0] == 0
         assert conn.execute("SELECT count(*) FROM outbox").fetchone()[0] == 0
 
