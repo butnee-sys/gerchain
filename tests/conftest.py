@@ -34,7 +34,10 @@ def isolate_postgresql_core_state():
     initialize_outbox_schema(engine)
     with engine.connect() as connection:
         apply_migrations(connection, "postgres/migrations")
-    # Ensure every canonical table exists before isolation truncation.\n    for base in (AtomicLedgerBase, EscrowBase, OutboxBase, DurableIdempotencyBase, TransactionWitness):\n        base.metadata.create_all(engine)\n    # Canonical durable idempotency is production-owned by the migration chain;
+    # Ensure every canonical table exists before isolation truncation.
+    for base in (AtomicLedgerBase, EscrowBase, OutboxBase, DurableIdempotencyBase, TransactionWitness):
+        base.metadata.create_all(engine)
+    # Canonical durable idempotency is production-owned by the migration chain;
     # create_all is only a test-fixture safety net for mixed legacy/core suites.
     DurableIdempotencyBase.metadata.create_all(engine)
     # Ensure the canonical table is visible on the exact connection used by
