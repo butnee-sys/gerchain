@@ -43,12 +43,12 @@ def _transaction(conn):
                 raise RuntimeError(
                     "apply_migrations requires a connection without an active transaction"
                 )
-            conn.execute(
-                text("SELECT pg_advisory_lock(:lock_key)"),
-                {"lock_key": MIGRATION_LOCK_KEY},
-            )
-            locked = True
             with conn.begin():
+                conn.execute(
+                    text("SELECT pg_advisory_lock(:lock_key)"),
+                    {"lock_key": MIGRATION_LOCK_KEY},
+                )
+                locked = True
                 yield
             return
 
