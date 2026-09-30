@@ -134,6 +134,7 @@ def apply_migrations(conn, migration_dir: str | Path) -> None:
             )
 
     # Serialize migration runners while preserving one atomic schema transaction.\n    with _transaction(conn):
+        _execute(conn, "SELECT pg_advisory_xact_lock(%s)", (MIGRATION_LOCK_KEY,))
         _execute(
             conn,
             """
