@@ -29,27 +29,39 @@ def checksum(sql: str) -> str:
 
 @contextmanager
 def _transaction(conn):
-    """Run one migration transaction under a session-level advisory lock."""
+    """Serialize migration runners with a session advisory lock."""
     if hasattr(conn, "exec_driver_sql"):
         if conn.in_transaction():
             raise RuntimeError(
                 "apply_migrations requires a connection without an active transaction"
             )
-        with conn.begin():
+        conn.execute(
+            text("SELECT pg_advisory_lock(:lock_key)"),
+            {"lock_key": MIGRATION_LOCK_KEY},
+        )
+        try:
+            with conn.begin():
+                yield
+        finally:
             conn.execute(
-                text("SELECT pg_advisory_xact_lock(:lock_key)"),
+                text("SELECT pg_advisory_unlock(:lock_key)"),
                 {"lock_key": MIGRATION_LOCK_KEY},
             )
-            yield
         return
 
     if hasattr(conn, "transaction"):
-        with conn.transaction():
+        conn.execute(
+            "SELECT pg_advisory_lock(%s)",
+            (MIGRATION_LOCK_KEY,),
+        )
+        try:
+            with conn.transaction():
+                yield
+        finally:
             conn.execute(
-                "SELECT pg_advisory_xact_lock(%s)",
+                "SELECT pg_advisory_unlock(%s)",
                 (MIGRATION_LOCK_KEY,),
             )
-            yield
         return
 
 def _execute(conn, sql: str, params=None):
