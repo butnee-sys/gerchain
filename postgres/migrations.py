@@ -29,7 +29,14 @@ def checksum(sql: str) -> str:
 
 @contextmanager
 def _transaction(conn):
-    """Serialize migration runners with a session advisory lock."""
+    """Serialize migration runners with a session advisory lock.
+
+    The advisory lock is acquired in its own transaction and therefore remains
+    session-scoped while the migration transaction runs.  Starting the
+    migration transaction before acquiring the lock would make the lock and
+    DDL transaction boundary ambiguous and can allow concurrent runners to
+    race on schema_version.
+    """
     if hasattr(conn, "exec_driver_sql"):
         if conn.in_transaction():
             raise RuntimeError(
@@ -39,6 +46,7 @@ def _transaction(conn):
             text("SELECT pg_advisory_lock(:lock_key)"),
             {"lock_key": MIGRATION_LOCK_KEY},
         )
+        conn.commit()
         try:
             with conn.begin():
                 yield
@@ -47,6 +55,7 @@ def _transaction(conn):
                 text("SELECT pg_advisory_unlock(:lock_key)"),
                 {"lock_key": MIGRATION_LOCK_KEY},
             )
+            conn.commit()
         return
 
     if hasattr(conn, "transaction"):
@@ -54,6 +63,7 @@ def _transaction(conn):
             "SELECT pg_advisory_lock(%s)",
             (MIGRATION_LOCK_KEY,),
         )
+        conn.commit()
         try:
             with conn.transaction():
                 yield
@@ -62,6 +72,7 @@ def _transaction(conn):
                 "SELECT pg_advisory_unlock(%s)",
                 (MIGRATION_LOCK_KEY,),
             )
+            conn.commit()
         return
 
 def _execute(conn, sql: str, params=None):
