@@ -29,23 +29,36 @@ def checksum(sql: str) -> str:
 
 @contextmanager
 def _transaction(conn):
-    """Serialize migration runners without relying on psycopg transaction nesting."""
+    """Run one migration transaction while holding the PostgreSQL migration lock."""
     if hasattr(conn, "exec_driver_sql"):
-        ctx = nullcontext() if conn.in_transaction() else conn.begin()
-        with ctx:
+        # SQLAlchemy Connection. Reuse an existing transaction when the caller
+        # owns one; otherwise create one. The transaction-level advisory lock
+        # is released only when that transaction ends.
+        if conn.in_transaction():
+            conn.execute(
+                text("SELECT pg_advisory_xact_lock(:lock_key)"),
+                {"lock_key": MIGRATION_LOCK_KEY},
+            )
             yield
+        else:
+            with conn.begin():
+                conn.execute(
+                    text("SELECT pg_advisory_xact_lock(:lock_key)"),
+                    {"lock_key": MIGRATION_LOCK_KEY},
+                )
+                yield
         return
 
     if hasattr(conn, "transaction"):
-        conn.commit()
-        conn.execute("SELECT pg_advisory_lock(%s)", (MIGRATION_LOCK_KEY,))
-        conn.commit()
-        try:
-            with conn.transaction():
-                yield
-        finally:
-            conn.execute("SELECT pg_advisory_unlock(%s)", (MIGRATION_LOCK_KEY,))
-            conn.commit()
+        # Native psycopg connection. Do not use a session-level advisory lock
+        # plus a second transaction: the migration itself must be protected by
+        # the same transaction-level lock that commits schema_version.
+        with conn.transaction():
+            conn.execute(
+                "SELECT pg_advisory_xact_lock(%s)",
+                (MIGRATION_LOCK_KEY,),
+            )
+            yield
         return
 
     if hasattr(conn, "begin"):
@@ -133,8 +146,8 @@ def apply_migrations(conn, migration_dir: str | Path) -> None:
                 + ", ".join(p.name for p in candidates)
             )
 
-    # Serialize migration runners while preserving one atomic schema transaction.\n    with _transaction(conn):
-        _execute(conn, "SELECT pg_advisory_xact_lock(%s)", (MIGRATION_LOCK_KEY,))
+    # Serialize migration runners while preserving one atomic schema transaction.
+    with _transaction(conn):
         _execute(
             conn,
             """
