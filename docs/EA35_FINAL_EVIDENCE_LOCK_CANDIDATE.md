@@ -136,3 +136,8 @@ The following are mandatory before declaring LOCKED:
 **Final LOCK:** NOT YET DECLARED.
 
 The remaining work is closure/reconciliation of evidence and final exact-SHA gate execution, not expansion of the architecture.
+
+
+## 9. Exact-SHA re-verification trigger — 2026-09-30
+
+This document is retained as a lock-candidate record. A fresh branch-tip CI execution must be attached to the exact commit containing this section before EA-35 is declared LOCKED. No prior successful SHA is treated as proof for a later SHA.
