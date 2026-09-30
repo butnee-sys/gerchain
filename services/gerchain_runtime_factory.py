@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from postgres.migrations import apply_migrations
+from persistence.production_schema_guard import assert_canonical_production_schema
 
 from sqlalchemy import create_engine
 from sqlalchemy.engine import Engine
@@ -53,6 +54,7 @@ class ProductionRuntimeFactory:
             raise RuntimeError(f"production migration directory not found: {migration_dir}")
         with self.engine.connect() as conn:
             apply_migrations(conn, migration_dir)
+            assert_canonical_production_schema(conn)
 
     def create(self) -> GerchainRuntime:
         self.initialize()
