@@ -48,7 +48,6 @@ class ProductionRuntimeFactory:
             apply_migrations(connection, migration_dir)
             assert_canonical_production_schema(connection)
 
-
     def create(self) -> GerchainRuntime:
         self.initialize()
         runtime = GerchainRuntime(
