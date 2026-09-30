@@ -39,7 +39,16 @@ def test_production_postgresql_full_value_flow() -> None:
     ):
         runtime.create_account(account, balance)
 
-    runtime.create_escrow(
+    release_runtime = ProductionRuntimeFactory(
+        ProductionRuntimeConfig(
+            database_url=database_url,
+            escrow_id="pg-release-escrow",
+            amount=100,
+            currency="MNT",
+            witness_id="pg-release-witness",
+        )
+    ).create()
+    release_runtime.create_escrow(
         escrow_id="pg-release-escrow",
         source="pg-source",
         beneficiary="pg-beneficiary",
@@ -47,9 +56,9 @@ def test_production_postgresql_full_value_flow() -> None:
         amount=100,
         currency="MNT",
     )
-    runtime.fund("pg-fund-1", "pg-source", "T1", {"test": "postgres"})
-    runtime.lock("pg-lock-1", "T2", {"test": "postgres"})
-    runtime.release(
+    release_runtime.fund("pg-fund-1", "pg-source", "T1", {"test": "postgres"})
+    release_runtime.lock("pg-lock-1", "T2", {"test": "postgres"})
+    release_runtime.release(
         transaction_id="pg-release-1",
         destination="pg-beneficiary",
         timestamp="T3",
@@ -61,7 +70,16 @@ def test_production_postgresql_full_value_flow() -> None:
         trinity_proof={"trust": True, "transparency": True, "performance": True},
     )
 
-    runtime.create_escrow(
+    refund_runtime = ProductionRuntimeFactory(
+        ProductionRuntimeConfig(
+            database_url=database_url,
+            escrow_id="pg-refund-escrow",
+            amount=80,
+            currency="MNT",
+            witness_id="pg-refund-witness",
+        )
+    ).create()
+    refund_runtime.create_escrow(
         escrow_id="pg-refund-escrow",
         source="pg-refund",
         beneficiary="pg-beneficiary",
@@ -69,9 +87,9 @@ def test_production_postgresql_full_value_flow() -> None:
         amount=80,
         currency="MNT",
     )
-    runtime.fund("pg-fund-2", "pg-refund", "T4", {"test": "postgres"})
-    runtime.lock("pg-lock-2", "T5", {"test": "postgres"})
-    runtime.refund(
+    refund_runtime.fund("pg-fund-2", "pg-refund", "T4", {"test": "postgres"})
+    refund_runtime.lock("pg-lock-2", "T5", {"test": "postgres"})
+    refund_runtime.refund(
         transaction_id="pg-refund-1",
         destination="pg-attacker",
         timestamp="T6",
@@ -83,7 +101,16 @@ def test_production_postgresql_full_value_flow() -> None:
         trinity_proof={"trust": True, "transparency": True, "performance": True},
     )
 
-    runtime.create_escrow(
+    cancel_runtime = ProductionRuntimeFactory(
+        ProductionRuntimeConfig(
+            database_url=database_url,
+            escrow_id="pg-cancel-escrow",
+            amount=60,
+            currency="MNT",
+            witness_id="pg-cancel-witness",
+        )
+    ).create()
+    cancel_runtime.create_escrow(
         escrow_id="pg-cancel-escrow",
         source="pg-cancel",
         beneficiary="pg-beneficiary",
@@ -91,8 +118,8 @@ def test_production_postgresql_full_value_flow() -> None:
         amount=60,
         currency="MNT",
     )
-    runtime.fund("pg-fund-3", "pg-cancel", "T7", {"test": "postgres"})
-    runtime.cancel(
+    cancel_runtime.fund("pg-fund-3", "pg-cancel", "T7", {"test": "postgres"})
+    cancel_runtime.cancel(
         transaction_id="pg-cancel-1",
         timestamp="T8",
         evidence={"test": "postgres"},
