@@ -15,8 +15,8 @@ REQUIRED_ESCROW_STATES = {'CREATED','FUNDED','LOCKED','RELEASED','REFUNDED','CAN
 
 def assert_canonical_production_schema(connection: Connection) -> None:
     version = connection.execute(text('SELECT MAX(version) FROM schema_version')).scalar_one()
-    if version is None or int(version) < 7:
-        raise RuntimeError('canonical production schema migration history incomplete; version 7 required')
+    if version is None or int(version) < 11:
+        raise RuntimeError('canonical production schema migration history incomplete; version 11 required')
     if connection.dialect.name != 'postgresql':
         raise RuntimeError('canonical production schema requires PostgreSQL')
     inspector = inspect(connection)
@@ -41,6 +41,7 @@ def assert_canonical_production_schema(connection: Connection) -> None:
         'gerchain_movement_operation_check',
         'gerchain_movement_integrity_hash_check',
         'gerchain_movement_escrow_binding_check',
+        'gerchain_movement_amount_check',
     }
     missing_movement_constraints = sorted(required_movement_constraints - movement_names)
     if missing_movement_constraints:
@@ -61,3 +62,10 @@ def assert_canonical_production_schema(connection: Connection) -> None:
         raise RuntimeError(
             'canonical production schema settlement/escrow binding contract is incomplete'
         )
+
+    witness_constraints = inspector.get_check_constraints('gerchain_transaction_witnesses')
+    if 'gerchain_witness_amount_check' not in {str(item.get('name')) for item in witness_constraints}:
+        raise RuntimeError('canonical production schema witness integrity constraints incomplete')
+    idempotency_constraints = inspector.get_check_constraints('gerchain_idempotency_records')
+    if 'gerchain_idempotency_state_check' not in {str(item.get('name')) for item in idempotency_constraints}:
+        raise RuntimeError('canonical production schema idempotency state constraint incomplete')
