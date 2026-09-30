@@ -2,6 +2,8 @@
 
 Status: IN PROGRESS / NOT LOCKED
 
+Execution note: historical CI run 36542458205 failed during collection because of a syntax error in the then-current runtime source; PostgreSQL itself reached ready state. Current runtime source has been re-read and the affected methods are syntactically valid. Fresh push-triggered PostgreSQL execution remains required.
+
 Verification target: production runtime construction and PostgreSQL canonical value-flow path.
 
 Verified on branch: `feat/ea21-transaction-aware-ledger`
