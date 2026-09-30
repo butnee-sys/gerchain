@@ -128,6 +128,11 @@ def apply_migrations(conn, migration_dir: str | Path) -> None:
             )
             """,
         )
+        # The version table lock is a defensive serialization barrier for
+        # first-install races. It remains inside the same transaction as the
+        # migration writes, so no concurrent runner can pass the read/write
+        # boundary between CREATE TABLE and schema_version INSERT.
+        _execute(conn, "LOCK TABLE schema_version IN ACCESS EXCLUSIVE MODE")
         rows = _execute(
             conn,
             "SELECT version, checksum FROM schema_version ORDER BY version",
