@@ -25,6 +25,7 @@ jobs:
           --health-retries 20
     env:
       GERCHAIN_DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/gerchain
+      GERCHAIN_POSTGRES_DSN: postgresql+psycopg://postgres:postgres@localhost:5432/gerchain
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -34,5 +35,5 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements-dee-security.txt pytest
-      - name: Run production PostgreSQL re-performance
-        run: pytest -q tests/integration/test_production_postgresql_e2e.py
+      - name: Run production runtime boot and re-performance
+        run: pytest -q tests/postgres/test_production_runtime_boot.py tests/postgres/test_production_postgres_reperformance.py
