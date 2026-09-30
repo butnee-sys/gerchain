@@ -112,16 +112,17 @@ def apply_migrations(conn, migration_dir: str | Path) -> None:
                 + ", ".join(p.name for p in candidates)
             )
 
-    # Serialize concurrent migration runners inside the same transaction that
-    # reads/writes schema_version. A transaction-scoped advisory lock removes
-    # the race window between lock acquisition and schema_version insertion.
-    _execute(conn, "SELECT pg_advisory_lock(%s)", (MIGRATION_LOCK_KEY,))
-
+    # Serialize concurrent migration runners inside the same transaction
+    # that reads/writes schema_version. The lock MUST be transaction-scoped:
+    # pg_advisory_lock() is session-scoped and can outlive the transaction
+    # boundary, while pg_advisory_xact_lock() cannot leak across pooled
+    # connections or create a race between schema_version reads and writes.
     if _connection_in_transaction(conn) and hasattr(conn, "commit"):
         conn.commit()
 
     try:
         with _transaction(conn):
+            _execute(conn, "SELECT pg_advisory_xact_lock(%s)", (MIGRATION_LOCK_KEY,))
             _execute(
                 conn,
                 """
@@ -179,13 +180,9 @@ def apply_migrations(conn, migration_dir: str | Path) -> None:
     except Exception:
         if hasattr(conn, "rollback"):
             conn.rollback()
-        _execute(conn, "SELECT pg_advisory_unlock(%s)", (MIGRATION_LOCK_KEY,))
         if hasattr(conn, "commit") and _connection_in_transaction(conn):
             conn.commit()
         raise
     else:
         if hasattr(conn, "commit"):
-            conn.commit()
-        _execute(conn, "SELECT pg_advisory_unlock(%s)", (MIGRATION_LOCK_KEY,))
-        if hasattr(conn, "commit") and _connection_in_transaction(conn):
             conn.commit()
