@@ -179,11 +179,13 @@ def apply_migrations(conn, migration_dir: str | Path) -> None:
     except Exception:
         if hasattr(conn, "rollback"):
             conn.rollback()
+        _execute(conn, "SELECT pg_advisory_unlock(%s)", (MIGRATION_LOCK_KEY,))
+        if hasattr(conn, "commit") and _connection_in_transaction(conn):
+            conn.commit()
         raise
     else:
-        # Commit the schema_version transaction BEFORE releasing the session lock.
-        # Releasing first would let a second runner observe the old schema_version
-        # snapshot and race to insert the same version.
         if hasattr(conn, "commit"):
             conn.commit()
         _execute(conn, "SELECT pg_advisory_unlock(%s)", (MIGRATION_LOCK_KEY,))
+        if hasattr(conn, "commit") and _connection_in_transaction(conn):
+            conn.commit()
