@@ -91,3 +91,25 @@ Repository-wide unrelated/broader workflows may still be open or failing. Those 
 - The current branch therefore has fresh exact-SHA evidence for PostgreSQL boot, canonical schema initialization, value-flow execution, and deep reconciliation.
 - Other workflows triggered by this same commit were still QUEUED at the time of this evidence refresh; they are not treated as verified here.
 - Final production lock remains OPEN until the queued/repository-wide gates and independent re-performance are resolved.
+
+
+## Current exact-SHA verification refresh — 2026-09-30
+
+Current branch tip: `0ff1b04762f275129faf008e7c1883a6c08b8b0a`.
+
+Fresh successful production evidence on this exact branch tip:
+- PostgreSQL production re-performance — run `36686464959` — SUCCESS.
+- production-postgresql-gate — run `36686464909` — SUCCESS.
+- production-postgresql-e2e — run `36686464870` — SUCCESS.
+- postgres-production-gate — run `36686464916` — SUCCESS.
+- Canonical EAI PostgreSQL Gate — run `36686464928` — SUCCESS.
+- PostgreSQL production gate — run `36686464958` — SUCCESS.
+- Production PostgreSQL verification — run `36686464874` — SUCCESS.
+- PostgreSQL Production Evidence — run `36686464877` — SUCCESS.
+- Production PostgreSQL Smoke — run `36686464960` — SUCCESS.
+
+Job-level verification includes real PostgreSQL service initialization, production runtime construction, canonical persistence migration/boot, canonical value-flow execution, REFUND/CANCEL re-performance, SETTLEMENT, replay/idempotency, and deep value-truth reconciliation. Production entrypoint compilation/boot evidence is also covered by the current production workflow set.
+
+**EA-35 PostgreSQL production execution gate: VERIFIED on current exact branch tip.**
+
+**Final fundamental-architecture lock: NOT YET DECLARED.** Repository-wide unrelated workflows and the final independent/oracle review remain separate closure gates.
