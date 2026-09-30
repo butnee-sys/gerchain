@@ -84,3 +84,5 @@ def test_postgresql_canonical_value_flow():
         assert report.matched, [f"{i.code}:{i.transaction_id}:{i.detail}" for i in report.issues]
 
     engine.dispose()
+
+# PostgreSQL production evidence gate: exercised by GitHub Actions.
