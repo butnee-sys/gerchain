@@ -43,22 +43,34 @@ def _transaction(conn):
                     "apply_migrations requires a connection without an active transaction"
                 )
             with conn.begin():
-                # Serialize the entire migration batch inside one transaction.
-                # Transaction-scoped locking cannot leak across commits.
+                # Serialize the entire migration batch with a session-level
+                # advisory lock. This lock must outlive the schema transaction.
                 conn.execute(
-                    text("SELECT pg_advisory_xact_lock(:lock_key)"),
+                    text("SELECT pg_advisory_lock(:lock_key)"),
                     {"lock_key": MIGRATION_LOCK_KEY},
                 )
-                yield
+                try:
+                    yield
+                finally:
+                    conn.execute(
+                        text("SELECT pg_advisory_unlock(:lock_key)"),
+                        {"lock_key": MIGRATION_LOCK_KEY},
+                    )
             return
 
         if hasattr(conn, "transaction"):
             with conn.transaction():
                 conn.execute(
-                    "SELECT pg_advisory_xact_lock(%s)",
+                    "SELECT pg_advisory_lock(%s)",
                     (MIGRATION_LOCK_KEY,),
                 )
-                yield
+                try:
+                    yield
+                finally:
+                    conn.execute(
+                        "SELECT pg_advisory_unlock(%s)",
+                        (MIGRATION_LOCK_KEY,),
+                    )
             return
 
         if hasattr(conn, "begin"):
