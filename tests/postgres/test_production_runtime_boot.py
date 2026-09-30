@@ -33,7 +33,7 @@ def test_production_runtime_boot_establishes_canonical_ledger_authority() -> Non
         assert runtime.is_canonical_ledger_authoritative
         assert runtime.runtime_mode == "production-postgresql"
 
-        runtime.create_account("production-boot-source", initial_balance=1000)
+        runtime.create_account("production-boot-source", "MNT", 1000)
         assert runtime.get_balance("production-boot-source") == 1000
 
         with engine.connect() as connection:
