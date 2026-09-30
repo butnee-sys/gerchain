@@ -124,7 +124,7 @@ def test_eai_production_full_value_flow_reperformance():
     with factory() as session:
         ledger = PostgreSQLAtomicLedger(factory)
         for account_id, balance in (
-            (source, 100), (beneficiary, 0), (refund_source, 100),
+            (source, 100), (release_id, 0), (beneficiary, 0), (refund_source, 100),
             (refund_id, 0), (cancel_source, 100), (cancel_id, 0),
             (settlement_source, 50), (settlement_destination, 0),
         ):
