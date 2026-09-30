@@ -67,9 +67,9 @@ def test_production_runtime_boots_and_executes_canonical_postgresql_flow() -> No
         )
         session.commit()
 
-    runtime.create_account("SRC", "USD", 200)
-    runtime.create_account("pg-e2e-escrow", "USD", 0)
-    runtime.create_account("BENEFICIARY", "USD", 0)
+    runtime.create_account("SRC", 200)
+    runtime.create_account("pg-e2e-escrow", 0)
+    runtime.create_account("BENEFICIARY", 0)
 
     funded = runtime.fund("pg-fund-1", "SRC", "T1", {"test": "fund"})
     assert funded["replayed"] is False
