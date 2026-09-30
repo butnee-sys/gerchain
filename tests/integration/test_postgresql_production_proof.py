@@ -118,8 +118,6 @@ def test_postgresql_production_runtime_boot_and_value_flow() -> None:
         report = deep_reconcile_value_truth(session)
         assert report.matched, report.issues
 
-        source = session.get(PostgreSQLAtomicLedger.__dict__["__annotations__"].get("LedgerAccountModel", object), "SRC")
-        # Use canonical SQLAlchemy model through the ledger module.
         from persistence.atomic_ledger import LedgerAccountModel, LedgerMovementModel
         source = session.get(LedgerAccountModel, "SRC")
         escrow_account = session.get(LedgerAccountModel, "pg-proof-escrow")
