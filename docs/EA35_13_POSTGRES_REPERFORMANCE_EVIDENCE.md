@@ -78,3 +78,16 @@ Repository-wide unrelated/broader workflows may still be open or failing. Those 
 - Perform final independent re-performance/oracle review.
 - Repeat verification after any corrective change.
 - Final production lock remains OPEN.
+
+
+## Current verification refresh — 2026-09-30
+- Current branch tip: `d0bf3dd0f0736ac9778d3d6c5e32ffed9a6f5902`
+- `Production PostgreSQL verification`: Run `36671893611` — SUCCESS.
+  - Real PostgreSQL production lifecycle: SUCCESS
+  - Production PostgreSQL value flow: SUCCESS
+  - Deep value reconciliation: SUCCESS
+- `Production PostgreSQL Smoke`: Run `36671893517` — SUCCESS.
+  - Production runtime boot and canonical schema: SUCCESS
+- The current branch therefore has fresh exact-SHA evidence for PostgreSQL boot, canonical schema initialization, value-flow execution, and deep reconciliation.
+- Other workflows triggered by this same commit were still QUEUED at the time of this evidence refresh; they are not treated as verified here.
+- Final production lock remains OPEN until the queued/repository-wide gates and independent re-performance are resolved.
