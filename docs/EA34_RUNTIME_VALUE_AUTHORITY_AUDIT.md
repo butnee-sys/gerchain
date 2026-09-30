@@ -94,3 +94,21 @@ EA-34 / EA-35 is still **VERIFIED / NOT LOCKED** because:
 - final independent oracle/re-performance package remains a separate assurance step;
 - overall fundamental architecture lock requires reconciliation of these broader gates.
 
+## EA-35.13 — Production PostgreSQL re-performance gate
+
+Status: IN PROGRESS / NOT LOCKED
+
+The production factory now applies the canonical PostgreSQL migration history and requires the canonical schema guard before constructing the runtime. The production entrypoint constructs `ProductionRuntimeConfig` and an instance of `ProductionRuntimeFactory`, then requires Canonical Ledger authority.
+
+Required external evidence remains the GitHub Actions PostgreSQL re-performance gate on the exact branch tip. Local execution cannot substitute for that evidence in this environment because direct GitHub network access is unavailable.
+
+Hard evidence requirements:
+- PostgreSQL 16 service
+- migration history reaches version 11
+- canonical schema guard passes
+- Canonical Ledger authority is established
+- FUND/LOCK/RELEASE/REFUND/CANCEL/SETTLEMENT execute against PostgreSQL
+- deep value-truth reconciliation passes
+- replay/idempotency remains single-movement
+
+No production lock is declared until the exact branch-tip workflow evidence is retrieved and independently reviewed.
