@@ -86,11 +86,11 @@ def test_production_postgres_factory_and_canonical_value_flow():
         assert balances["pg-cancel-source"] == 75
         assert balances["pg-settle-source"] == 25
         assert balances["pg-settle-destination"] == 25
-        assert len(movements) == 6
+        assert len(movements) == 7
         assert {m.operation for m in movements} == {"FUND", "RELEASE", "REFUND", "CANCEL", "SETTLEMENT"}
         assert {w.event_type for w in witnesses} >= {"GERCHAIN_FUNDED", "GERCHAIN_LOCKED", "GERCHAIN_RELEASED", "GERCHAIN_REFUNDED", "GERCHAIN_CANCELLED", "GERCHAIN_SETTLED"}
         assert {e.event_type for e in outbox} >= {"GERCHAIN_FUNDED", "GERCHAIN_LOCKED", "GERCHAIN_RELEASED", "GERCHAIN_REFUNDED", "GERCHAIN_CANCELLED", "GERCHAIN_SETTLED"}
         assert report.matched, report.issues
-        assert report.canonical_movement_count == 6
+        assert report.canonical_movement_count == 7
 
     engine.dispose()
