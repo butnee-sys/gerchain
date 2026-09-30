@@ -22,7 +22,7 @@ def test_production_postgres_migration_and_canonical_boot() -> None:
     engine = create_engine(database_url, pool_pre_ping=True)
     try:
         with engine.connect() as conn:
-            apply_migrations(conn, Path(__file__).parents[2] / "postgres" / "migrations")
+            apply_migrations(conn, Path(__file__).parents[2] / "postgres" / "schema")
 
         factory = ProductionRuntimeFactory(
             ProductionRuntimeConfig(
