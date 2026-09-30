@@ -190,4 +190,56 @@ def apply_migrations(conn, migration_dir: str | Path) -> None:
             if recorded is None or recorded[0] != digest:
                 raise RuntimeError(
                     f"Migration checksum mismatch for version {version}"
+                )        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS schema_migration_files (
+                filename TEXT PRIMARY KEY,
+                version BIGINT NOT NULL,
+                checksum TEXT NOT NULL,
+                applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
+            )
+            """
+        )
+        rows = conn.execute(
+            "SELECT version, checksum FROM schema_version ORDER BY version"
+        ).fetchall()
+        applied = {int(row[0]): row[1] for row in rows}
+        file_rows = conn.execute(
+            "SELECT filename, version, checksum FROM schema_migration_files"
+        ).fetchall()
+        applied_files = {row[0]: (int(row[1]), row[2]) for row in file_rows}
+
+        for migration in files:
+            version = int(migration.name.split("_", 1)[0])
+            sql = migration.read_text(encoding="utf-8")
+            digest = checksum(sql)
+
+            if migration.name in applied_files:
+                stored_version, stored_digest = applied_files[migration.name]
+                if stored_version != version or stored_digest != digest:
+                    raise RuntimeError(
+                        f"Migration checksum mismatch for file {migration.name}"
+                    )
+                continue
+
+            if version in applied and applied[version] != digest:
+                conn.execute(sql)
+                conn.execute(
+                    "INSERT INTO schema_migration_files(filename, version, checksum) "
+                    "VALUES (%s, %s, %s)",
+                    (migration.name, version, digest),
                 )
+                continue
+
+            conn.execute(sql)
+            if version not in applied:
+                conn.execute(
+                    "INSERT INTO schema_version(version, checksum) VALUES (%s, %s)",
+                    (version, digest),
+                )
+                applied[version] = digest
+            conn.execute(
+                "INSERT INTO schema_migration_files(filename, version, checksum) "
+                "VALUES (%s, %s, %s)",
+                (migration.name, version, digest),
+            )
