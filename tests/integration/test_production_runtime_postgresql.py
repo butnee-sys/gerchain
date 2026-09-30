@@ -4,6 +4,7 @@ import os
 from datetime import datetime, timezone
 
 from sqlalchemy import create_engine, inspect, select, text
+from sqlalchemy.orm import sessionmaker
 
 from persistence.deep_value_reconciliation import deep_reconcile_value_truth
 from persistence.escrow_aggregate import CanonicalEscrow, EscrowState
@@ -39,7 +40,6 @@ def test_production_runtime_boots_and_executes_canonical_postgresql_flow() -> No
     ):
         assert table in tables
 
-    session_factory = session_factory
     now = datetime.now(timezone.utc)
     with session_factory() as session:
         session.add(
