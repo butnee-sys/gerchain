@@ -112,13 +112,10 @@ def apply_migrations(conn, migration_dir: str | Path) -> None:
                 + ", ".join(p.name for p in candidates)
             )
 
-    # Serialize migration runners with a session-level advisory lock.
-    # A session-level lock is deliberate here: callers may arrive with an
-    # implicit psycopg transaction already open, while the migration runner
-    # must still serialize the schema_version read/write boundary.
-    _execute(conn, "SELECT pg_advisory_lock(%s)", (MIGRATION_LOCK_KEY,))
-    if hasattr(conn, "commit"):
-        conn.commit()
+    # Serialize concurrent migration runners inside the same transaction that
+    # reads/writes schema_version. A transaction-scoped advisory lock removes
+    # the race window between lock acquisition and schema_version insertion.
+    _execute(conn, "SELECT pg_advisory_xact_lock(%s)", (MIGRATION_LOCK_KEY,))
 
     try:
         with _transaction(conn):
@@ -186,5 +183,3 @@ def apply_migrations(conn, migration_dir: str | Path) -> None:
         # snapshot and race to insert the same version.
         if hasattr(conn, "commit"):
             conn.commit()
-    finally:
-        _execute(conn, "SELECT pg_advisory_unlock(%s)", (MIGRATION_LOCK_KEY,))
