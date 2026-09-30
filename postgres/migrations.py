@@ -35,7 +35,12 @@ def _transaction(conn):
     if hasattr(conn, "exec_driver_sql") and hasattr(conn, "begin"):
         return nullcontext() if conn.in_transaction() else conn.begin()
     if hasattr(conn, "transaction"):
-        return nullcontext() if _connection_in_transaction(conn) else conn.transaction()
+        # Native psycopg callers enter this runner on a fresh connection.
+        # Always own the transaction explicitly so the advisory xact lock and
+        # schema_version writes share exactly one transaction boundary.
+        if _connection_in_transaction(conn):
+            raise RuntimeError("migration runner requires a clean psycopg transaction")
+        return conn.transaction()
     return nullcontext()
 
 
