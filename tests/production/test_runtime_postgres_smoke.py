@@ -32,7 +32,7 @@ def test_production_runtime_factory_boots_against_postgres():
     assert "gerchain_outbox_events" in table_names
     assert "gerchain_idempotency_records" in table_names
 
-    result = runtime.create_account("smoke-account", "MNT", 1000)
+    result = runtime.create_account("smoke-account", 1000)
     assert result["balance"] == 1000
     assert runtime.get_balance("smoke-account")["balance"] == 1000
 
