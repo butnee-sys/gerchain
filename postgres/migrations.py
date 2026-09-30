@@ -29,59 +29,57 @@ def checksum(sql: str) -> str:
 
 @contextmanager
 def _transaction(conn):
-    """Run one migration transaction while holding an exclusive session lock.
+    """Run one migration transaction under a session-level advisory lock.
 
-    The migration transaction remains atomic, while the session-level advisory
-    lock serializes concurrent runners across the entire migration batch.
-    Session locks are released explicitly after the transaction ends, including
-    when a migration raises.
+    The advisory lock is released only after the schema transaction has
+    committed or rolled back.
     """
-    try:
-        if hasattr(conn, "exec_driver_sql"):
-            if conn.in_transaction():
-                raise RuntimeError(
-                    "apply_migrations requires a connection without an active transaction"
-                )
-            with conn.begin():
-                # Serialize the entire migration batch with a session-level
-                # advisory lock. This lock must outlive the schema transaction.
-                conn.execute(
-                    text("SELECT pg_advisory_lock(:lock_key)"),
-                    {"lock_key": MIGRATION_LOCK_KEY},
-                )
-                try:
-                    yield
-                finally:
-                    conn.execute(
-                        text("SELECT pg_advisory_unlock(:lock_key)"),
-                        {"lock_key": MIGRATION_LOCK_KEY},
-                    )
-            return
-
-        if hasattr(conn, "transaction"):
-            with conn.transaction():
-                conn.execute(
-                    "SELECT pg_advisory_lock(%s)",
-                    (MIGRATION_LOCK_KEY,),
-                )
-                try:
-                    yield
-                finally:
-                    conn.execute(
-                        "SELECT pg_advisory_unlock(%s)",
-                        (MIGRATION_LOCK_KEY,),
-                    )
-            return
-
-        if hasattr(conn, "begin"):
+    if hasattr(conn, "exec_driver_sql"):
+        if conn.in_transaction():
+            raise RuntimeError(
+                "apply_migrations requires a connection without an active transaction"
+            )
+        locked = False
+        try:
+            conn.execute(
+                text("SELECT pg_advisory_lock(:lock_key)"),
+                {"lock_key": MIGRATION_LOCK_KEY},
+            )
+            locked = True
             with conn.begin():
                 yield
-            return
+        finally:
+            if locked:
+                conn.execute(
+                    text("SELECT pg_advisory_unlock(:lock_key)"),
+                    {"lock_key": MIGRATION_LOCK_KEY},
+                )
+        return
 
-        yield
-    finally:
-        # Transaction-scoped advisory locks are released automatically.
-        pass
+    if hasattr(conn, "transaction"):
+        locked = False
+        try:
+            conn.execute(
+                "SELECT pg_advisory_lock(%s)",
+                (MIGRATION_LOCK_KEY,),
+            )
+            locked = True
+            with conn.transaction():
+                yield
+        finally:
+            if locked:
+                conn.execute(
+                    "SELECT pg_advisory_unlock(%s)",
+                    (MIGRATION_LOCK_KEY,),
+                )
+        return
+
+    if hasattr(conn, "begin"):
+        with conn.begin():
+            yield
+        return
+
+    yield
 
 def _execute(conn, sql: str, params=None):
     # Non-parameterized DDL/PLpgSQL may contain literal percent signs.
