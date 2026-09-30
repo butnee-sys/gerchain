@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, inspect
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import sessionmaker
 
@@ -44,10 +44,24 @@ class ProductionRuntimeFactory:
     def initialize(self) -> None:
         """Apply the authoritative PostgreSQL migration history."""
         migration_dir = Path(__file__).resolve().parents[1] / "postgres" / "migrations"
-        if not migration_dir.is_dir():
-            raise RuntimeError(f"canonical PostgreSQL migration directory missing: {migration_dir}")
         with self.engine.begin() as connection:
             apply_migrations(connection, migration_dir)
+
+        required_tables = {
+            "escrows",
+            "gerchain_ledger_accounts",
+            "gerchain_ledger_movements",
+            "gerchain_transaction_witnesses",
+            "gerchain_outbox_events",
+            "gerchain_idempotency_records",
+        }
+        actual_tables = set(inspect(self.engine).get_table_names())
+        missing = sorted(required_tables - actual_tables)
+        if missing:
+            raise RuntimeError(
+                "production migration completed without required canonical tables: "
+                + ", ".join(missing)
+            )
 
     def create(self) -> GerchainRuntime:
         self.initialize()
