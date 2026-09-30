@@ -1,9 +1,9 @@
 -- EA-35 canonical schema finalization.
--- Brings pre-existing PostgreSQL installations to the exact durable contract
--- used by the production ORM. No value movement is performed.
+-- Brings PostgreSQL installations to the exact durable contract used by the
+-- production ORM. No value movement is performed.
 --
--- Existing rows are never silently repaired with fabricated evidence. Any
--- incompatible historical row causes the migration to fail closed.
+-- Existing rows are never assigned fabricated currency metadata. If legacy
+-- rows lack required canonical currency, the migration fails closed.
 
 ALTER TABLE escrows
     ADD COLUMN IF NOT EXISTS refund_destination TEXT,
@@ -13,9 +13,19 @@ ALTER TABLE escrows
 
 UPDATE escrows
 SET refund_destination = COALESCE(refund_destination, sender_address),
-    currency = COALESCE(currency, 'MNT'),
     created_at = COALESCE(created_at, updated_at, now())
-WHERE refund_destination IS NULL OR currency IS NULL OR created_at IS NULL;
+WHERE refund_destination IS NULL OR created_at IS NULL;
+
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM escrows
+        WHERE currency IS NULL OR refund_destination IS NULL OR created_at IS NULL
+    ) THEN
+        RAISE EXCEPTION
+            'EA-35 canonical finalization blocked: existing escrow rows lack required currency/refund/created_at metadata';
+    END IF;
+END $$;
 
 ALTER TABLE escrows
     ALTER COLUMN refund_destination SET NOT NULL,
