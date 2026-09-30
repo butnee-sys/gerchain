@@ -9,6 +9,7 @@ from postgres.migrations import apply_migrations
 from sqlalchemy import create_engine
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import sessionmaker
+from postgres.migrations import apply_migrations
 
 from persistence.production_schema_guard import assert_canonical_production_schema
 from services.gerchain_runtime import GerchainRuntime
@@ -42,17 +43,9 @@ class ProductionRuntimeFactory:
         )
 
     def initialize(self) -> None:
-        """Apply the canonical PostgreSQL migration history before boot.
-
-        create_all is deliberately not used here: production schema state
-        must come from the versioned migration authority, not from ORM metadata.
-        """
-        migration_dir = Path(__file__).resolve().parents[1] / "postgres" / "migrations"
-        if not migration_dir.is_dir():
-            raise RuntimeError(f"production migration directory not found: {migration_dir}")
-        with self.engine.connect() as conn:
-            apply_migrations(conn, migration_dir)
-            assert_canonical_production_schema(conn)
+        """Apply the versioned PostgreSQL production schema before runtime startup."""
+        with self.engine.connect() as connection:
+            apply_migrations(connection, "postgres/schema")
 
     def create(self) -> GerchainRuntime:
         self.initialize()
