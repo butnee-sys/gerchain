@@ -29,44 +29,57 @@ def checksum(sql: str) -> str:
 
 @contextmanager
 def _transaction(conn):
-    """Run one migration transaction while holding the PostgreSQL migration lock."""
-    if hasattr(conn, "exec_driver_sql"):
-        # SQLAlchemy Connection. Reuse an existing transaction when the caller
-        # owns one; otherwise create one. The transaction-level advisory lock
-        # is released only when that transaction ends.
-        if conn.in_transaction():
+    """Run one migration transaction while holding an exclusive session lock.
+
+    The migration transaction remains atomic, while the session-level advisory
+    lock serializes concurrent runners across the entire migration batch.
+    Session locks are released explicitly after the transaction ends, including
+    when a migration raises.
+    """
+    locked = False
+    try:
+        if hasattr(conn, "exec_driver_sql"):
+            if conn.in_transaction():
+                raise RuntimeError(
+                    "apply_migrations requires a connection without an active transaction"
+                )
             conn.execute(
-                text("SELECT pg_advisory_xact_lock(:lock_key)"),
+                text("SELECT pg_advisory_lock(:lock_key)"),
                 {"lock_key": MIGRATION_LOCK_KEY},
             )
-            yield
-        else:
+            locked = True
             with conn.begin():
+                yield
+            return
+
+        if hasattr(conn, "transaction"):
+            with conn.transaction():
                 conn.execute(
-                    text("SELECT pg_advisory_xact_lock(:lock_key)"),
+                    "SELECT pg_advisory_lock(%s)",
+                    (MIGRATION_LOCK_KEY,),
+                )
+                locked = True
+                yield
+            return
+
+        if hasattr(conn, "begin"):
+            with conn.begin():
+                yield
+            return
+
+        yield
+    finally:
+        if locked:
+            if hasattr(conn, "exec_driver_sql"):
+                conn.execute(
+                    text("SELECT pg_advisory_unlock(:lock_key)"),
                     {"lock_key": MIGRATION_LOCK_KEY},
                 )
-                yield
-        return
-
-    if hasattr(conn, "transaction"):
-        # Native psycopg connection. Do not use a session-level advisory lock
-        # plus a second transaction: the migration itself must be protected by
-        # the same transaction-level lock that commits schema_version.
-        with conn.transaction():
-            conn.execute(
-                "SELECT pg_advisory_xact_lock(%s)",
-                (MIGRATION_LOCK_KEY,),
-            )
-            yield
-        return
-
-    if hasattr(conn, "begin"):
-        with conn.begin():
-            yield
-        return
-
-    yield
+            elif hasattr(conn, "execute"):
+                conn.execute(
+                    "SELECT pg_advisory_unlock(%s)",
+                    (MIGRATION_LOCK_KEY,),
+                )
 
 
 def _execute(conn, sql: str, params=None):
