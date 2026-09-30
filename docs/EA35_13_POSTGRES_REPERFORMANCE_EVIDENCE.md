@@ -113,3 +113,43 @@ Job-level verification includes real PostgreSQL service initialization, producti
 **EA-35 PostgreSQL production execution gate: VERIFIED on current exact branch tip.**
 
 **Final fundamental-architecture lock: NOT YET DECLARED.** Repository-wide unrelated workflows and the final independent/oracle review remain separate closure gates.
+
+
+## Current exact-SHA verification refresh — 2026-09-30T08:10Z
+
+Current branch tip: `35f7026e78f42a8e57229989b3db0ea0f95e204f`.
+
+Fresh GitHub Actions evidence associated with this exact SHA:
+
+- `production-postgresql-gate` — run `36687818018` — SUCCESS.
+  - Production factory and canonical persistence gate: PASS.
+  - Canonical tables gate: PASS.
+  - Canonical Ledger movement gate: PASS.
+  - Canonical Ledger replay/idempotency gate: PASS.
+  - Deep reconciliation: **19 passed**.
+- `PostgreSQL production re-performance` — run `36687818021` — SUCCESS.
+  - PostgreSQL production re-performance: **1 passed**.
+- `PostgreSQL Production verification` — run `36687817911` — SUCCESS.
+  - Real PostgreSQL production lifecycle: **1 passed**.
+  - Production PostgreSQL value flow: **2 passed, 1 warning**.
+  - Deep value reconciliation: **19 passed**.
+- `Production PostgreSQL Smoke` — run `36687817999` — SUCCESS.
+  - Production runtime boot and canonical schema verification: SUCCESS.
+- `PostgreSQL Production Gate` — run `36687818089` — SUCCESS.
+- `production-postgres-gate` — run `36687818132` — SUCCESS.
+
+The successful jobs used a real PostgreSQL 16 service, not SQLite or an in-memory substitute.
+
+### Exact evidence conclusion
+
+EA-35 PostgreSQL production execution is **VERIFIED on exact SHA `35f7026e78f42a8e57229989b3db0ea0f95e204f`** for the completed gates above.
+
+This verifies production construction, migration/boot, Canonical Ledger authority, canonical value movement/replay, real PostgreSQL lifecycle, and deep value-truth reconciliation.
+
+### Remaining closure gates
+
+The final fundamental-architecture lock remains OPEN. At the time of this refresh, additional workflows on the same SHA were still running, including Canonical EAI PostgreSQL Gate, production PostgreSQL E2E, and CodeQL. These are not treated as failed or passed until completed.
+
+An unrelated SHUUD workflow had a failure on the same SHA; it is outside the current locked scope because product/SHUUD layers remain excluded from the EAI/fundamental production gate.
+
+No final LOCK is declared from this evidence alone.
