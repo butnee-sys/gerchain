@@ -47,6 +47,9 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements-dee-security.txt pytest
 
+      - name: Python syntax gate
+        run: python -m py_compile services/gerchain_runtime.py services/gerchain_runtime_factory.py production_entrypoint.py
+
       - name: Verify production factory and canonical persistence
         run: |
           python - <<'PY'
