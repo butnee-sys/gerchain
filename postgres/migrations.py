@@ -142,10 +142,10 @@ def apply_migrations(conn, migration_dir: str | Path) -> None:
     # session-level lock is acquired by a SELECT that implicitly opens a transaction.
     try:
         with _transaction(conn):
-            if hasattr(conn, "exec_driver_sql"):
-                _execute(conn, "SELECT pg_advisory_xact_lock(:lock_key)", {"lock_key": MIGRATION_LOCK_KEY})
-            else:
-                _execute(conn, "SELECT pg_advisory_xact_lock(%s)", (MIGRATION_LOCK_KEY,))
+            # Use psycopg-native positional parameters for both SQLAlchemy's
+            # exec_driver_sql path and native psycopg. SQLAlchemy does not
+            # translate :name placeholders when exec_driver_sql() is used.
+            _execute(conn, "SELECT pg_advisory_xact_lock(%s)", (MIGRATION_LOCK_KEY,))
             _execute(
                 conn,
                 """
