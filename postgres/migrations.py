@@ -152,11 +152,13 @@ def apply_migrations(conn, migration_dir: str | Path) -> None:
                 migration = preferred[version]
                 sql = migration.read_text(encoding="utf-8")
                 digest = checksum(sql)
-                accepted_digests = {
-                    checksum(candidate.read_text(encoding="utf-8"))
-                    for candidate in versions[version]
-                }
-                accepted_digests.update(LEGACY_CHECKSUMS.get(version, set()))
+                # Only frozen/explicitly accepted historical checksums may
+                # validate an already-applied migration. Never accept the checksum
+                # of an arbitrary caller-supplied migration directory: that would
+                # make a modified migration appear valid.
+                accepted_digests = set(LEGACY_CHECKSUMS.get(version, set()))
+                preferred_digest = checksum(migration.read_text(encoding="utf-8"))
+                accepted_digests.add(preferred_digest)
 
                 if version in applied:
                     if applied[version] not in accepted_digests:
