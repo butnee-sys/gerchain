@@ -13,6 +13,20 @@ MIGRATION_LOCK_KEY = 73546501
 # Version 004 previously shipped with explicit BEGIN/COMMIT wrappers. Keep its
 # historical checksum accepted so existing databases can migrate to the
 # runner-compatible source without rewriting schema history.
+FROZEN_CHECKSUMS = {
+    1: {"538e0f5132ec775ec8963a2a72072dd00e81afa37383a6c5f6a8f54259716a31"},
+    2: {"0531b1b8ecd29118a6755538a701ab8dd751425c431d15f4fa50b400dd8dfcc7"},
+    3: {"50c86703a173d5faeabb2276a50fa165938abb3fc02bcdb13fa56255833227a9"},
+    4: {"0d5d063a1d35fbb79bef3023e8b02e06e76776c0af5da41b843fb702b702cf57"},
+    5: {"ecfc4306afb3b7ccde65902487f0702a6697ac343bced4534f624d134984effb"},
+    6: {"68fee98cb004ce99fd7acf8cfd29e305cd0f770cf7992f4426b95e108e4265e9"},
+    7: {"d7e97c874b8edf58d6c08a41f3b9f245d235485a7a942565fc9d73312a1a5b55"},
+    8: {"ffee1c1cedaa59d7b40c75b67fe035a11e4f3cdfd9c9079a62c78a8016c2abe3"},
+    9: {"ff2c383cddc8e9d6b5d399e2ce043cdf629de7864c8ba8cafb5a5160e947a28a"},
+    10: {"282bdd44d550161052f5a1c99d563e3832c4cbba558854988171fc9179b676c6"},
+    11: {"aa3b8fe4d39a61e5ba3f12a3b70b14b5a560e2bdb988cfeb068c2a8fec19494a"},
+}
+
 LEGACY_CHECKSUMS = {
     # Version 001 was historically recorded from postgres/schema/001_concurrency.sql.
     # The migration runner now owns that schema history; accept the known legacy
