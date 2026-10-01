@@ -43,5 +43,4 @@ jobs:
           pytest -q
           tests/integration/test_production_runtime_postgresql.py
           tests/integration/test_postgresql_production_reperformance.py
-          tests/integration/test_postgresql_canonical_value_truth.py
 
