@@ -137,19 +137,15 @@ def apply_migrations(conn, migration_dir: str | Path) -> None:
                 + ", ".join(p.name for p in candidates)
             )
 
-    # Serialize concurrent migration runners *inside* the migration transaction.
-    # The lock must be acquired before the schema_version snapshot is read.  Acquiring
-    # a session-level lock while an implicit transaction is already open can leave a
-    # waiting connection with a stale READ COMMITTED snapshot and cause duplicate
-    # schema_version inserts after the first runner commits.
-    acquired_session_lock = False
+    # Serialize concurrent migration runners inside one transaction. A transaction-
+    # scoped advisory lock avoids the stale-snapshot race that can occur when a
+    # session-level lock is acquired by a SELECT that implicitly opens a transaction.
     try:
-        if hasattr(conn, "exec_driver_sql"):
-            conn.execute(text("SELECT pg_advisory_lock(:lock_key)"), {"lock_key": MIGRATION_LOCK_KEY})
-        else:
-            conn.execute("SELECT pg_advisory_lock(%s)", (MIGRATION_LOCK_KEY,))
-        acquired_session_lock = True
         with _transaction(conn):
+            if hasattr(conn, "exec_driver_sql"):
+                _execute(conn, "SELECT pg_advisory_xact_lock(:lock_key)", {"lock_key": MIGRATION_LOCK_KEY})
+            else:
+                _execute(conn, "SELECT pg_advisory_xact_lock(%s)", (MIGRATION_LOCK_KEY,))
             _execute(
                 conn,
                 """
@@ -171,18 +167,10 @@ def apply_migrations(conn, migration_dir: str | Path) -> None:
                 migration = preferred[version]
                 sql = migration.read_text(encoding="utf-8")
                 digest = checksum(sql)
-                # Only frozen/explicitly accepted historical checksums may
-                # validate an already-applied migration. Never accept the checksum
-                # of an arbitrary caller-supplied migration directory: that would
-                # make a modified migration appear valid.
                 accepted_digests = set(LEGACY_CHECKSUMS.get(version, set()))
                 accepted_digests.update(FROZEN_CHECKSUMS.get(version, set()))
 
                 if version in applied:
-                    # A previously accepted historical checksum is valid only
-                    # when the current migration file is itself one of the
-                    # frozen/accepted representations. Never let a modified
-                    # migration directory inherit validity from an old digest.
                     if applied[version] != digest and digest not in accepted_digests:
                         raise RuntimeError(
                             f"Migration checksum mismatch for version {version}: "
@@ -192,9 +180,6 @@ def apply_migrations(conn, migration_dir: str | Path) -> None:
 
                 migration_sql = sql.replace("BEGIN;", "").replace("COMMIT;", "")
                 _execute(conn, migration_sql)
-                # Advisory locking is the primary serialization boundary;
-                # ON CONFLICT is the final idempotency guard if a version row
-                # was committed by another runner before this statement.
                 _execute(
                     conn,
                     """
