@@ -149,15 +149,20 @@ def apply_migrations(conn, migration_dir: str | Path) -> None:
                 + ", ".join(p.name for p in candidates)
             )
 
-    # Serialize concurrent migration runners inside one transaction. A transaction-
-    # scoped advisory lock avoids the stale-snapshot race that can occur when a
-    # session-level lock is acquired by a SELECT that implicitly opens a transaction.
+    # Serialize concurrent migration runners before any migration transaction is opened.
+    # Native psycopg uses a session advisory lock; SQLAlchemy uses a transaction-scoped lock.
+    migration_context = (
+        _native_migration_transaction(conn)
+        if hasattr(conn, "transaction") and not hasattr(conn, "exec_driver_sql")
+        else _transaction(conn)
+    )
     try:
-        with _transaction(conn):
+        with migration_context:
             # Use psycopg-native positional parameters for both SQLAlchemy's
             # exec_driver_sql path and native psycopg. SQLAlchemy does not
             # translate :name placeholders when exec_driver_sql() is used.
-            _execute(conn, "SELECT pg_advisory_xact_lock(%s)", (MIGRATION_LOCK_KEY,))
+            if hasattr(conn, "exec_driver_sql"):
+                _execute(conn, "SELECT pg_advisory_xact_lock(%s)", (MIGRATION_LOCK_KEY,))
             _execute(
                 conn,
                 """
