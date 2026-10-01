@@ -174,7 +174,11 @@ def apply_migrations(conn, migration_dir: str | Path) -> None:
                 accepted_digests.update(FROZEN_CHECKSUMS.get(version, set()))
 
                 if version in applied:
-                    if applied[version] not in accepted_digests:
+                    # A previously accepted historical checksum is valid only
+                    # when the current migration file is itself one of the
+                    # frozen/accepted representations. Never let a modified
+                    # migration directory inherit validity from an old digest.
+                    if applied[version] != digest and digest not in accepted_digests:
                         raise RuntimeError(
                             f"Migration checksum mismatch for version {version}: "
                             f"applied={applied[version]} expected={digest}"
