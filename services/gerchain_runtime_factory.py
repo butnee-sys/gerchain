@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+from pathlib import Path
 from typing import Any, Callable
 
 from postgres.migrations import apply_migrations
@@ -42,50 +43,12 @@ class ProductionRuntimeFactory:
         )
 
     def initialize(self) -> None:
-        """Apply the canonical PostgreSQL migration history atomically."""
-        migration_dir = Path(__file__).resolve().parent.parent / "postgres" / "schema"
-        with self.engine.connect() as conn:
-            apply_migrations(conn, migration_dir)
-            assert_canonical_production_schema(conn)
-
-    def verify_schema(self) -> None:
-        inspector = inspect(self.engine)
-        required = {
-            "escrows": {
-                "id", "sender_address", "receiver_address", "amount", "state",
-                "refund_destination", "currency", "version", "created_at", "updated_at",
-            },
-            "gerchain_ledger_accounts": {
-                "account_id", "currency", "balance", "version", "updated_at",
-            },
-            "gerchain_ledger_movements": {
-                "transaction_id", "source", "destination", "amount", "currency",
-                "operation", "escrow_id", "integrity_hash", "created_at",
-            },
-            "gerchain_transaction_witnesses": {
-                "transaction_id", "event_type", "escrow_id", "amount", "created_at",
-            },
-            "gerchain_idempotency_records": {
-                "key", "fingerprint", "result_json", "state", "created_at", "updated_at",
-            },
-            "gerchain_outbox_events": {
-                "event_id", "event_type", "aggregate_id", "payload_json", "state",
-                "lease_until", "attempts", "created_at", "updated_at",
-            },
-        }
-        missing = []
-        for table, columns in required.items():
-            if not inspector.has_table(table):
-                missing.append(f"{table} (table)")
-                continue
-            actual = {column["name"] for column in inspector.get_columns(table)}
-            for column in sorted(columns - actual):
-                missing.append(f"{table}.{column}")
-        if missing:
-            raise RuntimeError(
-                "canonical production schema incomplete; apply PostgreSQL migration before boot: "
-                + ", ".join(missing)
-            )
+        """Apply the canonical PostgreSQL migration chain atomically."""
+        migration_dir = Path(__file__).resolve().parents[1] / "postgres" / "migrations"
+        if not migration_dir.is_dir():
+            raise RuntimeError(f"PostgreSQL migration directory not found: {migration_dir}")
+        with self.engine.begin() as connection:
+            apply_migrations(connection, migration_dir)
 
     def create(self) -> GerchainRuntime:
         self.initialize()
