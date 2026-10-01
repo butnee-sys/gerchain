@@ -45,4 +45,4 @@ jobs:
 
       - name: Verify production runtime against PostgreSQL
         run: |
-          pytest -q             tests/integration/test_production_postgres_runtime.py             tests/persistence/test_deep_value_reconciliation.py
+          pytest -q             tests/integration/test_postgres_production_runtime.py tests/persistence/test_deep_value_reconciliation.py
