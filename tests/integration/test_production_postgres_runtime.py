@@ -7,7 +7,7 @@ import pytest
 from sqlalchemy import create_engine, select, delete
 from sqlalchemy.orm import sessionmaker
 
-from persistence.atomic_ledger import LedgerAccountModel, PostgreSQLAtomicLedger
+from persistence.atomic_ledger import LedgerAccountModel, LedgerMovementModel, PostgreSQLAtomicLedger
 from persistence.cancel_escrow import cancel_escrow_in_transaction
 from persistence.deep_value_reconciliation import deep_reconcile_value_truth
 from persistence.escrow_aggregate import CanonicalEscrow, EscrowState
