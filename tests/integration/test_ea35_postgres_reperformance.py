@@ -17,7 +17,7 @@ from persistence.recovery_outbox import OutboxEvent
 from persistence.durable_idempotency import DurableIdempotencyRecord
 from persistence.settlement_coordinator import SettlementCoordinator
 from persistence.deep_value_reconciliation import deep_reconcile_value_truth
-from services.gerchain_runtime_factory import ProductionRuntimeFactory
+from services.gerchain_runtime_factory import ProductionRuntimeConfig, ProductionRuntimeFactory
 
 
 @pytest.fixture()
@@ -27,14 +27,16 @@ def production():
         pytest.skip("GERCHAIN_DATABASE_URL is required")
     engine = create_engine(url, pool_pre_ping=True)
     session_factory = sessionmaker(bind=engine, expire_on_commit=False)
-    runtime = ProductionRuntimeFactory.create(
-        escrow_id="ea35-main-escrow",
-        amount=100,
-        currency="MNT",
-        witness_id="ea35-main-witness",
+    runtime = ProductionRuntimeFactory(
+        ProductionRuntimeConfig(
+            database_url=url,
+            escrow_id="ea35-main-escrow",
+            amount=100,
+            currency="MNT",
+            witness_id="ea35-main-witness",
+        ),
         engine=engine,
-        session_factory=session_factory,
-    )
+    ).create()
     return runtime
 
 
