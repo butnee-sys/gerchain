@@ -14,7 +14,7 @@ from postgres.migrations import apply_migrations
 from services.gerchain_runtime_factory import ProductionRuntimeConfig, ProductionRuntimeFactory
 
 DATABASE_URL = os.environ.get("GERCHAIN_POSTGRES_DSN")
-MIGRATION_DIR = Path(__file__).resolve().parents[1] / "postgres" / "schema"
+MIGRATION_DIR = Path(__file__).resolve().parents[2] / "postgres" / "migrations"
 
 
 def test_production_factory_and_canonical_runtime_postgresql():
