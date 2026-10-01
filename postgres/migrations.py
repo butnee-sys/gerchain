@@ -16,7 +16,11 @@ MIGRATION_LOCK_KEY = 73546501
 FROZEN_CHECKSUMS = {
     1: {"538e0f5132ec775ec8963a2a72072dd00e81afa37383a6c5f6a8f54259716a31"},
     2: {"0531b1b8ecd29118a6755538a701ab8dd751425c431d15f4fa50b400dd8dfcc7"},
-    3: {\n        "50c86703a173d5faeabb2276a50fa165938abb3fc02bcdb13fa56255833227a9",\n        # Historical checksum observed in existing production-smoke databases.\n        "15caac76ff599ec1a83091f2d7b3f9bb428f9ad04474f215df1ae9d39611a13e",\n    },
+    3: {
+        "50c86703a173d5faeabb2276a50fa165938abb3fc02bcdb13fa56255833227a9",
+        # Historical checksum observed in existing production-smoke databases.
+        "15caac76ff599ec1a83091f2d7b3f9bb428f9ad04474f215df1ae9d39611a13e",
+    },
     4: {"0d5d063a1d35fbb79bef3023e8b02e06e76776c0af5da41b843fb702b702cf57"},
     5: {"ecfc4306afb3b7ccde65902487f0702a6697ac343bced4534f624d134984effb"},
     6: {"68fee98cb004ce99fd7acf8cfd29e305cd0f770cf7992f4426b95e108e4265e9"},
