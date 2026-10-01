@@ -202,9 +202,3 @@ def apply_migrations(conn, migration_dir: str | Path) -> None:
         if hasattr(conn, "rollback"):
             conn.rollback()
         raise
-    finally:
-        if acquired_session_lock:
-            if hasattr(conn, "exec_driver_sql"):
-                conn.execute(text("SELECT pg_advisory_unlock(:lock_key)"), {"lock_key": MIGRATION_LOCK_KEY})
-            else:
-                conn.execute("SELECT pg_advisory_unlock(%s)", (MIGRATION_LOCK_KEY,))
