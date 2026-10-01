@@ -27,6 +27,7 @@ LEGACY_CHECKSUMS = {
         "729c586234c0b630cce6edd9feab694f4d589dcb5e9321e44f7d22ab556799a0",
         "0d5d063a1d35fbb79bef3023e8b02e06e76776c0af5da41b843fb702b702cf57",
     },
+    5: {"ecfc4306afb3b7ccde65902487f0702a6697ac343bced4534f624d134984effb"},
 }
 
 
