@@ -5,6 +5,7 @@ import hashlib
 import json
 
 import pytest
+from sqlalchemy import text
 
 from services.gerchain_runtime_factory import ProductionRuntimeConfig, ProductionRuntimeFactory
 
@@ -110,4 +111,47 @@ def test_production_factory_executes_canonical_ledger_value_flow_on_real_postgre
     destination = runtime.get_balance("FACTORY-PG-FLOW-DEST")
     assert source == 900
     assert destination == 100
+    engine.dispose()
+
+
+@pytest.mark.integration
+def test_production_factory_applies_canonical_schema_migrations():
+    database_url = os.getenv("GERCHAIN_TEST_DATABASE_URL")
+    if not database_url:
+        pytest.skip("GERCHAIN_TEST_DATABASE_URL is required")
+
+    from sqlalchemy import create_engine
+    engine = create_engine(database_url, pool_pre_ping=True)
+    ProductionRuntimeFactory(
+        ProductionRuntimeConfig(
+            database_url=database_url,
+            escrow_id="FACTORY-PG-SCHEMA",
+            amount=100,
+            currency="MNT",
+            witness_id="FACTORY-PG-W-SCHEMA",
+        ),
+        engine=engine,
+    ).create()
+
+    with engine.connect() as connection:
+        versions = [
+            row[0]
+            for row in connection.execute(
+                text("SELECT version FROM schema_version ORDER BY version")
+            ).fetchall()
+        ]
+        assert versions == list(range(1, 12))
+
+        for table in (
+            "gerchain_ledger_accounts",
+            "gerchain_ledger_movements",
+            "gerchain_transaction_witnesses",
+            "gerchain_idempotency_records",
+            "gerchain_outbox_events",
+        ):
+            assert connection.execute(
+                text("SELECT to_regclass(:table_name)"),
+                {"table_name": table},
+            ).scalar_one() == table
+
     engine.dispose()
