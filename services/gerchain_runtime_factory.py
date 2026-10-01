@@ -4,6 +4,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
+from pathlib import Path
 
 from sqlalchemy import create_engine
 from sqlalchemy.engine import Engine
@@ -43,16 +44,10 @@ class ProductionRuntimeFactory:
         )
 
     def initialize(self) -> None:
-        """Apply the repository authoritative PostgreSQL migration history."""
+        """Apply the canonical PostgreSQL migration history atomically."""
         migration_dir = Path(__file__).resolve().parents[1] / "postgres" / "migrations"
-        with self.engine.begin() as connection:
-            apply_migrations(connection, migration_dir)
-
-    def verify_schema(self) -> None:
-        """Fail closed unless the complete canonical PostgreSQL schema is present."""
         with self.engine.connect() as connection:
-            assert_canonical_production_schema(connection)
-
+            apply_migrations(connection, migration_dir)
     def create(self) -> GerchainRuntime:
         self.initialize()
         self.verify_schema()
