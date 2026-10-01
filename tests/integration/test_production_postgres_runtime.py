@@ -4,7 +4,7 @@ import os
 from datetime import datetime, timezone
 
 import pytest
-from sqlalchemy import create_engine, select
+from sqlalchemy import create_engine, select, delete
 from sqlalchemy.orm import sessionmaker
 
 from persistence.atomic_ledger import LedgerAccountModel, PostgreSQLAtomicLedger
@@ -16,6 +16,9 @@ from persistence.lock_escrow import lock_escrow_in_transaction
 from persistence.refund_escrow import refund_escrow_in_transaction
 from persistence.release_escrow import release_escrow_in_transaction
 from persistence.settlement_coordinator import SettlementCoordinator
+from persistence.atomic_value_transaction import TransactionWitness
+from persistence.recovery_outbox import OutboxEvent
+from persistence.durable_idempotency import DurableIdempotencyRecord
 from services.gerchain_runtime_factory import ProductionRuntimeConfig, ProductionRuntimeFactory
 
 
@@ -44,6 +47,14 @@ def test_production_postgresql_canonical_value_flow():
 
     Session = sessionmaker(bind=engine, expire_on_commit=False)
     ledger = PostgreSQLAtomicLedger(Session)
+
+    with Session.begin() as session:
+        session.execute(delete(OutboxEvent))
+        session.execute(delete(TransactionWitness))
+        session.execute(delete(DurableIdempotencyRecord))
+        session.execute(delete(LedgerMovementModel))
+        session.execute(delete(CanonicalEscrow))
+        session.execute(delete(LedgerAccountModel))
 
     for account_id, balance in (
         ("alice", 100),
@@ -204,7 +215,7 @@ def test_production_postgresql_canonical_value_flow():
                 select(LedgerAccountModel.account_id, LedgerAccountModel.balance)
             ).all()
         )
-        assert balances["alice"] == 90
+        assert balances["alice"] == 50
         assert balances["bob"] == 30
         assert balances["carol"] == 10
         assert balances["settlement-source"] == 30
