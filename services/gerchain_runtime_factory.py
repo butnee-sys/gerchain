@@ -43,6 +43,9 @@ class ProductionRuntimeFactory:
         )
 
     def initialize(self) -> None:
+        from persistence.postgres_migrations import apply_migrations
+
+        apply_migrations(self.config.database_url)
         """Apply the canonical PostgreSQL migration chain atomically."""
         migration_dir = Path(__file__).resolve().parents[1] / "postgres" / "schema"
         if not migration_dir.is_dir():
