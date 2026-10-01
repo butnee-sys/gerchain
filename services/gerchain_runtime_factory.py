@@ -45,8 +45,12 @@ class ProductionRuntimeFactory:
     def initialize(self) -> None:
         """Apply the repository-owned PostgreSQL production migration history."""
         migration_dir = Path(__file__).resolve().parents[1] / "postgres" / "migrations"
-        with self.engine.connect() as connection:
+        with self.engine.begin() as connection:
             apply_migrations(connection, migration_dir)
+
+    def verify_schema(self) -> None:
+        with self.engine.connect() as connection:
+            assert_canonical_production_schema(connection)
 
     def create(self) -> GerchainRuntime:
         self.initialize()
