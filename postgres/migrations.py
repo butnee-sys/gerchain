@@ -168,6 +168,9 @@ def apply_migrations(conn, migration_dir: str | Path) -> None:
 
                 migration_sql = sql.replace("BEGIN;", "").replace("COMMIT;", "")
                 _execute(conn, migration_sql)
+                # Advisory locking is the primary serialization boundary;
+                # ON CONFLICT is the final idempotency guard if a version row
+                # was committed by another runner before this statement.
                 _execute(
                     conn,
                     """
