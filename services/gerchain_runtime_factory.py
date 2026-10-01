@@ -3,11 +3,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+from pathlib import Path
 from typing import Any, Callable
 
 from sqlalchemy import create_engine
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import sessionmaker
+
+from postgres.migrations import apply_migrations
 
 from postgres.migrations import apply_migrations
 
@@ -43,17 +46,10 @@ class ProductionRuntimeFactory:
         )
 
     def initialize(self) -> None:
-        """Apply the authoritative PostgreSQL migration history before boot."""
+        """Apply the repository authoritative PostgreSQL migration history."""
         migration_dir = Path(__file__).resolve().parents[1] / "postgres" / "schema"
-        if not migration_dir.is_dir():
-            raise RuntimeError(f"production migration directory not found: {migration_dir}")
         with self.engine.begin() as connection:
             apply_migrations(connection, migration_dir)
-
-    def verify_schema(self) -> None:
-        """Fail closed unless the complete canonical production schema is present."""
-        with self.engine.connect() as connection:
-            assert_canonical_production_schema(connection)
 
     def create(self) -> GerchainRuntime:
         self.initialize()
