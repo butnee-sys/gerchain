@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import hashlib
-from contextlib import nullcontext
+from contextlib import contextmanager, nullcontext
 from pathlib import Path
 
 import psycopg.sql
@@ -53,24 +53,28 @@ def checksum(sql: str) -> str:
     return hashlib.sha256(sql.encode("utf-8")).hexdigest()
 
 
+@contextmanager
+def _native_migration_transaction(conn):
+    """Serialize native psycopg migration runners with a session advisory lock."""
+    if _connection_in_transaction(conn):
+        raise RuntimeError("migration runner requires a clean psycopg transaction")
+    conn.execute("SELECT pg_advisory_lock(%s)", (MIGRATION_LOCK_KEY,))
+    conn.commit()
+    try:
+        with conn.transaction():
+            yield
+    finally:
+        conn.execute("SELECT pg_advisory_unlock(%s)", (MIGRATION_LOCK_KEY,))
+        conn.commit()
+
+
 def _transaction(conn):
     """Return a real transaction context for SQLAlchemy or native psycopg."""
-    # SQLAlchemy Connection exposes exec_driver_sql/begin; native psycopg
-    # exposes transaction(). Do not infer the transaction API from the
-    # in_transaction attribute: psycopg may already have an implicit
-    # transaction before the runner reaches this boundary.
     if hasattr(conn, "exec_driver_sql") and hasattr(conn, "begin"):
         return nullcontext() if conn.in_transaction() else conn.begin()
     if hasattr(conn, "transaction"):
-        # Native psycopg callers enter this runner on a fresh connection.
-        # Always own the transaction explicitly so the advisory xact lock and
-        # schema_version writes share exactly one transaction boundary.
-        if _connection_in_transaction(conn):
-            raise RuntimeError("migration runner requires a clean psycopg transaction")
-        return conn.transaction()
+        return _native_migration_transaction(conn)
     return nullcontext()
-
-
 def _execute(conn, sql: str, params=None):
     # Non-parameterized DDL/PLpgSQL may contain literal percent signs.
     # Avoid psycopg's pyformat parser when there are no parameters.
