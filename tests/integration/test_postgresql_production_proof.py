@@ -10,6 +10,7 @@ from sqlalchemy.orm import sessionmaker
 from persistence.atomic_ledger import PostgreSQLAtomicLedger
 from persistence.deep_value_reconciliation import deep_reconcile_value_truth
 from persistence.escrow_aggregate import CanonicalEscrow
+from persistence.atomic_value_transaction import TransactionWitness
 from persistence.fund_escrow import fund_escrow_in_transaction
 from persistence.lock_escrow import lock_escrow_in_transaction
 from persistence.release_escrow import release_escrow_in_transaction
