@@ -50,6 +50,11 @@ class ProductionRuntimeFactory:
         with self.engine.begin() as connection:
             apply_migrations(connection, migration_dir)
 
+    def verify_schema(self) -> None:
+        """Fail closed unless the complete canonical production schema is present."""
+        with self.engine.connect() as connection:
+            assert_canonical_production_schema(connection)
+
     def create(self) -> GerchainRuntime:
         self.initialize()
         self.verify_schema()
