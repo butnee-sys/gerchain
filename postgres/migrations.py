@@ -21,7 +21,11 @@ FROZEN_CHECKSUMS = {
         # Historical checksum observed in existing production-smoke databases.
         "15caac76ff599ec1a83091f2d7b3f9bb428f9ad04474f215df1ae9d39611a13e",
     },
-    4: {"0d5d063a1d35fbb79bef3023e8b02e06e76776c0af5da41b843fb702b702cf57"},
+    4: {
+        "0d5d063a1d35fbb79bef3023e8b02e06e76776c0af5da41b843fb702b702cf57",
+        # Historical checksum observed in PostgreSQL production evidence.
+        "55a9ab0753356174ea6427d4c746958a563afb202265d170dae48df13afb8c9a",
+    },
     5: {"ecfc4306afb3b7ccde65902487f0702a6697ac343bced4534f624d134984effb"},
     6: {"68fee98cb004ce99fd7acf8cfd29e305cd0f770cf7992f4426b95e108e4265e9"},
     7: {"d7e97c874b8edf58d6c08a41f3b9f245d235485a7a942565fc9d73312a1a5b55"},
