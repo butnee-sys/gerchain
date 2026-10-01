@@ -53,3 +53,12 @@ No production lock is declared until all release gates have evidence.
 - Multiple PostgreSQL/EAI production workflows for the same branch tip are also queued; no completed execution result was available at verification time.
 
 This is positive evidence that the gate was triggered, but it is **not execution evidence of success**.
+
+## Exact failure evidence — 2026-10-01
+
+The GitHub Actions run associated with commit `e860f502f3e1a2d56fd873ad2faab7b1ab630740` completed with release-blocking failures:
+
+- `core-gates`: Python collection failed because that exact commit contained literal escaped newline sequences in `services/gerchain_runtime.py`.
+- `PostgreSQL Concurrency`: migration serialization failed with a `schema_version` primary-key conflict on version 2.
+
+The current branch source has since corrected the runtime formatting and the migration runner now uses conflict-safe version recording. A fresh exact-current-SHA execution is still required; these historical failures are not classified as current GREEN evidence.
