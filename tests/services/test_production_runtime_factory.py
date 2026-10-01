@@ -79,5 +79,5 @@ def test_factory_initialize_uses_canonical_migration_runner() -> None:
 
     apply.assert_called_once()
     assert apply.call_args.args[0] is connection
-    assert str(apply.call_args.args[1]).endswith("postgres/migrations")
+    assert str(apply.call_args.args[1]).endswith("postgres/schema")
     guard.assert_called_once_with(connection)
