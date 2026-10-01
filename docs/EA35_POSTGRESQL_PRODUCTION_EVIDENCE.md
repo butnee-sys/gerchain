@@ -64,3 +64,11 @@ It does **not** by itself establish final system-wide production lock. Remaining
 - final architecture/production lock decision.
 
 No certification or external audit claim is made by this document.
+
+## 2026-10-02 gate reconciliation
+
+The earlier workflow execution on commit e860f502f3e1a2d56fd873ad2faab7b1ab630740 was not accepted as production evidence. Its PostgreSQL Concurrency run 36542458201 failed in the migration serialization test with a duplicate schema_version row, while core-gates run 36542458205 failed during collection because that execution contained a malformed runtime source block.
+
+The current branch contains the corresponding corrections: the migration runner deterministically selects one canonical file per duplicated historical migration version, records migration versions idempotently with checksum verification, and the runtime FUND method source is valid Python again. A fresh exact-SHA workflow execution is required before any GREEN/LOCK claim.
+
+Status: IN PROGRESS / NOT LOCKED.
