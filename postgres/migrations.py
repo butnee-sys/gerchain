@@ -157,8 +157,7 @@ def apply_migrations(conn, migration_dir: str | Path) -> None:
                 # of an arbitrary caller-supplied migration directory: that would
                 # make a modified migration appear valid.
                 accepted_digests = set(LEGACY_CHECKSUMS.get(version, set()))
-                preferred_digest = checksum(migration.read_text(encoding="utf-8"))
-                accepted_digests.add(preferred_digest)
+                accepted_digests.update(FROZEN_CHECKSUMS.get(version, set()))
 
                 if version in applied:
                     if applied[version] not in accepted_digests:
