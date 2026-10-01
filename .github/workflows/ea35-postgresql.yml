@@ -39,5 +39,9 @@ jobs:
         env:
           GERCHAIN_TEST_DATABASE_URL: postgresql+psycopg://gerchain:gerchain@localhost:5432/gerchain_test
           GERCHAIN_DATABASE_URL: postgresql+psycopg://gerchain:gerchain@localhost:5432/gerchain_test
-        run: pytest -q tests/integration/test_production_runtime_postgresql.py
+        run: >-
+          pytest -q
+          tests/integration/test_production_runtime_postgresql.py
+          tests/integration/test_postgresql_production_reperformance.py
+          tests/integration/test_postgresql_canonical_value_truth.py
 
