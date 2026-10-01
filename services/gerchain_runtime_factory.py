@@ -3,11 +3,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from pathlib import Path
 from typing import Any, Callable
 
 from postgres.migrations import apply_migrations
-from sqlalchemy import create_engine, inspect
+from sqlalchemy import create_engine
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import sessionmaker
 
@@ -50,6 +49,10 @@ class ProductionRuntimeFactory:
         with self.engine.begin() as connection:
             apply_migrations(connection, migration_dir)
 
+    def verify_schema(self) -> None:
+        """Fail closed unless the migrated PostgreSQL schema is canonical."""
+        with self.engine.connect() as connection:
+            assert_canonical_production_schema(connection)
     def create(self) -> GerchainRuntime:
         self.initialize()
         self.verify_schema()
