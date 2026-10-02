@@ -473,7 +473,7 @@ Hard rule:
 
 This integration does not create a new canonical architecture layer and does not change the frozen DE → DEE → G-3 → Core → EXIM → I2B path.
 
-## 15. Hard rules
+## 16. Hard rules
 
 1. **DE is mandatory and top-level.**
 2. **DE is distinct from EXIM.** DE is the top-level Digital Economy space; EXIM is the core external-system boundary.
