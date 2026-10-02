@@ -7,11 +7,15 @@ Evidence SHA: `7a99dd82554a3f348c2c5ad34420a14fb3628e40`
 
 ## Fresh branch-tip evidence — 2026-10-02
 
-Current branch tip: `19632f3e20b3ab681839da1f8c58d4ae1bb9798e`.
+Current branch tip evidenced by fresh CI: `d2df017ab027b39f545b7cae1324f007126d1054`.
 
-GitHub Actions run `37003279910` (`PostgreSQL production re-performance`) completed **SUCCESS** against a PostgreSQL service container. Job `110825630073` executed `pytest -q tests/integration/test_postgresql_production_reperformance.py` and reported `1 passed in 0.33s`.
+GitHub Actions run `37015357710` (`PostgreSQL production re-performance`) completed **SUCCESS** against a PostgreSQL 16.15 service container. Job `110864767422` executed `pytest -q tests/integration/test_postgresql_production_reperformance.py` and reported `1 passed in 0.25s`.
 
 This is fresh evidence at the current branch lineage, but it does not close the remaining release gates below. In particular, the current branch has additional PostgreSQL/EAI/core gates still queued, so no overall production lock is declared.
+
+## Fresh branch-tip verification — 2026-10-02
+
+A second branch-tip proof run `37015357662` (`production-postgresql-proof`) also completed **SUCCESS**. Job `110864767620` executed `pytest -q tests/integration/test_postgresql_production_proof.py` and reported `1 passed, 1 warning in 0.44s`. The warning is an unregistered `pytest.mark.integration`; it did not fail the job.
 
 ## Verified PostgreSQL runs
 
