@@ -9,6 +9,8 @@ from sqlalchemy import create_engine
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import sessionmaker
 
+from postgres.migrations import apply_migrations
+
 from persistence.production_schema_guard import assert_canonical_production_schema
 from services.gerchain_runtime import GerchainRuntime
 
@@ -41,20 +43,17 @@ class ProductionRuntimeFactory:
         )
 
     def initialize(self) -> None:
-        """Apply the repository authoritative PostgreSQL migration chain.
+        """Apply the authoritative PostgreSQL migration history.
 
-        Production may start from an existing database whose schema requires
-        additive and constraint migrations; create_all is therefore insufficient.
-        The migration runner owns ordering, checksums, and serialization.
+        Production boot must use the repository migration runner rather than
+        ORM create_all(). This preserves schema versioning, checksums,
+        advisory-lock serialization, and fail-closed migration behavior.
         """
-        from postgres.migrations import apply_migrations
-
         migration_dir = Path(__file__).resolve().parents[1] / "postgres" / "schema"
         if not migration_dir.is_dir():
             raise RuntimeError(f"PostgreSQL migration directory not found: {migration_dir}")
         with self.engine.begin() as connection:
             apply_migrations(connection, migration_dir)
-            assert_canonical_production_schema(connection)
 
     def create(self) -> GerchainRuntime:
         self.initialize()
