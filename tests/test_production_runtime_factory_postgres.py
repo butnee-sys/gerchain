@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import hashlib
 import json
+from pathlib import Path
 
 import pytest
 from sqlalchemy import text
@@ -140,7 +141,13 @@ def test_production_factory_applies_canonical_schema_migrations():
                 text("SELECT version FROM schema_version ORDER BY version")
             ).fetchall()
         ]
-        assert versions == list(range(1, 12))
+        migration_versions = []
+        for path in (Path(__file__).resolve().parents[1] / "postgres" / "schema").glob("*.sql"):
+            try:
+                migration_versions.append(int(path.name.split("_", 1)[0]))
+            except (ValueError, IndexError):
+                continue
+        assert versions == sorted(migration_versions)
 
         for table in (
             "gerchain_ledger_accounts",
