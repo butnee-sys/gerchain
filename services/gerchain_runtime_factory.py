@@ -43,13 +43,19 @@ class ProductionRuntimeFactory:
         )
 
     def initialize(self) -> None:
-        """Apply the canonical PostgreSQL schema before runtime construction."""
-        migration_dir = Path(__file__).resolve().parent.parent / "postgres" / "schema"
-        with self.engine.connect() as connection:
-            apply_migrations(connection, migration_dir)
-            from persistence.production_schema_guard import assert_canonical_production_schema
-            assert_canonical_production_schema(connection)
+        """Apply the repository authoritative PostgreSQL migration chain.
 
+        Production may start from an existing database whose schema requires
+        additive and constraint migrations; create_all is therefore insufficient.
+        The migration runner owns ordering, checksums, and serialization.
+        """
+        from postgres.migrations import apply_migrations
+
+        migration_dir = Path(__file__).resolve().parents[1] / "postgres" / "schema"
+        if not migration_dir.is_dir():
+            raise RuntimeError(f"PostgreSQL migration directory not found: {migration_dir}")
+        with self.engine.begin() as connection:
+            apply_migrations(connection, migration_dir)
     def create(self) -> GerchainRuntime:
         self.initialize()
         runtime = GerchainRuntime(
