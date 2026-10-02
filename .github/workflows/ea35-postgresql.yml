@@ -1,4 +1,5 @@
 name: EA-35 PostgreSQL proof
+# Re-performance gate: migration concurrency serialization must remain proven.
 
 on:
   push:
