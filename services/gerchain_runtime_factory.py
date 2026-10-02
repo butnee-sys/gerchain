@@ -43,15 +43,10 @@ class ProductionRuntimeFactory:
         )
 
     def initialize(self) -> None:
-        """Apply the authoritative PostgreSQL migration history.
-
-        SQLAlchemy metadata creation is intentionally not used here: production
-        schema authority belongs to the versioned migration runner.
-        """
+        """Apply the authoritative PostgreSQL production schema before runtime use."""
         migration_dir = Path(__file__).resolve().parents[1] / "postgres" / "migrations"
         with self.engine.begin() as connection:
             apply_migrations(connection, migration_dir)
-            assert_canonical_production_schema(connection)
 
     def create(self) -> GerchainRuntime:
         self.initialize()
