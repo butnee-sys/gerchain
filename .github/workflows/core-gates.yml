@@ -52,6 +52,7 @@ jobs:
             tests/test_dee_security.py \
             tests/test_nef_gerchain_boundary.py \
             tests/test_nef_gerchain_port.py \
+            tests/production/test_runtime_source_compiles.py \
             tests/test_postgres_atomic_ledger.py \
             tests/test_production_runtime_factory.py \
             tests/test_production_runtime_factory_postgres.py \
