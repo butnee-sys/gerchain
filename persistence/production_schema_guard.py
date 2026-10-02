@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 from sqlalchemy import inspect, text
 from sqlalchemy.engine import Connection
 
@@ -15,8 +17,19 @@ REQUIRED_ESCROW_STATES = {'CREATED','FUNDED','LOCKED','RELEASED','REFUNDED','CAN
 
 def assert_canonical_production_schema(connection: Connection) -> None:
     version = connection.execute(text('SELECT MAX(version) FROM schema_version')).scalar_one()
-    if version is None or int(version) < 11:
-        raise RuntimeError('canonical production schema migration history incomplete; version 11 required')
+    migration_dir = Path(__file__).resolve().parents[1] / 'postgres' / 'schema'
+    migration_versions = []
+    for path in migration_dir.glob('*.sql'):
+        try:
+            migration_versions.append(int(path.name.split('_', 1)[0]))
+        except (ValueError, IndexError):
+            continue
+    expected_version = max(migration_versions, default=0)
+    if version is None or int(version) < expected_version:
+        raise RuntimeError(
+            f'canonical production schema migration history incomplete; '
+            f'expected version {expected_version}'
+        )
     if connection.dialect.name != 'postgresql':
         raise RuntimeError('canonical production schema requires PostgreSQL')
     inspector = inspect(connection)
