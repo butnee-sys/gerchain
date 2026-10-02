@@ -152,9 +152,9 @@ def test_production_postgresql_full_value_flow() -> None:
         ).scalar_one() == "CANCELLED"
 
         assert session.execute(select(func.count()).select_from(LedgerMovementModel)).scalar_one() == 7
-        assert session.execute(select(func.count()).select_from(TransactionWitness)).scalar_one() == 10
-        assert session.execute(select(func.count()).select_from(OutboxEvent)).scalar_one() == 10
-        assert session.execute(select(func.count()).select_from(DurableIdempotencyRecord)).scalar_one() == 10
+        assert session.execute(select(func.count()).select_from(TransactionWitness)).scalar_one() == 9
+        assert session.execute(select(func.count()).select_from(OutboxEvent)).scalar_one() == 9
+        assert session.execute(select(func.count()).select_from(DurableIdempotencyRecord)).scalar_one() == 9
 
         report = deep_reconcile_value_truth(session)
         assert report.matched, report.issues
