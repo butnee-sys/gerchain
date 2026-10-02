@@ -58,4 +58,6 @@ jobs:
             tests/production/test_postgres_canonical_runtime.py \
             tests/production/test_postgres_runtime_boot.py \
             tests/production/test_production_runtime_postgres_smoke.py \
-            tests/persistence/test_deep_value_reconciliation.py
+            tests/persistence/test_deep_value_reconciliation.py \
+            tests/test_ea35_postgres_reperformance.py \
+            tests/test_production_postgres.py
