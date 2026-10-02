@@ -1,4 +1,5 @@
 import os
+import base64
 from datetime import datetime, timezone
 
 from sqlalchemy import select
@@ -6,6 +7,7 @@ from sqlalchemy import select
 from persistence.atomic_ledger import LedgerAccountModel
 from persistence.deep_value_reconciliation import deep_reconcile_value_truth
 from persistence.escrow_aggregate import CanonicalEscrow
+from dee_security.root_of_trust import RootOfTrust
 from services.gerchain_runtime_factory import (
     ProductionRuntimeConfig,
     ProductionRuntimeFactory,
@@ -91,6 +93,7 @@ def test_postgresql_production_value_flow():
         {"test": "postgres-production"},
     )
     runtime.release(
+        root=RootOfTrust("pg-smoke-owner", base64.b64encode(bytes(32)).decode("ascii")),
         transaction_id="pg-smoke-release",
         destination="pg-smoke-beneficiary",
         timestamp="2026-09-30T00:00:02Z",
