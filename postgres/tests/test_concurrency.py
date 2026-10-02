@@ -181,19 +181,21 @@ def test_migrations_are_serialized_and_checksum_is_stable():
         assert all(len(row[1]) == 64 for row in rows)
 
 
-def test_migration_checksum_mismatch_is_rejected(tmp_path):
+def test_migration_checksum_mismatch_is_rejected():
     with connect() as conn:
         conn.execute("DROP TABLE IF EXISTS processed_events, outbox, audit_logs, escrows, schema_version CASCADE")
         conn.commit()
         apply_migrations(conn, MIGRATION_DIR)
 
-    migration = tmp_path / "001_modified.sql"
-    migration.write_text(
-        (MIGRATION_DIR / "001_concurrency.sql").read_text(encoding="utf-8")
-        + "\n-- modified after deployment\n",
-        encoding="utf-8",
-    )
+    # Simulate a deployed database whose recorded migration digest no longer
+    # matches the repository's immutable migration source.
+    with connect() as conn:
+        conn.execute(
+            "UPDATE schema_version SET checksum = %s WHERE version = %s",
+            ("0" * 64, 1),
+        )
+        conn.commit()
 
     with connect() as conn:
         with pytest.raises(RuntimeError, match="checksum mismatch"):
-            apply_migrations(conn, tmp_path)
+            apply_migrations(conn, MIGRATION_DIR)
