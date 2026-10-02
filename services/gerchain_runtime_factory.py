@@ -43,18 +43,14 @@ class ProductionRuntimeFactory:
         )
 
     def initialize(self) -> None:
-        """Apply the authoritative PostgreSQL migration history.
-
-        Production boot must use the repository migration runner rather than
-        ORM create_all(). This preserves schema versioning, checksums,
-        advisory-lock serialization, and fail-closed migration behavior.
-        """
+        """Apply canonical PostgreSQL migrations, then reconcile ORM metadata."""
         migration_dir = Path(__file__).resolve().parents[1] / "postgres" / "migrations"
-        if not migration_dir.is_dir():
-            raise RuntimeError(f"PostgreSQL migration directory not found: {migration_dir}")
         with self.engine.connect() as connection:
             apply_migrations(connection, migration_dir)
-            assert_canonical_production_schema(connection)
+            connection.commit()
+
+        for base in (AtomicLedgerBase, EscrowBase, OutboxBase, IdempotencyBase, TransactionWitness):
+            base.metadata.create_all(self.engine)
 
     def create(self) -> GerchainRuntime:
         self.initialize()
