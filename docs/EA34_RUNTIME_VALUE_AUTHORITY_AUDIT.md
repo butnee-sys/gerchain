@@ -112,3 +112,37 @@ Hard evidence requirements:
 - replay/idempotency remains single-movement
 
 No production lock is declared until the exact branch-tip workflow evidence is retrieved and independently reviewed.
+
+## EA-35.13 — Exact PostgreSQL re-performance evidence update — 2026-10-02
+
+The branch produced exact GitHub Actions execution evidence for commit
+`f158316277d65234e355b6040a905884ee4f4adf`.
+
+Verified successful run:
+- Workflow: `PostgreSQL production re-performance`
+- Run: `37002917360`
+- Job: `production-postgresql`
+- Job conclusion: `success`
+- PostgreSQL: 16.x service
+- Python: 3.13.15
+- Production re-performance test: **1 passed in 0.71s**
+
+The successful test established:
+1. Real PostgreSQL connectivity.
+2. `ProductionRuntimeFactory` construction.
+3. `production-postgresql` runtime mode.
+4. `is_canonical_ledger_authoritative == True`.
+5. Presence of the canonical runtime tables:
+   - `gerchain_ledger_accounts`
+   - `gerchain_ledger_movements`
+   - `escrows`
+   - `gerchain_transaction_witnesses`
+   - `gerchain_outbox_events`
+   - `gerchain_idempotency_records`
+
+This is fresh **GREEN evidence for fresh PostgreSQL runtime construction**.
+
+It is **not yet migration-upgrade evidence for an existing production database**. The current schema file is additive, but the production factory's `create_all()` path does not by itself perform arbitrary ALTER migrations against an already-existing legacy schema. Therefore the existing-database migration gate remains OPEN.
+
+Current status:
+**EA-35 — IN PROGRESS / NOT LOCKED.**
