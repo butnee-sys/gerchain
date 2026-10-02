@@ -12,11 +12,7 @@ from sqlalchemy.orm import sessionmaker
 from postgres.migrations import apply_migrations
 
 from persistence.production_schema_guard import assert_canonical_production_schema
-from persistence.atomic_ledger import AtomicLedgerBase
-from persistence.escrow_aggregate import EscrowBase
-from persistence.recovery_outbox import OutboxBase
-from persistence.durable_idempotency import IdempotencyBase
-from persistence.atomic_value_transaction import TransactionWitness
+from persistence.production_schema import initialize_production_schema
 from services.gerchain_runtime import GerchainRuntime
 
 
