@@ -1,13 +1,10 @@
 from __future__ import annotations
 
 import os
-from pathlib import Path
-
 import pytest
 from sqlalchemy import create_engine, inspect
 from sqlalchemy.orm import sessionmaker
 
-from postgres.migrations import apply_migrations
 from services.gerchain_runtime_factory import ProductionRuntimeConfig, ProductionRuntimeFactory
 
 
@@ -21,9 +18,6 @@ def test_production_postgres_migration_and_canonical_boot() -> None:
 
     engine = create_engine(database_url, pool_pre_ping=True)
     try:
-        with engine.connect() as conn:
-            apply_migrations(conn, Path(__file__).parents[2] / "postgres" / "schema")
-
         factory = ProductionRuntimeFactory(
             ProductionRuntimeConfig(
                 database_url=database_url,
