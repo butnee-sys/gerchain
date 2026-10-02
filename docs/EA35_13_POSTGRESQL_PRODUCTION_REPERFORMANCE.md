@@ -43,3 +43,5 @@ Required fresh branch-tip gates:
 Historical successful runs are retained as historical evidence only. They do not certify this new execution SHA.
 
 Decision rule: any failed canonical production gate remains an open blocker; queued is not PASS; only completed SUCCESS on the exact commit may be promoted to current execution evidence.
+
+- Fresh verification request: 2026-10-02 exact-SHA execution.
