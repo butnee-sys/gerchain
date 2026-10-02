@@ -59,14 +59,22 @@ def checksum(sql: str) -> str:
 
 @contextmanager
 def _native_migration_transaction(conn):
-    """Serialize native psycopg migration runners inside one transaction."""
+    """Serialize native psycopg migration runners with a session advisory lock."""
     if _connection_in_transaction(conn):
         raise RuntimeError("migration runner requires a clean psycopg transaction")
-    with conn.transaction():
-        # Transaction-scoped advisory locking is held until the migration
-        # transaction commits or rolls back, including schema_version writes.
-        conn.execute("SELECT pg_advisory_xact_lock(%s)", (MIGRATION_LOCK_KEY,))
-        yield
+
+    # Acquire the lock before opening the migration transaction.  psycopg
+    # connections begin an implicit transaction on ordinary execute() calls;
+    # taking a session-level advisory lock first therefore avoids nested
+    # transaction contexts and guarantees that only one runner can inspect,
+    # apply, and record schema versions at a time.
+    conn.execute("SELECT pg_advisory_lock(%s)", (MIGRATION_LOCK_KEY,))
+    try:
+        with conn.transaction():
+            yield
+    finally:
+        # Unlock outside the migration transaction; the lock is session-scoped.
+        conn.execute("SELECT pg_advisory_unlock(%s)", (MIGRATION_LOCK_KEY,))
 
 
 def _transaction(conn):
