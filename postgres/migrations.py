@@ -63,18 +63,20 @@ def _native_migration_transaction(conn):
     if _connection_in_transaction(conn):
         raise RuntimeError("migration runner requires a clean psycopg transaction")
 
-    # Acquire the lock before opening the migration transaction.  psycopg
-    # connections begin an implicit transaction on ordinary execute() calls;
-    # taking a session-level advisory lock first therefore avoids nested
-    # transaction contexts and guarantees that only one runner can inspect,
-    # apply, and record schema versions at a time.
+    # Acquire the session-level lock while autocommit is enabled so the
+    # lock statement itself cannot open an implicit transaction. Then switch
+    # back to an explicit transaction for the complete migration sequence.
+    original_autocommit = conn.autocommit
+    conn.autocommit = True
     conn.execute("SELECT pg_advisory_lock(%s)", (MIGRATION_LOCK_KEY,))
+    conn.autocommit = False
     try:
         with conn.transaction():
             yield
     finally:
-        # Unlock outside the migration transaction; the lock is session-scoped.
+        conn.autocommit = True
         conn.execute("SELECT pg_advisory_unlock(%s)", (MIGRATION_LOCK_KEY,))
+        conn.autocommit = original_autocommit
 
 
 def _transaction(conn):
