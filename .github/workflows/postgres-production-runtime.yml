@@ -34,4 +34,11 @@ jobs:
       - name: Verify canonical production runtime boot
         env:
           GERCHAIN_POSTGRES_DSN: postgresql://gerchain:gerchain@127.0.0.1:5432/gerchain_test
-        run: python -m pytest -q postgres/tests/test_production_runtime_boot.py
+        run: python -m pytest -q --junitxml=artifacts/postgres-production-runtime.xml postgres/tests/test_production_runtime_boot.py
+      - name: Upload PostgreSQL production runtime evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: postgres-production-runtime-junit
+          path: artifacts/postgres-production-runtime.xml
+          if-no-files-found: error
