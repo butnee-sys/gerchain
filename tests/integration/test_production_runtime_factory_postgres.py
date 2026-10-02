@@ -30,7 +30,7 @@ def test_production_runtime_factory_boots_against_postgresql():
         versions = connection.execute(
             text("SELECT version FROM schema_version ORDER BY version")
         ).scalars().all()
-        assert versions == list(range(1, 8))
+        assert versions == list(range(1, 12))
 
         tables = {
             row[0]
