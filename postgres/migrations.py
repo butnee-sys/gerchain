@@ -33,6 +33,7 @@ FROZEN_CHECKSUMS = {
     9: {"ff2c383cddc8e9d6b5d399e2ce043cdf629de7864c8ba8cafb5a5160e947a28a"},
     10: {"282bdd44d550161052f5a1c99d563e3832c4cbba558854988171fc9179b676c6"},
     11: {"aa3b8fe4d39a61e5ba3f12a3b70b14b5a560e2bdb988cfeb068c2a8fec19494a"},
+    10: {"b019fb3f29ba1926fe1806f33aa344013ed38c36aefb374baa4feced220dbf3b"},
 }
 
 LEGACY_CHECKSUMS = {
@@ -120,7 +121,9 @@ def apply_migrations(conn, migration_dir: str | Path) -> None:
         7: "007_canonical_production.sql",
         8: "008_ea35_idempotency_compat.sql",
         9: "009_canonical_movement_integrity_hardening.sql",
+        10: "010_canonical_evidence_constraints.sql",
     }
+    ignored_aliases = {10: {"010_ea35_settlement_binding_fix.sql"}}
     versions: dict[int, list[Path]] = {}
     for migration in files:
         version = int(migration.name.split("_", 1)[0])
@@ -130,19 +133,19 @@ def apply_migrations(conn, migration_dir: str | Path) -> None:
     for version, candidates in versions.items():
         preferred_name = preferred_names.get(version)
         if preferred_name:
-            selected = next((p for p in candidates if p.name == preferred_name), None)
+            active_candidates = [p for p in candidates if p.name not in ignored_aliases.get(version, set())]
+            selected = next((p for p in active_candidates if p.name == preferred_name), None)
             if selected is not None:
                 preferred[version] = selected
-            elif len(candidates) == 1:
-                # The preferred alias may be absent on a rebased migration history.
-                preferred[version] = candidates[0]
-            elif not candidates:
+            elif len(active_candidates) == 1:
+                preferred[version] = active_candidates[0]
+            elif not active_candidates:
                 # A preferred historical version has no physical migration here.
                 continue
             else:
                 raise RuntimeError(
                     f"Preferred migration {preferred_name} is missing and "
-                    f"version {version} has multiple candidates"
+                    f"version {version} has multiple active candidates"
                 )
         elif len(candidates) == 1:
             preferred[version] = candidates[0]
