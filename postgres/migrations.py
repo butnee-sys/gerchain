@@ -59,24 +59,17 @@ def checksum(sql: str) -> str:
 
 @contextmanager
 def _native_migration_transaction(conn):
-    """Serialize native psycopg migration runners with a session advisory lock."""
+    """Serialize native psycopg migration runners with a transaction advisory lock."""
     if _connection_in_transaction(conn):
         raise RuntimeError("migration runner requires a clean psycopg transaction")
 
-    # Acquire the session-level lock while autocommit is enabled so the
-    # lock statement itself cannot open an implicit transaction. Then switch
-    # back to an explicit transaction for the complete migration sequence.
-    original_autocommit = conn.autocommit
-    conn.autocommit = True
-    conn.execute("SELECT pg_advisory_lock(%s)", (MIGRATION_LOCK_KEY,))
-    conn.autocommit = False
-    try:
-        with conn.transaction():
-            yield
-    finally:
-        conn.autocommit = True
-        conn.execute("SELECT pg_advisory_unlock(%s)", (MIGRATION_LOCK_KEY,))
-        conn.autocommit = original_autocommit
+    # Keep the advisory lock inside the same transaction that applies the
+    # migration. The lock is therefore held until the migration commits or
+    # rolls back, eliminating the race where two runners can both observe the
+    # same missing schema_version row.
+    with conn.transaction():
+        conn.execute("SELECT pg_advisory_xact_lock(%s)", (MIGRATION_LOCK_KEY,))
+        yield
 
 
 def _transaction(conn):
