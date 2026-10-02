@@ -190,12 +190,26 @@ def test_migration_checksum_mismatch_is_rejected():
     # Simulate a deployed database whose recorded migration digest no longer
     # matches the repository's immutable migration source.
     with connect() as conn:
+        original = conn.execute(
+            "SELECT checksum FROM schema_version WHERE version = %s",
+            (1,),
+        ).fetchone()[0]
         conn.execute(
             "UPDATE schema_version SET checksum = %s WHERE version = %s",
             ("0" * 64, 1),
         )
         conn.commit()
 
-    with connect() as conn:
-        with pytest.raises(RuntimeError, match="checksum mismatch"):
-            apply_migrations(conn, MIGRATION_DIR)
+    try:
+        with connect() as conn:
+            with pytest.raises(RuntimeError, match="checksum mismatch"):
+                apply_migrations(conn, MIGRATION_DIR)
+    finally:
+        # Restore the fixture so later integration tests receive a valid
+        # migration history when they reuse the same PostgreSQL service.
+        with connect() as conn:
+            conn.execute(
+                "UPDATE schema_version SET checksum = %s WHERE version = %s",
+                (original, 1),
+            )
+            conn.commit()
