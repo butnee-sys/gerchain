@@ -311,7 +311,9 @@ class GerchainRuntime:
                 )
         return self.escrow_service.get_state()
 
-    def fund(self, transaction_id: str, source: str, timestamp: str, evidence: Any):  # canonical production value-flow boundary
+    def fund(
+        self, transaction_id: str, source: str, timestamp: str, evidence: Any
+    ):  # canonical production value-flow boundary
         if self.is_canonical_ledger_authoritative:
             from persistence.fund_escrow import fund_escrow_in_transaction
 
