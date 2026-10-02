@@ -62,19 +62,17 @@ def checksum(sql: str) -> str:
 
 @contextmanager
 def _native_migration_transaction(conn):
-    """Serialize native psycopg migration runners across the full migration commit."""
+    """Serialize native psycopg migration runners inside one real transaction."""
     if _connection_in_transaction(conn):
         raise RuntimeError("migration runner requires a clean psycopg transaction")
 
-    # Hold a session-level advisory lock before opening the migration
-    # transaction, and release it only after commit/rollback. This guarantees
-    # that concurrent runners cannot reach schema_version insertion together.
-    conn.execute("SELECT pg_advisory_lock(%s)", (MIGRATION_LOCK_KEY,))
-    try:
-        with conn.transaction():
-            yield
-    finally:
-        conn.execute("SELECT pg_advisory_unlock(%s)", (MIGRATION_LOCK_KEY,))
+    # Acquire the transaction-scoped advisory lock *inside* the migration
+    # transaction.  Acquiring a session-level lock before transaction() would
+    # implicitly open a transaction in psycopg and makes concurrent runners
+    # vulnerable to overlapping migration transactions.
+    with conn.transaction():
+        conn.execute("SELECT pg_advisory_xact_lock(%s)", (MIGRATION_LOCK_KEY,))
+        yield
 
 def _transaction(conn):
     """Return a real transaction context for SQLAlchemy or native psycopg."""
