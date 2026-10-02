@@ -10,9 +10,6 @@ from sqlalchemy.engine import Engine
 from sqlalchemy.orm import sessionmaker
 
 from postgres.migrations import apply_migrations
-
-from persistence.production_schema_guard import assert_canonical_production_schema
-from postgres.migrations import apply_migrations
 from persistence.production_schema_guard import assert_canonical_production_schema
 from services.gerchain_runtime import GerchainRuntime
 
@@ -52,8 +49,6 @@ class ProductionRuntimeFactory:
             assert_canonical_production_schema(connection)
             connection.commit()
 
-        for base in (AtomicLedgerBase, EscrowBase, OutboxBase, IdempotencyBase, TransactionWitness):
-            base.metadata.create_all(self.engine)
 
     def create(self) -> GerchainRuntime:
         self.initialize()
