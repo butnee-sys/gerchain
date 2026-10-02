@@ -27,3 +27,19 @@ Required execution evidence:
 A GitHub Actions PostgreSQL service is configured to execute this gate on the branch.
 
 No GREEN or production lock is declared until a fresh branch-tip PostgreSQL run completes successfully and its exact commit SHA is recorded.
+
+
+## Current-tip re-verification trigger — 2026-10-02
+
+This section intentionally creates a new exact-SHA release evidence point after the production-runtime construction and schema-guard corrections.
+
+Required fresh branch-tip gates:
+- PostgreSQL production re-performance
+- production-postgresql-gate
+- Canonical EAI PostgreSQL Gate
+- independent PostgreSQL evidence
+- deep value-truth reconciliation
+
+Historical successful runs are retained as historical evidence only. They do not certify this new execution SHA.
+
+Decision rule: any failed canonical production gate remains an open blocker; queued is not PASS; only completed SUCCESS on the exact commit may be promoted to current execution evidence.
