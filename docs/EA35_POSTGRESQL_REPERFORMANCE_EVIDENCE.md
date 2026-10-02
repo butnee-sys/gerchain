@@ -5,6 +5,14 @@ Status: IMPLEMENTED / EVIDENCE RECORDED / NOT LOCKED
 Branch: `feat/ea21-transaction-aware-ledger`
 Evidence SHA: `7a99dd82554a3f348c2c5ad34420a14fb3628e40`
 
+## Fresh branch-tip evidence — 2026-10-02
+
+Current branch tip: `19632f3e20b3ab681839da1f8c58d4ae1bb9798e`.
+
+GitHub Actions run `37003279910` (`PostgreSQL production re-performance`) completed **SUCCESS** against a PostgreSQL service container. Job `110825630073` executed `pytest -q tests/integration/test_postgresql_production_reperformance.py` and reported `1 passed in 0.33s`.
+
+This is fresh evidence at the current branch lineage, but it does not close the remaining release gates below. In particular, the current branch has additional PostgreSQL/EAI/core gates still queued, so no overall production lock is declared.
+
 ## Verified PostgreSQL runs
 
 The following GitHub Actions runs executed against PostgreSQL 16 service containers and completed successfully at the evidence SHA:
