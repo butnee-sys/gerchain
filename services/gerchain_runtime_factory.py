@@ -3,7 +3,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from pathlib import Path
 from typing import Any, Callable
 
 from sqlalchemy import create_engine
@@ -48,6 +47,8 @@ class ProductionRuntimeFactory:
         migration_dir = Path(__file__).resolve().parent.parent / "postgres" / "migrations"
         with self.engine.connect() as connection:
             apply_migrations(connection, migration_dir)
+            from persistence.production_schema_guard import assert_canonical_production_schema
+            assert_canonical_production_schema(connection)
 
     def create(self) -> GerchainRuntime:
         self.initialize()
