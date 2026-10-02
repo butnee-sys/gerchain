@@ -49,7 +49,7 @@ class ProductionRuntimeFactory:
         ORM create_all(). This preserves schema versioning, checksums,
         advisory-lock serialization, and fail-closed migration behavior.
         """
-        migration_dir = Path(__file__).resolve().parents[1] / "postgres" / "schema"
+        migration_dir = Path(__file__).resolve().parents[1] / "postgres" / "migrations"
         if not migration_dir.is_dir():
             raise RuntimeError(f"PostgreSQL migration directory not found: {migration_dir}")
         with self.engine.connect() as connection:
