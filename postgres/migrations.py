@@ -1,4 +1,5 @@
 # EA-35.14: migration recording is conflict-safe after advisory serialization.
+# The serialization contract is exercised by the PostgreSQL concurrency gate before production lock.
 from __future__ import annotations
 
 import hashlib
