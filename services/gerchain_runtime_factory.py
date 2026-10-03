@@ -63,6 +63,7 @@ class ProductionRuntimeFactory:
     def _migrate_escrow_schema(self) -> None:
         """Bring the legacy escrow table to the canonical aggregate contract."""
         statements = [
+            "CREATE TABLE IF NOT EXISTS schema_version (version BIGINT PRIMARY KEY, checksum TEXT NOT NULL, applied_at TIMESTAMPTZ NOT NULL DEFAULT now())",
             "ALTER TABLE escrows ADD COLUMN IF NOT EXISTS refund_destination TEXT",
             "ALTER TABLE escrows ADD COLUMN IF NOT EXISTS currency VARCHAR(16)",
             "ALTER TABLE escrows ADD COLUMN IF NOT EXISTS version BIGINT NOT NULL DEFAULT 0",
@@ -91,6 +92,10 @@ class ProductionRuntimeFactory:
             connection.execute(text(
                 "ALTER TABLE escrows ADD CONSTRAINT ck_escrows_canonical_state "
                 "CHECK (state IN ('CREATED','FUNDED','LOCKED','RELEASED','REFUNDED','CANCELLED'))"
+            ))
+            connection.execute(text(
+                "INSERT INTO schema_version(version, checksum) VALUES (2, 'canonical-escrow-lifecycle-v2') "
+                "ON CONFLICT (version) DO NOTHING"
             ))
 
     def _verify_canonical_schema(self) -> None:
