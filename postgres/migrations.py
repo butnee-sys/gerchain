@@ -212,6 +212,8 @@ def apply_migrations(conn, migration_dir: str | Path) -> None:
 
                 migration_sql = sql.replace("BEGIN;", "").replace("COMMIT;", "")
                 _execute(conn, migration_sql)
+                # Concurrent runners may both finish the same migration body
+                # after serialized lock handoff; recording is therefore race-safe.
                 _execute(
                     conn,
                     """
