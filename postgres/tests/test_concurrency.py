@@ -194,6 +194,27 @@ def test_migrations_are_serialized_and_checksum_is_stable():
         assert all(len(row[1]) == 64 for row in rows)
 
 
+def test_production_runtime_factory_boots_with_canonical_authority():
+    from services.gerchain_runtime_factory import ProductionRuntimeConfig, ProductionRuntimeFactory
+
+    with connect() as conn:
+        conn.execute("DROP TABLE IF EXISTS gerchain_transaction_witnesses, gerchain_outbox_events, gerchain_idempotency_records, gerchain_ledger_movements, gerchain_ledger_accounts, processed_events, outbox, audit_logs, escrows, schema_version CASCADE")
+        conn.commit()
+
+    factory = ProductionRuntimeFactory(
+        ProductionRuntimeConfig(
+            database_url=DATABASE_URL,
+            escrow_id="boot-escrow",
+            amount=100,
+            currency="MNT",
+            witness_id="boot-witness",
+        )
+    )
+    runtime = factory.create()
+    assert runtime.is_canonical_ledger_authoritative
+    with connect() as conn:
+        assert conn.execute("SELECT MAX(version) FROM schema_version").fetchone()[0] >= 11
+    factory.engine.dispose()
 def test_migration_checksum_mismatch_is_rejected():
     with connect() as conn:
         conn.execute("DROP TABLE IF EXISTS processed_events, outbox, audit_logs, escrows, schema_version CASCADE")
