@@ -11,6 +11,9 @@ def apply_migrations(connection, migration_dir: Path) -> None:
         migration_dir.glob("*.sql"),
         key=lambda path: int(path.name.split("_", 1)[0]),
     )
+    # PostgreSQL advisory transaction lock serializes concurrent migrators.
+    # The lock is transaction-scoped, so it releases automatically on commit/rollback.
+    connection.execute(text("SELECT pg_advisory_xact_lock(hashtext('gerchain:migrations'))"))
     connection.execute(
         text(
             "CREATE TABLE IF NOT EXISTS schema_version ("
