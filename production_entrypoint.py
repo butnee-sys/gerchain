@@ -5,6 +5,7 @@ import signal
 import time
 
 from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
 
 from services.gerchain_runtime_factory import ProductionRuntimeFactory
 
@@ -48,7 +49,7 @@ def main() -> None:
             currency=currency,
             witness_id=witness_id,
             engine=engine,
-            session_factory=lambda: __import__("sqlalchemy").orm.sessionmaker(bind=engine, expire_on_commit=False)(),
+            session_factory=sessionmaker(bind=engine, expire_on_commit=False),
         )
 
         if not runtime.is_canonical_ledger_authoritative:
