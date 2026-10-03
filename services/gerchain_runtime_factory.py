@@ -58,7 +58,6 @@ class ProductionRuntimeFactory:
 
         for base in (AtomicLedgerBase, EscrowBase, OutboxBase, IdempotencyBase, TransactionWitness):
             base.metadata.create_all(self.engine)
-        self._migrate_escrow_schema()
 
     def _verify_canonical_schema(self) -> None:
         with self.engine.connect() as connection:
