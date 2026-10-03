@@ -13,13 +13,19 @@ def apply_migrations(connection, migration_dir: Path) -> None:
         key=lambda path: int(path.name.split("_", 1)[0]),
     )
 
-    # The migration runner is intentionally usable from both the SQLAlchemy
-    # production boundary and the raw psycopg concurrency tests.
+    # The runner supports both the SQLAlchemy production boundary and raw
+    # psycopg concurrency tests. Parameter syntax is different at each edge.
     is_sqlalchemy = hasattr(connection, "exec_driver_sql")
 
-    def execute(sql: str, params=None):
+    if is_sqlalchemy:
+        from sqlalchemy import text
+
+    def execute(sql: str, params=None, *, static_sql: bool = False):
         if is_sqlalchemy:
-            return connection.exec_driver_sql(sql.replace("%", "%%"), params or {})
+            statement = text(sql.replace("%", "%%")) if static_sql else text(sql)
+            return connection.execute(statement, params or {})
+        if static_sql:
+            sql = sql.replace("%", "%%")
         return connection.execute(sql, params or ())
 
     lock_key = "gerchain:migrations"
@@ -45,9 +51,7 @@ def apply_migrations(connection, migration_dir: Path) -> None:
             """
         )
 
-        applied_rows = execute(
-            "SELECT version, checksum FROM schema_version"
-        )
+        applied_rows = execute("SELECT version, checksum FROM schema_version")
         applied = {int(row[0]): row[1] for row in applied_rows}
 
         for path in migration_files:
@@ -62,7 +66,7 @@ def apply_migrations(connection, migration_dir: Path) -> None:
                     )
                 continue
 
-            execute(sql)
+            execute(sql, static_sql=True)
 
             if is_sqlalchemy:
                 recorded = execute(
