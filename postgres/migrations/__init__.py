@@ -7,36 +7,48 @@ from sqlalchemy import text
 
 
 def apply_migrations(connection, migration_dir: Path) -> None:
+    migration_dir = Path(migration_dir)
     migration_files = sorted(
         migration_dir.glob("*.sql"),
         key=lambda path: int(path.name.split("_", 1)[0]),
     )
 
-    lock_key = "gerchain:migrations"
-    connection.execute(
-        text("SELECT pg_advisory_lock(hashtext(:lock_key))"),
-        {"lock_key": lock_key},
-    )
+    # The migration runner is intentionally usable from both the SQLAlchemy
+    # production boundary and the raw psycopg concurrency tests.
+    is_sqlalchemy = hasattr(connection, "exec_driver_sql")
 
-    try:
-        connection.execute(
-            text(
-                """
-                CREATE TABLE IF NOT EXISTS schema_version (
-                    version BIGINT PRIMARY KEY,
-                    checksum TEXT NOT NULL,
-                    applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
-                )
-                """
-            )
+    def execute(sql: str, params=None):
+        if is_sqlalchemy:
+            return connection.exec_driver_sql(sql.replace("%", "%%"), params or {})
+        return connection.execute(sql, params or ())
+
+    lock_key = "gerchain:migrations"
+    if is_sqlalchemy:
+        execute(
+            "SELECT pg_advisory_lock(hashtext(:lock_key))",
+            {"lock_key": lock_key},
+        )
+    else:
+        execute(
+            "SELECT pg_advisory_lock(hashtext(%s))",
+            (lock_key,),
         )
 
-        applied = {
-            int(row[0]): row[1]
-            for row in connection.execute(
-                text("SELECT version, checksum FROM schema_version")
+    try:
+        execute(
+            """
+            CREATE TABLE IF NOT EXISTS schema_version (
+                version BIGINT PRIMARY KEY,
+                checksum TEXT NOT NULL,
+                applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
             )
-        }
+            """
+        )
+
+        applied_rows = execute(
+            "SELECT version, checksum FROM schema_version"
+        )
+        applied = {int(row[0]): row[1] for row in applied_rows}
 
         for path in migration_files:
             version = int(path.name.split("_", 1)[0])
@@ -50,26 +62,36 @@ def apply_migrations(connection, migration_dir: Path) -> None:
                     )
                 continue
 
-            # psycopg uses ``%`` for parameter markers even when this migration
-            # carries no parameters. Migrations are static SQL, so escape literal
-            # percent signs only at the driver boundary; the stored checksum stays
-            # based on the canonical source SQL above.
-            connection.exec_driver_sql(sql.replace("%", "%%"))
-            recorded = connection.execute(
-                text(
+            execute(sql)
+
+            if is_sqlalchemy:
+                recorded = execute(
                     "INSERT INTO schema_version(version, checksum) "
                     "VALUES (:version, :checksum) "
                     "ON CONFLICT (version) DO NOTHING "
-                    "RETURNING checksum"
-                ),
-                {"version": version, "checksum": checksum},
-            ).scalar_one_or_none()
-
-            if recorded is None:
-                recorded = connection.execute(
-                    text("SELECT checksum FROM schema_version WHERE version = :version"),
-                    {"version": version},
-                ).scalar_one()
+                    "RETURNING checksum",
+                    {"version": version, "checksum": checksum},
+                ).scalar_one_or_none()
+                if recorded is None:
+                    recorded = execute(
+                        "SELECT checksum FROM schema_version WHERE version = :version",
+                        {"version": version},
+                    ).scalar_one()
+            else:
+                recorded_cursor = execute(
+                    "INSERT INTO schema_version(version, checksum) "
+                    "VALUES (%s, %s) "
+                    "ON CONFLICT (version) DO NOTHING "
+                    "RETURNING checksum",
+                    (version, checksum),
+                )
+                recorded_row = recorded_cursor.fetchone()
+                if recorded_row is None:
+                    recorded_row = execute(
+                        "SELECT checksum FROM schema_version WHERE version = %s",
+                        (version,),
+                    ).fetchone()
+                recorded = recorded_row[0]
 
             if recorded != checksum:
                 raise RuntimeError(
@@ -78,7 +100,13 @@ def apply_migrations(connection, migration_dir: Path) -> None:
 
         connection.commit()
     finally:
-        connection.execute(
-            text("SELECT pg_advisory_unlock(hashtext(:lock_key))"),
-            {"lock_key": lock_key},
-        )
+        if is_sqlalchemy:
+            execute(
+                "SELECT pg_advisory_unlock(hashtext(:lock_key))",
+                {"lock_key": lock_key},
+            )
+        else:
+            execute(
+                "SELECT pg_advisory_unlock(hashtext(%s))",
+                (lock_key,),
+            )
