@@ -4,13 +4,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
-from pathlib import Path
 
 from sqlalchemy import create_engine
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import sessionmaker
-
-from postgres.migrations import apply_migrations
 
 from persistence.production_schema_guard import assert_canonical_production_schema
 from persistence.atomic_ledger import AtomicLedgerBase
@@ -50,22 +47,11 @@ class ProductionRuntimeFactory:
         )
 
     def initialize(self) -> None:
-        """Apply canonical PostgreSQL migrations, then reconcile ORM metadata.
-
-        Migrations own production schema history. ORM create_all is retained
-        only as a defensive no-op for metadata not yet represented by a numbered migration.
-        """
-        migration_dir = Path(__file__).resolve().parents[1] / "postgres" / "migrations"
-        with self.engine.connect() as connection:
-            apply_migrations(connection, migration_dir)
-
+        """Apply the canonical migration chain, then create defensive ORM metadata."""
         migration_dir = Path(__file__).resolve().parents[1] / "postgres" / "migrations"
         with self.engine.begin() as connection:
             apply_migrations(connection, migration_dir)
-        migration_dir = Path(__file__).resolve().parents[1] / "postgres" / "migrations"
-        with self.engine.begin() as connection:
-            apply_migrations(connection, migration_dir)
-        for base in (AtomicLedgerBase, EscrowBase, OutboxBase, IdempotencyBase, TransactionWitness):
+        for base in (AtomicLedgerBase, EscrowBase, OutboxBase, IdempotencyBase, WitnessBase):
             base.metadata.create_all(self.engine)
 
     def _verify_canonical_schema(self) -> None:
