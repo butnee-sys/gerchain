@@ -161,7 +161,20 @@ def test_expired_lease_is_recovered_and_stale_owner_cannot_complete():
 
 def test_migrations_are_serialized_and_checksum_is_stable():
     with connect() as conn:
-        conn.execute("DROP TABLE IF EXISTS processed_events, outbox, audit_logs, escrows, schema_version CASCADE")
+        conn.execute("""
+            DROP TABLE IF EXISTS
+                gerchain_transaction_witnesses,
+                gerchain_outbox_events,
+                gerchain_idempotency_records,
+                gerchain_ledger_movements,
+                gerchain_ledger_accounts,
+                processed_events,
+                outbox,
+                audit_logs,
+                escrows,
+                schema_version
+            CASCADE
+        """)
         conn.commit()
 
     barrier = threading.Barrier(2)
