@@ -198,7 +198,8 @@ def apply_migrations(conn, migration_dir: str | Path) -> None:
                 )
                 """,
             )
-            # Defensive table-level barrier for legacy migration runners that do not honor the advisory lock.\n            _execute(conn, "LOCK TABLE schema_version IN ACCESS EXCLUSIVE MODE")
+            # Defensive table-level barrier for legacy migration runners that do not honor the advisory lock.
+            _execute(conn, "LOCK TABLE schema_version IN ACCESS EXCLUSIVE MODE")
             rows = _execute(
                 conn,
                 "SELECT version, checksum FROM schema_version ORDER BY version",
