@@ -33,43 +33,43 @@ def apply_migrations(connection, migration_dir: Path) -> None:
             )
         )
 
-    applied = {
-        int(row[0]): row[1]
-        for row in connection.execute(
-            text("SELECT version, checksum FROM schema_version")
-        )
-    }
+        applied = {
+            int(row[0]): row[1]
+            for row in connection.execute(
+                text("SELECT version, checksum FROM schema_version")
+            )
+        }
 
-    for path in migration_files:
-        version = int(path.name.split("_", 1)[0])
-        sql = path.read_text(encoding="utf-8")
-        checksum = hashlib.sha256(sql.encode("utf-8")).hexdigest()
+        for path in migration_files:
+            version = int(path.name.split("_", 1)[0])
+            sql = path.read_text(encoding="utf-8")
+            checksum = hashlib.sha256(sql.encode("utf-8")).hexdigest()
 
-        if version in applied:
-            if applied[version] != checksum:
+            if version in applied:
+                if applied[version] != checksum:
+                    raise RuntimeError(
+                        f"migration checksum mismatch for version {version}: {path.name}"
+                    )
+                continue
+
+            connection.exec_driver_sql(sql)
+            # Record the migration idempotently even when another migrator
+            # committed the same version while this transaction was waiting on
+            # the advisory lock. Keep the already-recorded checksum authoritative.
+            recorded = connection.execute(
+                text(
+                    "INSERT INTO schema_version(version, checksum) "
+                    "VALUES (:version, :checksum) "
+                    "ON CONFLICT (version) DO UPDATE "
+                    "SET checksum = schema_version.checksum "
+                    "RETURNING checksum"
+                ),
+                {"version": version, "checksum": checksum},
+            ).scalar_one()
+            if recorded != checksum:
                 raise RuntimeError(
                     f"migration checksum mismatch for version {version}: {path.name}"
                 )
-            continue
-
-        connection.exec_driver_sql(sql)
-        # Record the migration idempotently even when another migrator
-        # committed the same version while this transaction was waiting on
-        # the advisory lock. Keep the already-recorded checksum authoritative.
-        recorded = connection.execute(
-            text(
-                "INSERT INTO schema_version(version, checksum) "
-                "VALUES (:version, :checksum) "
-                "ON CONFLICT (version) DO UPDATE "
-                "SET checksum = schema_version.checksum "
-                "RETURNING checksum"
-            ),
-            {"version": version, "checksum": checksum},
-        ).scalar_one()
-        if recorded != checksum:
-            raise RuntimeError(
-                f"migration checksum mismatch for version {version}: {path.name}"
-            )
     finally:
         connection.execute(
             text("SELECT pg_advisory_unlock(hashtext(:lock_key))"),
