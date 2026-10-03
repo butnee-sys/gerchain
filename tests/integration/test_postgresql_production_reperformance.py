@@ -6,7 +6,7 @@ import pytest
 from sqlalchemy import text, create_engine
 from sqlalchemy.orm import sessionmaker
 
-from services.gerchain_runtime_factory import ProductionRuntimeFactory
+from services.gerchain_runtime_factory import ProductionRuntimeConfig, ProductionRuntimeFactory
 
 
 def test_production_factory_establishes_canonical_ledger_authority():
@@ -16,14 +16,17 @@ def test_production_factory_establishes_canonical_ledger_authority():
 
     engine = create_engine(url, pool_pre_ping=True)
     session_factory = sessionmaker(bind=engine, expire_on_commit=False)
-    runtime = ProductionRuntimeFactory.create(
-        escrow_id="production-reperf-escrow",
-        amount=100,
-        currency="USD",
-        witness_id="production-reperf-witness",
+    factory = ProductionRuntimeFactory(
+        ProductionRuntimeConfig(
+            database_url=url,
+            escrow_id="production-reperf-escrow",
+            amount=100,
+            currency="USD",
+            witness_id="production-reperf-witness",
+        ),
         engine=engine,
-        session_factory=session_factory,
     )
+    runtime = factory.create()
 
     assert runtime.is_canonical_ledger_authoritative
     assert runtime.runtime_mode == "production-postgresql"
