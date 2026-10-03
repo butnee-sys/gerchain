@@ -4,24 +4,22 @@ import os
 
 from sqlalchemy import create_engine, inspect
 
-from services.gerchain_runtime_factory import ProductionRuntimeConfig, ProductionRuntimeFactory
+from services.gerchain_runtime_factory import ProductionRuntimeFactory
 
 
 def test_production_runtime_bootstraps_canonical_persistence():
     database_url = os.environ["GERCHAIN_POSTGRES_DSN"]
     engine = create_engine(database_url, future=True)
-    factory = ProductionRuntimeFactory(
-        ProductionRuntimeConfig(
-            database_url=database_url,
-            escrow_id="smoke-escrow",
-            amount=100,
-            currency="MNT",
-            witness_id="smoke-witness",
-        ),
+    runtime = ProductionRuntimeFactory.create(
+        escrow_id="smoke-escrow",
+        amount=100,
+        currency="MNT",
+        witness_id="smoke-witness",
         engine=engine,
-    )
-
-    runtime = factory.create()
+        session_factory=__import__("sqlalchemy.orm", fromlist=["sessionmaker"]).sessionmaker(
+            bind=engine, expire_on_commit=False
+        ),
+    )    runtime = factory.create()
 
     assert runtime.is_canonical_ledger_authoritative
     assert runtime.runtime_mode == "production-postgresql"
