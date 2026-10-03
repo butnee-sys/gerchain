@@ -1,6 +1,7 @@
 """Explicit production construction for the GerChain canonical runtime."""
 from __future__ import annotations
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Callable
 from sqlalchemy import create_engine
 from sqlalchemy.engine import Engine
@@ -10,6 +11,7 @@ from persistence.atomic_value_transaction import WitnessBase
 from persistence.durable_idempotency import IdempotencyBase
 from persistence.escrow_aggregate import EscrowBase
 from persistence.recovery_outbox import OutboxBase
+from postgres.migrations import apply_migrations
 from services.gerchain_runtime import GerchainRuntime
 @dataclass(frozen=True)
 class ProductionRuntimeConfig:
@@ -28,7 +30,9 @@ class ProductionRuntimeFactory:
         if self.engine.dialect.name != "postgresql": raise ValueError("ProductionRuntimeFactory requires a PostgreSQL engine")
         self.session_factory: Callable[[], Any]=sessionmaker(bind=self.engine, expire_on_commit=False)
     def initialize(self) -> None:
-        for base in (AtomicLedgerBase, EscrowBase, WitnessBase, IdempotencyBase, OutboxBase): base.metadata.create_all(self.engine)
+        migration_dir = Path(__file__).resolve().parents[1] / "postgres" / "migrations"
+        with self.engine.connect() as connection:
+            apply_migrations(connection, migration_dir)
     def create(self) -> GerchainRuntime:
         self.initialize()
         runtime=GerchainRuntime(escrow_id=self.config.escrow_id, amount=self.config.amount, currency=self.config.currency, witness_id=self.config.witness_id)
