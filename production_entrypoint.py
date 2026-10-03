@@ -6,7 +6,8 @@ import time
 
 from sqlalchemy import create_engine
 
-from services.gerchain_runtime_factory import ProductionRuntimeConfig, ProductionRuntimeFactory
+from services.gerchain_runtime_factory import ProductionRuntimeFactory
+from sqlalchemy.orm import sessionmaker
 
 
 _running = True
@@ -42,17 +43,15 @@ def main() -> None:
 
     engine = create_engine(database_url, pool_pre_ping=True)
     try:
-        factory = ProductionRuntimeFactory(
-            ProductionRuntimeConfig(
-                database_url=database_url,
-                escrow_id=escrow_id,
-                amount=amount,
-                currency=currency,
-                witness_id=witness_id,
-            ),
-            engine=engine,
-        )
-        runtime = factory.create()
+        session_factory = sessionmaker(bind=engine, expire_on_commit=False)
+    runtime = ProductionRuntimeFactory.create(
+        escrow_id=escrow_id,
+        amount=amount,
+        currency=currency,
+        witness_id=witness_id,
+        engine=engine,
+        session_factory=session_factory,
+    )
 
         if not runtime.is_canonical_ledger_authoritative:
             raise RuntimeError("canonical ledger authority was not established")
