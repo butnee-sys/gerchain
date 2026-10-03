@@ -15,6 +15,7 @@ from persistence.escrow_aggregate import EscrowBase
 from persistence.recovery_outbox import OutboxBase
 from persistence.durable_idempotency import IdempotencyBase
 from persistence.atomic_value_transaction import TransactionWitness
+from persistence.production_schema_guard import assert_canonical_production_schema
 from services.gerchain_runtime import GerchainRuntime
 
 
@@ -81,6 +82,8 @@ class ProductionRuntimeFactory:
 
         for base in (AtomicLedgerBase, EscrowBase, OutboxBase, IdempotencyBase, TransactionWitness):
             base.metadata.create_all(self.engine)
+        with self.engine.connect() as connection:
+            assert_canonical_production_schema(connection)
 
     def create(self) -> GerchainRuntime:
         self.initialize()
