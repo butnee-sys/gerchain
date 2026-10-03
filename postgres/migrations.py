@@ -1,3 +1,4 @@
+# EA-35.14: migration recording is conflict-safe after advisory serialization.
 from __future__ import annotations
 
 import hashlib
