@@ -1,13 +1,13 @@
-name: PostgreSQL Concurrency
+name: PostgreSQL Production Runtime
 
 on:
-  push:
-    branches: ["postgres-concurrency-hardening"]
   pull_request:
     branches: ["main"]
+  push:
+    branches: ["feat/ea35-production-lock-candidate"]
 
 jobs:
-  postgres-concurrency:
+  production-runtime:
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -31,14 +31,14 @@ jobs:
           python-version: "3.13"
       - name: Install PostgreSQL test dependencies
         run: python -m pip install -r postgres/requirements-test.txt
-      - name: Run PostgreSQL concurrency suite
+      - name: Verify canonical production runtime boot
         env:
           GERCHAIN_POSTGRES_DSN: postgresql://gerchain:gerchain@127.0.0.1:5432/gerchain_test
-        run: python -m pytest -q --junitxml=artifacts/postgres-concurrency.xml postgres/tests/test_concurrency.py
-      - name: Upload PostgreSQL concurrency evidence
+        run: python -m pytest -q --junitxml=artifacts/postgres-production-runtime.xml postgres/tests/test_production_runtime_boot.py
+      - name: Upload PostgreSQL production runtime evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: postgres-concurrency-junit
-          path: artifacts/postgres-concurrency.xml
+          name: postgres-production-runtime-junit
+          path: artifacts/postgres-production-runtime.xml
           if-no-files-found: error
