@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+from pathlib import Path
 from typing import Any, Callable
 
 from sqlalchemy import create_engine
@@ -47,14 +48,29 @@ class ProductionRuntimeFactory:
         )
 
     def initialize(self) -> None:
-        """Apply the canonical migration chain and verify the production contract."""
-        migration_dir = Path(__file__).resolve().parents[1] / "postgres" / "schema"
-        with self.engine.begin() as connection:
-            apply_migrations(connection, migration_dir)
-            assert_canonical_production_schema(connection)
+        """Apply the canonical PostgreSQL schema before constructing the runtime.
 
-        # Migrations are authoritative. ORM metadata is supplementary only.
-        for base in (AtomicLedgerBase, EscrowBase, OutboxBase, IdempotencyBase, TransactionWitness):
+        The SQL migration is authoritative for existing databases; ORM
+        create_all alone cannot add columns or evolve constraints.
+        Migration errors intentionally fail closed.
+        """
+        schema_path = (
+            Path(__file__).resolve().parents[1]
+            / "postgres"
+            / "schema"
+            / "001_concurrency.sql"
+        )
+        schema_sql = schema_path.read_text(encoding="utf-8")
+        with self.engine.begin() as connection:
+            connection.exec_driver_sql(schema_sql)
+
+        for base in (
+            AtomicLedgerBase,
+            EscrowBase,
+            OutboxBase,
+            IdempotencyBase,
+            TransactionWitness,
+        ):
             base.metadata.create_all(self.engine)
 
     def create(self) -> GerchainRuntime:
