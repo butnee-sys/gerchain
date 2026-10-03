@@ -13,13 +13,9 @@ def apply_migrations(connection, migration_dir: Path) -> None:
         key=lambda path: int(path.name.split("_", 1)[0]),
     )
 
-    # The runner supports both the SQLAlchemy production boundary and raw
-    # psycopg concurrency tests. Parameter syntax is different at each edge.
-    # Preserve an existing SQLAlchemy transaction context; otherwise commit
-    # the migration transaction for standalone callers.
-    outer_sqlalchemy_transaction = bool(
-        hasattr(connection, "in_transaction") and connection.in_transaction()
-    )
+    # Migrations own their transaction boundary. This is required for the
+    # advisory lock to serialize both DDL and schema_version commits; releasing
+    # the lock before commit allows a second migrator to observe stale history.
     is_sqlalchemy = hasattr(connection, "exec_driver_sql")
 
     if is_sqlalchemy:
@@ -114,14 +110,12 @@ def apply_migrations(connection, migration_dir: Path) -> None:
                     f"migration checksum mismatch for version {version}: {path.name}"
                 )
 
-        if is_sqlalchemy:
-            if not outer_sqlalchemy_transaction:
-                connection.commit()
-        else:
-            connection.commit()
+        # Commit BEFORE releasing the session-level advisory lock. Otherwise
+        # another migrator can acquire the lock and race against an uncommitted
+        # schema_version row.
+        connection.commit()
     except Exception:
-        if not outer_sqlalchemy_transaction:
-            connection.rollback()
+        connection.rollback()
         raise
     finally:
         if is_sqlalchemy:
