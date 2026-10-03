@@ -126,3 +126,9 @@ CREATE TABLE IF NOT EXISTS gerchain_idempotency_records (
     created_at TIMESTAMPTZ NOT NULL,
     updated_at TIMESTAMPTZ NOT NULL
 );
+
+
+-- EA-35.13 migration identity
+INSERT INTO schema_version (version, checksum)
+VALUES (11, 'EA-35.13-canonical-production')
+ON CONFLICT (version) DO NOTHING;
