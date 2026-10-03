@@ -33,16 +33,6 @@ def apply_migrations(database_url: str, schema_dir: str | Path | None = None) ->
             sql = path.read_text(encoding="utf-8")
             checksum = hashlib.sha256(sql.encode("utf-8")).hexdigest()
 
-            if version == 1:
-                conn.execute(sql)
-                conn.execute(
-                    "INSERT INTO schema_version(version, checksum) VALUES (%s, %s)",
-                    (version, checksum),
-                )
-                conn.commit()
-                applied.append(version)
-                continue
-
             row = conn.execute(
                 "SELECT checksum FROM schema_version WHERE version = %s",
                 (version,),
