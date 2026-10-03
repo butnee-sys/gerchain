@@ -3,7 +3,7 @@ name: production-postgresql-e2e
 on:
   push:
     branches:
-      - feat/ea21-transaction-aware-ledger
+      - ea35-production-proof-final
   pull_request:
 
 jobs:
