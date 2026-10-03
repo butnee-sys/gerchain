@@ -1,0 +1,45 @@
+name: PostgreSQL Production Gate
+
+on:
+  push:
+    branches:
+      - "feat/**"
+  pull_request:
+
+jobs:
+  postgresql-production-gate:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: gerchain
+          POSTGRES_PASSWORD: gerchain
+          POSTGRES_DB: gerchain
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U gerchain -d gerchain"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements-dee-security.txt pytest
+      - name: Run PostgreSQL production gate
+        env:
+          GERCHAIN_TEST_DATABASE_URL: postgresql+psycopg://gerchain:gerchain@localhost:5432/gerchain
+          GERCHAIN_DATABASE_URL: postgresql+psycopg://gerchain:gerchain@localhost:5432/gerchain
+          GERCHAIN_ESCROW_ID: production-gate-escrow
+          GERCHAIN_ESCROW_AMOUNT: "100"
+          GERCHAIN_CURRENCY: USD
+          GERCHAIN_WITNESS_ID: production-gate-witness
+        run: |
+          python -m pytest -q tests/integration/test_production_runtime_postgresql.py
+          python -m pytest -q tests/persistence/test_deep_value_reconciliation.py

@@ -1,0 +1,73 @@
+name: production-postgres-gate
+
+on:
+  push:
+    branches: ["feat/ea21-transaction-aware-ledger"]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  postgres-production-gate:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: gerchain
+          POSTGRES_PASSWORD: gerchain
+          POSTGRES_DB: gerchain
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U gerchain -d gerchain"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install production dependencies and test runner
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements-dee-security.txt pytest psycopg[binary]
+
+      - name: Apply canonical PostgreSQL schema
+        env:
+          PGPASSWORD: gerchain
+        run: psql -h 127.0.0.1 -U gerchain -d gerchain -f postgres/schema/001_concurrency.sql
+
+      - name: Verify production runtime constructs against PostgreSQL
+        env:
+          GERCHAIN_DATABASE_URL: postgresql+psycopg://gerchain:gerchain@127.0.0.1:5432/gerchain
+        run: |
+          python - <<'PY'
+          import os
+          from services.gerchain_runtime_factory import (
+              ProductionRuntimeConfig,
+              ProductionRuntimeFactory,
+          )
+
+          factory = ProductionRuntimeFactory(
+              ProductionRuntimeConfig(
+                  database_url=os.environ["GERCHAIN_DATABASE_URL"],
+                  escrow_id="production-gate-escrow",
+                  amount=100,
+                  currency="USD",
+                  witness_id="production-gate-witness",
+              )
+          )
+          runtime = factory.create()
+          assert runtime.is_canonical_ledger_authoritative
+          print("PRODUCTION_POSTGRES_BOOT=PASS")
+          print("CANONICAL_LEDGER_AUTHORITY=PASS")
+          runtime._session_factory().close()
+          factory.engine.dispose()
+          PY
+
+      - name: Run deep value truth reconciliation tests
+        run: pytest -q tests/persistence/test_deep_value_reconciliation.py

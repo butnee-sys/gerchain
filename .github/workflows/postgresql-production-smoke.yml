@@ -1,0 +1,36 @@
+name: PostgreSQL production smoke
+
+on:
+  push:
+    branches:
+      - "feat/**"
+  workflow_dispatch:
+
+jobs:
+  production-postgresql:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: gerchain
+          POSTGRES_PASSWORD: gerchain
+          POSTGRES_DB: gerchain
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U gerchain -d gerchain"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: python -m pip install --upgrade pip
+      - run: python -m pip install "sqlalchemy>=2,<3" "psycopg[binary]>=3.2,<4" "cryptography>=43,<47" pytest
+      - run: >-
+          GERCHAIN_DATABASE_URL=postgresql+psycopg://gerchain:gerchain@localhost:5432/gerchain
+          pytest -q tests/integration/test_production_postgresql_smoke.py
