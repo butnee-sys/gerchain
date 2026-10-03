@@ -64,3 +64,23 @@ Required current-tip evidence:
 9. completed GitHub Actions result anchored to the current exact SHA.
 
 After current-tip verification, perform independent re-performance/oracle review before the final production lock.
+
+
+## Current exact-SHA verification trigger — 2026-10-03
+
+This section records the current verification trigger. Historical successful SHA results are not promoted to current-tip evidence.
+
+Required fresh execution on the resulting commit:
+- Python syntax gate;
+- PostgreSQL migration and canonical schema guard;
+- production runtime construction;
+- production entrypoint boot;
+- canonical value-flow/replay;
+- REFUND/CANCEL/SETTLEMENT;
+- deep value-truth reconciliation;
+- canonical EAI PostgreSQL gate;
+- independent re-performance workflow where configured.
+
+Status at trigger creation: **PENDING EXECUTION / NOT LOCKED**.
+
+No GREEN or production lock is inferred from this trigger itself.
