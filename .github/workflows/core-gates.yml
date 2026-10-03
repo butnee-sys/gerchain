@@ -37,6 +37,8 @@ jobs:
           if [ -f requirements-dee-security.txt ]; then pip install -r requirements-dee-security.txt; fi
           if [ -f postgres/requirements-test.txt ]; then pip install -r postgres/requirements-test.txt; fi
           pip install "sqlalchemy>=2" "psycopg[binary]" fastapi uvicorn httpx pytest
+      - name: Verify production runtime source compiles
+        run: python -m compileall -q services production_entrypoint.py persistence postgres
       - name: Run canonical fundamental architecture gate
         env:
           GERCHAIN_DATABASE_URL: postgresql+psycopg://gerchain:gerchain@127.0.0.1:5432/gerchain_test
