@@ -34,8 +34,10 @@ class ProductionRuntimeFactory:
     ) -> GerchainRuntime:
         if engine is None or session_factory is None:
             raise ValueError("production runtime requires PostgreSQL engine and session factory")
+        if engine.dialect.name != "postgresql":
+            raise ValueError("production runtime requires PostgreSQL engine")
         migration_dir = Path(__file__).resolve().parents[1] / "postgres" / "migrations"
-        with engine.connect() as connection:
+        with engine.begin() as connection:
             apply_migrations(connection, migration_dir)
             assert_canonical_production_schema(connection)
         runtime = GerchainRuntime(
