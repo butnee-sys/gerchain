@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+from pathlib import Path
 
 import pytest
 from sqlalchemy import create_engine, text
@@ -33,7 +34,7 @@ def isolate_postgresql_core_state():
     IdempotencyBase.metadata.create_all(engine)
     initialize_outbox_schema(engine)
     with engine.connect() as connection:
-        apply_migrations(connection, "postgres/migrations")
+        apply_migrations(connection, Path("postgres/migrations"))
     # Ensure every canonical table exists before isolation truncation.
     for base in (AtomicLedgerBase, EscrowBase, OutboxBase, DurableIdempotencyBase, TransactionWitness):
         base.metadata.create_all(engine)
