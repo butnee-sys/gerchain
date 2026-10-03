@@ -10,6 +10,11 @@ from sqlalchemy.engine import Engine
 from sqlalchemy.orm import sessionmaker
 
 from persistence.production_schema_guard import assert_canonical_production_schema
+from persistence.atomic_ledger import AtomicLedgerBase
+from persistence.escrow_aggregate import EscrowBase
+from persistence.recovery_outbox import OutboxBase
+from persistence.durable_idempotency import IdempotencyBase
+from persistence.atomic_value_transaction import WitnessBase
 from postgres.migrations import apply_migrations
 from services.gerchain_runtime import GerchainRuntime
 
@@ -53,6 +58,10 @@ class ProductionRuntimeFactory:
 
         for base in (AtomicLedgerBase, EscrowBase, OutboxBase, IdempotencyBase, TransactionWitness):
             base.metadata.create_all(self.engine)
+
+    def _verify_canonical_schema(self) -> None:
+        with self.engine.connect() as connection:
+            assert_canonical_production_schema(connection)
 
     def create(self) -> GerchainRuntime:
         self.initialize()
