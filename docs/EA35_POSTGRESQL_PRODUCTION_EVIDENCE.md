@@ -72,3 +72,23 @@ The earlier workflow execution on commit e860f502f3e1a2d56fd873ad2faab7b1ab63074
 The current branch contains the corresponding corrections: the migration runner deterministically selects one canonical file per duplicated historical migration version, records migration versions idempotently with checksum verification, and the runtime FUND method source is valid Python again. A fresh exact-SHA workflow execution is required before any GREEN/LOCK claim.
 
 Status: IN PROGRESS / NOT LOCKED.
+
+
+## Latest production verification
+
+The pull-request merge ref containing `2a2fef2ac9bda92052899fe9c1507159e89ca1b8` was executed as merge commit `430e41233b4158669feff04c9a7d2f056fcc6235`.
+
+Successful runs on that merge ref include:
+
+- Production PostgreSQL verification — run `36706455431`: lifecycle, canonical value flow, and deep reconciliation all succeeded.
+- PostgreSQL Production Evidence — run `36706455516`: production PostgreSQL boot evidence succeeded.
+- production-postgres-gate — run `36706455517`: runtime construction and deep value-truth reconciliation succeeded.
+- production-postgresql-e2e — run `36706455530`: production PostgreSQL re-performance succeeded.
+
+The direct verification job recorded: lifecycle **1 passed**, production value-flow **2 passed**, and deep reconciliation **19 passed**.
+
+## Current gate
+
+Commit `ede6c10f48bf9a193d5719864cf6cc60d287c5bc` adds the historically observed version-1 checksum `494763e210c8a3839972ba21e8705dcf2e6564e5abca9c76161f2f49c6664ec8` to the migration compatibility set. Fresh PostgreSQL/EAI/core workflows are queued for this commit.
+
+Status remains **IN PROGRESS / NOT LOCKED** until those fresh runs complete. No GREEN or production-lock claim is made from queued evidence.
