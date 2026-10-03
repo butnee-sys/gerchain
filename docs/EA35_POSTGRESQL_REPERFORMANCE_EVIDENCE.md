@@ -94,3 +94,7 @@ Remaining gates include:
 7. Formal production lock decision after all gates are closed.
 
 GREEN in this document means the specific GitHub Actions execution completed successfully; it is not an external certification or overall production approval.
+
+## Migration blocker fixed — 2026-10-03
+
+Fresh PostgreSQL runs on 2026-10-02 exposed a migration batch-order defect: `gerchain_movement_amount_check` could be re-added in the same submitted SQL batch before PostgreSQL had completed the preceding DROP. Migrations 010 and 011 were hardened with server-side sequential DO-block constraint replacement. Existing frozen checksums remain accepted; new checksums are now accepted for fresh installations. This change requires fresh PostgreSQL re-performance before any lock decision.
