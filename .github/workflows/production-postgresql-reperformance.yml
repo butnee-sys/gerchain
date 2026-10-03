@@ -39,6 +39,16 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements-dee-security.txt pytest
 
+      - name: Production source compile gate
+        run: |
+          python -m py_compile services/gerchain_runtime.py services/gerchain_runtime_factory.py production_entrypoint.py
+
+      - name: Migration concurrency re-performance
+        env:
+          GERCHAIN_POSTGRES_DSN: ${{ env.GERCHAIN_DATABASE_URL }}
+        run: |
+          pytest -q postgres/tests/test_concurrency.py::test_migrations_are_serialized_and_checksum_is_stable
+
       - name: Production PostgreSQL re-performance
         run: |
           pytest -q tests/integration/test_production_postgresql_runtime.py
