@@ -14,7 +14,7 @@ def apply_migrations(connection, migration_dir: Path) -> None:
 
     lock_key = "gerchain:migrations"
     connection.execute(
-        text("SELECT pg_advisory_xact_lock(hashtext(:lock_key))"),
+        text("SELECT pg_advisory_lock(hashtext(:lock_key))"),
         {"lock_key": lock_key},
     )
 
@@ -37,20 +37,21 @@ def apply_migrations(connection, migration_dir: Path) -> None:
         )
     }
 
-    for path in migration_files:
-        version = int(path.name.split("_", 1)[0])
-        sql = path.read_text(encoding="utf-8")
-        checksum = hashlib.sha256(sql.encode("utf-8")).hexdigest()
+    try:
+        for path in migration_files:
+            version = int(path.name.split("_", 1)[0])
+            sql = path.read_text(encoding="utf-8")
+            checksum = hashlib.sha256(sql.encode("utf-8")).hexdigest()
 
-        if version in applied:
-            if applied[version] != checksum:
-                raise RuntimeError(
+            if version in applied:
+                if applied[version] != checksum:
+                    raise RuntimeError(
                     f"migration checksum mismatch for version {version}: {path.name}"
-                )
-            continue
+                    )
+                continue
 
-        connection.exec_driver_sql(sql)
-        recorded = connection.execute(
+            connection.exec_driver_sql(sql)
+                recorded = connection.execute(
             text(
                 "INSERT INTO schema_version(version, checksum) "
                 "VALUES (:version, :checksum) "
@@ -59,14 +60,19 @@ def apply_migrations(connection, migration_dir: Path) -> None:
             ),
             {"version": version, "checksum": checksum},
         ).scalar_one_or_none()
-        if recorded is None:
+            if recorded is None:
             recorded = connection.execute(
                 text("SELECT checksum FROM schema_version WHERE version = :version"),
                 {"version": version},
             ).scalar_one()
-        if recorded != checksum:
-            raise RuntimeError(
+            if recorded != checksum:
+                raise RuntimeError(
                 f"migration checksum mismatch for version {version}: {path.name}"
             )
 
-    connection.commit()
+        connection.commit()
+    finally:
+        connection.execute(
+            text("SELECT pg_advisory_unlock(hashtext(:lock_key))"),
+            {"lock_key": lock_key},
+        )
