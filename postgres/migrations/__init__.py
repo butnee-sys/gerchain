@@ -50,7 +50,11 @@ def apply_migrations(connection, migration_dir: Path) -> None:
                     )
                 continue
 
-            connection.exec_driver_sql(sql)
+            # psycopg uses ``%`` for parameter markers even when this migration
+            # carries no parameters. Migrations are static SQL, so escape literal
+            # percent signs only at the driver boundary; the stored checksum stays
+            # based on the canonical source SQL above.
+            connection.exec_driver_sql(sql.replace("%", "%%"))
             recorded = connection.execute(
                 text(
                     "INSERT INTO schema_version(version, checksum) "
