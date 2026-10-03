@@ -58,6 +58,33 @@ class ProductionRuntimeFactory:
 
         for base in (AtomicLedgerBase, EscrowBase, OutboxBase, IdempotencyBase, TransactionWitness):
             base.metadata.create_all(self.engine)
+        self._migrate_escrow_schema()
+
+    def _migrate_escrow_schema(self) -> None:
+        """Bring the legacy escrow table to the canonical aggregate contract."""
+        statements = [
+            "ALTER TABLE escrows ADD COLUMN IF NOT EXISTS refund_destination TEXT",
+            "ALTER TABLE escrows ADD COLUMN IF NOT EXISTS currency VARCHAR(16)",
+            "ALTER TABLE escrows ADD COLUMN IF NOT EXISTS version BIGINT NOT NULL DEFAULT 0",
+            "ALTER TABLE escrows ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ",
+            "UPDATE escrows SET created_at = COALESCE(created_at, updated_at, now()) WHERE created_at IS NULL",
+            "ALTER TABLE escrows ALTER COLUMN created_at SET NOT NULL",
+        ]
+        with self.engine.begin() as connection:
+            for statement in statements:
+                connection.execute(text(statement))
+            connection.execute(text(
+                "DO $ DECLARE c RECORD; BEGIN "
+                "FOR c IN SELECT conname FROM pg_constraint "
+                "WHERE conrelid = 'escrows'::regclass AND contype = 'c' "
+                "AND pg_get_constraintdef(oid) LIKE '%state%' LOOP "
+                "EXECUTE format('ALTER TABLE escrows DROP CONSTRAINT %I', c.conname); "
+                "END LOOP; END $;"
+            ))
+            connection.execute(text(
+                "ALTER TABLE escrows ADD CONSTRAINT ck_escrows_canonical_state "
+                "CHECK (state IN ('CREATED','FUNDED','LOCKED','RELEASED','REFUNDED','CANCELLED'))"
+            ))
 
     def _verify_canonical_schema(self) -> None:
         with self.engine.connect() as connection:
