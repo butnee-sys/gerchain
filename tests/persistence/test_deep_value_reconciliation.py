@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 import hashlib
 import json
+import os
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -20,7 +21,7 @@ from persistence.recovery_outbox import OutboxBase, OutboxEvent
 
 
 def _session_factory():
-    engine = create_engine("sqlite+pysqlite:///:memory:")
+    engine = create_engine(os.environ.get("GERCHAIN_TEST_DATABASE_URL", "sqlite+pysqlite:///:memory:"), pool_pre_ping=True)
     AtomicLedgerBase.metadata.create_all(engine)
     EscrowBase.metadata.create_all(engine)
     OutboxBase.metadata.create_all(engine)
