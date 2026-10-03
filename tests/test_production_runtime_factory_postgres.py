@@ -142,7 +142,7 @@ def test_production_factory_applies_canonical_schema_migrations():
             ).fetchall()
         ]
         migration_versions = []
-        for path in (Path(__file__).resolve().parents[1] / "postgres" / "schema").glob("*.sql"):
+        for path in (Path(__file__).resolve().parents[1] / "postgres" / "migrations").glob("*.sql"):
             try:
                 migration_versions.append(int(path.name.split("_", 1)[0]))
             except (ValueError, IndexError):
