@@ -47,16 +47,12 @@ class ProductionRuntimeFactory:
         )
 
     def initialize(self) -> None:
-        """Apply the canonical migration chain, then create defensive ORM metadata."""
+        """Apply the canonical PostgreSQL migration history before boot."""
         migration_dir = Path(__file__).resolve().parents[1] / "postgres" / "migrations"
-        with self.engine.begin() as connection:
-            apply_migrations(connection, migration_dir)
-        for base in (AtomicLedgerBase, EscrowBase, OutboxBase, IdempotencyBase, WitnessBase):
-            base.metadata.create_all(self.engine)
-
-    def _verify_canonical_schema(self) -> None:
-        with self.engine.connect() as connection:
-            assert_canonical_production_schema(connection)
+        if not migration_dir.is_dir():
+            raise RuntimeError(f"canonical migration directory missing: {migration_dir}")
+        with self.engine.connect() as conn:
+            apply_migrations(conn, migration_dir)
 
     def create(self) -> GerchainRuntime:
         self.initialize()
