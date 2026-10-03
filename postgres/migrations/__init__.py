@@ -43,7 +43,7 @@ def apply_migrations(connection, migration_dir: Path) -> None:
         )
     else:
         execute(
-            "SELECT pg_advisory_lock(hashtext(%s))",
+            "SELECT pg_advisory_xact_lock(hashtext(%s))",
             (lock_key,),
         )
 
