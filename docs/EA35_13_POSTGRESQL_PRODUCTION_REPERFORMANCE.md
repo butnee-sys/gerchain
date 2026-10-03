@@ -45,3 +45,8 @@ Historical successful runs are retained as historical evidence only. They do not
 Decision rule: any failed canonical production gate remains an open blocker; queued is not PASS; only completed SUCCESS on the exact commit may be promoted to current execution evidence.
 
 - Fresh verification request: 2026-10-02 exact-SHA execution.
+
+
+## Fresh CI observation — 2026-10-04
+
+The workflow associated with commit `e860f502f3e1a2d56fd873ad2faab7b1ab630740` executed PostgreSQL 16 successfully, but its `core-gates` job failed during test collection because the PR merge snapshot contained literal `\\n` sequences in `services/gerchain_runtime.py`. The current branch-tip file has no such escaped-newline sequences. This historical failure is therefore not treated as current production evidence. A fresh branch-tip execution is required before any gate can be promoted.
