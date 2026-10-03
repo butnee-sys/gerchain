@@ -56,6 +56,9 @@ class ProductionRuntimeFactory:
         with self.engine.connect() as connection:
             apply_migrations(connection, migration_dir)
 
+        migration_dir = Path(__file__).resolve().parents[1] / "postgres" / "migrations"
+        with self.engine.begin() as connection:
+            apply_migrations(connection, migration_dir)
         for base in (AtomicLedgerBase, EscrowBase, OutboxBase, IdempotencyBase, TransactionWitness):
             base.metadata.create_all(self.engine)
 
