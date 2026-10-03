@@ -51,7 +51,16 @@ def apply_migrations(connection, migration_dir: Path) -> None:
         connection.execute(
             text(
                 "INSERT INTO schema_version(version, checksum) "
-                "VALUES (:version, :checksum)"
+                "VALUES (:version, :checksum) "
+                "ON CONFLICT (version) DO NOTHING"
             ),
             {"version": version, "checksum": checksum},
         )
+        recorded = connection.execute(
+            text("SELECT checksum FROM schema_version WHERE version = :version"),
+            {"version": version},
+        ).scalar_one()
+        if recorded != checksum:
+            raise RuntimeError(
+                f"migration checksum mismatch for version {version}: {path.name}"
+            )
