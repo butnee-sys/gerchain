@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import os
 import pytest
-from sqlalchemy import create_engine, inspect
+from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.orm import sessionmaker
 
 from services.gerchain_runtime_factory import ProductionRuntimeConfig, ProductionRuntimeFactory
@@ -45,5 +45,42 @@ def test_production_postgres_migration_and_canonical_boot() -> None:
         }
         assert not (required - tables)
         assert "schema_version" in tables
+
+        runtime.create_account("integration-source", initial_balance=100)
+        runtime.create_account("integration-destination", initial_balance=0)
+
+        first = runtime.settle(
+            transaction_id="integration-settlement-1",
+            source="integration-source",
+            destination="integration-destination",
+            amount=25,
+            currency="MNT",
+        )
+        replay = runtime.settle(
+            transaction_id="integration-settlement-1",
+            source="integration-source",
+            destination="integration-destination",
+            amount=25,
+            currency="MNT",
+        )
+        assert first["status"] == "SETTLED"
+        assert replay["status"] == "SETTLED"
+
+        with engine.connect() as connection:
+            movement_count = connection.execute(
+                text("SELECT COUNT(*) FROM gerchain_ledger_movements WHERE transaction_id = :tx"),
+                {"tx": "integration-settlement-1"},
+            ).scalar_one()
+            source_balance = connection.execute(
+                text("SELECT balance FROM gerchain_ledger_accounts WHERE account_id = :id"),
+                {"id": "integration-source"},
+            ).scalar_one()
+            destination_balance = connection.execute(
+                text("SELECT balance FROM gerchain_ledger_accounts WHERE account_id = :id"),
+                {"id": "integration-destination"},
+            ).scalar_one()
+        assert movement_count == 1
+        assert source_balance == 75
+        assert destination_balance == 25
     finally:
         engine.dispose()
