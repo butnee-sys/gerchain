@@ -13,9 +13,8 @@ def apply_migrations(connection, migration_dir: Path) -> None:
         key=lambda path: int(path.name.split("_", 1)[0]),
     )
 
-    # Migrations own their transaction boundary. This is required for the
-    # advisory lock to serialize both DDL and schema_version commits; releasing
-    # the lock before commit allows a second migrator to observe stale history.
+    # Migrations own one transaction boundary. The transaction-scoped advisory
+    # lock serializes DDL and schema_version publication as one atomic unit.
     is_sqlalchemy = hasattr(connection, "exec_driver_sql")
 
     if is_sqlalchemy:
@@ -39,7 +38,7 @@ def apply_migrations(connection, migration_dir: Path) -> None:
     lock_key = "gerchain:migrations"
     if is_sqlalchemy:
         execute(
-            "SELECT pg_advisory_lock(hashtext(:lock_key))",
+            "SELECT pg_advisory_xact_lock(hashtext(:lock_key))",
             {"lock_key": lock_key},
         )
     else:
@@ -110,15 +109,9 @@ def apply_migrations(connection, migration_dir: Path) -> None:
                     f"migration checksum mismatch for version {version}: {path.name}"
                 )
 
-        # Commit BEFORE releasing the session-level advisory lock. Otherwise
-        # another migrator can acquire the lock and race against an uncommitted
-        # schema_version row.
+        # Commit atomically publishes the migration history and releases
+        # the transaction-scoped advisory lock.
         connection.commit()
     except Exception:
         connection.rollback()
         raise
-    finally:
-        if is_sqlalchemy:
-            execute("SELECT pg_advisory_unlock(hashtext(:lock_key))", {"lock_key": lock_key})
-        else:
-            execute("SELECT pg_advisory_unlock(hashtext(%s))", (lock_key,))
