@@ -4,10 +4,10 @@ import os
 import signal
 import time
 
-from sqlalchemy import create_engine
-
-from services.gerchain_runtime_factory import ProductionRuntimeFactory
-from sqlalchemy.orm import sessionmaker
+from services.gerchain_runtime_factory import (
+    ProductionRuntimeConfig,
+    ProductionRuntimeFactory,
+)
 
 
 _running = True
@@ -41,32 +41,30 @@ def main() -> None:
     except ValueError as exc:
         raise RuntimeError("GERCHAIN_ESCROW_AMOUNT must be an integer") from exc
 
-    engine = create_engine(database_url, pool_pre_ping=True)
-    try:
-        session_factory = sessionmaker(bind=engine, expire_on_commit=False)
-    runtime = ProductionRuntimeFactory.create(
-        escrow_id=escrow_id,
-        amount=amount,
-        currency=currency,
-        witness_id=witness_id,
-        engine=engine,
-        session_factory=session_factory,
+    factory = ProductionRuntimeFactory(
+        ProductionRuntimeConfig(
+            database_url=database_url,
+            escrow_id=escrow_id,
+            amount=amount,
+            currency=currency,
+            witness_id=witness_id,
+        )
     )
 
-        if not runtime.is_canonical_ledger_authoritative:
-            raise RuntimeError("canonical ledger authority was not established")
+    runtime = factory.create()
 
-        print(
-            "GerChain production runtime initialized: "
-            f"escrow={escrow_id} currency={currency}"
-        )
+    if not runtime.is_canonical_ledger_authoritative:
+        raise RuntimeError("canonical ledger authority was not established")
 
-        signal.signal(signal.SIGTERM, _stop)
-        signal.signal(signal.SIGINT, _stop)
-        while _running:
-            time.sleep(1)
-    finally:
-        engine.dispose()
+    print(
+        "GerChain production runtime initialized: "
+        f"escrow={escrow_id} currency={currency}"
+    )
+
+    signal.signal(signal.SIGTERM, _stop)
+    signal.signal(signal.SIGINT, _stop)
+    while _running:
+        time.sleep(1)
 
 
 if __name__ == "__main__":
