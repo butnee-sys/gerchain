@@ -22,8 +22,15 @@ def apply_migrations(connection, migration_dir: Path) -> None:
 
     def execute(sql: str, params=None, *, static_sql: bool = False):
         if is_sqlalchemy:
-            statement = text(sql.replace("%", "%%")) if static_sql else text(sql)
-            return connection.execute(statement, params or {})
+            if static_sql:
+                # Static migration SQL may contain literal percent signs (e.g. LIKE
+                # patterns). Execute through the DBAPI boundary with %% escaping;
+                # control statements continue to use SQLAlchemy bind parameters.
+                return connection.exec_driver_sql(
+                    sql.replace("%", "%%"),
+                    {},
+                )
+            return connection.execute(text(sql), params or {})
         if static_sql:
             sql = sql.replace("%", "%%")
         return connection.execute(sql, params or ())
