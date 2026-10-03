@@ -110,10 +110,11 @@ def _execute(conn, sql: str, params=None):
     # Avoid psycopg's pyformat parser when there are no parameters.
     if hasattr(conn, "exec_driver_sql"):
         if params is None:
-            # SQLAlchemy's PostgreSQL driver still interprets literal % signs
-            # when using exec_driver_sql. text() preserves PL/pgSQL format
-            # strings such as format('%I', ...) as literal SQL.
-            return conn.execute(text(sql))
+            # psycopg uses pyformat semantics even through SQLAlchemy's
+            # exec_driver_sql path. Migration DDL contains PostgreSQL-native
+            # literal percent signs (LIKE '%state%', format('%I', ...));
+            # escape those literals before handing raw SQL to psycopg.
+            return conn.exec_driver_sql(sql.replace("%", "%%"))
         return conn.exec_driver_sql(sql, params)
     if params is None:
         # Native psycopg parses % as a placeholder even for literal DDL.
