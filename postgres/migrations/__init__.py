@@ -12,21 +12,26 @@ def apply_migrations(connection, migration_dir: Path) -> None:
         key=lambda path: int(path.name.split("_", 1)[0]),
     )
 
-    # Serialize migrators for the enclosing transaction.
+    # Serialize the entire migration lifecycle at the PostgreSQL session level.
+    # This keeps schema_version initialization and migration recording inside
+    # one exclusive migration critical section across concurrent callers.
+    lock_key = "gerchain:migrations"
     connection.execute(
-        text("SELECT pg_advisory_xact_lock(hashtext('gerchain:migrations'))")
+        text("SELECT pg_advisory_lock(hashtext(:lock_key))"),
+        {"lock_key": lock_key},
     )
-    connection.execute(
-        text(
-            """
-            CREATE TABLE IF NOT EXISTS schema_version (
-                version BIGINT PRIMARY KEY,
-                checksum TEXT NOT NULL,
-                applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    try:
+        connection.execute(
+            text(
+                """
+                CREATE TABLE IF NOT EXISTS schema_version (
+                    version BIGINT PRIMARY KEY,
+                    checksum TEXT NOT NULL,
+                    applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
+                )
+                """
             )
-            """
         )
-    )
 
     applied = {
         int(row[0]): row[1]
@@ -65,3 +70,8 @@ def apply_migrations(connection, migration_dir: Path) -> None:
             raise RuntimeError(
                 f"migration checksum mismatch for version {version}: {path.name}"
             )
+    finally:
+        connection.execute(
+            text("SELECT pg_advisory_unlock(hashtext(:lock_key))"),
+            {"lock_key": lock_key},
+        )
