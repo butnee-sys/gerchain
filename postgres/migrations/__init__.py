@@ -13,6 +13,16 @@ def apply_migrations(connection, migration_dir: Path) -> None:
         key=lambda path: int(path.name.split("_", 1)[0]),
     )
 
+    versions: dict[int, Path] = {}
+    for path in migration_files:
+        version = int(path.name.split("_", 1)[0])
+        if version in versions:
+            raise RuntimeError(
+                f"Unresolved duplicate migration version {version}: "
+                f"{versions[version].name} and {path.name}"
+            )
+        versions[version] = path
+
     # Migrations own one transaction boundary. The transaction-scoped advisory
     # lock serializes DDL and schema_version publication as one atomic unit.
     is_sqlalchemy = hasattr(connection, "exec_driver_sql")
