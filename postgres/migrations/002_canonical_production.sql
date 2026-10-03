@@ -5,16 +5,31 @@
 -- It is intentionally additive/idempotent. Legacy tables are NOT silently
 -- deleted; their production authority must be frozen separately.
 
-BEGIN;
-
 CREATE TABLE IF NOT EXISTS schema_version (
     version BIGINT PRIMARY KEY,
     checksum TEXT NOT NULL,
     applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
--- Canonical Escrow aggregate. Existing escrows from 001_concurrency are
--- upgraded in place when present.
+-- Canonical Escrow aggregate. Existing legacy escrows are upgraded in place;
+-- a fresh production database gets the canonical table directly.
+CREATE TABLE IF NOT EXISTS escrows (
+    id VARCHAR(255) PRIMARY KEY,
+    sender_address VARCHAR(255) NOT NULL,
+    receiver_address VARCHAR(255) NOT NULL,
+    amount NUMERIC(38, 8) NOT NULL CHECK (amount >= 0),
+    state VARCHAR(32) NOT NULL,
+    condition_desc TEXT,
+    refund_destination TEXT,
+    currency VARCHAR(16),
+    version BIGINT NOT NULL DEFAULT 0,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CONSTRAINT escrows_state_check CHECK (
+        state IN ('CREATED', 'FUNDED', 'LOCKED', 'RELEASED', 'REFUNDED', 'CANCELLED')
+    )
+);
+
 ALTER TABLE IF EXISTS escrows
     ADD COLUMN IF NOT EXISTS refund_destination TEXT,
     ADD COLUMN IF NOT EXISTS currency VARCHAR(16),
@@ -31,9 +46,15 @@ ALTER TABLE IF EXISTS escrows
 ALTER TABLE IF EXISTS escrows
     DROP CONSTRAINT IF EXISTS escrows_state_check;
 
+ALTER TABLE IF EXISTS escrows DROP CONSTRAINT IF EXISTS escrows_state_check;
 ALTER TABLE IF EXISTS escrows
     ADD CONSTRAINT escrows_state_check
     CHECK (state IN ('CREATED', 'FUNDED', 'LOCKED', 'RELEASED', 'REFUNDED', 'CANCELLED'));
+
+ALTER TABLE IF EXISTS gerchain_ledger_accounts
+    DROP CONSTRAINT IF EXISTS gerchain_ledger_account_balance_check;
+ALTER TABLE IF EXISTS gerchain_ledger_accounts
+    ADD CONSTRAINT gerchain_ledger_account_balance_check CHECK (balance >= 0);
 
 CREATE TABLE IF NOT EXISTS gerchain_ledger_accounts (
     account_id VARCHAR(128) PRIMARY KEY,
@@ -56,6 +77,29 @@ CREATE TABLE IF NOT EXISTS gerchain_ledger_movements (
     created_at TIMESTAMPTZ NOT NULL
 );
 
+ALTER TABLE IF EXISTS gerchain_ledger_movements
+    DROP CONSTRAINT IF EXISTS gerchain_movement_amount_check;
+ALTER TABLE IF EXISTS gerchain_ledger_movements
+    ADD CONSTRAINT gerchain_movement_amount_check CHECK (amount > 0);
+ALTER TABLE IF EXISTS gerchain_ledger_movements
+    DROP CONSTRAINT IF EXISTS gerchain_movement_operation_check;
+ALTER TABLE IF EXISTS gerchain_ledger_movements
+    ADD CONSTRAINT gerchain_movement_operation_check
+    CHECK (operation IN ('FUND','RELEASE','REFUND','CANCEL','SETTLEMENT'));
+ALTER TABLE IF EXISTS gerchain_ledger_movements
+    DROP CONSTRAINT IF EXISTS gerchain_movement_integrity_hash_check;
+ALTER TABLE IF EXISTS gerchain_ledger_movements
+    ADD CONSTRAINT gerchain_movement_integrity_hash_check
+    CHECK (length(integrity_hash) = 64);
+ALTER TABLE IF EXISTS gerchain_ledger_movements
+    DROP CONSTRAINT IF EXISTS gerchain_movement_escrow_binding_check;
+ALTER TABLE IF EXISTS gerchain_ledger_movements
+    ADD CONSTRAINT gerchain_movement_escrow_binding_check
+    CHECK (
+        (operation = 'SETTLEMENT' AND escrow_id IS NULL)
+        OR (operation IN ('FUND','RELEASE','REFUND','CANCEL') AND escrow_id IS NOT NULL)
+    );
+
 CREATE TABLE IF NOT EXISTS gerchain_transaction_witnesses (
     id SERIAL PRIMARY KEY,
     transaction_id VARCHAR(128) NOT NULL UNIQUE,
@@ -64,6 +108,11 @@ CREATE TABLE IF NOT EXISTS gerchain_transaction_witnesses (
     amount BIGINT NOT NULL,
     created_at TIMESTAMPTZ NOT NULL
 );
+
+ALTER TABLE IF EXISTS gerchain_transaction_witnesses
+    DROP CONSTRAINT IF EXISTS gerchain_witness_amount_check;
+ALTER TABLE IF EXISTS gerchain_transaction_witnesses
+    ADD CONSTRAINT gerchain_witness_amount_check CHECK (amount >= 0);
 
 CREATE TABLE IF NOT EXISTS gerchain_idempotency_records (
     id SERIAL PRIMARY KEY,
@@ -74,6 +123,12 @@ CREATE TABLE IF NOT EXISTS gerchain_idempotency_records (
     created_at TIMESTAMPTZ NOT NULL,
     updated_at TIMESTAMPTZ NOT NULL
 );
+
+ALTER TABLE IF EXISTS gerchain_idempotency_records
+    DROP CONSTRAINT IF EXISTS gerchain_idempotency_state_check;
+ALTER TABLE IF EXISTS gerchain_idempotency_records
+    ADD CONSTRAINT gerchain_idempotency_state_check
+    CHECK (state IN ('PROCESSING','COMPLETED'));
 
 CREATE TABLE IF NOT EXISTS gerchain_outbox_events (
     id SERIAL PRIMARY KEY,
@@ -88,8 +143,3 @@ CREATE TABLE IF NOT EXISTS gerchain_outbox_events (
     updated_at TIMESTAMPTZ NOT NULL
 );
 
-INSERT INTO schema_version(version, checksum)
-VALUES (2, 'EA-35.14-canonical-production-persistence')
-ON CONFLICT (version) DO NOTHING;
-
-COMMIT;
