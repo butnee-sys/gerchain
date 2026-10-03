@@ -36,7 +36,7 @@ class ProductionRuntimeFactory:
             raise ValueError("production runtime requires PostgreSQL engine and session factory")
         if engine.dialect.name != "postgresql":
             raise ValueError("production runtime requires PostgreSQL engine")
-        migration_dir = Path(__file__).resolve().parents[1] / "postgres" / "migrations"
+        migration_dir = Path(__file__).resolve().parents[1] / "postgres" / "schema"
         with engine.begin() as connection:
             apply_migrations(connection, migration_dir)
             assert_canonical_production_schema(connection)
