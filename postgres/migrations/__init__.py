@@ -43,12 +43,12 @@ def apply_migrations(connection, migration_dir: Path) -> None:
     lock_key = "gerchain:migrations"
     if is_sqlalchemy:
         execute(
-            "SELECT pg_advisory_xact_lock(hashtext(:lock_key))",
+            "SELECT pg_advisory_lock(hashtext(:lock_key))",
             {"lock_key": lock_key},
         )
     else:
         execute(
-            "SELECT pg_advisory_xact_lock(hashtext(%s))",
+            "SELECT pg_advisory_lock(hashtext(%s))",
             (lock_key,),
         )
 
@@ -123,3 +123,8 @@ def apply_migrations(connection, migration_dir: Path) -> None:
         if not outer_sqlalchemy_transaction:
             connection.rollback()
         raise
+    finally:
+        if is_sqlalchemy:
+            execute("SELECT pg_advisory_unlock(hashtext(:lock_key))", {"lock_key": lock_key})
+        else:
+            execute("SELECT pg_advisory_unlock(hashtext(%s))", (lock_key,))
