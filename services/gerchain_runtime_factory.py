@@ -10,6 +10,8 @@ from sqlalchemy import create_engine
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import sessionmaker
 
+from postgres.migrations import apply_migrations
+
 from persistence.production_schema_guard import assert_canonical_production_schema
 from persistence.atomic_ledger import AtomicLedgerBase
 from persistence.escrow_aggregate import EscrowBase
@@ -57,6 +59,9 @@ class ProductionRuntimeFactory:
         with self.engine.connect() as connection:
             apply_migrations(connection, migration_dir)
 
+        migration_dir = Path(__file__).resolve().parents[1] / "postgres" / "migrations"
+        with self.engine.begin() as connection:
+            apply_migrations(connection, migration_dir)
         migration_dir = Path(__file__).resolve().parents[1] / "postgres" / "migrations"
         with self.engine.begin() as connection:
             apply_migrations(connection, migration_dir)
