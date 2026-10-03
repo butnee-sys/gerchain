@@ -12,13 +12,13 @@ def apply_migrations(connection, migration_dir: Path) -> None:
         key=lambda path: int(path.name.split("_", 1)[0]),
     )
 
-    # Serialize migrators for the full migration application interval.
-    # A session-level advisory lock remains held even if the caller changes
-    # transaction scope, so concurrent migrators cannot race on schema_version.
+    # Serialize migrators for the enclosing transaction.
+    # A transaction-level advisory lock remains held until the caller commits,
+    # preventing a second migrator from observing schema_version before the
+    # first migrator's inserts become visible.
     connection.execute(
-        text("SELECT pg_advisory_lock(hashtext('gerchain:migrations'))")
+        text("SELECT pg_advisory_xact_lock(hashtext('gerchain:migrations'))")
     )
-    try:
         connection.execute(
             text(
                 """
@@ -56,7 +56,3 @@ def apply_migrations(connection, migration_dir: Path) -> None:
                 ),
                 {"version": version, "checksum": checksum},
             )
-    finally:
-        connection.execute(
-            text("SELECT pg_advisory_unlock(hashtext('gerchain:migrations'))")
-        )
