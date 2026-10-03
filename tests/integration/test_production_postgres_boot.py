@@ -63,8 +63,8 @@ def test_production_postgres_migration_and_canonical_boot() -> None:
             amount=25,
             currency="MNT",
         )
-        assert first["status"] == "SETTLED"
-        assert replay["status"] == "SETTLED"
+        assert first["replayed"] is False
+        assert replay["replayed"] is True
 
         with engine.connect() as connection:
             movement_count = connection.execute(
