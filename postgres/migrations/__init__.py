@@ -11,38 +11,20 @@ def apply_migrations(connection, migration_dir: Path) -> None:
         migration_dir.glob("*.sql"),
         key=lambda path: int(path.name.split("_", 1)[0]),
     )
-    # Session-scoped advisory lock serializes the complete migration operation,
-    # including the caller's eventual transaction commit. A transaction-scoped
-    # lock is insufficient here because this function returns before the caller
-    # necessarily exits its connection context.
-    lock_key = "gerchain:migrations"
-    connection.execute(text("SELECT pg_advisory_lock(hashtext(:lock_key))"), {"lock_key": lock_key})
-    connection.execute(
-        text(
-            "CREATE TABLE IF NOT EXISTS schema_version ("
-            "version BIGINT PRIMARY KEY, checksum TEXT NOT NULL, "
-            "applied_at TIMESTAMPTZ NOT NULL DEFAULT now())"
+    # PostgreSQL advisory transaction lock serializes concurrent migrators.
+    # The lock is transaction-scoped and releases automatically on commit/rollback.
+    connection.execute(text("SELECT pg_advisory_xact_lock(hashtext('gerchain:migrations'))"))
+
+    for path in migration_files:
+        version = int(path.name.split("_", 1)[0])
+        sql = path.read_text(encoding="utf-8")
+        checksum = hashlib.sha256(sql.encode("utf-8")).hexdigest()
+        if version in applied:
+            if applied[version] != checksum:
+                raise RuntimeError(f"migration checksum mismatch for version {version}: {path.name}")
+            continue
+        connection.exec_driver_sql(sql)
+        connection.execute(
+            text("INSERT INTO schema_version(version, checksum) VALUES (:version, :checksum)"),
+            {"version": version, "checksum": checksum},
         )
-    )
-    applied = {
-        int(row[0]): row[1]
-        for row in connection.execute(
-            text("SELECT version, checksum FROM schema_version ORDER BY version")
-        ).fetchall()
-    }
-    try:
-        for path in migration_files:
-            version = int(path.name.split("_", 1)[0])
-            sql = path.read_text(encoding="utf-8")
-            checksum = hashlib.sha256(sql.encode("utf-8")).hexdigest()
-            if version in applied:
-                if applied[version] != checksum:
-                    raise RuntimeError(f"migration checksum mismatch for version {version}: {path.name}")
-                continue
-            connection.exec_driver_sql(sql)
-            connection.execute(
-                text("INSERT INTO schema_version(version, checksum) VALUES (:version, :checksum)"),
-                {"version": version, "checksum": checksum},
-            )
-    finally:
-        connection.execute(text("SELECT pg_advisory_unlock(hashtext(:lock_key))"), {"lock_key": lock_key})
