@@ -42,6 +42,7 @@ class ProductionRuntimeFactory:
         )
 
     def initialize(self) -> None:
+        apply_migrations(self.config.database_url)
         """Apply the frozen PostgreSQL migration chain and verify its contract."""
         migration_dir = Path(__file__).resolve().parents[1] / "postgres" / "migrations"
         with self.engine.connect() as connection:
