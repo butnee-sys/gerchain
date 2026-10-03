@@ -21,6 +21,9 @@ def apply_migrations(connection, migration_dir: Path) -> None:
         text("SELECT pg_advisory_lock(hashtext(:lock_key))"),
         {"lock_key": lock_key},
     )
+    # Lock acquisition starts a transaction in psycopg. Commit it before reading
+    # schema_version so a waiter does not retain a stale snapshot.
+    connection.commit()
     try:
         connection.execute(
             text(
