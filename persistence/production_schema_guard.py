@@ -17,7 +17,7 @@ REQUIRED_ESCROW_STATES = {'CREATED','FUNDED','LOCKED','RELEASED','REFUNDED','CAN
 
 def assert_canonical_production_schema(connection: Connection) -> None:
     version = connection.execute(text('SELECT MAX(version) FROM schema_version')).scalar_one()
-    migration_dir = Path(__file__).resolve().parents[1] / 'postgres' / 'schema'
+    migration_dir = Path(__file__).resolve().parents[1] / 'postgres' / 'migrations'
     migration_versions = []
     for path in migration_dir.glob('*.sql'):
         try:
