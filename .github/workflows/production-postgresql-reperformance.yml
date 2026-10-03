@@ -43,6 +43,23 @@ jobs:
         run: |
           python -m py_compile services/gerchain_runtime.py services/gerchain_runtime_factory.py production_entrypoint.py
 
+      - name: Production entrypoint boot smoke
+        env:
+          GERCHAIN_DATABASE_URL: postgresql+psycopg://gerchain:gerchain@127.0.0.1:5432/gerchain_test
+          GERCHAIN_ESCROW_ID: ci-bootstrap
+          GERCHAIN_ESCROW_AMOUNT: "1"
+          GERCHAIN_CURRENCY: USD
+          GERCHAIN_WITNESS_ID: ci-witness
+        run: |
+          set +e
+          timeout 8s python production_entrypoint.py
+          rc=$?
+          if [ "$rc" -ne 124 ]; then
+            echo "production entrypoint failed before controlled shutdown (rc=$rc)"
+            exit "$rc"
+          fi
+          echo "production entrypoint initialized and remained alive until timeout"
+
       - name: Migration concurrency re-performance
         env:
           GERCHAIN_POSTGRES_DSN: ${{ env.GERCHAIN_DATABASE_URL }}
