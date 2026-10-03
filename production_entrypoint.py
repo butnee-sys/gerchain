@@ -6,7 +6,7 @@ import time
 
 from sqlalchemy import create_engine
 
-from services.production_runtime_factory import ProductionRuntimeConfig, ProductionRuntimeFactory
+from services.gerchain_runtime_factory import ProductionRuntimeConfig, ProductionRuntimeFactory
 
 
 _running = True
