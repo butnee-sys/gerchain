@@ -14,6 +14,17 @@ def apply_migrations(connection, migration_dir: Path) -> None:
     # PostgreSQL advisory transaction lock serializes concurrent migrators.
     # The lock is transaction-scoped and releases automatically on commit/rollback.
     connection.execute(text("SELECT pg_advisory_xact_lock(hashtext('gerchain:migrations'))"))
+    connection.execute(text("""
+        CREATE TABLE IF NOT EXISTS schema_version (
+            version BIGINT PRIMARY KEY,
+            checksum TEXT NOT NULL,
+            applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
+        )
+    """))
+    applied = {
+        int(row[0]): row[1]
+        for row in connection.execute(text("SELECT version, checksum FROM schema_version"))
+    }
 
     for path in migration_files:
         version = int(path.name.split("_", 1)[0])
