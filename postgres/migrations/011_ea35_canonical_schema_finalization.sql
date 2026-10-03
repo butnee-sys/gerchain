@@ -4,6 +4,10 @@
 --
 -- Existing rows are never assigned fabricated currency metadata. If legacy
 -- rows lack required canonical currency, the migration fails closed.
+--
+-- Constraint replacement is performed inside PostgreSQL DO blocks so DROP and
+-- ADD execute sequentially on the server when the migration is submitted as
+-- one SQL batch.
 
 ALTER TABLE escrows
     ADD COLUMN IF NOT EXISTS refund_destination TEXT,
@@ -33,62 +37,46 @@ ALTER TABLE escrows
     ALTER COLUMN version SET NOT NULL,
     ALTER COLUMN created_at SET NOT NULL;
 
-ALTER TABLE escrows
-    DROP CONSTRAINT IF EXISTS escrows_state_check,
-    DROP CONSTRAINT IF EXISTS escrows_state_canonical_check;
-
-ALTER TABLE escrows
-    ADD CONSTRAINT escrows_state_canonical_check
-    CHECK (state IN ('CREATED', 'FUNDED', 'LOCKED', 'RELEASED', 'REFUNDED', 'CANCELLED'));
+DO $$
+BEGIN
+    EXECUTE 'ALTER TABLE escrows DROP CONSTRAINT IF EXISTS escrows_state_check';
+    EXECUTE 'ALTER TABLE escrows DROP CONSTRAINT IF EXISTS escrows_state_canonical_check';
+    EXECUTE 'ALTER TABLE escrows ADD CONSTRAINT escrows_state_canonical_check CHECK (state IN (''CREATED'', ''FUNDED'', ''LOCKED'', ''RELEASED'', ''REFUNDED'', ''CANCELLED''))';
+END $$;
 
 ALTER TABLE gerchain_ledger_movements
     ALTER COLUMN integrity_hash SET NOT NULL;
 
-ALTER TABLE gerchain_ledger_movements
-    DROP CONSTRAINT IF EXISTS gerchain_movement_operation_check,
-    DROP CONSTRAINT IF EXISTS gerchain_movement_escrow_binding_check,
-    DROP CONSTRAINT IF EXISTS gerchain_movement_integrity_hash_check,
-    DROP CONSTRAINT IF EXISTS gerchain_movement_amount_check;
-
-ALTER TABLE gerchain_ledger_movements
-    ADD CONSTRAINT gerchain_movement_operation_check
-    CHECK (operation IN ('FUND', 'RELEASE', 'REFUND', 'CANCEL', 'SETTLEMENT'));
-
-ALTER TABLE gerchain_ledger_movements
-    ADD CONSTRAINT gerchain_movement_integrity_hash_check
-    CHECK (length(integrity_hash) = 64);
-
-ALTER TABLE gerchain_ledger_movements
-    ADD CONSTRAINT gerchain_movement_escrow_binding_check
-    CHECK (
-        (operation = 'SETTLEMENT' AND escrow_id IS NULL)
+DO $$
+BEGIN
+    EXECUTE 'ALTER TABLE gerchain_ledger_movements DROP CONSTRAINT IF EXISTS gerchain_movement_operation_check';
+    EXECUTE 'ALTER TABLE gerchain_ledger_movements DROP CONSTRAINT IF EXISTS gerchain_movement_escrow_binding_check';
+    EXECUTE 'ALTER TABLE gerchain_ledger_movements DROP CONSTRAINT IF EXISTS gerchain_movement_integrity_hash_check';
+    EXECUTE 'ALTER TABLE gerchain_ledger_movements DROP CONSTRAINT IF EXISTS gerchain_movement_amount_check';
+    EXECUTE 'ALTER TABLE gerchain_ledger_movements ADD CONSTRAINT gerchain_movement_operation_check CHECK (operation IN (''FUND'', ''RELEASE'', ''REFUND'', ''CANCEL'', ''SETTLEMENT''))';
+    EXECUTE 'ALTER TABLE gerchain_ledger_movements ADD CONSTRAINT gerchain_movement_integrity_hash_check CHECK (length(integrity_hash) = 64)';
+    EXECUTE 'ALTER TABLE gerchain_ledger_movements ADD CONSTRAINT gerchain_movement_escrow_binding_check CHECK (
+        (operation = ''SETTLEMENT'' AND escrow_id IS NULL)
         OR (
-            operation IN ('FUND', 'RELEASE', 'REFUND', 'CANCEL')
+            operation IN (''FUND'', ''RELEASE'', ''REFUND'', ''CANCEL'')
             AND escrow_id IS NOT NULL
             AND length(escrow_id) > 0
         )
-    );
+    )';
+    EXECUTE 'ALTER TABLE gerchain_ledger_movements ADD CONSTRAINT gerchain_movement_amount_check CHECK (amount > 0)';
+END $$;
 
-ALTER TABLE gerchain_ledger_movements
-    DROP CONSTRAINT IF EXISTS gerchain_movement_amount_check;
+DO $$
+BEGIN
+    EXECUTE 'ALTER TABLE gerchain_transaction_witnesses DROP CONSTRAINT IF EXISTS gerchain_witness_amount_check';
+    EXECUTE 'ALTER TABLE gerchain_transaction_witnesses ADD CONSTRAINT gerchain_witness_amount_check CHECK (amount >= 0)';
+END $$;
 
-ALTER TABLE gerchain_ledger_movements
-    ADD CONSTRAINT gerchain_movement_amount_check
-    CHECK (amount > 0);
-
-ALTER TABLE gerchain_transaction_witnesses
-    DROP CONSTRAINT IF EXISTS gerchain_witness_amount_check;
-
-ALTER TABLE gerchain_transaction_witnesses
-    ADD CONSTRAINT gerchain_witness_amount_check
-    CHECK (amount >= 0);
-
-ALTER TABLE gerchain_idempotency_records
-    DROP CONSTRAINT IF EXISTS gerchain_idempotency_state_check;
-
-ALTER TABLE gerchain_idempotency_records
-    ADD CONSTRAINT gerchain_idempotency_state_check
-    CHECK (state IN ('PROCESSING', 'COMPLETED'));
+DO $$
+BEGIN
+    EXECUTE 'ALTER TABLE gerchain_idempotency_records DROP CONSTRAINT IF EXISTS gerchain_idempotency_state_check';
+    EXECUTE 'ALTER TABLE gerchain_idempotency_records ADD CONSTRAINT gerchain_idempotency_state_check CHECK (state IN (''PROCESSING'', ''COMPLETED''))';
+END $$;
 
 CREATE INDEX IF NOT EXISTS ix_gerchain_ledger_movements_escrow
     ON gerchain_ledger_movements (escrow_id);
