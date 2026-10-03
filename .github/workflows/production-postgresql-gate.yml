@@ -120,3 +120,6 @@ jobs:
 
       - name: Run deep reconciliation tests
         run: pytest -q tests/persistence/test_deep_value_reconciliation.py
+
+      - name: Run real PostgreSQL production value-flow gate
+        run: pytest -q tests/integration/test_postgresql_production_gate.py
