@@ -68,11 +68,18 @@ class ProductionRuntimeFactory:
             "ALTER TABLE escrows ADD COLUMN IF NOT EXISTS version BIGINT NOT NULL DEFAULT 0",
             "ALTER TABLE escrows ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ",
             "UPDATE escrows SET created_at = COALESCE(created_at, updated_at, now()) WHERE created_at IS NULL",
+            "UPDATE escrows SET currency = :currency WHERE currency IS NULL",
+            "UPDATE escrows SET refund_destination = sender_address WHERE refund_destination IS NULL",
             "ALTER TABLE escrows ALTER COLUMN created_at SET NOT NULL",
+            "ALTER TABLE escrows ALTER COLUMN currency SET NOT NULL",
+            "ALTER TABLE escrows ALTER COLUMN refund_destination SET NOT NULL",
         ]
         with self.engine.begin() as connection:
             for statement in statements:
-                connection.execute(text(statement))
+                if ":currency" in statement:
+                    connection.execute(text(statement), {"currency": self.config.currency})
+                else:
+                    connection.execute(text(statement))
             connection.execute(text(
                 "DO $ DECLARE c RECORD; BEGIN "
                 "FOR c IN SELECT conname FROM pg_constraint "
