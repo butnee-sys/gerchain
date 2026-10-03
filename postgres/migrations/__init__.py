@@ -12,12 +12,12 @@ def apply_migrations(connection, migration_dir: Path) -> None:
         key=lambda path: int(path.name.split("_", 1)[0]),
     )
 
-    # Serialize the entire migration lifecycle at the PostgreSQL session level.
-    # This keeps schema_version initialization and migration recording inside
-    # one exclusive migration critical section across concurrent callers.
+    # Serialize the entire migration lifecycle at the PostgreSQL transaction level.
+    # The xact-scoped lock cannot survive beyond the migration transaction and
+    # therefore makes the schema_version read/DDL/record sequence one critical section.
     lock_key = "gerchain:migrations"
     connection.execute(
-        text("SELECT pg_advisory_lock(hashtext(:lock_key))"),
+        text("SELECT pg_advisory_xact_lock(hashtext(:lock_key))"),
         {"lock_key": lock_key},
     )
     try:
@@ -60,18 +60,20 @@ def apply_migrations(connection, migration_dir: Path) -> None:
                 text(
                     "INSERT INTO schema_version(version, checksum) "
                     "VALUES (:version, :checksum) "
-                    "ON CONFLICT (version) DO UPDATE "
-                    "SET checksum = schema_version.checksum "
+                    "ON CONFLICT (version) DO NOTHING "
                     "RETURNING checksum"
                 ),
                 {"version": version, "checksum": checksum},
-            ).scalar_one()
+            ).scalar_one_or_none()
+            if recorded is None:
+                recorded = connection.execute(
+                    text("SELECT checksum FROM schema_version WHERE version = :version"),
+                    {"version": version},
+                ).scalar_one()
             if recorded != checksum:
                 raise RuntimeError(
                     f"migration checksum mismatch for version {version}: {path.name}"
                 )
     finally:
-        connection.execute(
-            text("SELECT pg_advisory_unlock(hashtext(:lock_key))"),
-            {"lock_key": lock_key},
-        )
+        # pg_advisory_xact_lock is released automatically on transaction end.
+        pass
