@@ -35,8 +35,12 @@ FROZEN_CHECKSUMS = {
     10: {
         "282bdd44d550161052f5a1c99d563e3832c4cbba558854988171fc9179b676c6",
         "b019fb3f29ba1926fe1806f33aa344013ed38c36aefb374baa4feced220dbf3b",
+        "d43c7da9322060795bce5e63e3885039709f1fb01d3816ed006bba949db070e6",
     },
-    11: {"aa3b8fe4d39a61e5ba3f12a3b70b14b5a560e2bdb988cfeb068c2a8fec19494a"},
+    11: {
+        "aa3b8fe4d39a61e5ba3f12a3b70b14b5a560e2bdb988cfeb068c2a8fec19494a",
+        "a85d6973211bccce8caf1ba1185fecdd54a4f0e40fcd6d640d234c447f90fd0f",
+    },
 }
 
 LEGACY_CHECKSUMS = {
