@@ -12,12 +12,13 @@ def apply_migrations(connection, migration_dir: Path) -> None:
         key=lambda path: int(path.name.split("_", 1)[0]),
     )
 
-    # Serialize the entire migration lifecycle at the PostgreSQL transaction level.
-    # The xact-scoped lock cannot survive beyond the migration transaction and
-    # therefore makes the schema_version read/DDL/record sequence one critical section.
+    # Serialize the entire migration lifecycle with a session-scoped advisory lock.
+    # Migration callers may use different transaction boundaries, so an xact-scoped
+    # lock is insufficient: the schema_version read/DDL/record sequence must remain
+    # exclusive until this function has committed the migration transaction.
     lock_key = "gerchain:migrations"
     connection.execute(
-        text("SELECT pg_advisory_xact_lock(hashtext(:lock_key))"),
+        text("SELECT pg_advisory_lock(hashtext(:lock_key))"),
         {"lock_key": lock_key},
     )
     try:
@@ -74,6 +75,10 @@ def apply_migrations(connection, migration_dir: Path) -> None:
                 raise RuntimeError(
                     f"migration checksum mismatch for version {version}: {path.name}"
                 )
+        connection.commit()
     finally:
-        # pg_advisory_xact_lock is released automatically on transaction end.
-        pass
+        # Release the session-scoped lock only after the migration history is durable.
+        connection.execute(
+            text("SELECT pg_advisory_unlock(hashtext(:lock_key))"),
+            {"lock_key": lock_key},
+        )
