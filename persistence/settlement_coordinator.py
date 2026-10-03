@@ -73,14 +73,14 @@ class SettlementCoordinator:
         record_witness_in_transaction(
             self.session,
             transaction_id=transaction_id,
-            event_type="GERCHAIN_SETTLED",
+            event_type="GERCHAIN_SETTLEMENT",
             escrow_id=transaction_id,
             amount=amount,
         )
         enqueue_in_transaction(
             self.session,
-            event_id=deterministic_event_id("GERCHAIN_SETTLED", transaction_id),
-            event_type="GERCHAIN_SETTLED",
+            event_id=deterministic_event_id("GERCHAIN_SETTLEMENT", transaction_id),
+            event_type="GERCHAIN_SETTLEMENT",
             aggregate_id=transaction_id,
             payload={
                 "transaction_id": transaction_id,
