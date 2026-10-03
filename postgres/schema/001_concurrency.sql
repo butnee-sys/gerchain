@@ -74,6 +74,7 @@ ALTER TABLE escrows ADD CONSTRAINT escrows_state_check
     CHECK (state IN ('CREATED','FUNDED','LOCKED','RELEASED','REFUNDED','CANCELLED'));
 
 CREATE TABLE IF NOT EXISTS gerchain_ledger_accounts (
+
     account_id VARCHAR(128) PRIMARY KEY,
     currency VARCHAR(16) NOT NULL,
     balance BIGINT NOT NULL DEFAULT 0,
