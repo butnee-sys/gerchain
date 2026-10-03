@@ -119,3 +119,7 @@ def apply_migrations(connection, migration_dir: Path) -> None:
                 connection.commit()
         else:
             connection.commit()
+    except Exception:
+        if not outer_sqlalchemy_transaction:
+            connection.rollback()
+        raise
