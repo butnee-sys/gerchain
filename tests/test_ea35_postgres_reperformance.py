@@ -1,3 +1,4 @@
+# EA-35.13: exact-branch PostgreSQL re-performance evidence gate.
 from __future__ import annotations
 
 import os
