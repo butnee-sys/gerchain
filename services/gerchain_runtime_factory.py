@@ -30,7 +30,7 @@ class ProductionRuntimeFactory:
         if not config.database_url:
             raise ValueError("database_url is required")
         if not config.database_url.startswith(
-            ("postgresql://", "postgresql+psycopg://", "postgresql+psycopg2://")
+            ("postgresql://", "postgresql+psycopg://")
         ):
             raise ValueError("ProductionRuntimeFactory requires PostgreSQL database URL")
         self.config = config
