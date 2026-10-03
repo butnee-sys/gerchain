@@ -1,4 +1,5 @@
 name: core-gates
+# Production PostgreSQL evidence gate: EA-35.13
 
 on:
   push:
