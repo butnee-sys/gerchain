@@ -48,17 +48,18 @@ def apply_migrations(connection, migration_dir: Path) -> None:
             continue
 
         connection.exec_driver_sql(sql)
-        connection.execute(
+        # Record the migration idempotently even when another migrator
+        # committed the same version while this transaction was waiting on
+        # the advisory lock. Keep the already-recorded checksum authoritative.
+        recorded = connection.execute(
             text(
                 "INSERT INTO schema_version(version, checksum) "
                 "VALUES (:version, :checksum) "
-                "ON CONFLICT (version) DO NOTHING"
+                "ON CONFLICT (version) DO UPDATE "
+                "SET checksum = schema_version.checksum "
+                "RETURNING checksum"
             ),
             {"version": version, "checksum": checksum},
-        )
-        recorded = connection.execute(
-            text("SELECT checksum FROM schema_version WHERE version = :version"),
-            {"version": version},
         ).scalar_one()
         if recorded != checksum:
             raise RuntimeError(
