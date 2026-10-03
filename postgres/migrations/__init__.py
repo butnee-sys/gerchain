@@ -13,46 +13,45 @@ def apply_migrations(connection, migration_dir: Path) -> None:
     )
 
     # Serialize migrators for the enclosing transaction.
-    # A transaction-level advisory lock remains held until the caller commits,
-    # preventing a second migrator from observing schema_version before the
-    # first migrator's inserts become visible.
     connection.execute(
         text("SELECT pg_advisory_xact_lock(hashtext('gerchain:migrations'))")
     )
+    connection.execute(
+        text(
+            """
+            CREATE TABLE IF NOT EXISTS schema_version (
+                version BIGINT PRIMARY KEY,
+                checksum TEXT NOT NULL,
+                applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
+            )
+            """
+        )
+    )
+
+    applied = {
+        int(row[0]): row[1]
+        for row in connection.execute(
+            text("SELECT version, checksum FROM schema_version")
+        )
+    }
+
+    for path in migration_files:
+        version = int(path.name.split("_", 1)[0])
+        sql = path.read_text(encoding="utf-8")
+        checksum = hashlib.sha256(sql.encode("utf-8")).hexdigest()
+
+        if version in applied:
+            if applied[version] != checksum:
+                raise RuntimeError(
+                    f"migration checksum mismatch for version {version}: {path.name}"
+                )
+            continue
+
+        connection.exec_driver_sql(sql)
         connection.execute(
             text(
-                """
-                CREATE TABLE IF NOT EXISTS schema_version (
-                    version BIGINT PRIMARY KEY,
-                    checksum TEXT NOT NULL,
-                    applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
-                )
-                """
-            )
+                "INSERT INTO schema_version(version, checksum) "
+                "VALUES (:version, :checksum)"
+            ),
+            {"version": version, "checksum": checksum},
         )
-        applied = {
-            int(row[0]): row[1]
-            for row in connection.execute(
-                text("SELECT version, checksum FROM schema_version")
-            )
-        }
-
-        for path in migration_files:
-            version = int(path.name.split("_", 1)[0])
-            sql = path.read_text(encoding="utf-8")
-            checksum = hashlib.sha256(sql.encode("utf-8")).hexdigest()
-            if version in applied:
-                if applied[version] != checksum:
-                    raise RuntimeError(
-                        f"migration checksum mismatch for version {version}: {path.name}"
-                    )
-                continue
-
-            connection.exec_driver_sql(sql)
-            connection.execute(
-                text(
-                    "INSERT INTO schema_version(version, checksum) "
-                    "VALUES (:version, :checksum)"
-                ),
-                {"version": version, "checksum": checksum},
-            )
