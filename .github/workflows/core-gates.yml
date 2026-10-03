@@ -1,5 +1,6 @@
 name: core-gates
 # Production PostgreSQL evidence gate: EA-35.13
+# Verification rerun: migration concurrency fix
 
 on:
   push:
