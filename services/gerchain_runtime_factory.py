@@ -42,13 +42,19 @@ class ProductionRuntimeFactory:
         )
 
     def initialize(self) -> None:
-        """Apply canonical PostgreSQL migrations, then reconcile ORM metadata."""
-        migration_dir = Path(__file__).resolve().parents[1] / "postgres" / "migrations"
-        with self.engine.connect() as connection:
-            apply_migrations(connection, migration_dir)
-            assert_canonical_production_schema(connection)
-            connection.commit()
+        """Apply the versioned production PostgreSQL schema.
 
+        Production schema authority belongs to the migration runner, not
+        SQLAlchemy create_all(). ORM metadata creation is intentionally not
+        used here so schema history remains explicit and reproducible.
+        """
+        from pathlib import Path
+
+        from postgres.migrations import apply_migrations
+
+        migration_dir = Path(__file__).resolve().parents[1] / "postgres" / "migrations"
+        with self.engine.begin() as connection:
+            apply_migrations(connection, migration_dir)
 
     def create(self) -> GerchainRuntime:
         self.initialize()
