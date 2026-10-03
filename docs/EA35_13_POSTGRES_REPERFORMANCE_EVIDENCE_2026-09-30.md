@@ -17,7 +17,7 @@ Branch: feat/ea21-transaction-aware-ledger
 
 STATUS: IN PROGRESS / NOT LOCKED
 
-The historical failures are evidence, not current failure evidence for the latest branch tip. No current exact-SHA PostgreSQL workflow run is available through the GitHub workflow-run query for the latest repair commits, so current PostgreSQL execution is NOT claimed as verified.
+The historical PostgreSQL failure is now traced to the pre-repair migration runner: the failed run reported a duplicate `schema_version(version=2)`. The current migration runner contains transaction-scoped PostgreSQL advisory locking and idempotent `INSERT ... ON CONFLICT DO NOTHING` recording, so that historical failure is not treated as evidence against the repaired runner. A fresh exact-SHA workflow execution is still required; current PostgreSQL execution is NOT claimed as verified until that run completes.
 
 ## Release rule
 
