@@ -1,13 +1,12 @@
-name: PostgreSQL Concurrency
+name: EA-35 PostgreSQL Production Reperformance
 
 on:
   push:
-    branches: ["postgres-concurrency-hardening"]
-  pull_request:
-    branches: ["main"]
+    branches: ["feat/ea21-transaction-aware-ledger"]
+  workflow_dispatch:
 
 jobs:
-  postgres-concurrency:
+  production-reperformance:
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -23,15 +22,14 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 20
-
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
-      - name: Install PostgreSQL test dependencies
-        run: python -m pip install -r postgres/requirements-test.txt
-      - name: Run PostgreSQL concurrency suite
+      - name: Install dependencies
+        run: python -m pip install -r requirements-dee-security.txt pytest
+      - name: Production PostgreSQL re-performance
         env:
-          GERCHAIN_POSTGRES_DSN: postgresql://gerchain:gerchain@127.0.0.1:5432/gerchain_test
-        run: python -m pytest -q postgres/tests/test_concurrency.py
+          GERCHAIN_DATABASE_URL: postgresql+psycopg://gerchain:gerchain@127.0.0.1:5432/gerchain_test
+        run: python -m pytest -q tests/persistence/test_production_runtime_postgres.py

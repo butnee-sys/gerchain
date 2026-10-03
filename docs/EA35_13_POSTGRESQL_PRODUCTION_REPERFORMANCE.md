@@ -1,0 +1,29 @@
+# EA-35.13 — PostgreSQL Production Re-performance Gate
+
+Status: IN PROGRESS / NOT LOCKED
+
+This evidence record defines the branch-tip production verification gate.
+
+Required runtime construction:
+- PostgreSQL database URL only.
+- ProductionRuntimeFactory must apply the authoritative migration history.
+- Production schema guard must pass.
+- GerchainRuntime must attach the Canonical Ledger authority.
+- Legacy ReleaseAccount / MoneyLedger / AccountBalance must not be the production value authority.
+
+Required execution evidence:
+1. Production runtime boot.
+2. Canonical tables present.
+3. Canonical Ledger account creation.
+4. FUND value movement.
+5. LOCK state transition.
+6. RELEASE value movement.
+7. RELEASE replay/idempotency.
+8. REFUND with authoritative refund destination.
+9. CANCEL with authoritative original sender.
+10. SETTLEMENT through Canonical Ledger.
+11. Deep Value Truth reconciliation after the flow.
+
+A GitHub Actions PostgreSQL service is configured to execute this gate on the branch.
+
+No GREEN or production lock is declared until a fresh branch-tip PostgreSQL run completes successfully and its exact commit SHA is recorded.

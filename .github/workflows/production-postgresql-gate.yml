@@ -1,0 +1,119 @@
+name: production-postgresql-gate
+
+on:
+  push:
+    branches:
+      - "feat/ea21-transaction-aware-ledger"
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  postgresql-production-gate:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: gerchain
+          POSTGRES_PASSWORD: gerchain
+          POSTGRES_DB: gerchain
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U gerchain -d gerchain"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    env:
+      GERCHAIN_DATABASE_URL: postgresql+psycopg://gerchain:gerchain@localhost:5432/gerchain
+      GERCHAIN_ESCROW_ID: ci-escrow-1
+      GERCHAIN_ESCROW_AMOUNT: "100"
+      GERCHAIN_CURRENCY: USD
+      GERCHAIN_WITNESS_ID: ci-witness-1
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install runtime and test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dee-security.txt pytest
+
+      - name: Verify production factory and canonical persistence
+        run: |
+          python - <<'PY'
+          import os
+          from sqlalchemy import create_engine, inspect
+          from services.gerchain_runtime_factory import ProductionRuntimeConfig, ProductionRuntimeFactory
+
+          url = os.environ["GERCHAIN_DATABASE_URL"]
+          engine = create_engine(url, pool_pre_ping=True)
+          from sqlalchemy.orm import sessionmaker
+          config = ProductionRuntimeConfig(
+              database_url=url,
+              escrow_id=os.environ["GERCHAIN_ESCROW_ID"],
+              amount=int(os.environ["GERCHAIN_ESCROW_AMOUNT"]),
+              currency=os.environ["GERCHAIN_CURRENCY"],
+              witness_id=os.environ["GERCHAIN_WITNESS_ID"],
+          )
+          factory = ProductionRuntimeFactory(config, engine=engine)
+          runtime = factory.create()
+          assert runtime.is_canonical_ledger_authoritative
+          assert runtime.runtime_mode == "production-postgresql"
+
+          tables = set(inspect(engine).get_table_names())
+          required = {
+              "gerchain_ledger_accounts",
+              "gerchain_ledger_movements",
+              "escrows",
+              "gerchain_transaction_witnesses",
+              "gerchain_outbox_events",
+              "gerchain_idempotency_records",
+          }
+          missing = required - tables
+          assert not missing, f"missing canonical tables: {sorted(missing)}"
+          from persistence.atomic_ledger import PostgreSQLAtomicLedger, LedgerAccountModel, LedgerMovementModel
+          from sqlalchemy import select
+
+          ledger = PostgreSQLAtomicLedger(factory.session_factory)
+          ledger.create_account("ci-source", "USD", 1000)
+          ledger.create_account("ci-destination", "USD", 0)
+
+          first = ledger.transfer(
+              "ci-tx-1", "ci-source", "ci-destination", 100,
+              "USD", operation="FUND", escrow_id="ci-escrow-1",
+              integrity_hash="9f1d6d0d5e2f5d5e4f0f1c4b0a9f4d8d7f6e5c4b3a291817161514131211100f",
+          )
+          second = ledger.transfer(
+              "ci-tx-1", "ci-source", "ci-destination", 100,
+              "USD", operation="FUND", escrow_id="ci-escrow-1",
+              integrity_hash="9f1d6d0d5e2f5d5e4f0f1c4b0a9f4d8d7f6e5c4b3a291817161514131211100f",
+          )
+          assert first["replayed"] is False
+          assert second["replayed"] is True
+
+          with factory.session_factory() as session:
+              source = session.get(LedgerAccountModel, "ci-source")
+              destination = session.get(LedgerAccountModel, "ci-destination")
+              movements = session.execute(select(LedgerMovementModel).where(LedgerMovementModel.transaction_id == "ci-tx-1")).scalars().all()
+              assert source.balance == 900
+              assert destination.balance == 100
+              assert len(movements) == 1
+
+          print("PRODUCTION_FACTORY_GATE=PASS")
+          print("CANONICAL_TABLES_GATE=PASS")
+          print("CANONICAL_LEDGER_MOVEMENT_GATE=PASS")
+          print("CANONICAL_LEDGER_REPLAY_GATE=PASS")
+          engine.dispose()
+          PY
+
+      - name: Run deep reconciliation tests
+        run: pytest -q tests/persistence/test_deep_value_reconciliation.py
