@@ -5,16 +5,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
 
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import sessionmaker
 
 from persistence.production_schema_guard import assert_canonical_production_schema
-from persistence.atomic_ledger import AtomicLedgerBase
-from persistence.escrow_aggregate import EscrowBase
-from persistence.recovery_outbox import OutboxBase
-from persistence.durable_idempotency import IdempotencyBase
-from persistence.atomic_value_transaction import WitnessBase
 from postgres.migrations import apply_migrations
 from services.gerchain_runtime import GerchainRuntime
 
@@ -53,10 +48,10 @@ class ProductionRuntimeFactory:
             raise RuntimeError(f"canonical migration directory missing: {migration_dir}")
         with self.engine.connect() as conn:
             apply_migrations(conn, migration_dir)
+            assert_canonical_production_schema(conn)
 
     def create(self) -> GerchainRuntime:
         self.initialize()
-        self._verify_canonical_schema()
         runtime = GerchainRuntime(
             escrow_id=self.config.escrow_id,
             amount=self.config.amount,
