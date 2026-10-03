@@ -48,11 +48,7 @@ class ProductionRuntimeFactory:
         SQLAlchemy create_all(). ORM metadata creation is intentionally not
         used here so schema history remains explicit and reproducible.
         """
-        from pathlib import Path
-
-        from postgres.migrations import apply_migrations
-
-        migration_dir = Path(__file__).resolve().parents[1] / "postgres" / "migrations"
+        migration_dir = Path(__file__).resolve().parents[1] / "postgres" / "schema"
         with self.engine.begin() as connection:
             apply_migrations(connection, migration_dir)
             assert_canonical_production_schema(connection)
