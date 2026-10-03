@@ -10,11 +10,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import sessionmaker
 
-from persistence.atomic_ledger import AtomicLedgerBase
-from persistence.escrow_aggregate import EscrowBase
-from persistence.recovery_outbox import OutboxBase
-from persistence.durable_idempotency import IdempotencyBase
-from persistence.atomic_value_transaction import TransactionWitness
+from persistence.production_schema import apply_production_schema
 from persistence.production_schema_guard import assert_canonical_production_schema
 from postgres.migrations import apply_migrations
 from services.gerchain_runtime import GerchainRuntime
@@ -48,30 +44,7 @@ class ProductionRuntimeFactory:
         )
 
     def initialize(self) -> None:
-        """Apply the canonical PostgreSQL schema before constructing the runtime.
-
-        The SQL migration is authoritative for existing databases; ORM
-        create_all alone cannot add columns or evolve constraints.
-        Migration errors intentionally fail closed.
-        """
-        schema_path = (
-            Path(__file__).resolve().parents[1]
-            / "postgres"
-            / "schema"
-            / "001_concurrency.sql"
-        )
-        schema_sql = schema_path.read_text(encoding="utf-8")
-        with self.engine.begin() as connection:
-            connection.exec_driver_sql(schema_sql)
-
-        for base in (
-            AtomicLedgerBase,
-            EscrowBase,
-            OutboxBase,
-            IdempotencyBase,
-            TransactionWitness,
-        ):
-            base.metadata.create_all(self.engine)
+        apply_production_schema(self.engine)
 
     def create(self) -> GerchainRuntime:
         self.initialize()
