@@ -74,10 +74,22 @@ def _native_migration_transaction(conn):
         conn.execute("SELECT pg_advisory_xact_lock(%s)", (MIGRATION_LOCK_KEY,))
         yield
 
+@contextmanager
+def _sqlalchemy_migration_transaction(conn):
+    """Serialize SQLAlchemy migration callers, including pre-open transactions."""
+    if conn.in_transaction():
+        conn.execute(text("SELECT pg_advisory_xact_lock(%s)" % MIGRATION_LOCK_KEY))
+        yield
+        return
+    with conn.begin():
+        conn.execute(text("SELECT pg_advisory_xact_lock(%s)" % MIGRATION_LOCK_KEY))
+        yield
+
+
 def _transaction(conn):
     """Return a real transaction context for SQLAlchemy or native psycopg."""
     if hasattr(conn, "exec_driver_sql") and hasattr(conn, "begin"):
-        return nullcontext() if conn.in_transaction() else conn.begin()
+        return _sqlalchemy_migration_transaction(conn)
     if hasattr(conn, "transaction"):
         return _native_migration_transaction(conn)
     return nullcontext()
