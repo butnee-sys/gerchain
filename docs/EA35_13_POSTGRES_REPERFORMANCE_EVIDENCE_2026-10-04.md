@@ -21,3 +21,7 @@ A new push-triggered PostgreSQL production gate must pass all of:
 ## Lock rule
 
 EA-35 remains IN PROGRESS / NOT LOCKED until a fresh exact-SHA GitHub Actions PostgreSQL gate completes successfully and the result is independently reviewed.
+
+## Fresh execution trigger — 2026-10-04
+
+This revision is intentionally pushed to trigger the branch PostgreSQL production gates. Historical successful SHA evidence is not reused as current proof. The required decision is based only on the workflow runs attached to the resulting commit.
