@@ -2,8 +2,8 @@
 -- Brings PostgreSQL installations to the exact durable contract used by the
 -- production ORM. No value movement is performed.
 --
--- Existing rows are never assigned fabricated currency metadata. If legacy
--- rows lack required canonical currency, the migration fails closed.
+-- Existing rows are never assigned fabricated currency or refund-destination metadata.
+-- If legacy rows lack either required canonical value, the migration fails closed.
 --
 -- Constraint replacement is performed inside PostgreSQL DO blocks so DROP and
 -- ADD execute sequentially on the server when the migration is submitted as
@@ -16,9 +16,8 @@ ALTER TABLE escrows
     ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ;
 
 UPDATE escrows
-SET refund_destination = COALESCE(refund_destination, sender_address),
-    created_at = COALESCE(created_at, updated_at, now())
-WHERE refund_destination IS NULL OR created_at IS NULL;
+SET created_at = COALESCE(created_at, updated_at, now())
+WHERE created_at IS NULL;
 
 DO $$
 BEGIN
