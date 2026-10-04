@@ -25,3 +25,10 @@ EA-35 remains IN PROGRESS / NOT LOCKED until a fresh exact-SHA GitHub Actions Po
 ## Fresh execution trigger — 2026-10-04
 
 This revision is intentionally pushed to trigger the branch PostgreSQL production gates. Historical successful SHA evidence is not reused as current proof. The required decision is based only on the workflow runs attached to the resulting commit.
+
+
+## Evidence refresh — 2026-10-04
+
+The previously recorded exact-SHA production evidence for 35f7026e78f42a8e57229989b3db0ea0f95e204f was re-queried from GitHub Actions. The following completed successfully: PostgreSQL production re-performance, Production PostgreSQL Smoke, PostgreSQL Production Gate, production-postgresql-gate, production-postgres-gate, Production PostgreSQL verification, PostgreSQL Production Evidence, production-postgresql, Canonical EAI PostgreSQL Gate, production-postgresql-e2e, and CodeQL Advanced. SHUUD workflows are outside the current EAI/fundamental production scope. The core-gates run on that SHA was cancelled and is therefore not treated as evidence of success or failure.
+
+This evidence-only revision intentionally makes no architecture or runtime change. A new exact-SHA execution is required before final lock, including the independent PostgreSQL evidence workflow and final repository-wide canonical gates.
