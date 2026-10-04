@@ -35,3 +35,12 @@ def test_known_canonical_alias_versions_have_deterministic_preferred_files():
     for version, name in expected.items():
         candidates = [p for p in migration_dir.glob(f"{version:03d}_*.sql")]
         assert any(p.name == name for p in candidates)
+
+
+
+def test_postgresql_migrations_use_valid_dollar_quoting():
+    migration_dir = Path(__file__).resolve().parents[2] / "postgres" / "migrations"
+    for path in migration_dir.glob("*.sql"):
+        sql = path.read_text(encoding="utf-8")
+        assert "DO $\n" not in sql, f"invalid dollar quote opener in {path.name}"
+        assert "END $;" not in sql, f"invalid dollar quote closer in {path.name}"
