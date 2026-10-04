@@ -21,8 +21,7 @@ def _split_sql_statements(sql: str) -> list[str]:
         ch = sql[i]
         nxt = sql[i + 1] if i + 1 < n else ""
         if line_comment:
-            if ch == "
-": line_comment = False
+            if ch == "\n": line_comment = False
             i += 1; continue
         if block_comment:
             if ch == "*" and nxt == "/": block_comment = False; i += 2; continue
