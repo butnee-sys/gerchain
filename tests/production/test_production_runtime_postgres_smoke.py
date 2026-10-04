@@ -15,15 +15,15 @@ from persistence.settlement_coordinator import SettlementCoordinator
 from services.gerchain_runtime_factory import ProductionRuntimeConfig, ProductionRuntimeFactory
 
 
-def test_production_factory_boots_and_uses_canonical_ledger(postgres_engine):
+def test_production_factory_boots_and_uses_canonical_ledger(canonical_postgresql_engine):
     config = ProductionRuntimeConfig(
-        database_url=str(postgres_engine.url),
+        database_url=str(canonical_postgresql_engine.url),
         escrow_id="prod-smoke-escrow",
         amount=100,
         currency="USD",
         witness_id="prod-smoke-witness",
     )
-    factory = ProductionRuntimeFactory(config, engine=postgres_engine)
+    factory = ProductionRuntimeFactory(config, engine=canonical_postgresql_engine)
     runtime = factory.create()
 
     assert runtime.is_canonical_ledger_authoritative
@@ -129,12 +129,12 @@ def test_production_factory_boots_and_uses_canonical_ledger(postgres_engine):
     assert read.get_balance("SMOKE-DEST", "USD") == 100
 
 
-def test_production_factory_executes_refund_cancel_and_settlement_on_real_postgresql(postgres_engine):
+def test_production_factory_executes_refund_cancel_and_settlement_on_real_postgresql(canonical_postgresql_engine):
     config = ProductionRuntimeConfig(
-        database_url=str(postgres_engine.url), escrow_id="prod-eai-escrow", amount=100,
+        database_url=str(canonical_postgresql_engine.url), escrow_id="prod-eai-escrow", amount=100,
         currency="USD", witness_id="prod-eai-witness",
     )
-    factory = ProductionRuntimeFactory(config, engine=postgres_engine)
+    factory = ProductionRuntimeFactory(config, engine=canonical_postgresql_engine)
     runtime = factory.create()
 
     for account, balance in (("EAI-SOURCE", 1000), ("EAI-DEST", 0),
