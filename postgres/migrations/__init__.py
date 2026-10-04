@@ -42,7 +42,7 @@ def _split_sql_statements(sql: str) -> list[str]:
             if end != -1:
                 candidate = sql[i:end + 1]
                 tag = candidate[1:-1]
-                if candidate == "$" or (tag and all(c.isalnum() or c == "_" for c in tag)):
+                if candidate == "$$" or (tag and all(c.isalnum() or c == "_" for c in tag)):
                     dollar_tag = candidate; i = end + 1; continue
         if ch == ";":
             statement = sql[start:i].strip()
