@@ -89,16 +89,13 @@ def _native_migration_transaction(conn):
 
 @contextmanager
 def _sqlalchemy_migration_transaction(conn):
-    """Serialize SQLAlchemy migration callers, including pre-open transactions."""
-    conn.execute(text("SELECT pg_advisory_lock(%s)" % MIGRATION_LOCK_KEY))
-    try:
-        if conn.in_transaction():
-            yield
-        else:
-            with conn.begin():
-                yield
-    finally:
-        conn.execute(text("SELECT pg_advisory_unlock(%s)" % MIGRATION_LOCK_KEY))
+    """Serialize SQLAlchemy migration callers across one committed transaction."""
+    if conn.in_transaction():
+        raise RuntimeError("migration runner requires a clean SQLAlchemy transaction")
+
+    with conn.begin():
+        conn.execute(text("SELECT pg_advisory_xact_lock(:lock_key)"), {"lock_key": MIGRATION_LOCK_KEY})
+        yield
 
 
 def _transaction(conn):
