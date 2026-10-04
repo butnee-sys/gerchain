@@ -4,7 +4,11 @@ from typing import Any, Callable
 
 from sqlalchemy import Engine
 
-from persistence.atomic_release import initialize_atomic_release_schema
+from persistence.atomic_ledger import AtomicLedgerBase
+from persistence.atomic_value_transaction import WitnessBase
+from persistence.durable_idempotency import IdempotencyBase
+from persistence.escrow_aggregate import EscrowBase
+from persistence.recovery_outbox import OutboxBase
 from services.gerchain_runtime import GerchainRuntime
 
 
@@ -26,7 +30,11 @@ class ProductionRuntimeFactory:
     ) -> GerchainRuntime:
         if engine is None or session_factory is None:
             raise ValueError("production runtime requires PostgreSQL engine and session factory")
-        initialize_atomic_release_schema(engine)
+        AtomicLedgerBase.metadata.create_all(engine)
+        EscrowBase.metadata.create_all(engine)
+        WitnessBase.metadata.create_all(engine)
+        IdempotencyBase.metadata.create_all(engine)
+        OutboxBase.metadata.create_all(engine)
         runtime = GerchainRuntime(
             escrow_id=escrow_id,
             amount=amount,
@@ -36,8 +44,7 @@ class ProductionRuntimeFactory:
             manifest=manifest,
             initial_money_state=initial_money_state,
         )
-        runtime.configure_postgres_release(session_factory)
-        runtime.runtime_mode = "production-postgresql"
+        runtime.configure_canonical_ledger(session_factory)
         return runtime
 
 

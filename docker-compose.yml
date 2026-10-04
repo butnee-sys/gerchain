@@ -7,7 +7,7 @@ services:
       - "8485:8485"
       - "9333:9333"
     environment:
-      - NODE_ID=validator_01
+      - NODE_ID=validator_01\n      - GERCHAIN_DATABASE_URL=${GERCHAIN_DATABASE_URL}\n      - GERCHAIN_ESCROW_ID=${GERCHAIN_ESCROW_ID}\n      - GERCHAIN_ESCROW_AMOUNT=${GERCHAIN_ESCROW_AMOUNT}\n      - GERCHAIN_CURRENCY=${GERCHAIN_CURRENCY}\n      - GERCHAIN_WITNESS_ID=${GERCHAIN_WITNESS_ID}
       - GENESIS_PATH=/config/genesis.json
       - PEERS=tcp://node2_ip:8485,tcp://node3_ip:8485
     volumes:
