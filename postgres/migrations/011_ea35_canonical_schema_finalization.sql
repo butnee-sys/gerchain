@@ -46,24 +46,24 @@ END $$;
 ALTER TABLE gerchain_ledger_movements
     ALTER COLUMN integrity_hash SET NOT NULL;
 
-DO $$
-BEGIN
-    EXECUTE 'ALTER TABLE gerchain_ledger_movements DROP CONSTRAINT IF EXISTS gerchain_movement_operation_check';
-    EXECUTE 'ALTER TABLE gerchain_ledger_movements DROP CONSTRAINT IF EXISTS gerchain_movement_escrow_binding_check';
-    EXECUTE 'ALTER TABLE gerchain_ledger_movements DROP CONSTRAINT IF EXISTS gerchain_movement_integrity_hash_check';
-    EXECUTE 'ALTER TABLE gerchain_ledger_movements DROP CONSTRAINT IF EXISTS gerchain_movement_amount_check';
-    EXECUTE 'ALTER TABLE gerchain_ledger_movements ADD CONSTRAINT gerchain_movement_operation_check CHECK (operation IN (''FUND'', ''RELEASE'', ''REFUND'', ''CANCEL'', ''SETTLEMENT''))';
-    EXECUTE 'ALTER TABLE gerchain_ledger_movements ADD CONSTRAINT gerchain_movement_integrity_hash_check CHECK (length(integrity_hash) = 64)';
-    EXECUTE 'ALTER TABLE gerchain_ledger_movements ADD CONSTRAINT gerchain_movement_escrow_binding_check CHECK (
-        (operation = ''SETTLEMENT'' AND escrow_id IS NULL)
+ALTER TABLE gerchain_ledger_movements
+    DROP CONSTRAINT IF EXISTS gerchain_movement_operation_check,
+    DROP CONSTRAINT IF EXISTS gerchain_movement_escrow_binding_check,
+    DROP CONSTRAINT IF EXISTS gerchain_movement_integrity_hash_check,
+    DROP CONSTRAINT IF EXISTS gerchain_movement_amount_check;
+
+ALTER TABLE gerchain_ledger_movements
+    ADD CONSTRAINT gerchain_movement_operation_check CHECK (operation IN ('FUND', 'RELEASE', 'REFUND', 'CANCEL', 'SETTLEMENT')),
+    ADD CONSTRAINT gerchain_movement_integrity_hash_check CHECK (length(integrity_hash) = 64),
+    ADD CONSTRAINT gerchain_movement_escrow_binding_check CHECK (
+        (operation = 'SETTLEMENT' AND escrow_id IS NULL)
         OR (
-            operation IN (''FUND'', ''RELEASE'', ''REFUND'', ''CANCEL'')
+            operation IN ('FUND', 'RELEASE', 'REFUND', 'CANCEL')
             AND escrow_id IS NOT NULL
             AND length(escrow_id) > 0
         )
-    )';
-    EXECUTE 'ALTER TABLE gerchain_ledger_movements ADD CONSTRAINT gerchain_movement_amount_check CHECK (amount > 0)';
-END $$;
+    ),
+    ADD CONSTRAINT gerchain_movement_amount_check CHECK (amount > 0);
 
 DO $$
 BEGIN
