@@ -1,4 +1,4 @@
-# EA-35.16: migration history publication is conflict-safe after serialized runner handoff.
+# EA-35.17: use session-scoped advisory serialization for bootstrap-safe migration publication.
 # EA-35.14: migration recording is conflict-safe after advisory serialization.
 # EA-35.15: keep concurrent duplicate recording idempotent for fresh CI re-performance.
 # The serialization contract is exercised by the PostgreSQL concurrency gate before production lock.
@@ -72,28 +72,33 @@ def checksum(sql: str) -> str:
 
 @contextmanager
 def _native_migration_transaction(conn):
-    """Serialize native psycopg migration runners for the full transaction."""
+    """Serialize native psycopg migration runners across the full bootstrap."""
     if _connection_in_transaction(conn):
         raise RuntimeError("migration runner requires a clean psycopg transaction")
 
-    # Keep the advisory lock inside the same transaction as schema_version
-    # inspection, DDL and history recording. This makes the serialization
-    # boundary atomic and prevents two native runners from applying/recording
-    # the same migration version concurrently.
-    with conn.transaction():
-        conn.execute("SELECT pg_advisory_xact_lock(%s)", (MIGRATION_LOCK_KEY,))
-        yield
+    # Use a session-scoped advisory lock so serialization survives any
+    # driver/DDL transaction boundary and covers schema inspection, DDL and
+    # history recording as one exclusive bootstrap critical section.
+    conn.execute("SELECT pg_advisory_lock(%s)", (MIGRATION_LOCK_KEY,))
+    try:
+        with conn.transaction():
+            yield
+    finally:
+        conn.execute("SELECT pg_advisory_unlock(%s)", (MIGRATION_LOCK_KEY,))
+
 
 @contextmanager
 def _sqlalchemy_migration_transaction(conn):
     """Serialize SQLAlchemy migration callers, including pre-open transactions."""
-    if conn.in_transaction():
-        conn.execute(text("SELECT pg_advisory_xact_lock(%s)" % MIGRATION_LOCK_KEY))
-        yield
-        return
-    with conn.begin():
-        conn.execute(text("SELECT pg_advisory_xact_lock(%s)" % MIGRATION_LOCK_KEY))
-        yield
+    conn.execute(text("SELECT pg_advisory_lock(%s)" % MIGRATION_LOCK_KEY))
+    try:
+        if conn.in_transaction():
+            yield
+        else:
+            with conn.begin():
+                yield
+    finally:
+        conn.execute(text("SELECT pg_advisory_unlock(%s)" % MIGRATION_LOCK_KEY))
 
 
 def _transaction(conn):
