@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 from datetime import datetime, timezone
 
-from sqlalchemy import create_engine, select
+from sqlalchemy import create_engine, select, text
 from sqlalchemy.orm import sessionmaker
 
 from persistence.atomic_ledger import LedgerAccountModel, PostgreSQLAtomicLedger
@@ -27,6 +27,17 @@ def _factory():
     )
 
 
+def _reset_database(factory):
+    with factory.engine.begin() as connection:
+        connection.exec_driver_sql(
+            "TRUNCATE TABLE "
+            "gerchain_ledger_movements, gerchain_ledger_accounts, "
+            "escrows, gerchain_transaction_witnesses, "
+            "gerchain_outbox_events, gerchain_idempotency_records "
+            "RESTART IDENTITY CASCADE"
+        )
+
+
 def _seed_escrow(session, escrow_id, *, amount=100, refund_destination="SRC"):
     now = datetime.now(timezone.utc)
     session.add(
@@ -48,6 +59,8 @@ def _seed_escrow(session, escrow_id, *, amount=100, refund_destination="SRC"):
 
 def test_real_postgresql_factory_and_value_truth():
     factory = _factory()
+    runtime = factory.create()
+    _reset_database(factory)
     runtime = factory.create()
     assert runtime.is_canonical_ledger_authoritative
     assert runtime._canonical_ledger is not None
@@ -92,4 +105,34 @@ def test_real_postgresql_factory_and_value_truth():
         assert report.matched
         assert session.execute(select(TransactionWitness)).scalars().all()
         assert session.execute(select(OutboxEvent)).scalars().all()
+    factory.engine.dispose()
+
+
+def test_production_factory_repairs_legacy_escrow_state_constraint():
+    factory = _factory()
+    factory.create()
+    with factory.engine.begin() as connection:
+        connection.execute(text("ALTER TABLE escrows DROP CONSTRAINT IF EXISTS ck_escrows_canonical_state"))
+        connection.execute(text(
+            "ALTER TABLE escrows ADD CONSTRAINT legacy_escrow_state_check "
+            "CHECK (state IN ('CREATED','LOCKED','RELEASED'))"
+        ))
+
+    # Regression proof: create_all() alone cannot repair an existing table.
+    # Production boot must apply the canonical migration and replace the stale
+    # lifecycle constraint with the full six-state state machine.
+    factory.create()
+    with factory.engine.connect() as connection:
+        constraints = connection.execute(text(
+            "SELECT conname, pg_get_constraintdef(oid) AS definition "
+            "FROM pg_constraint WHERE conrelid = 'escrows'::regclass "
+            "AND contype = 'c' AND pg_get_constraintdef(oid) LIKE '%state%' "
+        )).all()
+        names = {row[0] for row in constraints}
+        assert "ck_escrows_canonical_state" in names
+        assert "legacy_escrow_state_check" not in names
+        definition = next(row[1] for row in constraints if row[0] == "ck_escrows_canonical_state")
+        assert "FUNDED" in definition
+        assert "REFUNDED" in definition
+        assert "CANCELLED" in definition
     factory.engine.dispose()
