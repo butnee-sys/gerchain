@@ -23,8 +23,8 @@ def apply_migrations(connection, migration_dir: Path) -> None:
             )
         versions[version] = path
 
-    # Migrations own one transaction boundary. The transaction-scoped advisory
-    # lock serializes DDL and schema_version publication as one atomic unit.
+    # Migrations own one transaction boundary. A session-scoped advisory lock
+    # serializes DDL and schema_version publication across concurrent boots.
     is_sqlalchemy = hasattr(connection, "exec_driver_sql")
 
     if is_sqlalchemy:
