@@ -1,3 +1,4 @@
+# EA-35.16: migration history publication is conflict-safe after serialized runner handoff.
 # EA-35.14: migration recording is conflict-safe after advisory serialization.
 # EA-35.15: keep concurrent duplicate recording idempotent for fresh CI re-performance.
 # The serialization contract is exercised by the PostgreSQL concurrency gate before production lock.
