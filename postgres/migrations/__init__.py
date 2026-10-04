@@ -23,8 +23,10 @@ def apply_migrations(connection, migration_dir: Path) -> None:
             )
         versions[version] = path
 
-    # Migrations own one transaction boundary. A session-scoped advisory lock
-    # serializes DDL and schema_version publication across concurrent boots.
+    # Migrations own one transaction boundary. A transaction-scoped advisory
+    # lock serializes the entire migration read/apply/publication sequence.
+    # This prevents two first-boot workers from both observing a missing version
+    # and racing to publish the same schema_version row.
     is_sqlalchemy = hasattr(connection, "exec_driver_sql")
 
     if is_sqlalchemy:
@@ -46,19 +48,16 @@ def apply_migrations(connection, migration_dir: Path) -> None:
         return connection.execute(sql, params or ())
 
     lock_key = "gerchain:migrations"
-    lock_acquired = False
     if is_sqlalchemy:
         execute(
-            "SELECT pg_advisory_lock(hashtext(:lock_key))",
+            "SELECT pg_advisory_xact_lock(hashtext(:lock_key))",
             {"lock_key": lock_key},
         )
-        lock_acquired = True
     else:
         execute(
-            "SELECT pg_advisory_lock(hashtext(%s))",
+            "SELECT pg_advisory_xact_lock(hashtext(%s))",
             (lock_key,),
         )
-        lock_acquired = True
 
     try:
         execute(
@@ -122,26 +121,10 @@ def apply_migrations(connection, migration_dir: Path) -> None:
                     f"migration checksum mismatch for version {version}: {path.name}"
                 )
 
-        # Commit atomically publishes the migration history. The session-scoped
-        # advisory lock is released only after the commit, so a concurrent
-        # bootstrap cannot observe a partially published migration history.
+        # Commit atomically publishes the migration history. The transaction-
+        # scoped advisory lock is released automatically only after this commit,
+        # so a concurrent bootstrap cannot observe a partially published history.
         connection.commit()
     except Exception:
         connection.rollback()
         raise
-    finally:
-        if lock_acquired:
-            try:
-                if is_sqlalchemy:
-                    connection.exec_driver_sql(
-                        "SELECT pg_advisory_unlock(hashtext(%s))", (lock_key,)
-                    )
-                else:
-                    connection.execute(
-                        "SELECT pg_advisory_unlock(hashtext(%s))", (lock_key,)
-                    )
-                if is_sqlalchemy:
-                    connection.commit()
-            except Exception:
-                # Never mask the migration result with unlock cleanup noise.
-                pass
