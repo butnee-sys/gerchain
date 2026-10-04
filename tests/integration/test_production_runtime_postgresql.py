@@ -6,7 +6,6 @@ from datetime import datetime, timezone
 from sqlalchemy import create_engine, inspect, select, text
 from sqlalchemy.orm import sessionmaker
 
-from postgres.migrations import apply_migrations
 from persistence.deep_value_reconciliation import deep_reconcile_value_truth
 from persistence.escrow_aggregate import CanonicalEscrow, EscrowState
 from persistence.atomic_ledger import LedgerAccountModel, LedgerMovementModel
@@ -19,8 +18,7 @@ from services.gerchain_runtime_factory import ProductionRuntimeConfig, Productio
 def test_production_runtime_boots_and_executes_canonical_postgresql_flow() -> None:
     database_url = os.environ["GERCHAIN_DATABASE_URL"]
     engine = create_engine(database_url, pool_pre_ping=True)
-    with engine.connect() as connection:
-        apply_migrations(connection, "postgres/migrations")
+    # The production factory must own canonical migration application.
     runtime = ProductionRuntimeFactory(
         ProductionRuntimeConfig(
             database_url=database_url,
