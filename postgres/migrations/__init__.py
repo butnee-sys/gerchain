@@ -74,8 +74,10 @@ def apply_migrations(connection, migration_dir: Path) -> None:
             )
         versions[version] = path
 
-    # Migrations own one transaction boundary. A transaction-scoped advisory
-    # lock serializes the entire migration read/apply/publication sequence.
+    # Migrations own one transaction boundary. A session-scoped advisory
+    # lock serializes the entire migration read/apply/publication sequence,
+    # including the schema-history publication commit. This is deliberately
+    # stronger than a transaction-scoped lock for bootstrap concurrency.
     is_sqlalchemy = hasattr(connection, "exec_driver_sql")
 
     if is_sqlalchemy:
@@ -98,9 +100,9 @@ def apply_migrations(connection, migration_dir: Path) -> None:
 
     lock_key = "gerchain:migrations"
     if is_sqlalchemy:
-        execute("SELECT pg_advisory_xact_lock(hashtext(:lock_key))", {"lock_key": lock_key})
+        execute("SELECT pg_advisory_lock(hashtext(:lock_key))", {"lock_key": lock_key})
     else:
-        execute("SELECT pg_advisory_xact_lock(hashtext(%s))", (lock_key,))
+        execute("SELECT pg_advisory_lock(hashtext(%s))", (lock_key,))
 
     try:
         execute(
@@ -175,3 +177,8 @@ def apply_migrations(connection, migration_dir: Path) -> None:
     except Exception:
         connection.rollback()
         raise
+    finally:
+        if is_sqlalchemy:
+            execute("SELECT pg_advisory_unlock(hashtext(:lock_key))", {"lock_key": lock_key})
+        else:
+            execute("SELECT pg_advisory_unlock(hashtext(%s))", (lock_key,))
