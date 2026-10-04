@@ -1,4 +1,4 @@
-# EA-35.17: use session-scoped advisory serialization for bootstrap-safe migration publication.
+# EA-35.18: retain session-scoped advisory serialization for bootstrap-safe migration publication.
 # EA-35.14: migration recording is conflict-safe after advisory serialization.
 # EA-35.15: keep concurrent duplicate recording idempotent for fresh CI re-performance.
 # The serialization contract is exercised by the PostgreSQL concurrency gate before production lock.
