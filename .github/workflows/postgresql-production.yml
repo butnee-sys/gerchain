@@ -41,5 +41,5 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r requirements-dee-security.txt pytest
 
-      - name: Run PostgreSQL production boot evidence
-        run: python -m pytest -q tests/integration/test_production_postgres_boot.py
+      - name: Run PostgreSQL canonical production re-performance
+        run: python -m pytest -q tests/integration/test_production_postgres_boot.py tests/integration/test_production_postgres_canonical.py
