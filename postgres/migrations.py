@@ -226,8 +226,10 @@ def apply_migrations(conn, migration_dir: str | Path) -> None:
 
                 migration_sql = sql.replace("BEGIN;", "").replace("COMMIT;", "")
                 _execute(conn, migration_sql)
-                # Concurrent runners may both finish the same migration body
-                # after serialized lock handoff; recording is therefore race-safe.
+                # Concurrent runners must never publish duplicate schema history.
+                # The transaction-scoped advisory lock serializes compliant runners;
+                # ON CONFLICT remains a second-line idempotency barrier for legacy
+                # or differently-versioned bootstrap callers.
                 _execute(
                     conn,
                     """
