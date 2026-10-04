@@ -141,12 +141,13 @@ def test_production_factory_applies_canonical_schema_migrations():
                 text("SELECT version FROM schema_version ORDER BY version")
             ).fetchall()
         ]
-        migration_versions = set()\n        for path in (Path(__file__).resolve().parents[1] / "postgres" / "migrations").glob("*.sql"):\n            try:\n                migration_versions.add(int(path.name.split("_", 1)[0]))\n            except (ValueError, IndexError):\n                continue\n        assert versions == sorted(migration_versions)
-
-        for table in (
-            "gerchain_ledger_accounts",
-            "gerchain_ledger_movements",
-            "gerchain_transaction_witnesses",
+        migration_versions = set()
+        for path in (Path(__file__).resolve().parents[1] / "postgres" / "migrations").glob("*.sql"):
+            try:
+                migration_versions.add(int(path.name.split("_", 1)[0]))
+            except (ValueError, IndexError):
+                continue
+        assert versions == sorted(migration_versions)
             "gerchain_idempotency_records",
             "gerchain_outbox_events",
         ):
