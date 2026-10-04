@@ -14,6 +14,12 @@ REQUIRED_COLUMNS = {
     'gerchain_idempotency_records': {'id','key','fingerprint','result_json','state','created_at','updated_at'},
 }
 REQUIRED_ESCROW_STATES = {'CREATED','FUNDED','LOCKED','RELEASED','REFUNDED','CANCELLED'}  # canonical lifecycle gate
+REQUIRED_NOT_NULL_COLUMNS = {
+    'escrows': {'id','sender_address','receiver_address','amount','state','refund_destination','currency','version','created_at','updated_at'},
+    'gerchain_ledger_movements': {'transaction_id','source','destination','amount','currency','operation','integrity_hash','created_at'},
+    'gerchain_transaction_witnesses': {'transaction_id','event_type','escrow_id','amount','created_at'},
+    'gerchain_idempotency_records': {'key','fingerprint','state','created_at','updated_at'},
+}
 
 def assert_canonical_production_schema(connection: Connection) -> None:
     version = connection.execute(text('SELECT MAX(version) FROM schema_version')).scalar_one()
@@ -35,12 +41,16 @@ def assert_canonical_production_schema(connection: Connection) -> None:
     inspector = inspect(connection)
     missing = []
     for table, columns in REQUIRED_COLUMNS.items():
-        actual = {column['name'] for column in inspector.get_columns(table)}
+        column_info = {column['name']: column for column in inspector.get_columns(table)}
+        actual = set(column_info)
         if not actual:
             missing.append(f'{table}: TABLE_MISSING')
             continue
         for column in sorted(columns - actual):
             missing.append(f'{table}: COLUMN_MISSING:{column}')
+        for column in sorted(REQUIRED_NOT_NULL_COLUMNS.get(table, set()) & actual):
+            if column_info[column].get('nullable', True):
+                missing.append(f'{table}: COLUMN_NULLABLE:{column}')
     if missing:
         raise RuntimeError('canonical production schema incomplete; migration required: ' + ', '.join(missing))
     constraints = inspector.get_check_constraints('escrows')
