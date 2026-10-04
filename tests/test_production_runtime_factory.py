@@ -57,3 +57,23 @@ def test_production_entrypoint_uses_factory_instance(monkeypatch):
     assert created["config"].amount == 100
     assert created["config"].currency == "MNT"
     assert created["config"].witness_id == "FACTORY-W"
+
+
+def test_production_factory_uses_authoritative_migration_history(monkeypatch):
+    from services import gerchain_runtime_factory as module
+    calls = []
+    class FakeEngine:
+        dialect = type("Dialect", (), {"name": "postgresql"})()
+        def connect(self):
+            class Ctx:
+                def __enter__(self): return self
+                def __exit__(self, *args): return False
+            return Ctx()
+    monkeypatch.setattr(module, "apply_migrations", lambda connection, path: calls.append(path.name))
+    factory = module.ProductionRuntimeFactory(
+        module.ProductionRuntimeConfig(
+            database_url="postgresql://example/db", escrow_id="E", amount=1, currency="MNT", witness_id="W"
+        ), engine=FakeEngine()
+    )
+    factory.initialize()
+    assert calls == ["migrations"]
