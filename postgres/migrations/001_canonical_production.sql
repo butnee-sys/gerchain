@@ -21,6 +21,10 @@ CREATE TABLE IF NOT EXISTS escrows (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+ALTER TABLE escrows
+    ALTER COLUMN refund_destination SET NOT NULL,
+    ALTER COLUMN currency SET NOT NULL;
+
 ALTER TABLE escrows DROP CONSTRAINT IF EXISTS escrows_state_check;
 ALTER TABLE escrows ADD CONSTRAINT escrows_state_check
     CHECK (state IN ('CREATED','FUNDED','LOCKED','RELEASED','REFUNDED','CANCELLED'));
@@ -45,6 +49,9 @@ CREATE TABLE IF NOT EXISTS gerchain_ledger_movements (
     integrity_hash VARCHAR(128),
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+ALTER TABLE gerchain_ledger_movements
+    ALTER COLUMN integrity_hash SET NOT NULL;
 
 ALTER TABLE gerchain_ledger_movements
     ADD CONSTRAINT gerchain_movement_amount_check CHECK (amount > 0);
