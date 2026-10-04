@@ -6,6 +6,53 @@ from pathlib import Path
 from sqlalchemy import text
 
 
+def _split_sql_statements(sql: str) -> list[str]:
+    """Split PostgreSQL SQL on top-level semicolons, preserving dollar blocks."""
+    statements: list[str] = []
+    start = 0
+    i = 0
+    n = len(sql)
+    quote: str | None = None
+    dollar_tag: str | None = None
+    line_comment = False
+    block_comment = False
+
+    while i < n:
+        ch = sql[i]
+        nxt = sql[i + 1] if i + 1 < n else ""
+        if line_comment:
+            if ch == "\n": line_comment = False
+            i += 1; continue
+        if block_comment:
+            if ch == "*" and nxt == "/": block_comment = False; i += 2; continue
+            i += 1; continue
+        if dollar_tag is not None:
+            if sql.startswith(dollar_tag, i): dollar_tag = None; i += len(dollar_tag); continue
+            i += 1; continue
+        if quote is not None:
+            if ch == quote:
+                if i + 1 < n and sql[i + 1] == quote: i += 2; continue
+                quote = None
+            i += 1; continue
+        if ch == "-" and nxt == "-": line_comment = True; i += 2; continue
+        if ch == "/" and nxt == "*": block_comment = True; i += 2; continue
+        if ch in ("'", '"'): quote = ch; i += 1; continue
+        if ch == "$":
+            end = sql.find("$", i + 1)
+            if end != -1:
+                candidate = sql[i:end + 1]
+                tag = candidate[1:-1]
+                if candidate == "$" or (tag and all(c.isalnum() or c == "_" for c in tag)):
+                    dollar_tag = candidate; i = end + 1; continue
+        if ch == ";":
+            statement = sql[start:i].strip()
+            if statement: statements.append(statement)
+            start = i + 1
+        i += 1
+    tail = sql[start:].strip()
+    if tail: statements.append(tail)
+    return statements
+
 def apply_migrations(connection, migration_dir: Path) -> None:
     migration_dir = Path(migration_dir)
     migration_files = sorted(
@@ -86,7 +133,11 @@ def apply_migrations(connection, migration_dir: Path) -> None:
                     )
                 continue
 
-            execute(sql, static_sql=True)
+            statements = _split_sql_statements(sql)
+            if not statements:
+                raise RuntimeError(f"migration {path.name} contains no executable SQL")
+            for statement in statements:
+                execute(statement, static_sql=True)
 
             if is_sqlalchemy:
                 recorded = execute(
