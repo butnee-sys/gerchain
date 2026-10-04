@@ -187,7 +187,7 @@ def test_migrations_are_serialized_and_checksum_is_stable():
     with ThreadPoolExecutor(max_workers=2) as pool:
         list(pool.map(lambda _: migrate(), range(2)))
 
-    with connect() as conn:
+    # Re-entry must remain idempotent after concurrent first boot.\n    # This is the production bootstrap contract: a second migration pass\n    # cannot duplicate schema history or mutate recorded checksums.\n    with connect() as conn:\n        apply_migrations(conn, MIGRATION_DIR)\n\n    with connect() as conn:
         rows = conn.execute("SELECT version, checksum FROM schema_version ORDER BY version").fetchall()
         expected_versions = sorted({int(path.name.split("_", 1)[0]) for path in MIGRATION_DIR.glob("*.sql")})
         assert [row[0] for row in rows] == expected_versions
