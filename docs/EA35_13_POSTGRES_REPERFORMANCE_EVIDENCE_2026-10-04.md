@@ -32,3 +32,10 @@ This revision is intentionally pushed to trigger the branch PostgreSQL productio
 The previously recorded exact-SHA production evidence for 35f7026e78f42a8e57229989b3db0ea0f95e204f was re-queried from GitHub Actions. The following completed successfully: PostgreSQL production re-performance, Production PostgreSQL Smoke, PostgreSQL Production Gate, production-postgresql-gate, production-postgres-gate, Production PostgreSQL verification, PostgreSQL Production Evidence, production-postgresql, Canonical EAI PostgreSQL Gate, production-postgresql-e2e, and CodeQL Advanced. SHUUD workflows are outside the current EAI/fundamental production scope. The core-gates run on that SHA was cancelled and is therefore not treated as evidence of success or failure.
 
 This evidence-only revision intentionally makes no architecture or runtime change. A new exact-SHA execution is required before final lock, including the independent PostgreSQL evidence workflow and final repository-wide canonical gates.
+
+
+## Exact-SHA verification trigger — 2026-10-05
+
+This commit is an evidence-trigger revision only. No production architecture or value-flow behavior is changed here. GitHub Actions must execute the PostgreSQL production and independent evidence gates against this exact commit SHA. Prior successful execution SHAs remain historical evidence and are not substituted for this exact-SHA proof.
+
+**Decision rule:** EA-35 remains NOT LOCKED until the exact-SHA canonical PostgreSQL gates pass and their run IDs are independently re-read.
