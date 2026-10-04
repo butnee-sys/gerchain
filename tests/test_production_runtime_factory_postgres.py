@@ -141,13 +141,7 @@ def test_production_factory_applies_canonical_schema_migrations():
                 text("SELECT version FROM schema_version ORDER BY version")
             ).fetchall()
         ]
-        migration_versions = []
-        for path in (Path(__file__).resolve().parents[1] / "postgres" / "migrations").glob("*.sql"):
-            try:
-                migration_versions.append(int(path.name.split("_", 1)[0]))
-            except (ValueError, IndexError):
-                continue
-        assert versions == sorted(migration_versions)
+        migration_versions = set()\n        for path in (Path(__file__).resolve().parents[1] / "postgres" / "migrations").glob("*.sql"):\n            try:\n                migration_versions.add(int(path.name.split("_", 1)[0]))\n            except (ValueError, IndexError):\n                continue\n        assert versions == sorted(migration_versions)
 
         for table in (
             "gerchain_ledger_accounts",
