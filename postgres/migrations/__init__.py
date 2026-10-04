@@ -27,7 +27,11 @@ def _split_sql_statements(sql: str) -> list[str]:
             if ch == "*" and nxt == "/": block_comment = False; i += 2; continue
             i += 1; continue
         if dollar_tag is not None:
-            if sql.startswith(dollar_tag, i): dollar_tag = None; i += len(dollar_tag); continue
+            if sql.startswith(dollar_tag, i):
+                tag_length = len(dollar_tag)
+                dollar_tag = None
+                i += tag_length
+                continue
             i += 1; continue
         if quote is not None:
             if ch == quote:
