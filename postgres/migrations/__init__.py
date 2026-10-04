@@ -70,10 +70,7 @@ def apply_migrations(connection, migration_dir: Path) -> None:
             )
         versions[version] = path
 
-    # Migrations own one transaction boundary. A session-scoped advisory lock
-    # serializes the entire migration read/apply/publication sequence. Session
-    # scope keeps the lock held until the connection explicitly releases it.
-    is_sqlalchemy = hasattr(connection, "exec_driver_sql")
+    # Migrations own one transaction boundary. A transaction-scoped advisory\n    # lock serializes the entire migration read/apply/publication sequence.\n    is_sqlalchemy = hasattr(connection, "exec_driver_sql")
 
     if is_sqlalchemy:
         from sqlalchemy import text
@@ -93,22 +90,7 @@ def apply_migrations(connection, migration_dir: Path) -> None:
             sql = sql.replace("%", "%%")
         return connection.execute(sql, params or ())
 
-    lock_key = "gerchain:migrations"
-    lock_acquired = False
-    if is_sqlalchemy:
-        execute(
-            "SELECT pg_advisory_lock(hashtext(:lock_key))",
-            {"lock_key": lock_key},
-        )
-    else:
-        execute(
-            "SELECT pg_advisory_lock(hashtext(%s))",
-            (lock_key,),
-        )
-    lock_acquired = True
-
-    try:
-        execute(
+    lock_key = "gerchain:migrations"\n    if is_sqlalchemy:\n        execute("SELECT pg_advisory_xact_lock(hashtext(:lock_key))", {"lock_key": lock_key})\n    else:\n        execute("SELECT pg_advisory_xact_lock(hashtext(%s))", (lock_key,))\n\n    try:\n        execute(
             """
             CREATE TABLE IF NOT EXISTS schema_version (
                 version BIGINT PRIMARY KEY,
@@ -177,26 +159,4 @@ def apply_migrations(connection, migration_dir: Path) -> None:
         # scoped advisory lock is released automatically only after this commit,
         # so a concurrent bootstrap cannot observe a partially published history.
         connection.commit()
-    except Exception:
-        connection.rollback()
-        raise
-    finally:
-        if lock_acquired:
-            try:
-                if is_sqlalchemy:
-                    execute(
-                        "SELECT pg_advisory_unlock(hashtext(:lock_key))",
-                        {"lock_key": lock_key},
-                    )
-                    connection.commit()
-                else:
-                    execute(
-                        "SELECT pg_advisory_unlock(hashtext(%s))",
-                        (lock_key,),
-                    )
-                    connection.commit()
-            except Exception:
-                try:
-                    connection.rollback()
-                except Exception:
-                    pass
+    except Exception:\n        connection.rollback()\n        raise\n
