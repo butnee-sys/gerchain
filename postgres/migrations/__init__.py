@@ -23,10 +23,9 @@ def apply_migrations(connection, migration_dir: Path) -> None:
             )
         versions[version] = path
 
-    # Migrations own one transaction boundary. A transaction-scoped advisory
-    # lock serializes the entire migration read/apply/publication sequence.
-    # This prevents two first-boot workers from both observing a missing version
-    # and racing to publish the same schema_version row.
+    # Migrations own one transaction boundary. A session-scoped advisory lock
+    # serializes the entire migration read/apply/publication sequence. Session
+    # scope keeps the lock held until the connection explicitly releases it.
     is_sqlalchemy = hasattr(connection, "exec_driver_sql")
 
     if is_sqlalchemy:
@@ -48,16 +47,18 @@ def apply_migrations(connection, migration_dir: Path) -> None:
         return connection.execute(sql, params or ())
 
     lock_key = "gerchain:migrations"
+    lock_acquired = False
     if is_sqlalchemy:
         execute(
-            "SELECT pg_advisory_xact_lock(hashtext(:lock_key))",
+            "SELECT pg_advisory_lock(hashtext(:lock_key))",
             {"lock_key": lock_key},
         )
     else:
         execute(
-            "SELECT pg_advisory_xact_lock(hashtext(%s))",
+            "SELECT pg_advisory_lock(hashtext(%s))",
             (lock_key,),
         )
+    lock_acquired = True
 
     try:
         execute(
@@ -128,3 +129,23 @@ def apply_migrations(connection, migration_dir: Path) -> None:
     except Exception:
         connection.rollback()
         raise
+    finally:
+        if lock_acquired:
+            try:
+                if is_sqlalchemy:
+                    execute(
+                        "SELECT pg_advisory_unlock(hashtext(:lock_key))",
+                        {"lock_key": lock_key},
+                    )
+                    connection.commit()
+                else:
+                    execute(
+                        "SELECT pg_advisory_unlock(hashtext(%s))",
+                        (lock_key,),
+                    )
+                    connection.commit()
+            except Exception:
+                try:
+                    connection.rollback()
+                except Exception:
+                    pass
