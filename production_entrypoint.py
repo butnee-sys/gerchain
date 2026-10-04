@@ -51,7 +51,12 @@ def main() -> None:
         )
     )
 
-    runtime = factory.create()
+    try:
+        runtime = factory.create()
+    except Exception:
+        engine = factory.engine
+        engine.dispose()
+        raise
 
     if not runtime.is_canonical_ledger_authoritative:
         raise RuntimeError("canonical ledger authority was not established")
@@ -63,8 +68,11 @@ def main() -> None:
 
     signal.signal(signal.SIGTERM, _stop)
     signal.signal(signal.SIGINT, _stop)
-    while _running:
-        time.sleep(1)
+    try:
+        while _running:
+            time.sleep(1)
+    finally:
+        factory.engine.dispose()
 
 
 if __name__ == "__main__":
