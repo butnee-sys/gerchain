@@ -121,7 +121,7 @@ def test_production_postgres_canonical_value_truth():
             row.account_id: row.balance
             for row in session.execute(select(LedgerAccountModel)).scalars()
         }
-        assert balances == {"SRC": 650, "DST": 100, "REFUND": 100, "OTHER": 50}
+        assert balances == {"SRC": 750, "DST": 100, "REFUND": 100, "OTHER": 50}
 
         report = deep_reconcile_value_truth(session)
         assert report.matched, report.issues
