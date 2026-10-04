@@ -46,16 +46,19 @@ def apply_migrations(connection, migration_dir: Path) -> None:
         return connection.execute(sql, params or ())
 
     lock_key = "gerchain:migrations"
+    lock_acquired = False
     if is_sqlalchemy:
         execute(
-            "SELECT pg_advisory_xact_lock(hashtext(:lock_key))",
+            "SELECT pg_advisory_lock(hashtext(:lock_key))",
             {"lock_key": lock_key},
         )
+        lock_acquired = True
     else:
         execute(
-            "SELECT pg_advisory_xact_lock(hashtext(%s))",
+            "SELECT pg_advisory_lock(hashtext(%s))",
             (lock_key,),
         )
+        lock_acquired = True
 
     try:
         execute(
@@ -119,9 +122,26 @@ def apply_migrations(connection, migration_dir: Path) -> None:
                     f"migration checksum mismatch for version {version}: {path.name}"
                 )
 
-        # Commit atomically publishes the migration history and releases
-        # the transaction-scoped advisory lock.
+        # Commit atomically publishes the migration history. The session-scoped
+        # advisory lock is released only after the commit, so a concurrent
+        # bootstrap cannot observe a partially published migration history.
         connection.commit()
     except Exception:
         connection.rollback()
         raise
+    finally:
+        if lock_acquired:
+            try:
+                if is_sqlalchemy:
+                    connection.exec_driver_sql(
+                        "SELECT pg_advisory_unlock(hashtext(%s))", (lock_key,)
+                    )
+                else:
+                    connection.execute(
+                        "SELECT pg_advisory_unlock(hashtext(%s))", (lock_key,)
+                    )
+                if is_sqlalchemy:
+                    connection.commit()
+            except Exception:
+                # Never mask the migration result with unlock cleanup noise.
+                pass
