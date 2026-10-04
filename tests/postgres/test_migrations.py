@@ -44,3 +44,30 @@ def test_postgresql_migrations_use_valid_dollar_quoting():
         sql = path.read_text(encoding="utf-8")
         assert "DO $\n" not in sql, f"invalid dollar quote opener in {path.name}"
         assert "END $;" not in sql, f"invalid dollar quote closer in {path.name}"
+
+
+
+def test_sql_splitter_preserves_dollar_quoted_blocks_and_semicolons():
+    from postgres.migrations import _split_sql_statements
+
+    sql = """
+    CREATE TABLE example (id INTEGER);
+    DO $$
+    BEGIN
+        PERFORM 1;
+        PERFORM 2;
+    END $$;
+    CREATE INDEX example_id ON example (id);
+    """
+    statements = _split_sql_statements(sql)
+    assert len(statements) == 3
+    assert statements[1].startswith("DO $$")
+    assert "PERFORM 1;" in statements[1]
+    assert "PERFORM 2;" in statements[1]
+
+
+def test_sql_splitter_preserves_single_quoted_semicolons():
+    from postgres.migrations import _split_sql_statements
+
+    statements = _split_sql_statements("INSERT INTO t VALUES ('a;b'); SELECT 1;")
+    assert statements == ["INSERT INTO t VALUES ('a;b')", "SELECT 1"]
