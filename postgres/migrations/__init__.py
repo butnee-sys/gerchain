@@ -21,7 +21,8 @@ def _split_sql_statements(sql: str) -> list[str]:
         ch = sql[i]
         nxt = sql[i + 1] if i + 1 < n else ""
         if line_comment:
-            if ch == "\n": line_comment = False
+            if ch == "
+": line_comment = False
             i += 1; continue
         if block_comment:
             if ch == "*" and nxt == "/": block_comment = False; i += 2; continue
@@ -70,7 +71,9 @@ def apply_migrations(connection, migration_dir: Path) -> None:
             )
         versions[version] = path
 
-    # Migrations own one transaction boundary. A transaction-scoped advisory\n    # lock serializes the entire migration read/apply/publication sequence.\n    is_sqlalchemy = hasattr(connection, "exec_driver_sql")
+    # Migrations own one transaction boundary. A transaction-scoped advisory
+    # lock serializes the entire migration read/apply/publication sequence.
+    is_sqlalchemy = hasattr(connection, "exec_driver_sql")
 
     if is_sqlalchemy:
         from sqlalchemy import text
@@ -90,7 +93,14 @@ def apply_migrations(connection, migration_dir: Path) -> None:
             sql = sql.replace("%", "%%")
         return connection.execute(sql, params or ())
 
-    lock_key = "gerchain:migrations"\n    if is_sqlalchemy:\n        execute("SELECT pg_advisory_xact_lock(hashtext(:lock_key))", {"lock_key": lock_key})\n    else:\n        execute("SELECT pg_advisory_xact_lock(hashtext(%s))", (lock_key,))\n\n    try:\n        execute(
+    lock_key = "gerchain:migrations"
+    if is_sqlalchemy:
+        execute("SELECT pg_advisory_xact_lock(hashtext(:lock_key))", {"lock_key": lock_key})
+    else:
+        execute("SELECT pg_advisory_xact_lock(hashtext(%s))", (lock_key,))
+
+    try:
+        execute(
             """
             CREATE TABLE IF NOT EXISTS schema_version (
                 version BIGINT PRIMARY KEY,
@@ -159,4 +169,6 @@ def apply_migrations(connection, migration_dir: Path) -> None:
         # scoped advisory lock is released automatically only after this commit,
         # so a concurrent bootstrap cannot observe a partially published history.
         connection.commit()
-    except Exception:\n        connection.rollback()\n        raise\n
+    except Exception:
+        connection.rollback()
+        raise
