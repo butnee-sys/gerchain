@@ -1,3 +1,5 @@
+import hashlib
+import json
 import os
 
 from persistence.atomic_ledger import LedgerMovementModel, PostgreSQLAtomicLedger
@@ -27,6 +29,17 @@ def test_production_postgresql_factory_and_canonical_ledger():
         )
         session.commit()
 
+        integrity_material = json.dumps({
+            "transaction_id": "pg-proof-tx",
+            "operation": "SETTLEMENT",
+            "escrow_id": None,
+            "source": "pg-proof-source",
+            "destination": "pg-proof-dest",
+            "amount": 100,
+            "currency": "USD",
+        }, sort_keys=True, separators=(",", ":"))
+        integrity_hash = hashlib.sha256(integrity_material.encode("utf-8")).hexdigest()
+
         result = PostgreSQLAtomicLedger.transfer_in_transaction(
             session,
             "pg-proof-tx",
@@ -35,6 +48,7 @@ def test_production_postgresql_factory_and_canonical_ledger():
             100,
             "USD",
             operation="SETTLEMENT",
+            integrity_hash=integrity_hash,
         )
         session.commit()
 
