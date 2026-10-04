@@ -40,6 +40,8 @@ ALTER TABLE gerchain_ledger_movements
     ALTER COLUMN operation SET DEFAULT 'TRANSFER';
 ALTER TABLE gerchain_ledger_movements
     ALTER COLUMN operation SET NOT NULL;
+ALTER TABLE gerchain_ledger_movements
+    ALTER COLUMN integrity_hash SET NOT NULL;
 
 ALTER TABLE escrows ADD COLUMN IF NOT EXISTS refund_destination TEXT;
 ALTER TABLE escrows ADD COLUMN IF NOT EXISTS currency VARCHAR(16);
@@ -64,6 +66,10 @@ END $$;
 ALTER TABLE escrows
     ADD CONSTRAINT ck_escrows_canonical_state
     CHECK (state IN ('CREATED','FUNDED','LOCKED','RELEASED','REFUNDED','CANCELLED'));
+ALTER TABLE escrows
+    ALTER COLUMN refund_destination SET NOT NULL;
+ALTER TABLE escrows
+    ALTER COLUMN currency SET NOT NULL;
 
 CREATE TABLE IF NOT EXISTS gerchain_transaction_witnesses (
     id SERIAL PRIMARY KEY,
