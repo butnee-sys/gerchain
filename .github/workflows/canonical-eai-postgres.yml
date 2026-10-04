@@ -1,4 +1,5 @@
 name: Canonical EAI PostgreSQL Gate
+# Production evidence gate: fresh PostgreSQL + canonical EAI flow.
 
 on:
   push:
