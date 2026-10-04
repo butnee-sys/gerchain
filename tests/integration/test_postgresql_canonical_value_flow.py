@@ -28,6 +28,7 @@ def test_postgresql_canonical_value_flow():
         session.add_all([
             LedgerAccountModel(account_id="SRC", currency="USD", balance=100, version=0, updated_at=now),
             LedgerAccountModel(account_id="BEN", currency="USD", balance=0, version=0, updated_at=now),
+            LedgerAccountModel(account_id="esc-prod", currency="USD", balance=0, version=0, updated_at=now),
             CanonicalEscrow(
                 id="esc-prod",
                 sender_address="SRC",
