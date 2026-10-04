@@ -223,7 +223,20 @@ def test_production_runtime_factory_boots_with_canonical_authority():
     factory.engine.dispose()
 def test_migration_checksum_mismatch_is_rejected():
     with connect() as conn:
-        conn.execute("DROP TABLE IF EXISTS processed_events, outbox, audit_logs, escrows, schema_version CASCADE")
+        conn.execute("""
+            DROP TABLE IF EXISTS
+                gerchain_transaction_witnesses,
+                gerchain_outbox_events,
+                gerchain_idempotency_records,
+                gerchain_ledger_movements,
+                gerchain_ledger_accounts,
+                processed_events,
+                outbox,
+                audit_logs,
+                escrows,
+                schema_version
+            CASCADE
+        """)
         conn.commit()
         apply_migrations(conn, MIGRATION_DIR)
 
