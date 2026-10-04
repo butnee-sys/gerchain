@@ -30,9 +30,45 @@ def ensure_schema():
 
 def connect():
     return psycopg.connect(DATABASE_URL)
+def ensure_legacy_concurrency_tables():
+    with connect() as conn:
+        with conn.transaction():
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS audit_logs (
+                    id BIGSERIAL PRIMARY KEY,
+                    escrow_id TEXT NOT NULL REFERENCES escrows(id),
+                    previous_state TEXT,
+                    new_state TEXT NOT NULL,
+                    actor TEXT NOT NULL,
+                    occurred_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+                    tx_hash TEXT NOT NULL
+                )
+            """)
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS outbox (
+                    id BIGSERIAL PRIMARY KEY,
+                    event_id UUID NOT NULL UNIQUE,
+                    aggregate_type TEXT NOT NULL,
+                    aggregate_id TEXT NOT NULL,
+                    event_type TEXT NOT NULL,
+                    payload JSONB NOT NULL,
+                    status TEXT NOT NULL DEFAULT 'PENDING',
+                    attempts INTEGER NOT NULL DEFAULT 0,
+                    available_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+                    processing_started_at TIMESTAMPTZ,
+                    lease_until TIMESTAMPTZ,
+                    lease_token UUID,
+                    processed_at TIMESTAMPTZ,
+                    last_error TEXT,
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+                )
+            """)
+            conn.execute("CREATE TABLE IF NOT EXISTS processed_events (event_id UUID PRIMARY KEY, processed_at TIMESTAMPTZ NOT NULL DEFAULT now())")
+
 
 
 def reset_db():
+    ensure_legacy_concurrency_tables()
     with connect() as conn:
         with conn.transaction():
             conn.execute("TRUNCATE audit_logs, outbox, processed_events, escrows CASCADE")
