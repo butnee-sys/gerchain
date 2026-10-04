@@ -43,6 +43,17 @@ WHERE created_at IS NULL;
 ALTER TABLE IF EXISTS escrows
     ALTER COLUMN created_at SET NOT NULL;
 
+DO $
+BEGIN
+    IF EXISTS (SELECT 1 FROM escrows WHERE currency IS NULL) THEN
+        RAISE EXCEPTION 'canonical production migration requires currency for every existing escrow';
+    END IF;
+END $;
+
+ALTER TABLE IF EXISTS escrows
+    ALTER COLUMN refund_destination SET NOT NULL,
+    ALTER COLUMN currency SET NOT NULL;
+
 ALTER TABLE IF EXISTS escrows
     DROP CONSTRAINT IF EXISTS escrows_state_check;
 
