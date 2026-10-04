@@ -5,11 +5,11 @@
 -- ADD execute sequentially on the server. This is required when migration SQL
 -- is submitted as one batch through psycopg/SQLAlchemy.
 
-DO $$
-BEGIN
-    EXECUTE 'ALTER TABLE gerchain_ledger_movements DROP CONSTRAINT IF EXISTS gerchain_movement_amount_check';
-    EXECUTE 'ALTER TABLE gerchain_ledger_movements ADD CONSTRAINT gerchain_movement_amount_check CHECK (amount > 0)';
-END $$;
+ALTER TABLE gerchain_ledger_movements
+    DROP CONSTRAINT IF EXISTS gerchain_movement_amount_check;
+
+ALTER TABLE gerchain_ledger_movements
+    ADD CONSTRAINT gerchain_movement_amount_check CHECK (amount > 0);
 
 DO $$
 BEGIN
