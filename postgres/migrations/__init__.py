@@ -17,7 +17,7 @@ def apply_migrations(connection, migration_dir: Path) -> None:
     # table used by older PostgreSQL bootstrap SQL.
     connection.execute(
         text(
-            "CREATE TABLE IF NOT EXISTS gerchain_schema_version ("
+            "CREATE TABLE IF NOT EXISTS schema_version ("
             "version BIGINT PRIMARY KEY, "
             "checksum TEXT NOT NULL, "
             "applied_at TIMESTAMPTZ NOT NULL DEFAULT now()"
