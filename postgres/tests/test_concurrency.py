@@ -281,11 +281,11 @@ def test_migration_checksum_mismatch_is_rejected():
     # matches the repository's immutable migration source.
     with connect() as conn:
         original = conn.execute(
-            "SELECT checksum FROM gerchain_schema_version WHERE version = %s",
+            "SELECT checksum FROM schema_version WHERE version = %s",
             (1,),
         ).fetchone()[0]
         conn.execute(
-            "UPDATE gerchain_schema_version SET checksum = %s WHERE version = %s",
+            "UPDATE schema_version SET checksum = %s WHERE version = %s",
             ("0" * 64, 1),
         )
         conn.commit()
