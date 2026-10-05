@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Any, Callable
 
 from sqlalchemy import Engine, create_engine
@@ -13,7 +12,6 @@ from persistence.durable_idempotency import IdempotencyBase
 from persistence.atomic_value_transaction import TransactionWitness
 from persistence.postgres_migrations import apply_canonical_production_baseline
 from persistence.postgres_canonical_schema import initialize_canonical_postgres_schema
-from postgres.migrations import apply_migrations
 from services.gerchain_runtime import GerchainRuntime
 
 
@@ -84,19 +82,20 @@ class ProductionRuntimeFactory:
         self.session_factory = session_factory
 
     def initialize(self) -> None:
-        """Apply the canonical PostgreSQL migration history before runtime boot."""
-        migration_dir = Path(__file__).resolve().parents[1] / "postgres" / "migrations"
-        with self.engine.connect() as connection:
-            apply_migrations(connection, migration_dir)
-            assert_canonical_production_schema(connection)
-
-        # ORM metadata is retained as a defensive compatibility layer for
-        # canonical persistence models not yet materialized by a historical
-        # migration. It must not replace or bypass migration history.
-        initialize_canonical_postgres_schema(self.engine)
+        """Apply the canonical PostgreSQL baseline, then fail closed on drift."""
+        # The canonical baseline is the only production schema authority.
+        # Historical migration runners are intentionally excluded here because
+        # they may target legacy schema histories with overlapping versions.
         apply_canonical_production_baseline(self.config.database_url)
+
+        # Additive ORM compatibility is allowed only after the authoritative
+        # baseline exists; it cannot substitute for the baseline.
+        initialize_canonical_postgres_schema(self.engine)
         for base in (AtomicLedgerBase, EscrowBase, OutboxBase, IdempotencyBase, TransactionWitness):
             base.metadata.create_all(self.engine)
+
+        with self.engine.connect() as connection:
+            assert_canonical_production_schema(connection)
 
     def create(self) -> GerchainRuntime:
         self.initialize()
