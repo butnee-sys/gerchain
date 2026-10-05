@@ -52,7 +52,7 @@ def apply_migrations(connection, migration_dir: Path) -> None:
         connection.exec_driver_sql(sql)
         connection.execute(
             text(
-                "INSERT INTO gerchain_schema_version(version, checksum) "
+                "INSERT INTO schema_version(version, checksum) "
                 "VALUES (:version, :checksum)"
             ),
             {"version": version, "checksum": checksum},
