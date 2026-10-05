@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+from pathlib import Path
 import pytest
 from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.orm import sessionmaker
@@ -18,6 +19,10 @@ def test_production_postgres_migration_and_canonical_boot() -> None:
 
     engine = create_engine(database_url, pool_pre_ping=True)
     try:
+        schema_dir = Path(__file__).parents[2] / "postgres" / "schema"
+        with engine.begin() as connection:
+            connection.exec_driver_sql((schema_dir / "001_concurrency.sql").read_text())
+            connection.exec_driver_sql((schema_dir / "002_canonical_production_persistence.sql").read_text())
         factory = ProductionRuntimeFactory(
             ProductionRuntimeConfig(
                 database_url=database_url,
