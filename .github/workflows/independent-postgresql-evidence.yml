@@ -1,11 +1,7 @@
 name: independent-postgresql-evidence
 
 on:
-  push:
-    branches:
-      - feat/ea21-transaction-aware-ledger
   workflow_dispatch:
-
 jobs:
   independent-postgresql-evidence:
     runs-on: ubuntu-latest
