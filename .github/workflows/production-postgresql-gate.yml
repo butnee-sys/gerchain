@@ -123,6 +123,18 @@ jobs:
           engine.dispose()
           PY
 
+      - name: Boot production entrypoint against PostgreSQL
+        run: |
+          set +e
+          timeout --signal=TERM 8s python production_entrypoint.py > production-entrypoint.log 2>&1
+          rc=$?
+          cat production-entrypoint.log
+          if [ "$rc" -ne 124 ]; then
+            echo "expected controlled timeout after successful boot, got rc=$rc"
+            exit 1
+          fi
+          grep -q "GerChain production runtime initialized" production-entrypoint.log
+
       - name: Run deep reconciliation tests
         run: pytest -q tests/persistence/test_deep_value_reconciliation.py
 
