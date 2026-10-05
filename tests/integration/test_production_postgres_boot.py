@@ -29,6 +29,9 @@ def test_production_postgres_migration_and_canonical_boot() -> None:
         )
         runtime = factory.create()
         assert runtime.is_canonical_ledger_authoritative
+        assert runtime.runtime_mode == "production-postgresql"
+        assert runtime._postgres_release is None
+        assert runtime._canonical_ledger is not None
 
         runtime2 = factory.create()
         assert runtime2.is_canonical_ledger_authoritative
