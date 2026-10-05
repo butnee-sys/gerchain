@@ -57,6 +57,14 @@ No production balance read or balance mutation may bypass the Canonical Ledger b
 8. Recovery and outbox participate in the same transaction boundary.
 9. CI and independent re-performance provide evidence.
 
-## Important finding
+## EA-35.13 production construction correction
 
-ProductionRuntimeFactory currently configures PostgreSQL release only. It does not yet configure a complete production value-flow runtime. Therefore runtime_mode == production-postgresql MUST NOT be interpreted as proof that all value operations are PostgreSQL-authoritative.
+The production factory was corrected on commit `e860f502f3e1a2d56fd873ad2faab7b1ab630740` to construct `ProductionRuntimeConfig`, initialize canonical persistence metadata, configure `GerchainRuntime` with `configure_canonical_ledger()`, and require Canonical Ledger authority.
+
+`production_entrypoint.py` was corrected to instantiate `ProductionRuntimeFactory` with the real configuration object and call its instance `create()` method. The previous class-level call was incompatible with the factory's actual API.
+
+This establishes the intended production construction path in source code. It is **not yet proof of production readiness**. Exact-SHA PostgreSQL execution evidence, deep reconciliation, recovery, and independent re-performance remain required before lock.
+
+## Hard evidence rule
+
+`runtime_mode == production-postgresql` alone is never treated as proof. Production lock requires fresh exact-SHA PostgreSQL gate evidence plus independent re-performance.
