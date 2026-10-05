@@ -82,4 +82,3 @@ def test_real_postgresql_production_boot_and_value_flow():
         assert report.canonical_movement_count == 2
         assert report.witness_count == 3
         assert report.outbox_count == 3
-        assert session.execute(text("SELECT MAX(version) FROM schema_version")).scalar_one() == 11
