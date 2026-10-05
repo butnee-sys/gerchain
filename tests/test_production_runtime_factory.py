@@ -31,9 +31,10 @@ def test_production_entrypoint_uses_factory_instance(monkeypatch):
         is_canonical_ledger_authoritative = True
 
     class FakeFactory:
-        def __init__(self, config, *, engine=None):
+        def __init__(self, config, *, engine=None, session_factory=None):
             created["config"] = config
             created["engine"] = engine
+            created["session_factory"] = session_factory
 
         def create(self):
             created["created"] = True
