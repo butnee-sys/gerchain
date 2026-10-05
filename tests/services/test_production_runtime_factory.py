@@ -59,7 +59,10 @@ def test_factory_initialize_uses_canonical_migration_runner() -> None:
     engine = Mock()
     engine.dialect.name = "postgresql"
     connection = Mock()
-    engine.connect.return_value.__enter__.return_value = connection
+    connect_context = Mock()
+    connect_context.__enter__.return_value = connection
+    connect_context.__exit__.return_value = None
+    engine.connect.return_value = connect_context
     engine.begin.return_value.__enter__.return_value = connection
 
     factory = ProductionRuntimeFactory(
