@@ -12,6 +12,10 @@ _VERSION_RE = re.compile(r"^(\d+)_.*\.sql$")
 
 def apply_migrations(connection, migration_dir: Path) -> None:
     """Apply ordered PostgreSQL migrations exactly once with checksum locking."""
+    # Serialize first-boot migration across all PostgreSQL application instances.
+    # Transaction-scoped advisory lock is released automatically on commit/rollback.
+    connection.execute(text("SELECT pg_advisory_xact_lock(8342719)"))
+
     connection.execute(
         text(
             "CREATE TABLE IF NOT EXISTS schema_version ("
