@@ -133,6 +133,14 @@ class GerchainRuntime:
         return self._canonical_ledger
 
     @property
+    def is_postgresql_authoritative(self) -> bool:
+        """Compatibility indicator for the legacy PostgreSQL release adapter."""
+        return self._postgres_release is not None
+
+    def require_postgresql_authority(self) -> None:
+        if not self.is_postgresql_authoritative:
+            raise RuntimeError("PostgreSQL release authority is required")
+    @property
     def is_canonical_ledger_authoritative(self) -> bool:
         return (
             self.runtime_mode == "production-postgresql"
