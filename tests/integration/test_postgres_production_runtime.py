@@ -4,7 +4,7 @@ import os
 from datetime import datetime, timezone
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import create_engine, select
 
 from persistence.atomic_ledger import LedgerAccountModel
 from persistence.deep_value_reconciliation import deep_reconcile_value_truth
@@ -22,6 +22,7 @@ def test_real_postgresql_canonical_runtime_and_value_truth():
     if not url:
         pytest.skip("GERCHAIN_DATABASE_URL is not configured")
 
+    engine = create_engine(url, pool_pre_ping=True)
     factory = ProductionRuntimeFactory(
         ProductionRuntimeConfig(
             database_url=url,
@@ -29,7 +30,8 @@ def test_real_postgresql_canonical_runtime_and_value_truth():
             amount=100,
             currency="USD",
             witness_id="pg-ea35-witness",
-        )
+        ),
+        engine=engine,
     )
     runtime = factory.create()
     assert runtime.is_canonical_ledger_authoritative
@@ -111,4 +113,4 @@ def test_real_postgresql_canonical_runtime_and_value_truth():
         report = deep_reconcile_value_truth(session)
         assert report.matched, report.issues
 
-    factory.engine.dispose()
+    engine.dispose()
