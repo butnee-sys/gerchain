@@ -134,3 +134,35 @@ def test_production_factory_uses_authoritative_migration_history(monkeypatch):
     factory.initialize()
 
     assert calls == ["migrations"]
+
+
+def test_production_factory_creates_canonical_ledger_runtime(monkeypatch):
+    from services import gerchain_runtime_factory as module
+
+    class FakeEngine:
+        dialect = type("Dialect", (), {"name": "postgresql"})()
+
+        def connect(self):
+            class Ctx:
+                def __enter__(self): return self
+                def __exit__(self, *args): return False
+                def execute(self, *args, **kwargs): return self
+                def scalars(self): return self
+                def all(self): return []
+            return Ctx()
+
+    monkeypatch.setattr(module, "apply_migrations", lambda connection, path: None)
+    monkeypatch.setattr(module, "assert_canonical_production_schema", lambda connection: None)
+    for base in (module.AtomicLedgerBase, module.EscrowBase, module.OutboxBase, module.IdempotencyBase, module.TransactionWitness):
+        monkeypatch.setattr(base.metadata, "create_all", lambda engine: None)
+
+    factory = module.ProductionRuntimeFactory(
+        module.ProductionRuntimeConfig(
+            database_url="postgresql://example/db",
+            escrow_id="E", amount=1, currency="MNT", witness_id="W",
+        ),
+        engine=FakeEngine(),
+    )
+    runtime = factory.create()
+    assert runtime.is_canonical_ledger_authoritative is True
+    assert runtime.runtime_mode == "production-postgresql"
