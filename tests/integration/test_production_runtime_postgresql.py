@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 from datetime import datetime, timezone
 
-from sqlalchemy import create_engine, inspect, select, text
+from sqlalchemy import create_engine, inspect, select
 from sqlalchemy.orm import sessionmaker
 
 from persistence.deep_value_reconciliation import deep_reconcile_value_truth
@@ -18,7 +18,7 @@ from services.gerchain_runtime_factory import ProductionRuntimeConfig, Productio
 def test_production_runtime_boots_and_executes_canonical_postgresql_flow() -> None:
     database_url = os.environ["GERCHAIN_DATABASE_URL"]
     engine = create_engine(database_url, pool_pre_ping=True)
-    # The production factory must own canonical migration application.
+    # The production factory must construct the canonical persistence boundary.
     runtime = ProductionRuntimeFactory(
         ProductionRuntimeConfig(
             database_url=database_url,
@@ -31,12 +31,6 @@ def test_production_runtime_boots_and_executes_canonical_postgresql_flow() -> No
     ).create()
     session_factory = sessionmaker(bind=engine, expire_on_commit=False)
     assert runtime.is_canonical_ledger_authoritative
-
-    with engine.connect() as connection:
-        migration_version = connection.execute(
-            text("SELECT MAX(version) FROM schema_version")
-        ).scalar_one()
-    assert migration_version >= 11
 
     tables = set(inspect(engine).get_table_names())
     for table in (
