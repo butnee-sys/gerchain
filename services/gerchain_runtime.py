@@ -538,4 +538,231 @@ class GerchainRuntime:
         }
 
 
+__all__ = ["GerchainRuntime"]    def fund(self, transaction_id: str, source: str, timestamp: str, evidence: Any):
+        if self.is_canonical_ledger_authoritative:
+            from persistence.fund_escrow import fund_escrow_in_transaction
+
+            with self._session_factory() as session:
+                result = fund_escrow_in_transaction(
+                    session,
+                    transaction_id=transaction_id,
+                    escrow_id=self.escrow_engine.escrow_id,
+                    source=source,
+                    amount=self.escrow_engine.amount,
+                    currency=self.escrow_engine.currency,
+                    payload={"timestamp": timestamp, "evidence": evidence},
+                )
+                session.commit()
+                return result
+
+        return self.escrow_service.fund(
+            transaction_id=transaction_id,
+            source=source,
+            timestamp=timestamp,
+            evidence=evidence,
+        )
+
+    def lock(self, transaction_id: str, timestamp: str, evidence: Any):
+        if self.is_canonical_ledger_authoritative:
+            from persistence.lock_escrow import lock_escrow_in_transaction
+
+            with self._session_factory() as session:
+                result = lock_escrow_in_transaction(
+                    session,
+                    transaction_id=transaction_id,
+                    escrow_id=self.escrow_engine.escrow_id,
+                    payload={"timestamp": timestamp, "evidence": evidence},
+                )
+                session.commit()
+                return result
+
+        return self.escrow_service.lock(
+            transaction_id=transaction_id,
+            timestamp=timestamp,
+            evidence=evidence,
+        )
+
+    def release(
+        self,
+        *,
+        transaction_id: str,
+        destination: str,
+        timestamp: str,
+        evidence: Any,
+        root: RootOfTrust | None = None,
+        owner_id: str | None = None,
+        authorized: bool = False,
+        evidence_verified: bool = False,
+        trinity_proof: Mapping[str, bool] | None = None,
+        source: str | None = None,
+        idempotency_key: str | None = None,
+    ):
+        if root is None or owner_id is None or trinity_proof is None:
+            raise ValueError("DEE authorization context is required for release")
+
+        if self.is_canonical_ledger_authoritative:
+            from persistence.release_escrow import release_escrow_in_transaction
+
+            with self._session_factory() as session:
+                result = release_escrow_in_transaction(
+                    session,
+                    transaction_id=idempotency_key or transaction_id,
+                    escrow_id=self.escrow_engine.escrow_id,
+                    beneficiary=destination,
+                    amount=self.escrow_engine.amount,
+                    currency=self.escrow_engine.currency,
+                    decision_status="APPROVE",
+                    authorization_status="AUTHORIZED" if authorized else "DENIED",
+                    trust=trinity_proof.get("trust") is True,
+                    transparency=trinity_proof.get("transparency") is True,
+                    performance=trinity_proof.get("performance") is True,
+                    evidence_verified=evidence_verified,
+                    payload={
+                        "timestamp": timestamp,
+                        "evidence": evidence,
+                        "owner_id": owner_id,
+                        "source_claim": source,
+                    },
+                )
+                session.commit()
+                return result
+
+        return self.escrow_service.release(
+            transaction_id=transaction_id,
+            destination=destination,
+            timestamp=timestamp,
+            evidence=evidence,
+            root=root,
+            owner_id=owner_id,
+            authorized=authorized,
+            evidence_verified=evidence_verified,
+            trinity_proof=trinity_proof,
+        )
+
+    def release_postgres(self, request: ReleaseRequest):
+        self.require_postgresql_authority()
+        return self._postgres_release.execute(request)
+
+    def refund(
+        self,
+        *,
+        transaction_id: str,
+        destination: str,
+        timestamp: str,
+        evidence: Any,
+        root: RootOfTrust | None = None,
+        owner_id: str | None = None,
+        authorized: bool = False,
+        evidence_verified: bool = False,
+        trinity_proof: Mapping[str, bool] | None = None,
+    ):
+        if root is None or owner_id is None or trinity_proof is None:
+            raise ValueError("DEE authorization context is required for refund")
+
+        if self.is_canonical_ledger_authoritative:
+            from persistence.refund_escrow import refund_escrow_in_transaction
+
+            with self._session_factory() as session:
+                result = refund_escrow_in_transaction(
+                    session,
+                    transaction_id=transaction_id,
+                    escrow_id=self.escrow_engine.escrow_id,
+                    amount=self.escrow_engine.amount,
+                    currency=self.escrow_engine.currency,
+                    payload={
+                        "timestamp": timestamp,
+                        "evidence": evidence,
+                        "owner_id": owner_id,
+                        "authorized": authorized,
+                        "evidence_verified": evidence_verified,
+                        "trinity_proof": dict(trinity_proof),
+                        "requested_destination": destination,
+                    },
+                )
+                session.commit()
+                return result
+
+        return self.escrow_service.refund(
+            transaction_id=transaction_id,
+            destination=destination,
+            timestamp=timestamp,
+            evidence=evidence,
+            root=root,
+            owner_id=owner_id,
+            authorized=authorized,
+            evidence_verified=evidence_verified,
+            trinity_proof=trinity_proof,
+        )
+
+    def cancel(self, *, transaction_id: str, timestamp: str, evidence: Any):
+        if self.is_canonical_ledger_authoritative:
+            from persistence.cancel_escrow import cancel_escrow_in_transaction
+
+            with self._session_factory() as session:
+                result = cancel_escrow_in_transaction(
+                    session,
+                    transaction_id=transaction_id,
+                    escrow_id=self.escrow_engine.escrow_id,
+                    payload={"timestamp": timestamp, "evidence": evidence},
+                )
+                session.commit()
+                return result
+
+        raise RuntimeError("production cancellation requires Canonical Ledger authority")
+
+    def settle(self, *, transaction_id: str, source: str, destination: str, amount: int, currency: str):
+        if self.is_canonical_ledger_authoritative:
+            from persistence.settlement_coordinator import SettlementCoordinator
+
+            with self._session_factory() as session:
+                result = SettlementCoordinator(session).settle_in_transaction(
+                    transaction_id=transaction_id,
+                    source=source,
+                    destination=destination,
+                    amount=amount,
+                    currency=currency,
+                )
+                session.commit()
+                return result
+
+        raise RuntimeError("production settlement requires Canonical Ledger authority")
+
+    def serialize(self) -> bytes:
+        from persistence.serializer import serialize_chain
+        return serialize_chain(self.witness_chain)
+
+    def verify(self) -> bool:
+        return self.verifier.verify_bytes(self.serialize())
+
+    def verify_report(self) -> Dict[str, Any]:
+        return self.verifier.verify_with_report(self._bundle())
+
+    def _bundle(self) -> Dict[str, Any]:
+        return {
+            "manifest": self.witness_chain.manifest,
+            "manifest_hash": self.witness_chain.manifest_hash,
+            "witness_id": self.witness_chain.witness_id,
+            "initial_state": self.witness_chain.initial_state,
+            "entries": [
+                {
+                    "record": {
+                        "sequence": entry.record.sequence,
+                        "event_id": entry.record.event_id,
+                        "event_type": entry.record.event_type,
+                        "timestamp": entry.record.timestamp,
+                        "previous_state_hash": entry.record.previous_state_hash,
+                        "event_hash": entry.record.event_hash,
+                        "new_state_hash": entry.record.new_state_hash,
+                        "evidence_hash": entry.record.evidence_hash,
+                        "witness_id": entry.record.witness_id,
+                        "manifest_hash": entry.record.manifest_hash,
+                    },
+                    "event_payload": entry.event_payload,
+                    "evidence": entry.evidence,
+                }
+                for entry in self.witness_chain.entries
+            ],
+        }
+
+
 __all__ = ["GerchainRuntime"]
