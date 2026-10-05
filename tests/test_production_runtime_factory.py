@@ -113,6 +113,7 @@ def test_production_factory_uses_authoritative_migration_history(monkeypatch):
     )
     monkeypatch.setattr(module, "assert_canonical_production_schema", lambda connection: None)
     monkeypatch.setattr(module, "initialize_canonical_postgres_schema", lambda engine: None)
+    monkeypatch.setattr(module, "initialize_canonical_postgres_schema", lambda engine: None)
 
     for base in (
         module.AtomicLedgerBase,
@@ -155,6 +156,7 @@ def test_production_factory_creates_canonical_ledger_runtime(monkeypatch):
 
     monkeypatch.setattr(module, "apply_migrations", lambda connection, path: None)
     monkeypatch.setattr(module, "assert_canonical_production_schema", lambda connection: None)
+    monkeypatch.setattr(module, "initialize_canonical_postgres_schema", lambda engine: None)
     for base in (module.AtomicLedgerBase, module.EscrowBase, module.OutboxBase, module.IdempotencyBase, module.TransactionWitness):
         monkeypatch.setattr(base.metadata, "create_all", lambda engine: None)
 
