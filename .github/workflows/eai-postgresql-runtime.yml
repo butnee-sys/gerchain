@@ -1,11 +1,7 @@
 name: EAI PostgreSQL Production Runtime
 
 on:
-  push:
-    branches: ["feat/ea21-transaction-aware-ledger"]
-  pull_request:
-    branches: ["main"]
-
+  workflow_dispatch:
 jobs:
   eai-postgresql-runtime:
     runs-on: ubuntu-latest
