@@ -1,13 +1,14 @@
 import os
 from datetime import datetime, timezone
 
-from sqlalchemy import create_engine, select
+from sqlalchemy import create_engine, delete, select
 from sqlalchemy.orm import sessionmaker
 
 from persistence.atomic_ledger import LedgerAccountModel, LedgerMovementModel
 from persistence.atomic_value_transaction import TransactionWitness
 from persistence.escrow_aggregate import CanonicalEscrow, EscrowState
 from persistence.deep_value_reconciliation import deep_reconcile_value_truth
+from persistence.durable_idempotency import DurableIdempotencyRecord
 from persistence.recovery_outbox import OutboxEvent
 from services.gerchain_runtime_factory import ProductionRuntimeConfig, ProductionRuntimeFactory
 
@@ -31,6 +32,12 @@ def test_production_runtime_postgresql_full_escrow_lifecycle():
 
     now = datetime.now(timezone.utc)
     with session_factory.begin() as session:
+        session.execute(delete(OutboxEvent).where(OutboxEvent.aggregate_id.in_(["pg-smoke-escrow", "pg-refund-escrow"])))
+        session.execute(delete(TransactionWitness).where(TransactionWitness.aggregate_id.in_(["pg-smoke-escrow", "pg-refund-escrow"])))
+        session.execute(delete(DurableIdempotencyRecord).where(DurableIdempotencyRecord.key.in_(["pg-fund-1", "pg-lock-1", "pg-release-1", "pg-refund-fund", "pg-refund-lock", "pg-refund-1"])))
+        session.execute(delete(LedgerMovementModel).where(LedgerMovementModel.transaction_id.in_(["pg-fund-1", "pg-release-1", "pg-refund-fund", "pg-refund-1"])))
+        session.execute(delete(CanonicalEscrow).where(CanonicalEscrow.id.in_(["pg-smoke-escrow", "pg-refund-escrow"])))
+        session.execute(delete(LedgerAccountModel).where(LedgerAccountModel.account_id.in_(["pg-source", "pg-smoke-escrow", "pg-beneficiary", "pg-refund-source", "pg-refund-escrow", "pg-refund-attacker"])))
         session.add_all(
             [
                 LedgerAccountModel(
