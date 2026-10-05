@@ -66,6 +66,22 @@ DIGITAL ECONOMY ACTIVITIES
 
 The architecture is frozen. Implementation may be added, repaired, refactored, or moved only to conform to this document unless an explicit architecture-change proposal is approved.
 
+## 1A. SHUUD is outside the fundamental infrastructure
+
+**SHUUD is NOT part of the fundamental infrastructure architecture and must remain fully isolated from it.**
+
+SHUUD is a separate application layer/runtime. Its published integration boundary is the EXIM Port; it must not become a GerChain core layer, core engine, production entrypoint, or alternate value authority.
+
+The fundamental infrastructure production gate must therefore never treat SHUUD functional success as evidence that the fundamental infrastructure itself is production-ready.
+
+The mandatory SHUUD isolation invariants are enforced by `tests/test_shuud_exim_boundary.py`:
+- no direct imports from canonical GerChain core/services/architecture namespaces;
+- no SHUUD service modules under canonical `services/`;
+- no legacy `shuud.integration` dependency;
+- EXIM Port is the published SHUUD boundary.
+
+SHUUD's Docker sandbox is separately composed under `sandbox/docker-compose.yml` and starts `shuud.server:app`. It is not the production GerChain entrypoint.
+
 ## 2. Adapter principle
 
 Every layer-to-layer connection shown in the canonical path is an explicit adapter boundary.
