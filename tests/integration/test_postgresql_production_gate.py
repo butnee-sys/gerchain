@@ -8,7 +8,7 @@ from sqlalchemy import text
 
 from persistence.escrow_aggregate import CanonicalEscrow
 from persistence.deep_value_reconciliation import deep_reconcile_value_truth
-from services.gerchain_runtime_factory import ProductionRuntimeConfig, ProductionRuntimeFactory
+from sqlalchemy import create_engine, text\n\nfrom services.gerchain_runtime_factory import ProductionRuntimeFactory
 
 DATABASE_URL = os.environ.get("GERCHAIN_TEST_DATABASE_URL")
 
