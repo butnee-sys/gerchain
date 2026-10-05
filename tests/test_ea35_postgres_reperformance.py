@@ -1,4 +1,5 @@
-# EA-35.13: exact-branch PostgreSQL re-performance evidence gate.
+# EA-35.20: exact-branch PostgreSQL re-performance evidence gate.
+# Requires fresh PostgreSQL execution; no in-memory substitute is accepted.
 from __future__ import annotations
 
 import os
