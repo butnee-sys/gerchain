@@ -19,17 +19,11 @@ def test_production_runtime_boots_and_executes_canonical_postgresql_flow() -> No
     database_url = os.environ["GERCHAIN_DATABASE_URL"]
     engine = create_engine(database_url, pool_pre_ping=True)
     # The production factory must construct the canonical persistence boundary.
-    runtime = ProductionRuntimeFactory(
-        ProductionRuntimeConfig(
-            database_url=database_url,
-            escrow_id="pg-e2e-escrow",
-            amount=100,
-            currency="USD",
-            witness_id="pg-e2e-witness",
-        ),
-        engine=engine,
-    ).create()
     session_factory = sessionmaker(bind=engine, expire_on_commit=False)
+    runtime = ProductionRuntimeFactory.create(
+        escrow_id="pg-e2e-escrow", amount=100, currency="USD",
+        witness_id="pg-e2e-witness", engine=engine, session_factory=session_factory,
+    )
     assert runtime.is_canonical_ledger_authoritative
 
     tables = set(inspect(engine).get_table_names())
