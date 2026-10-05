@@ -8,3 +8,7 @@ Purpose:
 - do not treat prior workflow failures as current GREEN evidence.
 
 Gate remains NOT LOCKED until the fresh PostgreSQL runs complete successfully.
+
+
+## 2026-10-06 verification trigger
+The EA-35 PostgreSQL production smoke workflow is the authoritative CI execution gate for this re-performance. The gate must pass on the current branch head before production evidence is treated as verified.
