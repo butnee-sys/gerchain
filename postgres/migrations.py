@@ -20,7 +20,11 @@ MIGRATION_LOCK_KEY = 73546501
 # runner-compatible source without rewriting schema history.
 FROZEN_CHECKSUMS = {
     1: {"538e0f5132ec775ec8963a2a72072dd00e81afa37383a6c5f6a8f54259716a31"},
-    2: {"0531b1b8ecd29118a6755538a701ab8dd751425c431d15f4fa50b400dd8dfcc7"},
+    2: {
+        "0531b1b8ecd29118a6755538a701ab8dd751425c431d15f4fa50b400dd8dfcc7",
+        # Historical checksum observed in the PostgreSQL production re-performance gate.
+        "1dad432b63dec39434d72ec929b135b1ef19e38a642a513750f37deb9de0cca2",
+    },
     3: {
         "50c86703a173d5faeabb2276a50fa165938abb3fc02bcdb13fa56255833227a9",
         # Historical checksum observed in existing production-smoke databases.
