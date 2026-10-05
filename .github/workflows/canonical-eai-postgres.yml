@@ -2,10 +2,7 @@ name: Canonical EAI PostgreSQL Gate
 # Production evidence gate: fresh PostgreSQL + canonical EAI flow.
 
 on:
-  push:
-    branches: ["feat/ea21-transaction-aware-ledger"]
-  pull_request:
-    branches: ["main"]
+  workflow_dispatch:
 
 jobs:
   canonical-eai-postgres:
