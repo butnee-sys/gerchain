@@ -43,8 +43,14 @@ def seed_escrow(escrow_id="race-1"):
         with conn.transaction():
             conn.execute(
                 """
-                INSERT INTO escrows(id, sender_address, receiver_address, amount, state)
-                VALUES (%s, 'sender', 'receiver', 100, 'CREATED')
+                INSERT INTO escrows(
+                    id, sender_address, receiver_address, amount, state,
+                    refund_destination, currency, version, created_at
+                )
+                VALUES (
+                    %s, 'sender', 'receiver', 100, 'CREATED',
+                    'sender', 'USD', 0, now()
+                )
                 """,
                 (escrow_id,),
             )
