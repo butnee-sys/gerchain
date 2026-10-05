@@ -1,6 +1,10 @@
 from __future__ import annotations
 
 from pathlib import Path
+import hashlib
+import re
+
+_VERSION_RE = re.compile(r"^(\d+)_.*\.sql$")
 
 from sqlalchemy import text
 
