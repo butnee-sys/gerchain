@@ -2,10 +2,6 @@ name: EA-35 PostgreSQL proof
 # Re-performance gate: migration concurrency serialization must remain proven.
 
 on:
-  push:
-    branches:
-      - feat/ea21-transaction-aware-ledger
-  pull_request:
   workflow_dispatch:
 
 jobs:
