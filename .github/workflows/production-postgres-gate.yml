@@ -1,11 +1,7 @@
 name: production-postgres-gate
 
 on:
-  push:
-    branches: ["feat/ea21-transaction-aware-ledger"]
-  pull_request:
   workflow_dispatch:
-
 jobs:
   postgres-production-gate:
     runs-on: ubuntu-latest
