@@ -110,9 +110,3 @@ CREATE TABLE IF NOT EXISTS schema_version (
     checksum TEXT NOT NULL,
     applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
-
-INSERT INTO schema_version(version, checksum)
-VALUES (2, 'EA-35.14-canonical-production-persistence')
-ON CONFLICT (version) DO NOTHING;
-
-COMMIT;
