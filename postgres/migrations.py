@@ -37,6 +37,7 @@ FROZEN_CHECKSUMS = {
         "b019fb3f29ba1926fe1806f33aa344013ed38c36aefb374baa4feced220dbf3b",
     },
     11: {"aa3b8fe4d39a61e5ba3f12a3b70b14b5a560e2bdb988cfeb068c2a8fec19494a"},
+    6: set(),
 }
 
 LEGACY_CHECKSUMS = {
@@ -139,6 +140,7 @@ def apply_migrations(conn, migration_dir: str | Path) -> None:
         9: "009_canonical_movement_integrity_hardening.sql",
         10: "010_canonical_evidence_constraints.sql",
         11: "011_ea35_canonical_schema_finalization.sql",
+        6: "006_ea35_idempotency_schema_compat.sql",
     }
     versions: dict[int, list[Path]] = {}
     for migration in files:
