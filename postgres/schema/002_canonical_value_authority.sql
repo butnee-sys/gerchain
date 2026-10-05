@@ -80,4 +80,7 @@ ALTER TABLE escrows
     ADD CONSTRAINT escrows_amount_check
     CHECK (amount >= 0);
 
+INSERT INTO schema_version (version, checksum) VALUES (2, 'ea35-13-canonical-value-authority')
+ON CONFLICT (version) DO NOTHING;
+
 COMMIT;
