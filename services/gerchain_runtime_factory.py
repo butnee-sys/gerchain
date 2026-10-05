@@ -95,6 +95,23 @@ class ProductionRuntimeFactory:
         initialize_canonical_postgres_schema(self.engine)
         for base in (AtomicLedgerBase, EscrowBase, OutboxBase, IdempotencyBase, TransactionWitness):
             base.metadata.create_all(self.engine)
+        with self.engine.begin() as connection:
+            connection.execute(text(
+                """
+                CREATE TABLE IF NOT EXISTS schema_version (
+                    version BIGINT PRIMARY KEY,
+                    checksum TEXT NOT NULL,
+                    applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
+                )
+                """
+            ))
+            connection.execute(
+                text(
+                    "INSERT INTO schema_version(version, checksum) "
+                    "VALUES (1, 'canonical-model-metadata') "
+                    "ON CONFLICT (version) DO NOTHING"
+                )
+            )
 
     def create(self) -> GerchainRuntime:
         self.initialize()
