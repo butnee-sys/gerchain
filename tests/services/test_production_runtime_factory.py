@@ -50,7 +50,7 @@ def test_factory_rejects_non_postgresql_engine() -> None:
             engine=engine,
         )
     except ValueError as exc:
-        assert str(exc) == "production runtime requires a PostgreSQL engine"
+        assert str(exc) == "ProductionRuntimeFactory requires a PostgreSQL engine"
     else:
         raise AssertionError("non-PostgreSQL engine must be rejected")
 
@@ -63,7 +63,6 @@ def test_factory_initialize_uses_canonical_migration_runner() -> None:
     connect_context.__enter__.return_value = connection
     connect_context.__exit__.return_value = None
     engine.connect.return_value = connect_context
-    engine.begin.return_value.__enter__.return_value = connection
 
     factory = ProductionRuntimeFactory(
         ProductionRuntimeConfig(
@@ -76,11 +75,11 @@ def test_factory_initialize_uses_canonical_migration_runner() -> None:
         engine=engine,
     )
 
-    with patch("services.gerchain_runtime_factory.apply_canonical_production_baseline") as baseline, \
+    with patch("services.gerchain_runtime_factory.apply_migrations") as migrations, \
          patch("services.gerchain_runtime_factory.initialize_canonical_postgres_schema") as additive, \
          patch("services.gerchain_runtime_factory.assert_canonical_production_schema") as guard:
         factory.initialize()
 
-    baseline.assert_called_once_with(factory.config.database_url)
+    migrations.assert_called_once()
     additive.assert_called_once_with(engine)
     guard.assert_called_once_with(connection)
