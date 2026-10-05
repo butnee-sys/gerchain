@@ -1,3 +1,4 @@
+# EA-35.20: fresh PostgreSQL re-performance must prove duplicate publication is harmless.
 # EA-35.18: retain session-scoped advisory serialization for bootstrap-safe migration publication.
 # EA-35.19: re-performance evidence must execute the conflict-safe publication path.
 # EA-35.14: migration recording is conflict-safe after advisory serialization.
