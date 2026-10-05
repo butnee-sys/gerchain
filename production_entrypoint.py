@@ -4,6 +4,8 @@ import os
 import signal
 import time
 
+from sqlalchemy import create_engine
+
 from services.gerchain_runtime_factory import (
     ProductionRuntimeConfig,
     ProductionRuntimeFactory,
@@ -41,6 +43,7 @@ def main() -> None:
     except ValueError as exc:
         raise RuntimeError("GERCHAIN_ESCROW_AMOUNT must be an integer") from exc
 
+    engine = create_engine(database_url, pool_pre_ping=True)
     factory = ProductionRuntimeFactory(
         ProductionRuntimeConfig(
             database_url=database_url,
@@ -48,14 +51,14 @@ def main() -> None:
             amount=amount,
             currency=currency,
             witness_id=witness_id,
-        )
+        ),
+        engine=engine,
     )
 
     try:
         runtime = factory.create()
     except Exception:
-        engine = factory.engine
-        engine.dispose()
+        factory.engine.dispose()
         raise
 
     if not runtime.is_canonical_ledger_authoritative:
