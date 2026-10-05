@@ -62,6 +62,8 @@ LEGACY_CHECKSUMS = {
         "ab6838b3e69a9a9faa28bdd82c98fe579921763be8b5dd56e1c686b77c098596",
         # Historical checksum observed in the canonical EAI PostgreSQL gate.
         "494763e210c8a3839972ba21e8705dcf2e6564e5abca9c76161f2f49c6664ec8",
+        # Historical checksum published by the canonical postgres/migrations bootstrap path.
+        "6766267c9e939a320bf6ac28ee516c4c11fe537ef2b6a7778d94ca6e3cd5b246",
     },
     3: {"50c86703a173d5faeabb2276a50fa165938abb3fc02bcdb13fa56255833227a9"},
     4: {
