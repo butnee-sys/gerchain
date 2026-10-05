@@ -70,7 +70,7 @@ jobs:
 
       - name: Production PostgreSQL re-performance
         run: |
-          pytest -q tests/integration/test_production_postgresql_runtime.py
+          pytest -q tests/integration/test_eai_production_runtime.py
 
       - name: Deep value truth regression
         run: |
