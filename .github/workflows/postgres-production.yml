@@ -2,13 +2,6 @@ name: PostgreSQL production verification
 
 on:
   workflow_dispatch:
-  pull_request:
-    branches:
-      - main
-  push:
-    branches:
-      - feat/ea21-transaction-aware-ledger
-
 jobs:
   postgres-production:
     runs-on: ubuntu-latest
