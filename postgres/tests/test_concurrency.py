@@ -230,7 +230,7 @@ def test_migrations_are_serialized_and_checksum_is_stable():
         apply_migrations(conn, MIGRATION_DIR)
 
     with connect() as conn:
-        rows = conn.execute("SELECT version, checksum FROM schema_version ORDER BY version").fetchall()
+        rows = conn.execute("SELECT version, checksum FROM gerchain_schema_version ORDER BY version").fetchall()
         expected_versions = sorted({int(path.name.split("_", 1)[0]) for path in MIGRATION_DIR.glob("*.sql")})
         assert [row[0] for row in rows] == expected_versions
         assert len({row[0] for row in rows}) == len(rows)
@@ -256,7 +256,7 @@ def test_production_runtime_factory_boots_with_canonical_authority():
     runtime = factory.create()
     assert runtime.is_canonical_ledger_authoritative
     with connect() as conn:
-        assert conn.execute("SELECT MAX(version) FROM schema_version").fetchone()[0] >= 11
+        assert conn.execute("SELECT MAX(version) FROM gerchain_schema_version").fetchone()[0] >= 11
     factory.engine.dispose()
 def test_migration_checksum_mismatch_is_rejected():
     with connect() as conn:
@@ -281,11 +281,11 @@ def test_migration_checksum_mismatch_is_rejected():
     # matches the repository's immutable migration source.
     with connect() as conn:
         original = conn.execute(
-            "SELECT checksum FROM schema_version WHERE version = %s",
+            "SELECT checksum FROM gerchain_schema_version WHERE version = %s",
             (1,),
         ).fetchone()[0]
         conn.execute(
-            "UPDATE schema_version SET checksum = %s WHERE version = %s",
+            "UPDATE gerchain_schema_version SET checksum = %s WHERE version = %s",
             ("0" * 64, 1),
         )
         conn.commit()
@@ -299,7 +299,7 @@ def test_migration_checksum_mismatch_is_rejected():
         # migration history when they reuse the same PostgreSQL service.
         with connect() as conn:
             conn.execute(
-                "UPDATE schema_version SET checksum = %s WHERE version = %s",
+                "UPDATE gerchain_schema_version SET checksum = %s WHERE version = %s",
                 (original, 1),
             )
             conn.commit()
