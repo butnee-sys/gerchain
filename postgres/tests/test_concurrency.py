@@ -299,7 +299,7 @@ def test_migration_checksum_mismatch_is_rejected():
         # migration history when they reuse the same PostgreSQL service.
         with connect() as conn:
             conn.execute(
-                "UPDATE gerchain_schema_version SET checksum = %s WHERE version = %s",
+                "UPDATE schema_version SET checksum = %s WHERE version = %s",
                 (original, 1),
             )
             conn.commit()
