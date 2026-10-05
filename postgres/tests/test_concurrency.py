@@ -213,15 +213,15 @@ def test_migrations_are_serialized_and_checksum_is_stable():
         """)
         conn.commit()
 
-    barrier = threading.Barrier(2)
+    barrier = threading.Barrier(4)
 
     def migrate():
         with connect() as conn:
             barrier.wait()
             apply_migrations(conn, MIGRATION_DIR)
 
-    with ThreadPoolExecutor(max_workers=2) as pool:
-        list(pool.map(lambda _: migrate(), range(2)))
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        list(pool.map(lambda _: migrate(), range(4)))
 
     # Re-entry must remain idempotent after concurrent first boot.
     # This is the production bootstrap contract: a second migration pass
