@@ -6,7 +6,7 @@ import time
 
 from sqlalchemy import create_engine
 
-from services.gerchain_runtime_factory import ProductionRuntimeFactory
+from services.gerchain_runtime_factory import ProductionRuntimeConfig, ProductionRuntimeFactory
 
 
 _running = True
@@ -41,14 +41,17 @@ def main() -> None:
         raise RuntimeError("GERCHAIN_ESCROW_AMOUNT must be an integer") from exc
 
     engine = create_engine(database_url, pool_pre_ping=True)
-    runtime = ProductionRuntimeFactory.create(
-        escrow_id=escrow_id,
-        amount=amount,
-        currency=currency,
-        witness_id=witness_id,
+    factory = ProductionRuntimeFactory(
+        ProductionRuntimeConfig(
+            database_url=database_url,
+            escrow_id=escrow_id,
+            amount=amount,
+            currency=currency,
+            witness_id=witness_id,
+        ),
         engine=engine,
-        session_factory=session_factory,
     )
+    runtime = factory.create()
 
     if not runtime.is_canonical_ledger_authoritative:
         raise RuntimeError("canonical ledger authority was not established")
