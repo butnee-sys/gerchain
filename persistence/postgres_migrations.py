@@ -62,10 +62,9 @@ _CANONICAL_BASELINE = (
 def apply_canonical_production_baseline(database_url: str, schema_dir: str | Path | None = None) -> list[int]:
     """Apply the single authoritative production schema baseline.
 
-    The repository contains historical/alternative SQL files sharing migration
-    numbers. Those files are not allowed to become production migration
-    authority. Only this explicit canonical baseline is executable by the
-    production runtime; checksum conflicts fail closed.
+    Historical SQL files share migration numbers, so the generic legacy runner
+    cannot be production authority. This explicit baseline is the only schema
+    path used by the production runtime; checksum conflicts fail closed.
     """
     if not database_url.startswith(("postgresql://", "postgresql+psycopg://")):
         raise ValueError("PostgreSQL database URL is required")
@@ -75,30 +74,49 @@ def apply_canonical_production_baseline(database_url: str, schema_dir: str | Pat
     if any(not path.is_file() for path in files):
         raise RuntimeError("canonical PostgreSQL production baseline is incomplete")
 
-    applied: list[int] = []
+    checksums = {
+        version: hashlib.sha256(path.read_bytes()).hexdigest()
+        for version, path in ((1, files[0]), (2, files[1]))
+    }
     dsn = database_url.replace("postgresql+psycopg://", "postgresql://")
-    with psycopg.connect(dsn) as conn:
-        first = files[0]
-        first_sql = first.read_text(encoding="utf-8")
-        first_checksum = hashlib.sha256(first_sql.encode("utf-8")).hexdigest()
-        conn.execute(first_sql)
-        conn.commit()
+    applied: list[int] = []
 
-        for version, path in ((1, first), (2, files[1])):
-            sql = path.read_text(encoding="utf-8")
-            checksum = hashlib.sha256(sql.encode("utf-8")).hexdigest()
+    with psycopg.connect(dsn) as conn:
+        conn.execute("SELECT pg_advisory_xact_lock(hashtext('gerchain:canonical-production-migrations'))")
+        schema_exists = conn.execute(
+            "SELECT to_regclass('public.schema_version')"
+        ).fetchone()[0] is not None
+
+        if not schema_exists:
+            conn.execute(files[0].read_text(encoding="utf-8"))
+            conn.execute(
+                "INSERT INTO schema_version(version, checksum) VALUES (%s, %s)",
+                (1, checksums[1]),
+            )
+            conn.commit()
+            applied.append(1)
+        else:
             row = conn.execute(
-                "SELECT checksum FROM schema_version WHERE version = %s",
-                (version,),
+                "SELECT checksum FROM schema_version WHERE version = 1"
             ).fetchone()
-            if row is not None and row[0] != checksum:
-                raise RuntimeError(f"canonical migration checksum mismatch: {path.name}")
             if row is None:
-                conn.execute(sql)
-                conn.execute(
-                    "INSERT INTO schema_version(version, checksum) VALUES (%s, %s)",
-                    (version, checksum),
-                )
-                conn.commit()
-                applied.append(version)
+                raise RuntimeError("canonical migration baseline is not established")
+            if row[0] != checksums[1]:
+                raise RuntimeError("canonical migration checksum mismatch: 001_concurrency.sql")
+
+        row = conn.execute(
+            "SELECT checksum FROM schema_version WHERE version = 2"
+        ).fetchone()
+        if row is not None:
+            if row[0] != checksums[2]:
+                raise RuntimeError("canonical migration checksum mismatch: 002_canonical_production.sql")
+        else:
+            conn.execute(files[1].read_text(encoding="utf-8"))
+            conn.execute(
+                "INSERT INTO schema_version(version, checksum) VALUES (%s, %s)",
+                (2, checksums[2]),
+            )
+            conn.commit()
+            applied.append(2)
+
     return applied
