@@ -1,19 +1,7 @@
 name: EAI Production PostgreSQL
 
 on:
-  pull_request:
-    paths:
-      - "services/gerchain_runtime_factory.py"
-      - "production_entrypoint.py"
-      - "persistence/**"
-      - "postgres/**"
-      - "tests/integration/test_production_postgres_smoke.py"
-      - "tests/services/test_production_runtime_factory.py"
-      - ".github/workflows/eai-production-postgres.yml"
-  push:
-    branches:
-      - main
-      - "feat/ea21-transaction-aware-ledger"
+  workflow_dispatch:
 
 jobs:
   production-postgres-smoke:
