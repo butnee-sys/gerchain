@@ -16,7 +16,7 @@ from persistence.release_escrow import release_escrow_in_transaction
 from persistence.recovery_outbox import OutboxEvent
 from persistence.atomic_value_transaction import TransactionWitness
 from persistence.durable_idempotency import DurableIdempotencyRecord
-from services.gerchain_runtime_factory import ProductionRuntimeFactory
+from services.gerchain_runtime_factory import ProductionRuntimeConfig, ProductionRuntimeFactory
 
 DATABASE_URL = os.environ.get("GERCHAIN_POSTGRES_DSN")
 pytestmark = pytest.mark.skipif(not DATABASE_URL, reason="GERCHAIN_POSTGRES_DSN is not configured")
@@ -26,14 +26,17 @@ def test_production_runtime_canonical_value_flow_and_reconciliation():
     engine = create_engine(DATABASE_URL, pool_pre_ping=True)
     factory = sessionmaker(bind=engine, expire_on_commit=False)
 
-    runtime = ProductionRuntimeFactory.create(
-        escrow_id="production-reperf-1",
-        amount=40,
-        currency="MNT",
-        witness_id="production-witness-1",
+    runtime_factory = ProductionRuntimeFactory(
+        ProductionRuntimeConfig(
+            database_url=DATABASE_URL,
+            escrow_id="production-reperf-1",
+            amount=40,
+            currency="MNT",
+            witness_id="production-witness-1",
+        ),
         engine=engine,
-        session_factory=factory,
     )
+    runtime = runtime_factory.create()
     assert runtime.is_canonical_ledger_authoritative
 
     now = datetime.now(timezone.utc)
