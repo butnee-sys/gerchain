@@ -80,28 +80,29 @@ def checksum(sql: str) -> str:
 
 @contextmanager
 def _native_migration_transaction(conn):
-    """Serialize native psycopg migration runners in one transaction."""
+    """Serialize native psycopg migration runners across transaction boundaries."""
     if _connection_in_transaction(conn):
         raise RuntimeError("migration runner requires a clean psycopg transaction")
-    with conn.transaction():
-        conn.execute(
-            "SELECT pg_advisory_xact_lock(%s)",
-            (MIGRATION_LOCK_KEY,),
-        )
-        yield
+    conn.execute("SELECT pg_advisory_lock(%s)", (MIGRATION_LOCK_KEY,))
+    try:
+        with conn.transaction():
+            yield
+    finally:
+        conn.execute("SELECT pg_advisory_unlock(%s)", (MIGRATION_LOCK_KEY,))
+        conn.commit()
 
 
 @contextmanager
 def _sqlalchemy_migration_transaction(conn):
-    """Serialize SQLAlchemy migration runners in one transaction."""
+    """Serialize SQLAlchemy migration runners across transaction boundaries."""
     if conn.in_transaction():
         raise RuntimeError("migration runner requires a clean SQLAlchemy transaction")
-    with conn.begin():
-        conn.exec_driver_sql(
-            "SELECT pg_advisory_xact_lock(%s)",
-            (MIGRATION_LOCK_KEY,),
-        )
-        yield
+    conn.exec_driver_sql("SELECT pg_advisory_lock(%s)", (MIGRATION_LOCK_KEY,))
+    try:
+        with conn.begin():
+            yield
+    finally:
+        conn.exec_driver_sql("SELECT pg_advisory_unlock(%s)", (MIGRATION_LOCK_KEY,))
 
 def _transaction(conn):
     """Return a real transaction context for SQLAlchemy or native psycopg."""
