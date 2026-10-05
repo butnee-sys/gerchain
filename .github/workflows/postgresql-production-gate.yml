@@ -1,6 +1,9 @@
 name: PostgreSQL Production Gate
 
 on:
+  push:
+    branches:
+      - "feat/ea21-transaction-aware-ledger"
   workflow_dispatch:
 jobs:
   postgresql-production-gate:
