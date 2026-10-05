@@ -11,6 +11,7 @@ from persistence.escrow_aggregate import EscrowBase
 from persistence.recovery_outbox import OutboxBase
 from persistence.durable_idempotency import IdempotencyBase
 from persistence.atomic_value_transaction import TransactionWitness
+from persistence.postgres_canonical_schema import initialize_canonical_postgres_schema
 from postgres.migrations import apply_migrations
 from services.gerchain_runtime import GerchainRuntime
 
@@ -91,6 +92,7 @@ class ProductionRuntimeFactory:
         # ORM metadata is retained as a defensive compatibility layer for
         # canonical persistence models not yet materialized by a historical
         # migration. It must not replace or bypass migration history.
+        initialize_canonical_postgres_schema(self.engine)
         for base in (AtomicLedgerBase, EscrowBase, OutboxBase, IdempotencyBase, TransactionWitness):
             base.metadata.create_all(self.engine)
 
