@@ -18,22 +18,20 @@ def test_real_postgresql_production_boot_and_value_flow():
     if not DATABASE_URL:
         pytest.skip("GERCHAIN_TEST_DATABASE_URL is required")
 
-    config = ProductionRuntimeConfig(
-        database_url=DATABASE_URL,
-        escrow_id="pg-ea35-escrow",
-        amount=25,
-        currency="MNT",
-        witness_id="pg-ea35-witness",
+    engine = create_engine(DATABASE_URL, pool_pre_ping=True)
+    session_factory = sessionmaker(bind=engine, expire_on_commit=False)
+    runtime = ProductionRuntimeFactory.create(
+        escrow_id="pg-ea35-escrow", amount=25, currency="MNT",
+        witness_id="pg-ea35-witness", engine=engine, session_factory=session_factory,
     )
-    factory = ProductionRuntimeFactory(config)
-    runtime = factory.create()
     assert runtime.is_canonical_ledger_authoritative
-
-    # Second construction proves migration idempotency.
-    factory.create()
+    ProductionRuntimeFactory.create(
+        escrow_id="pg-ea35-escrow", amount=25, currency="MNT",
+        witness_id="pg-ea35-witness", engine=engine, session_factory=session_factory,
+    )
 
     now = datetime.now(timezone.utc)
-    with factory.session_factory() as session:
+    with session_factory() as session:
         for table in (
             "gerchain_ledger_movements",
             "gerchain_transaction_witnesses",
