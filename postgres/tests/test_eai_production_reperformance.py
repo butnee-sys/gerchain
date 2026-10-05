@@ -82,6 +82,7 @@ def test_eai_production_runtime_reperformance():
     with factory.session_factory() as session:
         for account_id, balance in (
             (source, 100),
+            (escrow_id, 0),
             (beneficiary, 0),
             (refund_source, 100),
             (refund_id, 0),
