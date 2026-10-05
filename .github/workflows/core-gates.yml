@@ -1,6 +1,6 @@
 name: core-gates
 # Production PostgreSQL evidence gate: EA-35.13
-# Verification rerun: migration concurrency fix
+# Single authoritative PostgreSQL/core gate; duplicate migration/concurrency workflows are not permitted
 
 on:
   push:
@@ -58,7 +58,6 @@ jobs:
             tests/test_nef_gerchain_port.py \
             tests/production/test_runtime_source_compiles.py \
             tests/test_postgres_atomic_ledger.py \
-            tests/test_postgres_migration_concurrency.py \
             tests/test_production_runtime_factory.py \
             tests/production/test_postgres_canonical_runtime.py \
             tests/production/test_postgres_runtime_boot.py \
