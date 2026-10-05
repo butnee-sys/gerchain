@@ -12,7 +12,7 @@ from persistence.atomic_ledger import LedgerAccountModel, LedgerMovementModel
 from persistence.atomic_value_transaction import TransactionWitness
 from persistence.recovery_outbox import OutboxEvent
 from persistence.durable_idempotency import DurableIdempotencyRecord
-from services.gerchain_runtime_factory import ProductionRuntimeConfig, ProductionRuntimeFactory
+from services.gerchain_runtime_factory import ProductionRuntimeFactory
 
 
 def test_production_runtime_boots_and_executes_canonical_postgresql_flow() -> None:
