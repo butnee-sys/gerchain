@@ -43,7 +43,7 @@ jobs:
           pytest -q tests/integration/test_production_postgres_boot.py
       - name: Verify production PostgreSQL value flow
         run: |
-          pytest -q tests/persistence/test_production_postgres_full_flow.py
+          pytest -q tests/integration/test_postgresql_production_gate.py
       - name: Verify deep value truth suite
         run: |
           pytest -q tests/persistence/test_deep_value_reconciliation.py
