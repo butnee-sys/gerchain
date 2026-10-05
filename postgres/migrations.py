@@ -3,6 +3,7 @@
 # EA-35.19: re-performance evidence must execute the conflict-safe publication path.
 # EA-35.14: migration recording is conflict-safe after advisory serialization.
 # EA-35.15: keep concurrent duplicate recording idempotent for fresh CI re-performance.
+# EA-35.21: fresh CI trigger after migration publication hardening.
 # The serialization contract is exercised by the PostgreSQL concurrency gate before production lock.
 from __future__ import annotations
 
