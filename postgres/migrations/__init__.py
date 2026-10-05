@@ -11,8 +11,11 @@ from sqlalchemy import text
 
 def apply_migrations(connection, migration_dir: Path) -> None:
     """Apply ordered PostgreSQL migrations exactly once with checksum locking."""
-    connection.execute(text("SELECT pg_advisory_xact_lock(8342719)"))
-
+    # Session-level lock serializes bootstrap across independently managed
+    # transactions/connections. The lock is explicitly released in finally so
+    # a failed migration cannot strand the database bootstrap gate.
+    connection.execute(text("SELECT pg_advisory_lock(8342719)"))
+    try:
     connection.execute(
         text(
             "CREATE TABLE IF NOT EXISTS schema_version ("
@@ -58,4 +61,6 @@ def apply_migrations(connection, migration_dir: Path) -> None:
             {"version": version, "checksum": checksum},
         )
 
-    connection.commit()
+        connection.commit()
+    finally:
+        connection.execute(text("SELECT pg_advisory_unlock(8342719)"))
