@@ -37,6 +37,7 @@ jobs:
       GERCHAIN_ESCROW_AMOUNT: "100"
       GERCHAIN_CURRENCY: USD
       GERCHAIN_WITNESS_ID: ci-witness-1
+      GERCHAIN_TEST_DATABASE_URL: postgresql+psycopg://gerchain:gerchain@localhost:5432/gerchain
 
     steps:
       - uses: actions/checkout@v4
