@@ -34,26 +34,43 @@ def test_production_entrypoint_uses_factory_instance(monkeypatch):
         def __init__(self, config, *, engine=None):
             created["config"] = config
             created["engine"] = engine
+
         def create(self):
             created["created"] = True
             return FakeRuntime()
 
     monkeypatch.setattr(production_entrypoint, "ProductionRuntimeFactory", FakeFactory)
+
     class FakeEngine:
         def dispose(self):
-            created["disposed"] = True\n    monkeypatch.setattr(production_entrypoint, "create_engine", lambda *a, **k: FakeEngine())
+            created["disposed"] = True
+
+    monkeypatch.setattr(
+        production_entrypoint,
+        "create_engine",
+        lambda *a, **k: FakeEngine(),
+    )
     monkeypatch.setattr(production_entrypoint, "sessionmaker", lambda **k: object())
-    monkeypatch.setattr(production_entrypoint.time, "sleep", lambda _: setattr(production_entrypoint, "_running", False))
-    monkeypatch.setattr(production_entrypoint.os, "environ", {
-        "GERCHAIN_DATABASE_URL": "postgresql://example/db",
-        "GERCHAIN_ESCROW_ID": "FACTORY-ESC",
-        "GERCHAIN_ESCROW_AMOUNT": "100",
-        "GERCHAIN_CURRENCY": "MNT",
-        "GERCHAIN_WITNESS_ID": "FACTORY-W",
-    })
+    monkeypatch.setattr(
+        production_entrypoint.time,
+        "sleep",
+        lambda _: setattr(production_entrypoint, "_running", False),
+    )
+    monkeypatch.setattr(
+        production_entrypoint.os,
+        "environ",
+        {
+            "GERCHAIN_DATABASE_URL": "postgresql://example/db",
+            "GERCHAIN_ESCROW_ID": "FACTORY-ESC",
+            "GERCHAIN_ESCROW_AMOUNT": "100",
+            "GERCHAIN_CURRENCY": "MNT",
+            "GERCHAIN_WITNESS_ID": "FACTORY-W",
+        },
+    )
 
     production_entrypoint._running = True
     production_entrypoint.main()
+
     assert created["created"] is True
     assert created["config"].escrow_id == "FACTORY-ESC"
     assert created["config"].amount == 100
@@ -63,19 +80,57 @@ def test_production_entrypoint_uses_factory_instance(monkeypatch):
 
 def test_production_factory_uses_authoritative_migration_history(monkeypatch):
     from services import gerchain_runtime_factory as module
+
     calls = []
+
     class FakeEngine:
         dialect = type("Dialect", (), {"name": "postgresql"})()
+
         def connect(self):
             class Ctx:
-                def __enter__(self): return self
-                def __exit__(self, *args): return False
+                def __enter__(self):
+                    return self
+
+                def __exit__(self, *args):
+                    return False
+
+                def execute(self, *args, **kwargs):
+                    return self
+
+                def scalars(self):
+                    return self
+
+                def all(self):
+                    return []
+
             return Ctx()
-    monkeypatch.setattr(module, "apply_migrations", lambda connection, path: calls.append(path.name))
+
+    monkeypatch.setattr(
+        module,
+        "apply_migrations",
+        lambda connection, path: calls.append(path.name),
+    )
+    monkeypatch.setattr(module, "assert_canonical_production_schema", lambda connection: None)
+
+    for base in (
+        module.AtomicLedgerBase,
+        module.EscrowBase,
+        module.OutboxBase,
+        module.IdempotencyBase,
+        module.TransactionWitness,
+    ):
+        monkeypatch.setattr(base.metadata, "create_all", lambda engine: None)
+
     factory = module.ProductionRuntimeFactory(
         module.ProductionRuntimeConfig(
-            database_url="postgresql://example/db", escrow_id="E", amount=1, currency="MNT", witness_id="W"
-        ), engine=FakeEngine()
+            database_url="postgresql://example/db",
+            escrow_id="E",
+            amount=1,
+            currency="MNT",
+            witness_id="W",
+        ),
+        engine=FakeEngine(),
     )
     factory.initialize()
+
     assert calls == ["migrations"]
