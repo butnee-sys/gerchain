@@ -7,6 +7,8 @@ from services.gerchain_runtime_factory import ProductionRuntimeConfig, Productio
 
 def test_factory_requires_postgresql_url() -> None:
     try:
+        engine = Mock()
+        engine.dialect.name = "sqlite"
         ProductionRuntimeFactory(
             ProductionRuntimeConfig(
                 database_url="sqlite://",
@@ -14,7 +16,8 @@ def test_factory_requires_postgresql_url() -> None:
                 amount=100,
                 currency="USD",
                 witness_id="wit-1",
-            )
+            ),
+            engine=engine,
         )
     except ValueError as exc:
         assert "PostgreSQL" in str(exc)
@@ -34,10 +37,9 @@ def test_factory_creates_canonical_ledger_runtime() -> None:
     engine = Mock()
     engine.dialect.name = "postgresql"
 
-    with patch("services.gerchain_runtime_factory.create_engine", return_value=engine):
-        factory = ProductionRuntimeFactory(config, engine=engine)
-        with patch.object(factory, "initialize"):
-            runtime = factory.create()
+    factory = ProductionRuntimeFactory(config, engine=engine)
+    with patch.object(factory, "initialize"):
+        runtime = factory.create()
 
     assert runtime.is_canonical_ledger_authoritative
     assert runtime.runtime_mode == "production-postgresql"
