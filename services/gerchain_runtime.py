@@ -538,7 +538,7 @@ class GerchainRuntime:
         }
 
 
-__all__ = ["GerchainRuntime"]    def fund(self, transaction_id: str, source: str, timestamp: str, evidence: Any):
+    def fund(self, transaction_id: str, source: str, timestamp: str, evidence: Any):
         if self.is_canonical_ledger_authoritative:
             from persistence.fund_escrow import fund_escrow_in_transaction
 
