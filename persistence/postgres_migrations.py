@@ -92,9 +92,7 @@ def apply_canonical_production_baseline(database_url: str, schema_dir: str | Pat
 
         if not schema_exists:
             conn.execute(first_sql)
-            conn.execute("COMMIT")
-            conn.execute(first_sql) if False else None
-            # 001 creates schema_version; record its checksum in the same connection.
+            # 001 creates schema_version; record its checksum in the same transaction.
             conn.execute(
                 "INSERT INTO schema_version(version, checksum) VALUES (%s, %s)",
                 (1, hashlib.sha256(first_sql.encode("utf-8")).hexdigest()),
