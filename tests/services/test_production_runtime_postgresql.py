@@ -2,19 +2,22 @@ from __future__ import annotations
 
 from sqlalchemy import inspect
 
-from services.gerchain_runtime_factory import ProductionRuntimeFactory
+from services.gerchain_runtime_factory import ProductionRuntimeConfig, ProductionRuntimeFactory
 
 
 def test_production_factory_bootstraps_canonical_postgresql(
     canonical_postgresql_engine,
 ):
-    runtime = ProductionRuntimeFactory.from_engine(
-        escrow_id="production-smoke-escrow",
-        amount=100,
-        currency="MNT",
-        witness_id="production-smoke-witness",
+    runtime = ProductionRuntimeFactory(
+        ProductionRuntimeConfig(
+            database_url=str(canonical_postgresql_engine.url),
+            escrow_id="production-smoke-escrow",
+            amount=100,
+            currency="MNT",
+            witness_id="production-smoke-witness",
+        ),
         engine=canonical_postgresql_engine,
-    )
+    ).create()
 
     assert runtime.is_canonical_ledger_authoritative
 
