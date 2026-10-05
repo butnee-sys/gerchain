@@ -22,7 +22,7 @@ def test_production_postgres_migration_and_canonical_boot() -> None:
         schema_dir = Path(__file__).parents[2] / "postgres" / "schema"
         with engine.begin() as connection:
             connection.exec_driver_sql((schema_dir / "001_concurrency.sql").read_text())
-            connection.exec_driver_sql((schema_dir / "002_canonical_production_persistence.sql").read_text())
+            connection.exec_driver_sql((schema_dir / "002_canonical_production.sql").read_text())
         factory = ProductionRuntimeFactory(
             ProductionRuntimeConfig(
                 database_url=database_url,
