@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
-from unittest.mock import Mock, patch
+from unittest.mock import MagicMock, Mock, patch
 
 from services.gerchain_runtime_factory import (
     ProductionRuntimeConfig,
@@ -59,7 +59,7 @@ def test_factory_initialize_uses_canonical_migration_runner() -> None:
     engine = Mock()
     engine.dialect.name = "postgresql"
     connection = Mock()
-    connect_context = Mock()
+    connect_context = MagicMock()
     connect_context.__enter__.return_value = connection
     connect_context.__exit__.return_value = None
     engine.connect.return_value = connect_context
