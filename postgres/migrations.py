@@ -84,11 +84,8 @@ def _native_migration_transaction(conn):
     if _connection_in_transaction(conn):
         raise RuntimeError("migration runner requires a clean psycopg transaction")
     with conn.transaction():
-        conn.execute("SELECT pg_advisory_lock(%s)", (MIGRATION_LOCK_KEY,))
-        try:
-            yield
-        finally:
-            conn.execute("SELECT pg_advisory_unlock(%s)", (MIGRATION_LOCK_KEY,))
+        conn.execute("SELECT pg_advisory_xact_lock(%s)", (MIGRATION_LOCK_KEY,))
+        yield
 
 
 @contextmanager
@@ -97,11 +94,8 @@ def _sqlalchemy_migration_transaction(conn):
     if conn.in_transaction():
         raise RuntimeError("migration runner requires a clean SQLAlchemy transaction")
     with conn.begin():
-        conn.exec_driver_sql("SELECT pg_advisory_lock(%s)", (MIGRATION_LOCK_KEY,))
-        try:
-            yield
-        finally:
-            conn.exec_driver_sql("SELECT pg_advisory_unlock(%s)", (MIGRATION_LOCK_KEY,))
+        conn.exec_driver_sql("SELECT pg_advisory_xact_lock(%s)", (MIGRATION_LOCK_KEY,))
+        yield
 
 def _transaction(conn):
     """Return a real transaction context for SQLAlchemy or native psycopg."""
