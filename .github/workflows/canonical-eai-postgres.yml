@@ -3,7 +3,6 @@ name: Canonical EAI PostgreSQL Gate
 
 on:
   workflow_dispatch:
-
 jobs:
   canonical-eai-postgres:
     runs-on: ubuntu-latest
