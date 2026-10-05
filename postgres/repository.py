@@ -25,6 +25,10 @@ class EscrowRepository:
         payload: dict,
         tx_hash: str,
     ) -> None:
+        valid_states = {"CREATED", "FUNDED", "LOCKED", "RELEASED", "REFUNDED", "CANCELLED"}
+        if new_state not in valid_states:
+            raise ConcurrentStateTransition(f"Invalid escrow state: {new_state}")
+
         with self.conn.transaction():
             row = self.conn.execute(
                 """
