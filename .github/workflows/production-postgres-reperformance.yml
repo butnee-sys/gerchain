@@ -1,11 +1,7 @@
 name: production-postgres-reperformance
 
 on:
-  push:
-    branches:
-      - "**"
-  pull_request:
-
+  workflow_dispatch:
 jobs:
   postgres-production-smoke:
     runs-on: ubuntu-latest
