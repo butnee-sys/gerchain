@@ -88,3 +88,5 @@ def apply_migrations(connection, migration_dir: Path) -> None:
 
         connection.commit()
     finally:
+        if hasattr(connection, "rollback"):
+            connection.rollback()
