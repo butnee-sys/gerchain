@@ -46,6 +46,8 @@ class ProductionRuntimeFactory:
         self.engine = engine
         if session_factory is None:
             from sqlalchemy.orm import sessionmaker
+
+from postgres.migrations import apply_migrations
             session_factory = sessionmaker(bind=engine, expire_on_commit=False)
         self.session_factory = session_factory
 
