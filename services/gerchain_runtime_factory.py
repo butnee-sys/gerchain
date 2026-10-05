@@ -8,6 +8,9 @@ from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import sessionmaker
 
+from postgres.migrations import apply_migrations
+from pathlib import Path
+
 from persistence.atomic_ledger import AtomicLedgerBase
 from persistence.atomic_value_transaction import WitnessBase
 from persistence.durable_idempotency import IdempotencyBase
