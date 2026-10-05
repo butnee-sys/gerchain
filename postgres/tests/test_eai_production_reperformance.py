@@ -69,10 +69,16 @@ def test_eai_production_runtime_reperformance():
 
     engine = create_engine(DATABASE_URL, pool_pre_ping=True)
     session_factory = sessionmaker(bind=engine, expire_on_commit=False)
-    runtime = ProductionRuntimeFactory.create(
-        escrow_id=escrow_id, amount=40, currency="MNT",
-        witness_id=f"witness-{uuid4().hex}", engine=engine, session_factory=session_factory,
-    )
+    runtime = ProductionRuntimeFactory(
+        ProductionRuntimeConfig(
+            database_url=DATABASE_URL,
+            escrow_id=escrow_id,
+            amount=40,
+            currency="MNT",
+            witness_id=f"witness-{uuid4().hex}",
+        ),
+        engine=engine,
+    ).create()
     assert runtime.is_canonical_ledger_authoritative
     factory = type("FactoryHandle", (), {"session_factory": session_factory})()
 
