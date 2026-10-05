@@ -30,6 +30,7 @@ def test_production_postgresql_boot_and_value_truth():
         engine=engine,
     ).create()
     assert runtime.is_canonical_ledger_authoritative
+    assert not runtime.is_postgresql_authoritative
     assert runtime.runtime_mode == "production-postgresql"
 
     with engine.connect() as connection:
