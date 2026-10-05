@@ -15,6 +15,38 @@ from postgres.migrations import apply_migrations
 from services.gerchain_runtime import GerchainRuntime
 
 
+_REQUIRED_SCHEMA = {
+    "escrows": {"id", "sender_address", "receiver_address", "amount", "state", "refund_destination", "currency", "version", "created_at", "updated_at"},
+    "gerchain_ledger_accounts": {"account_id", "currency", "balance", "version", "updated_at"},
+    "gerchain_ledger_movements": {"transaction_id", "source", "destination", "amount", "currency", "operation", "escrow_id", "integrity_hash", "created_at"},
+    "gerchain_transaction_witnesses": {"transaction_id", "event_type", "escrow_id", "amount", "created_at"},
+    "gerchain_outbox_events": {"event_id", "event_type", "aggregate_id", "payload_json", "state", "lease_until", "attempts", "created_at", "updated_at"},
+    "gerchain_idempotency_records": {"key", "fingerprint", "result_json", "state", "created_at", "updated_at"},
+}
+
+
+def assert_canonical_production_schema(connection) -> None:
+    """Fail closed unless every canonical production table/column exists."""
+    from sqlalchemy import text
+
+    for table, required_columns in _REQUIRED_SCHEMA.items():
+        rows = connection.execute(
+            text(
+                "SELECT column_name "
+                "FROM information_schema.columns "
+                "WHERE table_schema = current_schema() AND table_name = :table"
+            ),
+            {"table": table},
+        ).scalars().all()
+        actual = set(rows)
+        missing = required_columns - actual
+        if missing:
+            raise RuntimeError(
+                f"canonical production schema incomplete for {table}: "
+                f"missing {', '.join(sorted(missing))}"
+            )
+
+
 @dataclass(frozen=True)
 class ProductionRuntimeConfig:
     database_url: str
@@ -54,6 +86,7 @@ class ProductionRuntimeFactory:
         migration_dir = Path(__file__).resolve().parents[1] / "postgres" / "migrations"
         with self.engine.connect() as connection:
             apply_migrations(connection, migration_dir)
+            assert_canonical_production_schema(connection)
 
         # ORM metadata is retained as a defensive compatibility layer for
         # canonical persistence models not yet materialized by a historical
