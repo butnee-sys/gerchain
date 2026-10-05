@@ -35,6 +35,10 @@ jobs:
         env:
           GERCHAIN_POSTGRES_DSN: postgresql://gerchain:gerchain@127.0.0.1:5432/gerchain_test
         run: python -m pytest -q --junitxml=artifacts/postgres-concurrency.xml postgres/tests/test_concurrency.py
+      - name: Run production canonical value-flow gate
+        env:
+          GERCHAIN_POSTGRES_DSN: postgresql://gerchain:gerchain@127.0.0.1:5432/gerchain_test
+        run: python -m pytest -q postgres/tests/test_production_runtime.py
       - name: Upload PostgreSQL concurrency evidence
         if: always()
         uses: actions/upload-artifact@v4
