@@ -1,10 +1,8 @@
 from __future__ import annotations
 
 import os
-from pathlib import Path
 import pytest
 from sqlalchemy import create_engine, inspect, text
-from sqlalchemy.orm import sessionmaker
 
 from services.gerchain_runtime_factory import ProductionRuntimeConfig, ProductionRuntimeFactory
 
@@ -19,10 +17,6 @@ def test_production_postgres_migration_and_canonical_boot() -> None:
 
     engine = create_engine(database_url, pool_pre_ping=True)
     try:
-        schema_dir = Path(__file__).parents[2] / "postgres" / "schema"
-        with engine.begin() as connection:
-            connection.exec_driver_sql((schema_dir / "001_concurrency.sql").read_text())
-            connection.exec_driver_sql((schema_dir / "002_canonical_production.sql").read_text())
         factory = ProductionRuntimeFactory(
             ProductionRuntimeConfig(
                 database_url=database_url,
@@ -50,6 +44,9 @@ def test_production_postgres_migration_and_canonical_boot() -> None:
         }
         assert not (required - tables)
         assert "schema_version" in tables
+        with engine.connect() as connection:
+            versions = [row[0] for row in connection.execute(text("SELECT version FROM schema_version ORDER BY version"))]
+        assert versions == [1, 2]
 
         runtime.create_account("integration-source", initial_balance=100)
         runtime.create_account("integration-destination", initial_balance=0)
