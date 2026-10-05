@@ -51,9 +51,8 @@ def apply_migrations(connection, migration_dir: Path) -> None:
             checksum = hashlib.sha256(sql.encode("utf-8")).hexdigest()
 
             if hasattr(connection, "exec_driver_sql"):
-                row = _execute(
-                    connection,
-                    "SELECT checksum FROM schema_version WHERE version = :version",
+                row = connection.execute(
+                    text("SELECT checksum FROM schema_version WHERE version = :version"),
                     {"version": version},
                 ).scalar_one_or_none()
             else:
@@ -76,8 +75,8 @@ def apply_migrations(connection, migration_dir: Path) -> None:
                     sql,
                     execution_options={"no_parameters": True},
                 )
-                connection.exec_driver_sql(
-                    "INSERT INTO schema_version(version, checksum) VALUES (:version, :checksum)",
+                connection.execute(
+                    text("INSERT INTO schema_version(version, checksum) VALUES (:version, :checksum)"),
                     {"version": version, "checksum": checksum},
                 )
             else:
