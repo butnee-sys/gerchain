@@ -236,6 +236,14 @@ def test_migrations_are_serialized_and_checksum_is_stable():
         assert len({row[0] for row in rows}) == len(rows)
         assert all(len(row[1]) == 64 for row in rows)
 
+    # The second bootstrap pass must preserve the exact published history,
+    # not merely the version set and checksum shape.
+    with connect() as conn:
+        before = conn.execute("SELECT version, checksum FROM schema_version ORDER BY version").fetchall()
+        apply_migrations(conn, MIGRATION_DIR)
+        after = conn.execute("SELECT version, checksum FROM schema_version ORDER BY version").fetchall()
+        assert after == before
+
 
 def test_production_runtime_factory_boots_with_canonical_authority():
     from services.gerchain_runtime_factory import ProductionRuntimeConfig, ProductionRuntimeFactory
