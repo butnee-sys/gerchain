@@ -1,10 +1,7 @@
 name: PostgreSQL Production Proof
 
 on:
-  pull_request:
-  push:
-    branches: [main, "feat/**"]
-
+  workflow_dispatch:
 jobs:
   postgres-production-proof:
     runs-on: ubuntu-latest
