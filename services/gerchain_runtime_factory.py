@@ -79,7 +79,7 @@ class ProductionRuntimeFactory:
             raise ValueError("production runtime requires a PostgreSQL engine")
         if session_factory is None:
             from sqlalchemy.orm import sessionmaker
-            session_factory = sessionmaker(bind=engine, expire_on_commit=False)
+            session_factory = sessionmaker(bind=self.engine, expire_on_commit=False)
         self.session_factory = session_factory
 
     def initialize(self) -> None:
