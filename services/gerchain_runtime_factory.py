@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+from pathlib import Path
 from typing import Any, Callable
 
 from sqlalchemy import Engine, create_engine
@@ -79,6 +80,8 @@ class ProductionRuntimeFactory:
             raise ValueError("production runtime requires a PostgreSQL engine")
         if session_factory is None:
             from sqlalchemy.orm import sessionmaker
+
+from postgres.migrations import apply_migrations
             session_factory = sessionmaker(bind=self.engine, expire_on_commit=False)
         self.session_factory = session_factory
 
@@ -92,6 +95,13 @@ class ProductionRuntimeFactory:
         # Additive ORM compatibility is allowed only after the authoritative
         # baseline exists; it cannot substitute for the baseline.
         initialize_canonical_postgres_schema(self.engine)
+        migration_dir = Path(__file__).resolve().parents[1] / "postgres" / "schema"
+        raw = self.engine.raw_connection()
+        try:
+            apply_migrations(raw, migration_dir)
+        finally:
+            raw.close()
+
         for base in (AtomicLedgerBase, EscrowBase, OutboxBase, IdempotencyBase, TransactionWitness):
             base.metadata.create_all(self.engine)
 
