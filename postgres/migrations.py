@@ -248,6 +248,8 @@ def apply_migrations(conn, migration_dir: str | Path) -> None:
                 migration_sql = sql.replace("BEGIN;", "").replace("COMMIT;", "")
                 _execute(conn, migration_sql)
                 # Concurrent runners must never publish duplicate schema history.
+                # The unique version key is a final publication barrier even if
+                # an older runner reaches this point after the advisory lock path.
                 # The transaction-scoped advisory lock serializes compliant runners;
                 # ON CONFLICT remains a second-line idempotency barrier for legacy
                 # or differently-versioned bootstrap callers.
