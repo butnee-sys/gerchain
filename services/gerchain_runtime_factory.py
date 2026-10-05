@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
 
-from sqlalchemy import Engine
+from sqlalchemy import Engine, create_engine
 
 from persistence.atomic_ledger import AtomicLedgerBase
 from persistence.escrow_aggregate import EscrowBase
@@ -74,7 +74,7 @@ class ProductionRuntimeFactory:
         if config.amount <= 0:
             raise ValueError("ProductionRuntimeConfig amount must be positive")
         self.config = config
-        self.engine = engine or __import__("sqlalchemy").create_engine(config.database_url, future=True)
+        self.engine = engine or create_engine(config.database_url, future=True)
         if self.engine.dialect.name != "postgresql":
             raise ValueError("production runtime requires a PostgreSQL engine")
         if session_factory is None:
