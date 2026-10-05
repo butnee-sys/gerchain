@@ -39,7 +39,9 @@ def test_production_entrypoint_uses_factory_instance(monkeypatch):
             return FakeRuntime()
 
     monkeypatch.setattr(production_entrypoint, "ProductionRuntimeFactory", FakeFactory)
-    class FakeEngine:\n        def dispose(self):\n            created["disposed"] = True\n    monkeypatch.setattr(production_entrypoint, "create_engine", lambda *a, **k: FakeEngine())
+    class FakeEngine:
+        def dispose(self):
+            created["disposed"] = True\n    monkeypatch.setattr(production_entrypoint, "create_engine", lambda *a, **k: FakeEngine())
     monkeypatch.setattr(production_entrypoint, "sessionmaker", lambda **k: object())
     monkeypatch.setattr(production_entrypoint.time, "sleep", lambda _: setattr(production_entrypoint, "_running", False))
     monkeypatch.setattr(production_entrypoint.os, "environ", {
