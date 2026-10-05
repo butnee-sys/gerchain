@@ -5,7 +5,7 @@ import os
 from sqlalchemy import create_engine, inspect
 from sqlalchemy.orm import sessionmaker
 
-from services.gerchain_runtime_factory import ProductionRuntimeFactory
+from services.gerchain_runtime_factory import ProductionRuntimeConfig, ProductionRuntimeFactory
 
 
 def test_production_runtime_bootstraps_canonical_persistence():
@@ -14,7 +14,7 @@ def test_production_runtime_bootstraps_canonical_persistence():
     session_factory = sessionmaker(bind=engine, expire_on_commit=False)
 
     runtime = ProductionRuntimeFactory(
-        config=__import__("services.gerchain_runtime_factory", fromlist=["ProductionRuntimeConfig"]).ProductionRuntimeConfig(
+        config=ProductionRuntimeConfig(
             database_url=database_url,
             escrow_id="smoke-escrow",
             amount=100,
