@@ -51,7 +51,7 @@ class ProductionRuntimeFactory:
 
     def initialize(self) -> None:
         """Apply the canonical PostgreSQL migration history before runtime boot."""
-        migration_dir = Path(__file__).resolve().parents[1] / "postgres" / "schema"
+        migration_dir = Path(__file__).resolve().parents[1] / "postgres" / "migrations"
         with self.engine.connect() as connection:
             apply_migrations(connection, migration_dir)
 
