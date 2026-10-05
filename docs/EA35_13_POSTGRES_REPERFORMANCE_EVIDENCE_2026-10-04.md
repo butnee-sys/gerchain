@@ -39,3 +39,10 @@ This evidence-only revision intentionally makes no architecture or runtime chang
 This commit is an evidence-trigger revision only. No production architecture or value-flow behavior is changed here. GitHub Actions must execute the PostgreSQL production and independent evidence gates against this exact commit SHA. Prior successful execution SHAs remain historical evidence and are not substituted for this exact-SHA proof.
 
 **Decision rule:** EA-35 remains NOT LOCKED until the exact-SHA canonical PostgreSQL gates pass and their run IDs are independently re-read.
+
+
+## Exact-SHA execution trigger — 2026-10-05
+
+This evidence-only revision changes no production architecture, runtime behavior, or value-flow logic. It exists solely to create a fresh push event for the canonical PostgreSQL production gates. Final verification must use only workflow results attached to the resulting exact commit SHA.
+
+Decision rule: EA-35 remains IN PROGRESS / NOT LOCKED until the fresh exact-SHA PostgreSQL production gate and independent evidence workflow are re-read from GitHub Actions.
