@@ -12,6 +12,7 @@ from persistence.recovery_outbox import OutboxBase
 from persistence.durable_idempotency import IdempotencyBase
 from persistence.atomic_value_transaction import TransactionWitness
 from postgres.migrations import apply_migrations
+from postgres.migrations import apply_migrations
 from persistence.postgres_migrations import apply_canonical_production_baseline
 from persistence.postgres_canonical_schema import initialize_canonical_postgres_schema
 from services.gerchain_runtime import GerchainRuntime
@@ -93,6 +94,10 @@ class ProductionRuntimeFactory:
         # Additive ORM compatibility is allowed only after the authoritative
         # baseline exists; it cannot substitute for the baseline.
         initialize_canonical_postgres_schema(self.engine)
+        migration_dir = Path(__file__).resolve().parents[1] / "postgres" / "schema"
+        with self.engine.connect() as connection:
+            apply_migrations(connection, migration_dir)
+
         migration_dir = Path(__file__).resolve().parents[1] / "postgres" / "schema"
         with self.engine.connect() as connection:
             apply_migrations(connection, migration_dir)
