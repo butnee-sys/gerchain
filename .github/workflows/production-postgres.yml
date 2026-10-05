@@ -26,6 +26,7 @@ jobs:
           --health-retries 20
 
     env:
+      GERCHAIN_DATABASE_URL: postgresql+psycopg://gerchain:gerchain@localhost:5432/gerchain_test
       TEST_POSTGRES_URL: postgresql+psycopg://gerchain:gerchain@localhost:5432/gerchain_test
 
     steps:
@@ -37,6 +38,9 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements-dee-security.txt pytest
+      - name: Verify production PostgreSQL migration and boot
+        run: |
+          pytest -q tests/integration/test_production_postgres_boot.py
       - name: Verify production PostgreSQL value flow
         run: |
           pytest -q tests/persistence/test_production_postgres_full_flow.py
