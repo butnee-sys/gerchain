@@ -7,20 +7,41 @@ import re
 from sqlalchemy import text
 
 _VERSION_RE = re.compile(r"^(\d+)_.*\.sql$")
+_LOCK_KEY = 8342719
+
+
+def _execute(connection, sql: str, params: dict | None = None):
+    """Execute against either SQLAlchemy Connection or psycopg Connection."""
+    if hasattr(connection, "exec_driver_sql"):
+        return connection.exec_driver_sql(
+            sql,
+            params,
+            execution_options={"no_parameters": True} if params is None else {},
+        )
+    if params:
+        # Migration parameters are restricted to integer version and SHA-256 hex.
+        sql = sql.replace(":version", "%s").replace(":checksum", "%s")
+        ordered = [params["version"], params["checksum"]]
+        return connection.execute(sql, ordered)
+    return connection.execute(sql)
+
+
+def _scalar(connection, sql: str, params: dict | None = None):
+    result = _execute(connection, sql, params)
+    return result.scalar_one_or_none() if hasattr(result, "scalar_one_or_none") else result.fetchone()[0] if result.fetchone else None
 
 
 def apply_migrations(connection, migration_dir: Path) -> None:
     """Apply ordered PostgreSQL migrations exactly once with checksum locking."""
-    connection.execute(text("SELECT pg_advisory_lock(8342719)"))
+    _execute(connection, "SELECT pg_advisory_lock(8342719)")
     try:
-        connection.execute(
-            text(
-                "CREATE TABLE IF NOT EXISTS schema_version ("
-                "version BIGINT PRIMARY KEY, "
-                "checksum TEXT NOT NULL, "
-                "applied_at TIMESTAMPTZ NOT NULL DEFAULT now()"
-                ")"
-            )
+        _execute(
+            connection,
+            "CREATE TABLE IF NOT EXISTS schema_version ("
+            "version BIGINT PRIMARY KEY, "
+            "checksum TEXT NOT NULL, "
+            "applied_at TIMESTAMPTZ NOT NULL DEFAULT now()"
+            ")",
         )
 
         files = sorted(
@@ -33,13 +54,18 @@ def apply_migrations(connection, migration_dir: Path) -> None:
             sql = path.read_text(encoding="utf-8")
             checksum = hashlib.sha256(sql.encode("utf-8")).hexdigest()
 
-            row = connection.execute(
-                text(
-                    "SELECT checksum FROM schema_version "
-                    "WHERE version = :version"
-                ),
-                {"version": version},
-            ).scalar_one_or_none()
+            if hasattr(connection, "exec_driver_sql"):
+                row = _execute(
+                    connection,
+                    "SELECT checksum FROM schema_version WHERE version = :version",
+                    {"version": version},
+                ).scalar_one_or_none()
+            else:
+                row = connection.execute(
+                    "SELECT checksum FROM schema_version WHERE version = %s",
+                    (version,),
+                ).fetchone()
+                row = row[0] if row else None
 
             if row is not None:
                 if row != checksum:
@@ -49,15 +75,22 @@ def apply_migrations(connection, migration_dir: Path) -> None:
                     )
                 continue
 
-            connection.exec_driver_sql(sql)
-            connection.execute(
-                text(
-                    "INSERT INTO schema_version(version, checksum) "
-                    "VALUES (:version, :checksum)"
-                ),
-                {"version": version, "checksum": checksum},
-            )
+            if hasattr(connection, "exec_driver_sql"):
+                connection.exec_driver_sql(
+                    sql,
+                    execution_options={"no_parameters": True},
+                )
+                connection.exec_driver_sql(
+                    "INSERT INTO schema_version(version, checksum) VALUES (:version, :checksum)",
+                    {"version": version, "checksum": checksum},
+                )
+            else:
+                connection.execute(sql)
+                connection.execute(
+                    "INSERT INTO schema_version(version, checksum) VALUES (%s, %s)",
+                    (version, checksum),
+                )
 
         connection.commit()
     finally:
-        connection.execute(text("SELECT pg_advisory_unlock(8342719)"))
+        _execute(connection, "SELECT pg_advisory_unlock(8342719)")
