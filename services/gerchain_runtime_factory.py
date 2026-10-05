@@ -1,50 +1,20 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Callable
 
-from sqlalchemy import Engine, create_engine
+from sqlalchemy import create_engine, inspect, text
+from sqlalchemy.engine import Engine
+from sqlalchemy.orm import sessionmaker
 
 from persistence.atomic_ledger import AtomicLedgerBase
+from persistence.atomic_value_transaction import WitnessBase
+from persistence.durable_idempotency import IdempotencyBase
 from persistence.escrow_aggregate import EscrowBase
 from persistence.recovery_outbox import OutboxBase
-from persistence.durable_idempotency import IdempotencyBase
-from persistence.atomic_value_transaction import TransactionWitness
-from persistence.postgres_migrations import apply_canonical_production_baseline
-from persistence.postgres_canonical_schema import initialize_canonical_postgres_schema
 from services.gerchain_runtime import GerchainRuntime
-
-
-_REQUIRED_SCHEMA = {
-    "escrows": {"id", "sender_address", "receiver_address", "amount", "state", "refund_destination", "currency", "version", "created_at", "updated_at"},
-    "gerchain_ledger_accounts": {"account_id", "currency", "balance", "version", "updated_at"},
-    "gerchain_ledger_movements": {"transaction_id", "source", "destination", "amount", "currency", "operation", "escrow_id", "integrity_hash", "created_at"},
-    "gerchain_transaction_witnesses": {"transaction_id", "event_type", "escrow_id", "amount", "created_at"},
-    "gerchain_outbox_events": {"event_id", "event_type", "aggregate_id", "payload_json", "state", "lease_until", "attempts", "created_at", "updated_at"},
-    "gerchain_idempotency_records": {"key", "fingerprint", "result_json", "state", "created_at", "updated_at"},
-}
-
-
-def assert_canonical_production_schema(connection) -> None:
-    """Fail closed unless every canonical production table/column exists."""
-    from sqlalchemy import text
-
-    for table, required_columns in _REQUIRED_SCHEMA.items():
-        rows = connection.execute(
-            text(
-                "SELECT column_name "
-                "FROM information_schema.columns "
-                "WHERE table_schema = current_schema() AND table_name = :table"
-            ),
-            {"table": table},
-        ).scalars().all()
-        actual = set(rows)
-        missing = required_columns - actual
-        if missing:
-            raise RuntimeError(
-                f"canonical production schema incomplete for {table}: "
-                f"missing {', '.join(sorted(missing))}"
-            )
+from postgres.migrations import apply_migrations
 
 
 @dataclass(frozen=True)
@@ -56,44 +26,49 @@ class ProductionRuntimeConfig:
     witness_id: str
 
 
+def assert_canonical_production_schema(connection) -> None:
+    required = {
+        "schema_version",
+        "escrows",
+        "gerchain_ledger_accounts",
+        "gerchain_ledger_movements",
+        "gerchain_transaction_witnesses",
+        "gerchain_outbox_events",
+        "gerchain_idempotency_records",
+    }
+    tables = set(inspect(connection).get_table_names())
+    missing = required - tables
+    if missing:
+        raise RuntimeError(f"canonical production schema incomplete; missing tables: {sorted(missing)}")
+    version = connection.execute(text("SELECT MAX(version) FROM schema_version")).scalar()
+    if version is None or int(version) < 11:
+        raise RuntimeError(f"canonical production schema history incomplete; latest={version}")
+
+
+def initialize_canonical_postgres_schema(engine: Engine) -> None:
+    for base in (AtomicLedgerBase, EscrowBase, WitnessBase, IdempotencyBase, OutboxBase):
+        base.metadata.create_all(engine)
+
+
 class ProductionRuntimeFactory:
     """Create the production GerChain runtime with PostgreSQL as authority."""
 
-    def __init__(
-        self,
-        config: ProductionRuntimeConfig,
-        *,
-        engine: Engine | None = None,
-        session_factory: Callable[[], Any] | None = None,
-    ) -> None:
-        if not config.database_url.startswith(
-            ("postgresql://", "postgresql+psycopg://", "postgresql+psycopg2://")
-        ):
-            raise ValueError("ProductionRuntimeConfig requires a PostgreSQL database URL")
-        if config.amount <= 0:
-            raise ValueError("ProductionRuntimeConfig amount must be positive")
+    def __init__(self, config: ProductionRuntimeConfig, *, engine: Engine | None = None) -> None:
+        if not config.database_url:
+            raise ValueError("database_url is required")
+        if not config.database_url.startswith(("postgresql://", "postgresql+psycopg://", "postgresql+psycopg2://")):
+            raise ValueError("ProductionRuntimeFactory requires a PostgreSQL database URL")
         self.config = config
         self.engine = engine or create_engine(config.database_url, future=True)
         if self.engine.dialect.name != "postgresql":
-            raise ValueError("production runtime requires a PostgreSQL engine")
-        if session_factory is None:
-            from sqlalchemy.orm import sessionmaker
-            session_factory = sessionmaker(bind=self.engine, expire_on_commit=False)
-        self.session_factory = session_factory
+            raise ValueError("ProductionRuntimeFactory requires a PostgreSQL engine")
+        self.session_factory: Callable[[], Any] = sessionmaker(bind=self.engine, expire_on_commit=False)
 
     def initialize(self) -> None:
-        """Apply the canonical PostgreSQL baseline, then fail closed on drift."""
-        # The canonical baseline is the only production schema authority.
-        # Historical migration runners are intentionally excluded here because
-        # they may target legacy schema histories with overlapping versions.
-        apply_canonical_production_baseline(self.config.database_url)
-
-        # Additive ORM compatibility is allowed only after the authoritative
-        # baseline exists; it cannot substitute for the baseline.
+        migration_dir = Path(__file__).resolve().parents[1] / "postgres" / "migrations"
+        with self.engine.connect() as connection:
+            apply_migrations(connection, migration_dir)
         initialize_canonical_postgres_schema(self.engine)
-        for base in (AtomicLedgerBase, EscrowBase, OutboxBase, IdempotencyBase, TransactionWitness):
-            base.metadata.create_all(self.engine)
-
         with self.engine.connect() as connection:
             assert_canonical_production_schema(connection)
 
@@ -110,4 +85,17 @@ class ProductionRuntimeFactory:
         return runtime
 
 
-__all__ = ["ProductionRuntimeConfig", "ProductionRuntimeFactory"]
+TransactionWitness = WitnessBase
+
+__all__ = [
+    "ProductionRuntimeConfig",
+    "ProductionRuntimeFactory",
+    "apply_migrations",
+    "assert_canonical_production_schema",
+    "initialize_canonical_postgres_schema",
+    "AtomicLedgerBase",
+    "EscrowBase",
+    "OutboxBase",
+    "IdempotencyBase",
+    "TransactionWitness",
+]
