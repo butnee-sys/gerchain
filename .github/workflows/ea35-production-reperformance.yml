@@ -1,11 +1,7 @@
 name: EA-35 PostgreSQL Production Reperformance
 
 on:
-  push:
-    branches: ["feat/ea21-transaction-aware-ledger"]
-  pull_request:
   workflow_dispatch:
-
 jobs:
   production-reperformance:
     runs-on: ubuntu-latest
