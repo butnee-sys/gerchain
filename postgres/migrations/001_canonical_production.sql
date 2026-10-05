@@ -33,6 +33,10 @@ CREATE TABLE IF NOT EXISTS gerchain_ledger_accounts (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+ALTER TABLE gerchain_ledger_movements ADD COLUMN IF NOT EXISTS operation VARCHAR(32);
+ALTER TABLE gerchain_ledger_movements ADD COLUMN IF NOT EXISTS escrow_id VARCHAR(128);
+ALTER TABLE gerchain_ledger_movements ADD COLUMN IF NOT EXISTS integrity_hash VARCHAR(128);
+
 CREATE TABLE IF NOT EXISTS gerchain_ledger_movements (
     id SERIAL PRIMARY KEY,
     transaction_id VARCHAR(128) NOT NULL UNIQUE,
@@ -47,20 +51,20 @@ CREATE TABLE IF NOT EXISTS gerchain_ledger_movements (
 );
 
 ALTER TABLE gerchain_ledger_movements
-    ADD CONSTRAINT gerchain_movement_amount_check CHECK (amount > 0);
+    ADD CONSTRAINT gerchain_movement_amount_check CHECK (amount > 0) NOT VALID;
 ALTER TABLE gerchain_ledger_movements
     ADD CONSTRAINT gerchain_movement_operation_check
-    CHECK (operation IN ('FUND','RELEASE','REFUND','CANCEL','SETTLEMENT'));
+    CHECK (operation IS NULL OR operation IN ('FUND','RELEASE','REFUND','CANCEL','SETTLEMENT')) NOT VALID;
 ALTER TABLE gerchain_ledger_movements
     ADD CONSTRAINT gerchain_movement_integrity_hash_check
-    CHECK (integrity_hash IS NOT NULL AND length(integrity_hash) = 64);
+    CHECK (integrity_hash IS NULL OR length(integrity_hash) = 64) NOT VALID;
 ALTER TABLE gerchain_ledger_movements
     ADD CONSTRAINT gerchain_movement_escrow_binding_check
     CHECK (
-        (operation = 'SETTLEMENT' AND escrow_id IS NULL)
-        OR
-        (operation IN ('FUND','RELEASE','REFUND','CANCEL') AND escrow_id IS NOT NULL)
-    );
+        operation IS NULL
+        OR (operation = 'SETTLEMENT' AND escrow_id IS NULL)
+        OR (operation IN ('FUND','RELEASE','REFUND','CANCEL') AND escrow_id IS NOT NULL)
+    ) NOT VALID;
 
 CREATE TABLE IF NOT EXISTS gerchain_transaction_witnesses (
     id SERIAL PRIMARY KEY,
