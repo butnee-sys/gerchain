@@ -96,13 +96,27 @@ def _native_migration_transaction(conn):
 
 @contextmanager
 def _sqlalchemy_migration_transaction(conn):
-    """Serialize SQLAlchemy migration callers across one committed transaction."""
+    """Serialize SQLAlchemy migration callers across the full publication window."""
     if conn.in_transaction():
         raise RuntimeError("migration runner requires a clean SQLAlchemy transaction")
 
-    with conn.begin():
-        conn.execute(text("SELECT pg_advisory_xact_lock(:lock_key)"), {"lock_key": MIGRATION_LOCK_KEY})
-        yield
+    # Use a session-level advisory lock, matching the native psycopg path.
+    # This prevents concurrent bootstrap callers from observing the same
+    # pre-publication schema_version snapshot.
+    conn.execute(
+        text("SELECT pg_advisory_lock(:lock_key)"),
+        {"lock_key": MIGRATION_LOCK_KEY},
+    )
+    conn.commit()
+    try:
+        with conn.begin():
+            yield
+    finally:
+        conn.execute(
+            text("SELECT pg_advisory_unlock(:lock_key)"),
+            {"lock_key": MIGRATION_LOCK_KEY},
+        )
+        conn.commit()
 
 
 def _transaction(conn):
