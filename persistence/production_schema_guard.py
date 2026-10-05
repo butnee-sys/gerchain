@@ -49,7 +49,7 @@ def assert_canonical_production_schema(connection) -> None:
             text("SELECT version FROM schema_version ORDER BY version")
         ).fetchall()
     ]
-    if versions != list(range(1, 6)):
+    if versions != list(range(1, 7)):
         raise RuntimeError(f"canonical production schema migration set is incomplete: {versions}")
 
 
