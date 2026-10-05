@@ -13,14 +13,16 @@ def test_production_runtime_bootstraps_canonical_persistence():
     engine = create_engine(database_url, future=True)
     session_factory = sessionmaker(bind=engine, expire_on_commit=False)
 
-    runtime = ProductionRuntimeFactory.create(
-        escrow_id="smoke-escrow",
-        amount=100,
-        currency="MNT",
-        witness_id="smoke-witness",
+    runtime = ProductionRuntimeFactory(
+        config=__import__("services.gerchain_runtime_factory", fromlist=["ProductionRuntimeConfig"]).ProductionRuntimeConfig(
+            database_url=database_url,
+            escrow_id="smoke-escrow",
+            amount=100,
+            currency="MNT",
+            witness_id="smoke-witness",
+        ),
         engine=engine,
-        session_factory=session_factory,
-    )
+    ).create()
 
     assert runtime.is_canonical_ledger_authoritative
     assert runtime.runtime_mode == "production-postgresql"
