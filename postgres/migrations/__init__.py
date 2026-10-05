@@ -26,10 +26,6 @@ def _execute(connection, sql: str, params: dict | None = None):
     return connection.execute(sql)
 
 
-def _scalar(connection, sql: str, params: dict | None = None):
-    result = _execute(connection, sql, params)
-    return result.scalar_one_or_none() if hasattr(result, "scalar_one_or_none") else result.fetchone()[0] if result.fetchone else None
-
 
 def apply_migrations(connection, migration_dir: Path) -> None:
     """Apply ordered PostgreSQL migrations exactly once with checksum locking."""
