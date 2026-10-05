@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+from pathlib import Path
 from typing import Any, Callable
 
 from sqlalchemy import Engine
@@ -50,14 +51,15 @@ class ProductionRuntimeFactory:
         self.session_factory = session_factory
 
     def initialize(self) -> None:
-        # Migration history is authoritative for PostgreSQL production schema.
-        # ORM create_all is retained only as a compatibility backstop for
-        # additive mapped objects; it is not the migration mechanism.
-        migration_dir = Path(__file__).resolve().parents[1] / "postgres" / "migrations"
+        """Apply the canonical PostgreSQL migration history before runtime boot."""
+        migration_dir = Path(__file__).resolve().parents[1] / "postgres" / "schema"
         with self.engine.connect() as connection:
             apply_migrations(connection, migration_dir)
 
-        for base in (AtomicLedgerBase, EscrowBase, WitnessBase, IdempotencyBase, OutboxBase):
+        # ORM metadata is retained as a defensive compatibility layer for
+        # canonical persistence models not yet materialized by a historical
+        # migration. It must not replace or bypass migration history.
+        for base in (AtomicLedgerBase, EscrowBase, OutboxBase, IdempotencyBase, TransactionWitness):
             base.metadata.create_all(self.engine)
 
     def create(self) -> GerchainRuntime:
