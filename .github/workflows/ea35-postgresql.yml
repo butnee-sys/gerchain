@@ -3,7 +3,6 @@ name: EA-35 PostgreSQL proof
 
 on:
   workflow_dispatch:
-
 jobs:
   postgresql-proof:
     runs-on: ubuntu-latest
