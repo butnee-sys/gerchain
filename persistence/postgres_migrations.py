@@ -69,7 +69,12 @@ _CANONICAL_BASELINE = (
 
 
 def apply_canonical_production_baseline(database_url: str, schema_dir: str | Path | None = None) -> list[int]:
-    """Apply the single authoritative production schema sequence, fail closed on drift."""
+    """Apply the single authoritative production schema sequence atomically.
+
+    A session-level advisory lock is held for the entire publication window.
+    No migration version is committed independently, so concurrent production
+    bootstraps cannot publish the same schema version twice.
+    """
     if not database_url.startswith(("postgresql://", "postgresql+psycopg://")):
         raise ValueError("PostgreSQL database URL is required")
 
@@ -82,46 +87,58 @@ def apply_canonical_production_baseline(database_url: str, schema_dir: str | Pat
     applied: list[int] = []
 
     with psycopg.connect(dsn) as conn:
-        conn.execute(
-            "SELECT pg_advisory_xact_lock(hashtext('gerchain:canonical-production-migrations'))"
-        )
-        first_sql = files[0].read_text(encoding="utf-8")
-        schema_exists = conn.execute(
-            "SELECT to_regclass('public.schema_version')"
-        ).fetchone()[0] is not None
+        lock_key = "gerchain:canonical-production-migrations"
+        conn.execute("SELECT pg_advisory_lock(hashtext(%s))", (lock_key,))
+        try:
+            first_sql = files[0].read_text(encoding="utf-8")
+            schema_exists = conn.execute(
+                "SELECT to_regclass('public.schema_version')"
+            ).fetchone()[0] is not None
 
-        if not schema_exists:
-            conn.execute(first_sql)
-            # 001 creates schema_version; record its checksum in the same transaction.
-            conn.execute(
-                "INSERT INTO schema_version(version, checksum) VALUES (%s, %s)",
-                (1, hashlib.sha256(first_sql.encode("utf-8")).hexdigest()),
-            )
-            conn.commit()
-            applied.append(1)
-        else:
-            row = conn.execute("SELECT checksum FROM schema_version WHERE version = 1").fetchone()
-            expected = hashlib.sha256(first_sql.encode("utf-8")).hexdigest()
-            if row is None or row[0] != expected:
-                raise RuntimeError("canonical migration baseline mismatch: 001_concurrency.sql")
+            if not schema_exists:
+                conn.execute(first_sql)
+                conn.execute(
+                    "INSERT INTO schema_version(version, checksum) VALUES (%s, %s)",
+                    (1, hashlib.sha256(first_sql.encode("utf-8")).hexdigest()),
+                )
+                applied.append(1)
+            else:
+                row = conn.execute(
+                    "SELECT checksum FROM schema_version WHERE version = 1"
+                ).fetchone()
+                expected = hashlib.sha256(first_sql.encode("utf-8")).hexdigest()
+                if row is None or row[0] != expected:
+                    raise RuntimeError(
+                        "canonical migration baseline mismatch: 001_concurrency.sql"
+                    )
 
-        for version, path in enumerate(files[1:], start=2):
-            sql = path.read_text(encoding="utf-8")
-            checksum = hashlib.sha256(sql.encode("utf-8")).hexdigest()
-            row = conn.execute(
-                "SELECT checksum FROM schema_version WHERE version = %s",
-                (version,),
-            ).fetchone()
-            if row is not None:
-                if row[0] != checksum:
-                    raise RuntimeError(f"canonical migration checksum mismatch: {path.name}")
-                continue
-            conn.execute(sql)
-            conn.execute(
-                "INSERT INTO schema_version(version, checksum) VALUES (%s, %s)",
-                (version, checksum),
-            )
+            for version, path in enumerate(files[1:], start=2):
+                sql = path.read_text(encoding="utf-8")
+                digest = hashlib.sha256(sql.encode("utf-8")).hexdigest()
+                row = conn.execute(
+                    "SELECT checksum FROM schema_version WHERE version = %s",
+                    (version,),
+                ).fetchone()
+                if row is not None:
+                    if row[0] != digest:
+                        raise RuntimeError(
+                            f"canonical migration checksum mismatch: {path.name}"
+                        )
+                    continue
+
+                conn.execute(sql)
+                conn.execute(
+                    "INSERT INTO schema_version(version, checksum) VALUES (%s, %s)",
+                    (version, digest),
+                )
+                applied.append(version)
+
             conn.commit()
-            applied.append(version)
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            conn.execute("SELECT pg_advisory_unlock(hashtext(%s))", (lock_key,))
+            conn.commit()
 
     return applied
