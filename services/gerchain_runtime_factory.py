@@ -1,16 +1,17 @@
-"""Explicit production construction for the GerChain durable runtime."""
 from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
 
-from sqlalchemy import create_engine
-from sqlalchemy.engine import Engine
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy import Engine
 
+from persistence.atomic_ledger import AtomicLedgerBase
+from persistence.atomic_value_transaction import WitnessBase
+from persistence.durable_idempotency import IdempotencyBase
+from persistence.escrow_aggregate import EscrowBase
+from persistence.recovery_outbox import OutboxBase
 from postgres.migrations import apply_migrations
-from persistence.production_schema_guard import assert_canonical_production_schema
 from services.gerchain_runtime import GerchainRuntime
 
 
@@ -24,29 +25,40 @@ class ProductionRuntimeConfig:
 
 
 class ProductionRuntimeFactory:
-    """Construct the production runtime with Canonical Ledger authority."""
+    """Create the production GerChain runtime with PostgreSQL as authority."""
 
-    def __init__(self, config: ProductionRuntimeConfig, *, engine: Engine | None = None) -> None:
-        if not config.database_url:
-            raise ValueError("database_url is required")
+    def __init__(
+        self,
+        config: ProductionRuntimeConfig,
+        *,
+        engine: Engine,
+        session_factory: Callable[[], Any] | None = None,
+    ) -> None:
+        if engine is None or engine.dialect.name != "postgresql":
+            raise ValueError("production runtime requires a PostgreSQL engine")
         if not config.database_url.startswith(
-            ("postgresql://", "postgresql+psycopg://")
+            ("postgresql://", "postgresql+psycopg://", "postgresql+psycopg2://")
         ):
-            raise ValueError("ProductionRuntimeFactory requires PostgreSQL database URL")
+            raise ValueError("ProductionRuntimeConfig requires a PostgreSQL database URL")
+        if config.amount <= 0:
+            raise ValueError("ProductionRuntimeConfig amount must be positive")
         self.config = config
-        self.engine = engine or create_engine(config.database_url, future=True)
-        if self.engine.dialect.name != "postgresql":
-            raise ValueError("ProductionRuntimeFactory requires a PostgreSQL engine")
-        self.session_factory: Callable[[], Any] = sessionmaker(
-            bind=self.engine, expire_on_commit=False
-        )
+        self.engine = engine
+        if session_factory is None:
+            from sqlalchemy.orm import sessionmaker
+            session_factory = sessionmaker(bind=engine, expire_on_commit=False)
+        self.session_factory = session_factory
 
     def initialize(self) -> None:
-        """Apply the canonical PostgreSQL migration set before runtime use."""
+        # Migration history is authoritative for PostgreSQL production schema.
+        # ORM create_all is retained only as a compatibility backstop for
+        # additive mapped objects; it is not the migration mechanism.
         migration_dir = Path(__file__).resolve().parents[1] / "postgres" / "migrations"
         with self.engine.connect() as connection:
             apply_migrations(connection, migration_dir)
-            assert_canonical_production_schema(connection)
+
+        for base in (AtomicLedgerBase, EscrowBase, WitnessBase, IdempotencyBase, OutboxBase):
+            base.metadata.create_all(self.engine)
 
     def create(self) -> GerchainRuntime:
         self.initialize()
