@@ -112,6 +112,7 @@ def test_production_factory_uses_authoritative_migration_history(monkeypatch):
         lambda connection, path: calls.append(path.name),
     )
     monkeypatch.setattr(module, "assert_canonical_production_schema", lambda connection: None)
+    monkeypatch.setattr(module, "initialize_canonical_postgres_schema", lambda engine: None)
 
     for base in (
         module.AtomicLedgerBase,
