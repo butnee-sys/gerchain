@@ -46,7 +46,7 @@ def test_production_postgres_migration_and_canonical_boot() -> None:
         assert "schema_version" in tables
         with engine.connect() as connection:
             versions = [row[0] for row in connection.execute(text("SELECT version FROM schema_version ORDER BY version"))]
-        assert versions == [1, 2]
+        assert versions == list(range(1, 12))
 
         runtime.create_account("integration-source", initial_balance=100)
         runtime.create_account("integration-destination", initial_balance=0)
