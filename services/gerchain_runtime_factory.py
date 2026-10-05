@@ -64,11 +64,9 @@ class ProductionRuntimeFactory:
         self,
         config: ProductionRuntimeConfig,
         *,
-        engine: Engine,
+        engine: Engine | None = None,
         session_factory: Callable[[], Any] | None = None,
     ) -> None:
-        if engine is None or engine.dialect.name != "postgresql":
-            raise ValueError("production runtime requires a PostgreSQL engine")
         if not config.database_url.startswith(
             ("postgresql://", "postgresql+psycopg://", "postgresql+psycopg2://")
         ):
@@ -76,7 +74,9 @@ class ProductionRuntimeFactory:
         if config.amount <= 0:
             raise ValueError("ProductionRuntimeConfig amount must be positive")
         self.config = config
-        self.engine = engine
+        self.engine = engine or __import__("sqlalchemy").create_engine(config.database_url, future=True)
+        if self.engine.dialect.name != "postgresql":
+            raise ValueError("production runtime requires a PostgreSQL engine")
         if session_factory is None:
             from sqlalchemy.orm import sessionmaker
             session_factory = sessionmaker(bind=engine, expire_on_commit=False)
