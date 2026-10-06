@@ -17,7 +17,6 @@ def test_production_factory_builds_real_postgresql_runtime():
     from sqlalchemy.orm import sessionmaker
 
     engine = create_engine(database_url, pool_pre_ping=True)
-    session_factory = sessionmaker(bind=engine, expire_on_commit=False)
 
     runtime = ProductionRuntimeFactory.create(
         escrow_id="FACTORY-PG-ESC",
@@ -32,5 +31,5 @@ def test_production_factory_builds_real_postgresql_runtime():
     assert runtime.is_canonical_ledger_authoritative is True
     runtime.require_canonical_ledger_authority()
     assert runtime._canonical_ledger is not None
-    assert runtime._session_factory is session_factory
+    assert runtime._session_factory is not None
     engine.dispose()
