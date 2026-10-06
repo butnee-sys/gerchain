@@ -33,7 +33,7 @@ def test_production_runtime_postgresql_full_escrow_lifecycle():
     now = datetime.now(timezone.utc)
     with session_factory.begin() as session:
         session.execute(delete(OutboxEvent).where(OutboxEvent.aggregate_id.in_(["pg-smoke-escrow", "pg-refund-escrow"])))
-        session.execute(delete(TransactionWitness).where(TransactionWitness.aggregate_id.in_(["pg-smoke-escrow", "pg-refund-escrow"])))
+        session.execute(delete(TransactionWitness).where(TransactionWitness.escrow_id.in_(["pg-smoke-escrow", "pg-refund-escrow"])))
         session.execute(delete(DurableIdempotencyRecord).where(DurableIdempotencyRecord.key.in_(["pg-fund-1", "pg-lock-1", "pg-release-1", "pg-refund-fund", "pg-refund-lock", "pg-refund-1"])))
         session.execute(delete(LedgerMovementModel).where(LedgerMovementModel.transaction_id.in_(["pg-fund-1", "pg-release-1", "pg-refund-fund", "pg-refund-1"])))
         session.execute(delete(CanonicalEscrow).where(CanonicalEscrow.id.in_(["pg-smoke-escrow", "pg-refund-escrow"])))
