@@ -85,3 +85,24 @@ The entrypoint boot test completed successfully against PostgreSQL.
 This is strong repository-level technical evidence from a real PostgreSQL 16 execution environment. It is not external certification or third-party production sign-off.
 
 **EA-35 overall remains IN PROGRESS / NOT LOCKED** until the remaining final evidence, operational governance, privileged-access/IAM, recovery/DR, and release-lock gates are formally closed.
+
+
+## EA-35.13 verified evidence — 2026-10-06
+
+- Tested head SHA: `48b2fcbd802e0607f92f0e1ed90c940d0ca71e2b`
+- Production PostgreSQL run: `37438638354` — SUCCESS
+- EAI PostgreSQL Production Proof: `37438638438` — SUCCESS
+- Independent PostgreSQL evidence: `37438638329` — SUCCESS
+- Production job steps verified: PostgreSQL service initialization; dependency installation; production migration/boot; production value flow; deep value-truth suite; clean container shutdown.
+- EAI proof verified on PostgreSQL 16 service.
+- Independent evidence verified persisted value state independently on PostgreSQL.
+
+### Gate decision
+EA-35.13 production PostgreSQL re-performance is **VERIFIED** for the tested commit above. This is repository technical evidence, not an external certification or final production lock.
+
+### Remaining lock gates
+- full lifecycle coverage including REFUND/CANCEL/SETTLEMENT in the same independent production evidence set
+- recovery/restart evidence
+- security/IAM/MFA governance evidence
+- final independent re-performance and release evidence reconciliation
+- formal production lock decision
