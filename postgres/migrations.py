@@ -239,6 +239,47 @@ def apply_migrations(conn, migration_dir: str | Path) -> None:
                     raise RuntimeError(
                         f"Migration checksum mismatch for version {version}"
                     )
+            # Canonicalize idempotency evidence shape before runtime boot.
+            # Legacy deployments may expose idempotency_key/request_fingerprint or
+            # omit the operation discriminator entirely. Reconcile only when the
+            # mapping is deterministic; otherwise fail closed rather than guessing.
+            _execute(conn, "ALTER TABLE IF EXISTS gerchain_idempotency_records ADD COLUMN IF NOT EXISTS operation VARCHAR(64)")
+            missing_operation = _execute(
+                conn,
+                "SELECT EXISTS (SELECT 1 FROM gerchain_idempotency_records WHERE operation IS NULL)",
+            ).fetchone()[0]
+            if missing_operation:
+                raise RuntimeError("cannot canonicalize idempotency records: NULL operation remains")
+            _execute(conn, "ALTER TABLE IF EXISTS gerchain_idempotency_records ALTER COLUMN operation SET NOT NULL")
+
+            _execute(conn, "ALTER TABLE IF EXISTS gerchain_idempotency_records ADD COLUMN IF NOT EXISTS fingerprint VARCHAR(64)")
+            legacy_fingerprint_column = _execute(
+                conn,
+                """
+                SELECT EXISTS (
+                    SELECT 1 FROM information_schema.columns
+                    WHERE table_schema='public' AND table_name='gerchain_idempotency_records'
+                      AND column_name='request_fingerprint'
+                )
+                """,
+            ).fetchone()[0]
+            if legacy_fingerprint_column:
+                _execute(
+                    conn,
+                    "UPDATE gerchain_idempotency_records SET fingerprint = request_fingerprint WHERE fingerprint IS NULL",
+                )
+                _execute(
+                    conn,
+                    "ALTER TABLE gerchain_idempotency_records DROP COLUMN IF EXISTS request_fingerprint",
+                )
+            null_fingerprint = _execute(
+                conn,
+                "SELECT EXISTS (SELECT 1 FROM gerchain_idempotency_records WHERE fingerprint IS NULL)",
+            ).fetchone()[0]
+            if null_fingerprint:
+                raise RuntimeError("cannot canonicalize idempotency records: NULL fingerprint remains")
+            _execute(conn, "ALTER TABLE gerchain_idempotency_records ALTER COLUMN fingerprint SET NOT NULL")
+
             # Compatibility repair: historical version 6 may already be recorded
             # while the physical idempotency table still exposes idempotency_key.
             _execute(conn, "ALTER TABLE IF EXISTS gerchain_idempotency_records ADD COLUMN IF NOT EXISTS key VARCHAR(255)")
