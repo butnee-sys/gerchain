@@ -60,8 +60,8 @@ def test_production_postgresql_boot_fund_lock_and_deep_reconciliation():
         )
         session.commit()
 
-    runtime.create_account(source, "MNT", 100)
-    runtime.create_account(escrow_id, "MNT", 0)
+    runtime.create_account(source, "MNT", initial_balance=100)
+    runtime.create_account(escrow_id, "MNT", initial_balance=0)
 
     funded = runtime.fund("pg-fund-1", source, "2026-10-06T00:00:00Z", {"test": "postgres"})
     assert not funded["replayed"]
