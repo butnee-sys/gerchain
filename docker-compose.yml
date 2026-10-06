@@ -1,4 +1,4 @@
-version: '3.8'
+version: "3.8"
 services:
   gerchain-node:
     build: .
@@ -7,9 +7,14 @@ services:
       - "8485:8485"
       - "9333:9333"
     environment:
-      - NODE_ID=validator_01
-      - GENESIS_PATH=/config/genesis.json
-      - PEERS=tcp://node2_ip:8485,tcp://node3_ip:8485
+      NODE_ID: validator_01
+      GERCHAIN_DATABASE_URL: ${GERCHAIN_DATABASE_URL}
+      GERCHAIN_ESCROW_ID: ${GERCHAIN_ESCROW_ID}
+      GERCHAIN_ESCROW_AMOUNT: ${GERCHAIN_ESCROW_AMOUNT}
+      GERCHAIN_CURRENCY: ${GERCHAIN_CURRENCY}
+      GERCHAIN_WITNESS_ID: ${GERCHAIN_WITNESS_ID}
+      GENESIS_PATH: /config/genesis.json
+      PEERS: tcp://node2_ip:8485,tcp://node3_ip:8485
     volumes:
       - ./data:/app/data
       - ./config:/config

@@ -12,7 +12,7 @@ CREATE TABLE IF NOT EXISTS escrows (
     sender_address TEXT NOT NULL,
     receiver_address TEXT NOT NULL,
     amount NUMERIC(38, 8) NOT NULL CHECK (amount >= 0),
-    state TEXT NOT NULL CHECK (state IN ('CREATED', 'LOCKED', 'RELEASED')),
+    state TEXT NOT NULL CHECK (state IN ('CREATED', 'FUNDED', 'LOCKED', 'RELEASED', 'REFUNDED', 'CANCELLED')),
     condition_desc TEXT,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
