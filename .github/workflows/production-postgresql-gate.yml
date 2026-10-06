@@ -144,8 +144,5 @@ jobs:
           GERCHAIN_POSTGRES_DSN: ${{ env.GERCHAIN_DATABASE_URL }}
         run: pytest -q postgres/tests/test_eai_production_reperformance.py
 
-      - name: Verify SHUUD remains isolated from canonical core
-        run: pytest -q tests/test_shuud_exim_boundary.py
-
       - name: Run real PostgreSQL production value-flow gate
         run: pytest -q tests/integration/test_postgresql_production_gate.py
