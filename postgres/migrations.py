@@ -6,7 +6,7 @@
 # EA-35.21: fresh CI trigger after migration publication hardening.
 # EA-35.22: re-performance trigger; no migration semantics changed.
 # EA-35.25: force a fresh branch verification after the conflict-safe publication path.
-# EA-35.24: fresh PostgreSQL verification after conflict-safe publication hardening.
+# EA-35.27: fresh PostgreSQL verification after canonical runtime factory correction.
 # The serialization contract is exercised by the PostgreSQL concurrency gate before production lock.
 # The concurrency regression test is the release evidence for duplicate schema publication.
 from __future__ import annotations
