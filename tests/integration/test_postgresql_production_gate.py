@@ -63,10 +63,10 @@ def test_real_postgresql_production_boot_and_value_flow():
         )
         session.commit()
 
-    runtime.create_account("SRC", "MNT", initial_balance=100)
-    runtime.create_account("BEN", "MNT", initial_balance=0)
+    runtime.create_account("SRC", initial_balance=100)
+    runtime.create_account("BEN", initial_balance=0)
     # FUND moves source -> the canonical escrow ledger account; provision it explicitly.
-    runtime.create_account("pg-ea35-escrow", "MNT", initial_balance=0)
+    runtime.create_account("pg-ea35-escrow", initial_balance=0)
     runtime.fund("pg-fund", "SRC", now.isoformat(), {"integration": True})
     runtime.lock("pg-lock", now.isoformat(), {"integration": True})
     runtime.release(
