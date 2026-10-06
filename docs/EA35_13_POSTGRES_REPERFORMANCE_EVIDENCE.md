@@ -153,3 +153,14 @@ The final fundamental-architecture lock remains OPEN. At the time of this refres
 An unrelated SHUUD workflow had a failure on the same SHA; it is outside the current locked scope because product/SHUUD layers remain excluded from the EAI/fundamental production gate.
 
 No final LOCK is declared from this evidence alone.
+
+
+## Verification refresh — 2026-10-06
+
+A subsequent exact-SHA verification attempt exposed two regressions before production lock:
+- core-gates run `36542458205` failed during test collection because an intermediate `services/gerchain_runtime.py` revision contained literal `\\n` escape sequences in the canonical FUND method. The current branch source has since been corrected to real Python newlines.
+- PostgreSQL Concurrency run `36542458201` failed `test_migrations_are_serialized_and_checksum_is_stable` with a duplicate `schema_version(version=2)` publication error. The current `postgres/migrations.py` publication path now uses conflict-safe insertion and serialized migration publication.
+
+These failures are recorded as verification evidence, not as production approval. A fresh exact-SHA rerun is required before this gate can be re-qualified.
+
+**Status after this refresh: EA-35 IN PROGRESS / NOT LOCKED.**
