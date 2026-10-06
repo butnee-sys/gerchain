@@ -89,17 +89,10 @@ def _native_migration_transaction(conn):
     if _connection_in_transaction(conn):
         raise RuntimeError("migration runner requires a clean psycopg transaction")
 
-    # Use a session-scoped advisory lock so the lock acquisition itself cannot
-    # race with transaction visibility during concurrent first boot.
-    conn.execute("SELECT pg_advisory_lock(%s)", (MIGRATION_LOCK_KEY,))
-    conn.commit()
-    try:
-        with conn.transaction():
-            yield
-    finally:
-        conn.execute("SELECT pg_advisory_unlock(%s)", (MIGRATION_LOCK_KEY,))
-        conn.commit()
-
+    # Keep advisory lock ownership inside the same transaction as publication.
+    with conn.transaction():
+        conn.execute("SELECT pg_advisory_xact_lock(%s)", (MIGRATION_LOCK_KEY,))
+        yield
 
 @contextmanager
 def _sqlalchemy_migration_transaction(conn):
