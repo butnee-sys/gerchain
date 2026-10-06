@@ -5,6 +5,7 @@
 # EA-35.15: keep concurrent duplicate recording idempotent for fresh CI re-performance.
 # EA-35.21: fresh CI trigger after migration publication hardening.
 # EA-35.22: re-performance trigger; no migration semantics changed.
+# EA-35.25: force a fresh branch verification after the conflict-safe publication path.
 # EA-35.24: fresh PostgreSQL verification after conflict-safe publication hardening.
 # The serialization contract is exercised by the PostgreSQL concurrency gate before production lock.
 from __future__ import annotations
