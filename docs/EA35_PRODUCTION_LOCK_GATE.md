@@ -1,6 +1,6 @@
 # EA-35 — Production Lock Gate
 
-Status: IN PROGRESS / NOT LOCKED
+Status: VERIFIED / NOT LOCKED
 
 ## Purpose
 
@@ -25,19 +25,24 @@ Code-level authority checks:
 - Legacy Release authority is not the production construction path.
 - Production runtime requires Canonical Ledger authority.
 
-## Not yet verified
+## Verified on exact SHA
 
-The following remain release blockers:
+The following release gates are evidenced on `98f8f9005d58220dece4a1e44b36e8bc452b8069`:
 
-1. Fresh PostgreSQL production boot against a real PostgreSQL instance.
-2. Existing-schema migration compatibility; SQLAlchemy `create_all()` is not a migration mechanism.
-3. Full canonical schema completeness for Ledger, Escrow, Witness, Outbox and Idempotency.
-4. End-to-end PostgreSQL execution for CREATE/FUND/LOCK/RELEASE/REFUND/CANCEL/SETTLEMENT/READ.
-5. Deep Value Truth Reconciliation on PostgreSQL.
-6. Crash/restart and abandoned-processing recovery on PostgreSQL.
-7. Exact-SHA CI evidence for the production test suite.
-8. Independent re-performance.
-9. Physical freeze/removal of legacy value authorities after migration evidence.
+- Production PostgreSQL runtime — run `37420203547` — SUCCESS.
+- Independent PostgreSQL evidence — run `37420203563` — SUCCESS.
+- Production PostgreSQL gate — run `37420203612` — SUCCESS.
+
+The production gate completed syntax, canonical factory/schema, PostgreSQL boot, deep value-truth reconciliation, EAI re-performance, and real PostgreSQL value-flow checks. Independent evidence separately verified persisted PostgreSQL value state.
+
+## Remaining release blockers
+
+1. Physical freeze/removal/archive closure of legacy value authorities.
+2. Organizational IAM/MFA evidence.
+3. Privileged-access review evidence.
+4. Branch/main governance evidence.
+5. Final independent assurance package.
+6. Overall fundamental architecture reconciliation and final evidence consolidation.
 
 ## Lock rule
 
@@ -60,6 +65,6 @@ CODE
 
 ## Current decision
 
-**EA-35: IN PROGRESS / NOT LOCKED**
+**EA-35: VERIFIED / NOT LOCKED**
 
-The current evidence supports implementation progress, not final production certification.
+The current evidence supports production PostgreSQL verification. Final lock remains withheld pending the remaining closure gates.
