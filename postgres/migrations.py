@@ -251,7 +251,7 @@ def apply_migrations(conn, migration_dir: str | Path) -> None:
                       AND column_name='idempotency_key'
                 )
                 """,
-            ).scalar()
+            ).fetchone()[0]
             if legacy_key_column:
                 _execute(
                     conn,
@@ -260,7 +260,7 @@ def apply_migrations(conn, migration_dir: str | Path) -> None:
             null_key = _execute(
                 conn,
                 "SELECT EXISTS (SELECT 1 FROM gerchain_idempotency_records WHERE key IS NULL)",
-            ).scalar()
+            ).fetchone()[0]
             if null_key:
                 raise RuntimeError("cannot canonicalize idempotency records: NULL key remains")
             _execute(conn, "ALTER TABLE gerchain_idempotency_records ALTER COLUMN key SET NOT NULL")
