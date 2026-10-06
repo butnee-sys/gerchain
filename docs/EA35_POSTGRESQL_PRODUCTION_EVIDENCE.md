@@ -2,148 +2,95 @@
 
 ## Scope
 
-This record covers the canonical PostgreSQL production runtime and value-truth boundary on the exact branch execution commit.
+Fresh evidence for the canonical PostgreSQL production runtime, EAI value-flow boundary, migration bootstrap, and deep value-truth reconciliation.
 
 ## Exact execution commit
 
 - Branch: `feat/ea21-transaction-aware-ledger`
-- Commit: `214c158a24ae97cd8a0ac8a1af708ac9042b2481`
-- Execution date: 2026-09-29
+- Commit: `d56315b178c087829860893b2af98d43a7c18a35`
 - PostgreSQL service: PostgreSQL 16
 - Python: 3.13
 
-## Verified workflow evidence
+## Fresh GitHub Actions evidence
 
-The following GitHub Actions runs were associated with the exact execution commit and completed successfully:
+### Production PostgreSQL gate
 
-| Gate | Run | Result |
-|---|---:|---|
-| PostgreSQL Production Gate | 36519670647 | SUCCESS |
-| PostgreSQL production re-performance | 36519670742 | SUCCESS |
-| production-postgresql-e2e | 36519670670 | SUCCESS |
-| Production PostgreSQL verification | 36519670609 | SUCCESS |
-| PostgreSQL Production Evidence | 36519670616 | SUCCESS |
-| production-postgres-gate | 36519670645 | SUCCESS |
-| Production PostgreSQL Smoke | 36519670610 | SUCCESS |
-| production-postgresql | 36519670654 | SUCCESS |
+- Run: `37492347897`
+- Workflow: `production-postgresql-gate`
+- Conclusion: **SUCCESS**
+- Pull request: #90
+- Head SHA: `d56315b178c087829860893b2af98d43a7c18a35`
 
-### Direct re-performance evidence
+Substantive steps all completed successfully:
 
-Run `36519670742`, job `109249554498`:
+1. Python syntax gate
+2. Production factory + canonical persistence
+3. Production entrypoint boot against PostgreSQL
+4. Concurrent PostgreSQL migration bootstrap
+5. Deep value-truth reconciliation
+6. EAI production re-performance
+7. Real PostgreSQL production value-flow gate
 
-- PostgreSQL 16 service initialized and accepted connections.
-- Python 3.13 environment initialized.
-- Production dependencies installed.
-- `tests/integration/test_postgresql_production_reperformance.py` executed.
-- Result: **1 passed in 0.34s**.
+Observed outputs:
 
-This is direct execution evidence against a real PostgreSQL service, not SQLite substitution.
+- Concurrent migration bootstrap: **2 passed**
+- Deep reconciliation: **19 passed**
+- EAI production re-performance: **1 passed**
+- PostgreSQL production value-flow gate: **2 passed**
 
-## Runtime construction verified
+Canonical runtime evidence:
 
-The production factory now:
+- `PRODUCTION_FACTORY_GATE=PASS`
+- `CANONICAL_TABLES_GATE=PASS`
+- `CANONICAL_LEDGER_MOVEMENT_GATE=PASS`
+- `CANONICAL_LEDGER_REPLAY_GATE=PASS`
 
-1. requires a PostgreSQL URL;
-2. applies versioned PostgreSQL migrations;
-3. validates the canonical production schema;
-4. constructs `GerchainRuntime`;
-5. attaches `configure_canonical_ledger()`;
-6. requires Canonical Ledger authority before returning the runtime.
+Production boot evidence:
 
-The production entrypoint constructs `ProductionRuntimeConfig` and `ProductionRuntimeFactory` using the actual PostgreSQL DSN; it no longer calls a nonexistent class-level factory constructor.
+- `GerChain production runtime initialized: escrow=ci-escrow-1 currency=USD`
 
-## Evidence interpretation
+### Independent PostgreSQL evidence
 
-This evidence establishes that the canonical PostgreSQL runtime and the EA-35 production re-performance test execute successfully on the exact commit above.
+- Run: `37492347721`
+- Workflow: `independent-postgresql-evidence`
+- Conclusion: **SUCCESS**
+- Independent persisted-value verification: **1 passed**
 
-It does **not** by itself establish final system-wide production lock. Remaining gates include:
+### EAI PostgreSQL production proof
 
-- independent re-performance by a separate reviewer/environment;
-- complete evidence reconciliation against the final release candidate;
-- organizational IAM/MFA and privileged-access evidence where applicable;
-- final architecture/production lock decision.
+- Run: `37492347772`
+- Workflow: `EAI PostgreSQL Production Proof`
+- Conclusion: **SUCCESS**
 
-No certification or external audit claim is made by this document.
+## Migration-lock hardening
 
-## 2026-10-02 gate reconciliation
+The canonical production factory imports the `postgres.migrations` package. Its migration runner uses a PostgreSQL transaction-scoped advisory lock.
 
-The earlier workflow execution on commit e860f502f3e1a2d56fd873ad2faab7b1ab630740 was not accepted as production evidence. Its PostgreSQL Concurrency run 36542458201 failed in the migration serialization test with a duplicate schema_version row, while core-gates run 36542458205 failed during collection because that execution contained a malformed runtime source block.
+The runner previously attempted an explicit advisory unlock after COMMIT. A transaction-scoped advisory lock is already released by COMMIT, so that explicit unlock generated PostgreSQL warnings.
 
-The current branch contains the corresponding corrections: the migration runner deterministically selects one canonical file per duplicated historical migration version, records migration versions idempotently with checksum verification, and the runtime FUND method source is valid Python again. A fresh exact-SHA workflow execution is required before any GREEN/LOCK claim.
+Fixed in:
 
-Status: IN PROGRESS / NOT LOCKED.
+`d56315b178c087829860893b2af98d43a7c18a35`
 
-## Current branch-tip verification gate
+The invalid post-COMMIT unlock was removed. The fresh production PostgreSQL gate then completed successfully on the corrected commit.
 
-- Current branch tip: `4a705c1bd4c977c1c6bada90180661a2ad3211c3`
-- The historical successful merge-ref runs above are retained as historical evidence only.
-- A new pull-request execution against the current branch tip is required before promoting this evidence to current-tip GREEN.
+## Verified production properties
 
+The fresh evidence establishes that the branch can:
 
-## Latest production verification
+1. start PostgreSQL 16;
+2. apply the canonical migration history;
+3. construct a Canonical Ledger-authoritative runtime;
+4. boot the production entrypoint;
+5. execute canonical ledger movement and replay protection;
+6. run deep value-truth reconciliation;
+7. reproduce EAI value-flow behavior;
+8. independently verify persisted value state.
 
-The pull-request merge ref containing `2a2fef2ac9bda92052899fe9c1507159e89ca1b8` was executed as merge commit `430e41233b4158669feff04c9a7d2f056fcc6235`.
+## Status
 
-Successful runs on that merge ref include:
+**EA-35.13 — VERIFIED**
 
-- Production PostgreSQL verification — run `36706455431`: lifecycle, canonical value flow, and deep reconciliation all succeeded.
-- PostgreSQL Production Evidence — run `36706455516`: production PostgreSQL boot evidence succeeded.
-- production-postgres-gate — run `36706455517`: runtime construction and deep value-truth reconciliation succeeded.
-- production-postgresql-e2e — run `36706455530`: production PostgreSQL re-performance succeeded.
+This is not the final overall production lock.
 
-The direct verification job recorded: lifecycle **1 passed**, production value-flow **2 passed**, and deep reconciliation **19 passed**.
-
-## Current gate
-
-Commit `ede6c10f48bf9a193d5719864cf6cc60d287c5bc` adds the historically observed version-1 checksum `494763e210c8a3839972ba21e8705dcf2e6564e5abca9c76161f2f49c6664ec8` to the migration compatibility set. Fresh PostgreSQL/EAI/core workflows are queued for this commit.
-
-Status remains **IN PROGRESS / NOT LOCKED** until those fresh runs complete. No GREEN or production-lock claim is made from queued evidence.
-
-## 2026-10-06 fresh exact-SHA verification
-
-The workflow DSN handoff was corrected in commit f3e46c5dc1abfa1408b8edc55da18c974509867a.
-
-Fresh GitHub Actions evidence for that exact commit:
-
-| Gate | Run | Result |
-|---|---:|---|
-| production-postgresql-gate | 37474177095 | SUCCESS |
-| EAI PostgreSQL Production Proof | 37474177052 | SUCCESS |
-| independent-postgresql-evidence | 37474177070 | SUCCESS |
-| production-postgres | 37474176989 | SUCCESS |
-
-The production-postgresql-gate completed successfully through all production checks:
-
-- production factory and canonical persistence;
-- PostgreSQL production entrypoint boot;
-- concurrent migration bootstrap and checksum stability;
-- deep value-truth reconciliation;
-- EAI production re-performance;
-- real PostgreSQL production value-flow gate.
-
-The independent PostgreSQL evidence run separately verified persisted production value state.
-The production-postgres run separately verified migration/boot, value flow, and deep value truth.
-
-This is fresh exact-SHA technical evidence. It is stronger than the historical evidence above, but it is still not a system-wide production lock declaration.
-
-Status: VERIFIED / NOT LOCKED.
-
-
-## 2026-10-06 current-tip re-performance
-
-The current branch tip `6c938508a06ae2c77309fa4ae2fe72415d252996` was executed by GitHub Actions as verified PR merge ref `0421e85ff29eab8658ccd5998520a0e3b7b51d30` against main `621e7e2acefe243d4c72e783970e1eb833c60b96`. The merge commit is GitHub-verified and has the branch tip as its second parent.
-
-Fresh successful technical gates:
-
-| Gate | Run | Result |
-|---|---:|---|
-| production-postgresql-gate | 37475648916 | SUCCESS |
-| independent-postgresql-evidence | 37475648899 | SUCCESS |
-| EAI PostgreSQL Production Proof | 37475649018 | SUCCESS |
-| production-postgres | 37475648896 | SUCCESS |
-
-The production gate completed: factory/schema, canonical ledger movement + replay, production entrypoint boot, concurrent migration serialization/checksum stability, deep reconciliation, EAI re-performance, and real PostgreSQL value-flow. Direct job evidence recorded `1 passed`, `19 passed`, `1 passed`, and `2 passed` for the corresponding test gates. The independent PostgreSQL evidence job separately recorded `1 passed` against a PostgreSQL 16 service. No SQLite substitution was used for these PostgreSQL gates.
-
-Interpretation: EA-35 PostgreSQL production runtime/value-truth verification is now technically VERIFIED for the current branch tip via the verified merge ref. This is not a system-wide production-lock declaration. IAM/MFA, privileged-access governance, final evidence reconciliation, DR/performance gates, and final independent release decision remain separate gates.
-
-Status: VERIFIED / NOT LOCKED.
+Remaining overall gates include broader recovery/DR, security and IAM governance, observability/performance, release governance, and final independent re-performance across the complete frozen architecture.
