@@ -78,6 +78,7 @@ def _seed_clean(session):
         "new_state": "RELEASED", "event_type": "GERCHAIN_RELEASE",
     }
     session.add(DurableIdempotencyRecord(
+        operation="RELEASE",
         key=tx, fingerprint=IdempotencyEngine.fingerprint(payload),
         result_json="{}", state="COMPLETED", created_at=now, updated_at=now,
     ))
@@ -337,6 +338,7 @@ def test_deep_reconciliation_accepts_lock_as_state_only_evidence():
             created_at=now, updated_at=now,
         ))
         session.add(DurableIdempotencyRecord(
+            operation="LOCK",
             key="tx-lock",
             fingerprint=IdempotencyEngine.fingerprint(payload),
             result_json='{"status":"LOCKED","value_movement":false}',
@@ -485,6 +487,7 @@ def test_deep_reconciliation_does_not_false_positive_state_only_idempotency():
             "target_state": "LOCKED",
         }
         session.add(DurableIdempotencyRecord(
+            operation="LOCK",
             key="lock-only-tx",
             fingerprint=IdempotencyEngine.fingerprint(payload),
             result_json=json.dumps({"status": "LOCKED", "value_movement": False}),
