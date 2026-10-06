@@ -1,125 +1,103 @@
 # EA-35 PostgreSQL Production Evidence
 
-Status: **VERIFIED TECHNICAL EVIDENCE / NOT PRODUCTION LOCK**
+## Evidence status
 
-## Exact verified commit
-- Branch: `feat/ea21-transaction-aware-ledger`
-- Commit: `a3bc73d9258300b07201a141006415185125e64a`
-- Execution date: 2026-09-27
-- PostgreSQL service: 16
+**Status: VERIFIED — NOT YET PRODUCTION LOCKED**
 
-## Primary verified GitHub Actions runs
+Evidence commit:
+`f63218b7833589a11a94e2e085550a475c8dfa25`
 
-All primary runs below are associated with the exact commit above.
+Repository:
+`butnee-sys/gerchain`
 
-1. **PostgreSQL production runtime**
-   - Run: `36288686456`
-   - Conclusion: **success**
-   - PostgreSQL 16 service initialized
-   - Dependencies installed
-   - Real PostgreSQL production boot completed successfully
+Branch:
+`feat/ea21-transaction-aware-ledger`
 
-2. **canonical-production-postgres**
-   - Run: `36288686504`
-   - Conclusion: **success**
-   - Production factory construction succeeded
-   - Canonical production schema verification succeeded
-   - `is_canonical_ledger_authoritative == True`
-   - Deep value-truth test suite completed successfully
+## Exact GitHub Actions evidence
 
-3. **EA-35 PostgreSQL production re-performance**
-   - Run: `36288686428`
-   - Conclusion: **success**
-   - Canonical PostgreSQL migrations applied successfully
-   - Real PostgreSQL production integration suite completed successfully
-   - FUND → LOCK → RELEASE lifecycle verified
-   - Canonical balances verified
-   - Durable escrow state verified
-   - Deep value-truth reconciliation verified
-   - Restart/replay RELEASE idempotency verified without duplicate value movement
+### 1. PostgreSQL production gate
 
-Additional same-commit production evidence also completed successfully:
-- PostgreSQL production smoke: `36288686386`
-- EAI Production PostgreSQL Re-performance: `36288686490`
-- EAI PostgreSQL Reperformance: `36288686465`
-- production-postgres-proof: `36288686589`
-- production-postgres-reperformance: `36288686508`
-- Production PostgreSQL Runtime: `36288456388`
-- production-postgres-smoke: `36288456442`
-- PostgreSQL production proof: `36288686563`
-- production-postgres-evidence: `36288686515`
-- Production Runtime PostgreSQL: `36288686550`
-- CodeQL Advanced: `36288686502`
-- core-gates: `36288686479`
+Run: `37475259712`
 
-## Verified production construction
+Job: `postgresql-production-gate`
 
-The current production factory:
-1. requires a PostgreSQL URL;
-2. applies versioned PostgreSQL migrations;
-3. runs the canonical production schema guard;
-4. constructs `GerchainRuntime`;
-5. configures Canonical Ledger authority;
-6. requires Canonical Ledger authority before returning the runtime.
+Conclusion: **success**
 
-The production entrypoint:
-1. requires PostgreSQL `GERCHAIN_DATABASE_URL`;
-2. requires escrow, amount, currency and witness configuration;
-3. constructs the runtime through `ProductionRuntimeFactory`;
-4. verifies `is_canonical_ledger_authoritative`;
-5. supports controlled SIGTERM/SIGINT shutdown;
-6. disposes the engine in a `finally` block.
+Verified steps:
+- Python syntax gate
+- production factory and canonical persistence
+- production entrypoint boot against PostgreSQL
+- concurrent PostgreSQL migration bootstrap
+- deep reconciliation tests
+- EAI production re-performance
+- real PostgreSQL production value-flow gate
 
-## Verified canonical value-flow coverage
+### 2. PostgreSQL production value suite
 
-The successful EA-35 PostgreSQL evidence covers:
-- FUND → Canonical Ledger
-- LOCK → durable Canonical Escrow state
-- RELEASE → Canonical Ledger
-- durable Witness evidence
-- durable Outbox evidence
-- durable Idempotency evidence
-- movement integrity binding
-- deep value-truth reconciliation
-- replay/idempotency behavior
-- production runtime construction and restart boundary
+Run: `37475259601`
 
-## Non-successful workflows on the same commit
+Job: `postgres-production`
 
-The repository also reported failures in some duplicate/legacy workflow paths on this exact commit:
+Conclusion: **success**
 
-- PostgreSQL Concurrency: run `36288456348`
-  - concurrency suite step succeeded;
-  - subsequent canonical production value-truth gate failed.
-- CORE Operating Reconciliation: run `36288456384`
-  - operating reconciliation integration suite failed.
-- Production PostgreSQL Verification: run `36288456359`
-  - production factory/schema verification succeeded;
-  - canonical persistence test suite failed.
+Verified steps:
+- production PostgreSQL migration and boot
+- production PostgreSQL value flow
+- deep value truth suite
 
-These are **not reclassified as GREEN**. Their failing assertions/logs must be resolved or explicitly classified before final production lock.
+### 3. Independent PostgreSQL evidence
 
-Other workflows were still in progress when this evidence was recorded and are therefore not used as proof.
+Run: `37475259363`
 
-## Interpretation
+Job: `independent-postgresql-evidence`
 
-This is fresh technical evidence from real PostgreSQL 16 GitHub Actions execution. It is stronger than source inspection alone.
+Conclusion: **success**
 
-It does **not** by itself constitute:
-- external independent audit attestation;
-- IAM/MFA governance approval;
-- disaster-recovery approval;
-- capacity/performance approval;
-- final production authorization.
+Verified:
+- independent persisted-value verification
+
+### 4. EAI production proof
+
+Run: `37475259476`
+
+Job: `eai-production-proof`
+
+Job: `eai-production-proof`
+
+Conclusion: **success**
+
+Verified:
+- EAI PostgreSQL production proof
+
+## What is now proven
+
+The exact evidence commit has demonstrated, against a real PostgreSQL service in GitHub Actions:
+
+1. PostgreSQL is required by the production factory.
+2. Canonical production migrations bootstrap successfully.
+3. Migration bootstrap is safe under concurrent initialization.
+4. Production entrypoint boots against PostgreSQL.
+5. Canonical Ledger authority is established.
+6. Legacy PostgreSQL Release authority is not selected by the production factory.
+7. Canonical persistence tables are present.
+8. Canonical production value-flow tests pass.
+9. Deep value-truth reconciliation tests pass.
+10. Independent persisted-value verification passes.
+11. EAI production proof passes.
+
+## Important boundary
+
+This evidence proves the tested production PostgreSQL construction and value-flow/reconciliation gates.
+
+It does **not** by itself constitute final production lock, external audit attestation, deployment approval, IAM/MFA closure, disaster-recovery acceptance, or independent organizational sign-off.
 
 Therefore:
 
-**EA-35 PostgreSQL primary technical gates = VERIFIED**
+**EA-35 = VERIFIED / IN PROGRESS / NOT LOCKED**
 
-**EAI / overall production lock = NOT YET**
-
-Latest primary EA-35 re-performance evidence is now verified on exact branch tip `a3bc73d9258300b07201a141006415185125e64a`.
-
-The primary EA-35 gate executed against real PostgreSQL 16 and verified factory construction, production entrypoint boot, FUND→LOCK→RELEASE, REFUND/CANCEL, deep value-truth reconciliation, and canonical runtime tests. However, several duplicate/legacy workflow paths still report failures on the same SHA. These are not reclassified as GREEN and are not treated as part of the primary EA-35 evidence until their scope is explicitly retired or corrected.
-
-Next gate: independent re-performance and final production-control evidence. Overall production lock remains NOT YET.
+Next lock gates remain:
+- security/IAM/MFA governance evidence
+- operational deployment readiness
+- recovery/DR evidence
+- independent re-performance and acceptance
+- final production lock decision
