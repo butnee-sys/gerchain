@@ -87,17 +87,19 @@ def deep_reconcile_value_truth(session: Session) -> DeepValueTruthReport:
             issue("INVALID_AMOUNT", tx, "canonical movement amount must be positive")
         if not movement.operation:
             issue("MISSING_OPERATION", tx, "canonical movement operation is missing")
-        if not movement.escrow_id:
+        is_settlement = movement.operation == "SETTLEMENT"
+        if not movement.escrow_id and not is_settlement:
             issue("MISSING_ESCROW_ID", tx, "canonical movement escrow reference is missing")
-        elif movement.escrow_id not in escrow_by_id:
+        elif movement.escrow_id and movement.escrow_id not in escrow_by_id:
             issue("ORPHAN_ESCROW_REFERENCE", tx, "movement references a missing canonical escrow")
 
+        expected_evidence_aggregate = tx if is_settlement else movement.escrow_id
         witness = witness_by_tx.get(tx)
         if witness is None:
             issue("UNWITNESSED_MOVEMENT", tx, "movement has no witness")
         elif (witness.event_type, witness.escrow_id, witness.amount) != (
             f"GERCHAIN_{movement.operation}",
-            movement.escrow_id,
+            expected_evidence_aggregate,
             movement.amount,
         ):
             issue("WITNESS_MISMATCH", tx, "witness does not match canonical movement")
@@ -106,7 +108,7 @@ def deep_reconcile_value_truth(session: Session) -> DeepValueTruthReport:
         if not matching_outboxes:
             issue("UNOUTBOXED_MOVEMENT", tx, "movement has no outbox evidence")
         elif not any(
-            e.aggregate_id == movement.escrow_id
+            e.aggregate_id == expected_evidence_aggregate
             and e.event_type == f"GERCHAIN_{movement.operation}"
             for e in matching_outboxes
         ):
