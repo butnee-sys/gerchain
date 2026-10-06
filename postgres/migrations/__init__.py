@@ -53,7 +53,7 @@ def apply_migrations(connection, migration_dir: Path) -> None:
     # and schema changes remain one serialized bootstrap transaction.
     # Session-scoped lock prevents a failed migration transaction from releasing the
     # serialization guard before the connection has finished its bootstrap attempt.
-    _execute(connection, "SELECT pg_advisory_lock(8342719)")
+    # Serialize concurrent first boots inside the same transaction that writes schema_version.\n    _execute(connection, "SELECT pg_advisory_xact_lock(8342719)")
     _execute(
         connection,
         "CREATE TABLE IF NOT EXISTS schema_version ("
