@@ -18,3 +18,9 @@ The production runtime construction was corrected to instantiate ProductionRunti
 
 ## 2026-10-06 verification trigger — fresh current-tip evidence
 This trigger exists solely to force fresh CI evidence against the current branch tip after the production runtime and migration hardening changes. Prior runs remain historical evidence only.
+
+
+## 2026-10-06 verification trigger — final current-tip re-performance
+This evidence-only revision requires fresh exact-SHA PostgreSQL production, independent PostgreSQL evidence, CORE reconciliation, and CodeQL execution against the resulting commit. No previous SHA is reused as current proof.
+
+Decision rule: EA-35 remains VERIFIED / NOT LOCKED until the resulting exact SHA has fresh successful canonical production evidence and the final lock gaps are reviewed.
