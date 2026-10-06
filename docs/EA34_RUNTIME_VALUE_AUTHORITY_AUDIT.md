@@ -146,3 +146,55 @@ It is **not yet migration-upgrade evidence for an existing production database**
 
 Current status:
 **EA-35 — IN PROGRESS / NOT LOCKED.**
+
+
+## EA-35.28 — Exact branch-tip production verification — 2026-10-06
+
+Branch tip verified:
+- Branch: `feat/ea21-transaction-aware-ledger`
+- Exact commit: `f11fcb6411f1458c7bb4696566a695a52141b0c3`
+
+Fresh GitHub Actions evidence attached to this exact commit:
+- `production-postgres` — run `37463305181` — SUCCESS
+- `production-postgresql-gate` — run `37463305107` — SUCCESS
+- `EAI PostgreSQL Production Proof` — run `37463304934` — SUCCESS
+- `independent-postgresql-evidence` — run `37463304855` — SUCCESS
+- `CORE Operating Reconciliation` — run `37463305050` — SUCCESS
+- `CodeQL Advanced` — run `37463304876` — SUCCESS
+
+Production PostgreSQL job `112267996297` completed successfully through:
+1. PostgreSQL migration and boot verification.
+2. Production PostgreSQL value-flow verification.
+3. Deep value-truth verification.
+
+Production PostgreSQL gate job `112268002110` completed successfully through:
+1. Exact evidence-commit recording.
+2. Python syntax gate.
+3. Canonical persistence verification.
+4. Production entrypoint boot against PostgreSQL.
+5. Deep reconciliation.
+6. EAI production re-performance.
+7. Real PostgreSQL production value-flow gate.
+
+Independent persisted-value verification job `112267995003` also completed successfully.
+
+### Evidence interpretation
+
+The previous failed executions on 2026-09-27 are historical failure evidence, not current branch-tip failures. They exposed migration publication/checksum, environment wiring, transaction-binding and reconciliation-test defects; subsequent commits corrected those paths.
+
+Current branch-tip PostgreSQL production evidence is therefore:
+**VERIFIED — exact branch tip, real PostgreSQL, production runtime, value flow, deep reconciliation, EAI proof, and independent persisted-value verification.**
+
+### Lock boundary
+
+This evidence is sufficient to close the **EA-35 PostgreSQL production verification gate**.
+
+It does not by itself close the broader fundamental-architecture lock. Remaining gates are:
+- current `core-gates` run `37463305121` is still in progress;
+- legacy value-store physical removal/archive;
+- organizational IAM/MFA assurance;
+- main-branch governance;
+- final independent architecture/oracle package.
+
+**EA-35 PostgreSQL gate: CLOSED / VERIFIED.**
+**Overall fundamental architecture: NOT LOCKED.**
