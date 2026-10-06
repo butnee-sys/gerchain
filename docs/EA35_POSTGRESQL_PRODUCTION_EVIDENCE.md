@@ -127,3 +127,23 @@ The production-postgres run separately verified migration/boot, value flow, and 
 This is fresh exact-SHA technical evidence. It is stronger than the historical evidence above, but it is still not a system-wide production lock declaration.
 
 Status: VERIFIED / NOT LOCKED.
+
+
+## 2026-10-06 current-tip re-performance
+
+The current branch tip `6c938508a06ae2c77309fa4ae2fe72415d252996` was executed by GitHub Actions as verified PR merge ref `0421e85ff29eab8658ccd5998520a0e3b7b51d30` against main `621e7e2acefe243d4c72e783970e1eb833c60b96`. The merge commit is GitHub-verified and has the branch tip as its second parent.
+
+Fresh successful technical gates:
+
+| Gate | Run | Result |
+|---|---:|---|
+| production-postgresql-gate | 37475648916 | SUCCESS |
+| independent-postgresql-evidence | 37475648899 | SUCCESS |
+| EAI PostgreSQL Production Proof | 37475649018 | SUCCESS |
+| production-postgres | 37475648896 | SUCCESS |
+
+The production gate completed: factory/schema, canonical ledger movement + replay, production entrypoint boot, concurrent migration serialization/checksum stability, deep reconciliation, EAI re-performance, and real PostgreSQL value-flow. Direct job evidence recorded `1 passed`, `19 passed`, `1 passed`, and `2 passed` for the corresponding test gates. The independent PostgreSQL evidence job separately recorded `1 passed` against a PostgreSQL 16 service. No SQLite substitution was used for these PostgreSQL gates.
+
+Interpretation: EA-35 PostgreSQL production runtime/value-truth verification is now technically VERIFIED for the current branch tip via the verified merge ref. This is not a system-wide production-lock declaration. IAM/MFA, privileged-access governance, final evidence reconciliation, DR/performance gates, and final independent release decision remain separate gates.
+
+Status: VERIFIED / NOT LOCKED.
