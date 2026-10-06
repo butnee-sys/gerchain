@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 import hashlib
 import re
+import time
 
 from sqlalchemy import text
 
@@ -47,6 +48,22 @@ def _execute(connection, sql: str, params: dict | None = None):
 
 
 def apply_migrations(connection, migration_dir: Path) -> None:
+    """Apply migrations with serialized bootstrap and bounded catalog-race retry."""
+    for attempt in range(1, 6):
+        try:
+            _apply_migrations_once(connection, migration_dir)
+            return
+        except Exception as exc:
+            sqlstate = getattr(exc, "sqlstate", None)
+            detail = str(exc)
+            retryable = sqlstate == "23505" and (
+                "schema_version" in detail or "pg_type_typname_nsp_index" in detail
+            )
+            if not retryable or attempt == 5:
+                raise
+            connection.rollback()
+            time.sleep(0.05 * (2 ** (attempt - 1)))
+def _apply_migrations_once(connection, migration_dir: Path) -> None:
     """Apply ordered PostgreSQL migrations exactly once with checksum locking."""
     # Transaction-scoped advisory lock makes concurrent first boots mutually exclusive.
     # The lock is released automatically by COMMIT/ROLLBACK, so migration history
