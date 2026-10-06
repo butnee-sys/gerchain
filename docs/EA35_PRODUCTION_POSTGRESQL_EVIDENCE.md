@@ -89,19 +89,23 @@ This is strong repository-level technical evidence from a real PostgreSQL 16 exe
 
 ## EA-35.13 verified evidence — 2026-10-06
 
-- Tested head SHA: `48b2fcbd802e0607f92f0e1ed90c940d0ca71e2b`
-- Production PostgreSQL run: `37438638354` — SUCCESS
-- EAI PostgreSQL Production Proof: `37438638438` — SUCCESS
-- Independent PostgreSQL evidence: `37438638329` — SUCCESS
-- Production job steps verified: PostgreSQL service initialization; dependency installation; production migration/boot; production value flow; deep value-truth suite; clean container shutdown.
-- EAI proof verified on PostgreSQL 16 service.
-- Independent evidence verified persisted value state independently on PostgreSQL.
+- Initial production smoke head: `48b2fcbd802e0607f92f0e1ed90c940d0ca71e2b`
+- Initial production PostgreSQL run: `37438638354` — SUCCESS
+- Initial EAI PostgreSQL Production Proof: `37438638438` — SUCCESS
+- Initial independent PostgreSQL evidence: `37438638329` — SUCCESS
+- Full-lifecycle extension initially exposed a test expectation error only: actual persisted evidence was 9 witnesses/outbox/idempotency records, while the test expected 8.
+- Corrected tested head: `3d8b3c5da54f7f6c4a9721190b851380d9cc010d`
+- Corrected production PostgreSQL run: `37438978065` — SUCCESS
+- Corrected independent PostgreSQL evidence: `37438978112` — SUCCESS
+- Corrected production PostgreSQL gate: `37438978166` — SUCCESS
+- Corrected gate verified: syntax; production factory and canonical persistence; production entrypoint boot against PostgreSQL; deep value-truth tests; EAI production re-performance; real PostgreSQL value-flow including FUND, LOCK, RELEASE, REFUND, CANCEL and SETTLEMENT.
+- PostgreSQL service: version 16.
+- Full lifecycle reconciliation: matched; canonical movement count 7; witness count 9; outbox count 9.
 
 ### Gate decision
-EA-35.13 production PostgreSQL re-performance is **VERIFIED** for the tested commit above. This is repository technical evidence, not an external certification or final production lock.
+EA-35.13 production PostgreSQL re-performance is **VERIFIED** for the corrected tested commit above. This is repository technical evidence, not an external certification or final production lock.
 
 ### Remaining lock gates
-- full lifecycle coverage including REFUND/CANCEL/SETTLEMENT in the same independent production evidence set
 - recovery/restart evidence
 - security/IAM/MFA governance evidence
 - final independent re-performance and release evidence reconciliation
