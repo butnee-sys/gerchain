@@ -1,6 +1,12 @@
 name: independent-postgresql-evidence
 
 on:
+  push:
+    branches:
+      - "feat/ea21-transaction-aware-ledger"
+  pull_request:
+    branches:
+      - main
   workflow_dispatch:
 jobs:
   independent-postgresql-evidence:
