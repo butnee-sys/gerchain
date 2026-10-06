@@ -84,17 +84,14 @@ def checksum(sql: str) -> str:
 
 @contextmanager
 def _native_migration_transaction(conn):
-    """Serialize native psycopg migration runners with a session advisory lock."""
+    """Serialize native psycopg migration runners inside one transaction."""
     if _connection_in_transaction(conn):
         raise RuntimeError("migration runner requires a clean psycopg transaction")
-    # Serialize bootstrap at the session level so callers with an already-open
-    # implicit transaction cannot bypass the migration lock.
-    conn.execute("SELECT pg_advisory_lock(%s)", (MIGRATION_LOCK_KEY,))
-    try:
-        with conn.transaction():
-            yield
-    finally:
-        conn.execute("SELECT pg_advisory_unlock(%s)", (MIGRATION_LOCK_KEY,))
+    # The advisory lock is transaction-scoped so schema publication and the
+    # schema_version row are protected by the same PostgreSQL transaction.
+    with conn.transaction():
+        conn.execute("SELECT pg_advisory_xact_lock(%s)", (MIGRATION_LOCK_KEY,))
+        yield
 
 
 @contextmanager
@@ -267,4 +264,4 @@ def apply_migrations(conn, migration_dir: str | Path) -> None:
     # EA-35.23: fresh verification trigger after canonical production runtime correction.
 
     finally:
-        conn.execute("SELECT pg_advisory_unlock(%s)", (MIGRATION_LOCK_KEY,))
+        pass
