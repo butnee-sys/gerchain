@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-# EA-35.26: trigger fresh production PostgreSQL re-performance on the current canonical branch.
+# EA-35.27: migration bootstrap corrected; rerun production PostgreSQL evidence.
 
 import os
 import signal
