@@ -3,10 +3,10 @@
 ## Status
 - Production PostgreSQL gate: **PASS**
 - Production lock: **NOT YET LOCKED**
-- Evidence commit: `b7631fbe62770141835b13d982287db9f3a0cbec`
-- Workflow run: `37411914509`
+- Evidence commit: `6caa3648dcb0bd168c52811cbdcf10bdf55c97e0` (current verified head)
+- Workflow runs: `37434010046` (EAI proof), `37434010060` (production PostgreSQL), `37434009985` (independent PostgreSQL evidence)
 - Job: `postgresql-production-gate`
-- Verified: 2026-10-06 (fresh run)
+- Verified: 2026-10-06 (fresh runs)
 
 ## Fresh PostgreSQL evidence
 
