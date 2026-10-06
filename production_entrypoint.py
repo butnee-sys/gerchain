@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+# EA-35.26: trigger fresh production PostgreSQL re-performance on the current canonical branch.
+
 import os
 import signal
 import time
