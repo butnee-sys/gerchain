@@ -242,30 +242,27 @@ def apply_migrations(conn, migration_dir: str | Path) -> None:
             # Compatibility repair: historical version 6 may already be recorded
             # while the physical idempotency table still exposes idempotency_key.
             _execute(conn, "ALTER TABLE IF EXISTS gerchain_idempotency_records ADD COLUMN IF NOT EXISTS key VARCHAR(255)")
-            _execute(conn, """
-                DO $
-                BEGIN
-                    IF EXISTS (
-                        SELECT 1 FROM information_schema.columns
-                        WHERE table_schema='public' AND table_name='gerchain_idempotency_records'
-                          AND column_name='idempotency_key'
-                    ) THEN
-                        UPDATE gerchain_idempotency_records
-                        SET key = idempotency_key
-                        WHERE key IS NULL;
-                    END IF;
-                END
-                $;
-            """)
-            _execute(conn, """
-                DO $
-                BEGIN
-                    IF EXISTS (SELECT 1 FROM gerchain_idempotency_records WHERE key IS NULL) THEN
-                        RAISE EXCEPTION 'cannot canonicalize idempotency records: NULL key remains';
-                    END IF;
-                END
-                $;
-            """)
+            legacy_key_column = _execute(
+                conn,
+                """
+                SELECT EXISTS (
+                    SELECT 1 FROM information_schema.columns
+                    WHERE table_schema='public' AND table_name='gerchain_idempotency_records'
+                      AND column_name='idempotency_key'
+                )
+                """,
+            ).scalar()
+            if legacy_key_column:
+                _execute(
+                    conn,
+                    "UPDATE gerchain_idempotency_records SET key = idempotency_key WHERE key IS NULL",
+                )
+            null_key = _execute(
+                conn,
+                "SELECT EXISTS (SELECT 1 FROM gerchain_idempotency_records WHERE key IS NULL)",
+            ).scalar()
+            if null_key:
+                raise RuntimeError("cannot canonicalize idempotency records: NULL key remains")
             _execute(conn, "ALTER TABLE gerchain_idempotency_records ALTER COLUMN key SET NOT NULL")
             _execute(conn, "CREATE UNIQUE INDEX IF NOT EXISTS uq_gerchain_idempotency_records_key ON gerchain_idempotency_records (key)")
     except Exception:
