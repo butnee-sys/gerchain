@@ -85,24 +85,36 @@ def checksum(sql: str) -> str:
 
 @contextmanager
 def _native_migration_transaction(conn):
-    """Serialize native psycopg migration runners inside one transaction."""
+    """Serialize native psycopg migration runners for the full publication lifecycle."""
     if _connection_in_transaction(conn):
         raise RuntimeError("migration runner requires a clean psycopg transaction")
-    # The advisory lock is transaction-scoped so schema publication and the
-    # schema_version row are protected by the same PostgreSQL transaction.
-    with conn.transaction():
-        conn.execute("SELECT pg_advisory_xact_lock(%s)", (MIGRATION_LOCK_KEY,))
-        yield
+
+    # Use a session-scoped advisory lock so the lock acquisition itself cannot
+    # race with transaction visibility during concurrent first boot.
+    conn.execute("SELECT pg_advisory_lock(%s)", (MIGRATION_LOCK_KEY,))
+    conn.commit()
+    try:
+        with conn.transaction():
+            yield
+    finally:
+        conn.execute("SELECT pg_advisory_unlock(%s)", (MIGRATION_LOCK_KEY,))
+        conn.commit()
 
 
 @contextmanager
 def _sqlalchemy_migration_transaction(conn):
-    """Serialize SQLAlchemy migration runners with a session advisory lock."""
+    """Serialize SQLAlchemy migration runners for the full publication lifecycle."""
     if conn.in_transaction():
         raise RuntimeError("migration runner requires a clean SQLAlchemy transaction")
-    with conn.begin():
-        conn.exec_driver_sql("SELECT pg_advisory_xact_lock(%s)", (MIGRATION_LOCK_KEY,))
-        yield
+
+    conn.exec_driver_sql("SELECT pg_advisory_lock(%s)", (MIGRATION_LOCK_KEY,))
+    conn.commit()
+    try:
+        with conn.begin():
+            yield
+    finally:
+        conn.exec_driver_sql("SELECT pg_advisory_unlock(%s)", (MIGRATION_LOCK_KEY,))
+        conn.commit()
 
 def _transaction(conn):
     """Return a real transaction context for SQLAlchemy or native psycopg."""
