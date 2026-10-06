@@ -79,6 +79,14 @@ def test_eai_production_runtime_reperformance():
     runtime = factory.create()
     assert runtime.is_canonical_ledger_authoritative
 
+    # Isolate this production re-performance from earlier tests sharing the CI PostgreSQL service.
+    with engine.begin() as connection:
+        connection.exec_driver_sql(
+            "TRUNCATE TABLE gerchain_transaction_witnesses, gerchain_outbox_events, "
+            "gerchain_idempotency_records, gerchain_ledger_movements, "
+            "gerchain_ledger_accounts, escrows RESTART IDENTITY CASCADE"
+        )
+
     with factory.session_factory() as session:
         for account_id, balance in (
             (source, 100),
