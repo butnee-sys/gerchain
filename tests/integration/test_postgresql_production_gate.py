@@ -234,7 +234,7 @@ def test_real_postgresql_full_value_lifecycle_and_settlement():
     }
     assert report.matched, [issue.__dict__ for issue in report.issues]
     assert report.canonical_movement_count == 7
-    assert report.witness_count == 8
-    assert report.outbox_count == 8
+    assert report.witness_count == 9
+    assert report.outbox_count == 9
 
     engine.dispose()
