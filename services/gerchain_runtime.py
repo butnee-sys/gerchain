@@ -335,27 +335,6 @@ class GerchainRuntime:
             timestamp=timestamp,
             evidence=evidence,
         )
-
-    def lock(self, transaction_id: str, timestamp: str, evidence: Any):
-        if self.is_canonical_ledger_authoritative:
-            from persistence.lock_escrow import lock_escrow_in_transaction
-
-            with self._session_factory() as session:
-                result = lock_escrow_in_transaction(
-                    session,
-                    transaction_id=transaction_id,
-                    escrow_id=self.escrow_engine.escrow_id,
-                    payload={"timestamp": timestamp, "evidence": evidence},
-                )
-                session.commit()
-                return result
-
-        return self.escrow_service.lock(
-            transaction_id=transaction_id,
-            timestamp=timestamp,
-            evidence=evidence,
-        )
-
     def release(
         self,
         *,
