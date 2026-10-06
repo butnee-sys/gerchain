@@ -33,6 +33,10 @@ def _session_factory():
             engine=engine,
             session_factory=sessionmaker(bind=engine),
         )
+        with engine.begin() as connection:
+            connection.exec_driver_sql(
+                "TRUNCATE TABLE gerchain_transaction_witnesses, gerchain_outbox_events, gerchain_idempotency_records, gerchain_ledger_movements, gerchain_ledger_accounts, escrows RESTART IDENTITY CASCADE"
+            )
     else:
         AtomicLedgerBase.metadata.create_all(engine)
         EscrowBase.metadata.create_all(engine)
