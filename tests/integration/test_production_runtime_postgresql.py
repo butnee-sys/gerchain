@@ -12,7 +12,7 @@ from persistence.atomic_ledger import LedgerAccountModel, LedgerMovementModel
 from persistence.atomic_value_transaction import TransactionWitness
 from persistence.recovery_outbox import OutboxEvent
 from persistence.durable_idempotency import DurableIdempotencyRecord
-from services.gerchain_runtime_factory import ProductionRuntimeFactory
+from services.gerchain_runtime_factory import ProductionRuntimeConfig, ProductionRuntimeFactory
 
 
 def test_production_runtime_boots_and_executes_canonical_postgresql_flow() -> None:
@@ -20,7 +20,7 @@ def test_production_runtime_boots_and_executes_canonical_postgresql_flow() -> No
     engine = create_engine(database_url, pool_pre_ping=True)
     # The production factory must construct the canonical persistence boundary.
     factory = ProductionRuntimeFactory(
-        config=__import__("services.gerchain_runtime_factory", fromlist=["ProductionRuntimeConfig"]).ProductionRuntimeConfig(
+        config=ProductionRuntimeConfig(
             database_url=database_url,
             escrow_id="pg-e2e-escrow",
             amount=100,
