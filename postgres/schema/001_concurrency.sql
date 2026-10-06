@@ -108,3 +108,13 @@ CREATE TABLE IF NOT EXISTS gerchain_idempotency_records (
     created_at TIMESTAMPTZ NOT NULL,
     updated_at TIMESTAMPTZ NOT NULL
 );
+
+-- Backward-compatible completion of the durable escrow aggregate for deployments
+-- that already contain the legacy escrows table.
+ALTER TABLE escrows ADD COLUMN IF NOT EXISTS refund_destination TEXT;
+ALTER TABLE escrows ADD COLUMN IF NOT EXISTS currency VARCHAR(16);
+ALTER TABLE escrows ADD COLUMN IF NOT EXISTS version BIGINT NOT NULL DEFAULT 0;
+ALTER TABLE escrows ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ;
+UPDATE escrows SET created_at = COALESCE(created_at, updated_at, now()) WHERE created_at IS NULL;
+ALTER TABLE escrows ALTER COLUMN created_at SET NOT NULL;
+UPDATE escrows SET refund_destination = COALESCE(refund_destination, sender_address) WHERE refund_destination IS NULL;
