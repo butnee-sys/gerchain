@@ -311,6 +311,7 @@ class GerchainRuntime:
                 )
         return self.escrow_service.get_state()
 
+    # EA-35.26: keep canonical FUND runtime syntax explicit for fresh merge verification.
     def fund(self, transaction_id: str, source: str, timestamp: str, evidence: Any):
         if self.is_canonical_ledger_authoritative:
             from persistence.fund_escrow import fund_escrow_in_transaction
