@@ -7,7 +7,7 @@ import pytest
 from sqlalchemy import select
 
 from persistence.escrow_aggregate import CanonicalEscrow, EscrowState
-from persistence.atomic_ledger import LedgerAccountModel
+from persistence.atomic_ledger import LedgerAccountModel, LedgerMovementModel
 from persistence.atomic_value_transaction import TransactionWitness
 from persistence.recovery_outbox import OutboxEvent
 from persistence.durable_idempotency import DurableIdempotencyRecord
@@ -111,7 +111,7 @@ def test_postgresql_canonical_fund_lock_release_proof(production_runtime):
         escrow = session.get(CanonicalEscrow, "eai-pg-proof")
         source = session.get(LedgerAccountModel, "pg-source")
         beneficiary = session.get(LedgerAccountModel, "pg-beneficiary")
-        movement = session.execute(select(__import__("persistence.atomic_ledger", fromlist=["LedgerMovementModel"]).LedgerMovementModel).where(__import__("persistence.atomic_ledger", fromlist=["LedgerMovementModel"]).LedgerMovementModel.transaction_id == "pg-release-1")).scalar_one()
+        movement = session.execute(select(LedgerMovementModel).where(LedgerMovementModel.transaction_id == "pg-release-1")).scalar_one()
         witness = session.execute(select(TransactionWitness).where(TransactionWitness.transaction_id == "pg-release-1")).scalar_one()
         outbox = session.execute(select(OutboxEvent).where(OutboxEvent.event_id == "gerchain_released:pg-release-1")).scalar_one()
         idem = session.execute(select(DurableIdempotencyRecord).where(DurableIdempotencyRecord.key == "pg-release-1")).scalar_one()
