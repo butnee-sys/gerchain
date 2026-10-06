@@ -52,103 +52,103 @@ def apply_migrations(connection, migration_dir: Path) -> None:
     # The lock is released automatically by COMMIT/ROLLBACK, so migration history
     # and schema changes remain one serialized bootstrap transaction.
     _execute(connection, "SELECT pg_advisory_xact_lock(8342719)")
-        _execute(
-            connection,
-            "CREATE TABLE IF NOT EXISTS schema_version ("
-            "version BIGINT PRIMARY KEY, "
-            "checksum TEXT NOT NULL, "
-            "applied_at TIMESTAMPTZ NOT NULL DEFAULT now()"
-            ")",
-        )
+    _execute(
+        connection,
+        "CREATE TABLE IF NOT EXISTS schema_version ("
+        "version BIGINT PRIMARY KEY, "
+        "checksum TEXT NOT NULL, "
+        "applied_at TIMESTAMPTZ NOT NULL DEFAULT now()"
+        ")",
+    )
 
-        files = sorted(
-            p for p in migration_dir.glob("*.sql")
-            if _VERSION_RE.match(p.name)
-        )
-        by_version: dict[int, list[Path]] = {}
-        for path in files:
-            version = int(_VERSION_RE.match(path.name).group(1))
-            by_version.setdefault(version, []).append(path)
+    files = sorted(
+        p for p in migration_dir.glob("*.sql")
+        if _VERSION_RE.match(p.name)
+    )
+    by_version: dict[int, list[Path]] = {}
+    for path in files:
+        version = int(_VERSION_RE.match(path.name).group(1))
+        by_version.setdefault(version, []).append(path)
 
-        selected: list[tuple[int, Path, set[str]]] = []
-        for version in sorted(by_version):
-            candidates = by_version[version]
-            preferred_name = _PREFERRED_MIGRATIONS.get(version)
-            preferred = next((p for p in candidates if p.name == preferred_name), None)
-            if preferred is None:
-                if len(candidates) != 1:
-                    raise RuntimeError(
-                        f"migration version {version} has no unique authoritative file: "
-                        + ", ".join(p.name for p in candidates)
-                    )
-                preferred = candidates[0]
-            historical_checksums = {
-                hashlib.sha256(p.read_text(encoding="utf-8").encode("utf-8")).hexdigest()
-                for p in candidates
-            }
-            selected.append((version, preferred, historical_checksums))
-
-        for version, path, historical_checksums in selected:
-            sql = path.read_text(encoding="utf-8")
-            checksum = hashlib.sha256(sql.encode("utf-8")).hexdigest()
-
-            if hasattr(connection, "exec_driver_sql"):
-                row = connection.execute(
-                    text("SELECT checksum FROM schema_version WHERE version = :version"),
-                    {"version": version},
-                ).scalar_one_or_none()
-            else:
-                row = connection.execute(
-                    "SELECT checksum FROM schema_version WHERE version = %s",
-                    (version,),
-                ).fetchone()
-                row = row[0] if row else None
-
-            if row is not None:
-                if row != checksum and row not in historical_checksums:
-                    raise RuntimeError(
-                        f"migration checksum mismatch for version {version}: "
-                        f"database={row} file={checksum}"
-                    )
-                continue
-
-            if hasattr(connection, "exec_driver_sql"):
-                connection.exec_driver_sql(
-                    sql,
-                    execution_options={"no_parameters": True},
+    selected: list[tuple[int, Path, set[str]]] = []
+    for version in sorted(by_version):
+        candidates = by_version[version]
+        preferred_name = _PREFERRED_MIGRATIONS.get(version)
+        preferred = next((p for p in candidates if p.name == preferred_name), None)
+        if preferred is None:
+            if len(candidates) != 1:
+                raise RuntimeError(
+                    f"migration version {version} has no unique authoritative file: "
+                    + ", ".join(p.name for p in candidates)
                 )
-                connection.execute(
-                    text(
-                        "INSERT INTO schema_version(version, checksum) "
-                        "VALUES (:version, :checksum) "
-                        "ON CONFLICT (version) DO NOTHING"
-                    ),
-                    {"version": version, "checksum": checksum},
-                )
-                recorded = connection.execute(
-                    text("SELECT checksum FROM schema_version WHERE version = :version"),
-                    {"version": version},
-                ).scalar_one()
-                if recorded != checksum and recorded not in historical_checksums:
-                    raise RuntimeError(
-                        f"migration checksum mismatch for version {version}: "
-                        f"database={recorded} file={checksum}"
-                    )
-            else:
-                connection.execute(sql)
-                connection.execute(
-                    "INSERT INTO schema_version(version, checksum) VALUES (%s, %s) "
-                    "ON CONFLICT (version) DO NOTHING",
-                    (version, checksum),
-                )
-                recorded = connection.execute(
-                    "SELECT checksum FROM schema_version WHERE version = %s",
-                    (version,),
-                ).fetchone()[0]
-                if recorded != checksum and recorded not in historical_checksums:
-                    raise RuntimeError(
-                        f"migration checksum mismatch for version {version}: "
-                        f"database={recorded} file={checksum}"
-                    )
+            preferred = candidates[0]
+        historical_checksums = {
+            hashlib.sha256(p.read_text(encoding="utf-8").encode("utf-8")).hexdigest()
+            for p in candidates
+        }
+        selected.append((version, preferred, historical_checksums))
 
-        connection.commit()
+    for version, path, historical_checksums in selected:
+        sql = path.read_text(encoding="utf-8")
+        checksum = hashlib.sha256(sql.encode("utf-8")).hexdigest()
+
+        if hasattr(connection, "exec_driver_sql"):
+            row = connection.execute(
+                text("SELECT checksum FROM schema_version WHERE version = :version"),
+                {"version": version},
+            ).scalar_one_or_none()
+        else:
+            row = connection.execute(
+                "SELECT checksum FROM schema_version WHERE version = %s",
+                (version,),
+            ).fetchone()
+            row = row[0] if row else None
+
+        if row is not None:
+            if row != checksum and row not in historical_checksums:
+                raise RuntimeError(
+                    f"migration checksum mismatch for version {version}: "
+                    f"database={row} file={checksum}"
+                )
+            continue
+
+        if hasattr(connection, "exec_driver_sql"):
+            connection.exec_driver_sql(
+                sql,
+                execution_options={"no_parameters": True},
+            )
+            connection.execute(
+                text(
+                    "INSERT INTO schema_version(version, checksum) "
+                    "VALUES (:version, :checksum) "
+                    "ON CONFLICT (version) DO NOTHING"
+                ),
+                {"version": version, "checksum": checksum},
+            )
+            recorded = connection.execute(
+                text("SELECT checksum FROM schema_version WHERE version = :version"),
+                {"version": version},
+            ).scalar_one()
+            if recorded != checksum and recorded not in historical_checksums:
+                raise RuntimeError(
+                    f"migration checksum mismatch for version {version}: "
+                    f"database={recorded} file={checksum}"
+                )
+        else:
+            connection.execute(sql)
+            connection.execute(
+                "INSERT INTO schema_version(version, checksum) VALUES (%s, %s) "
+                "ON CONFLICT (version) DO NOTHING",
+                (version, checksum),
+            )
+            recorded = connection.execute(
+                "SELECT checksum FROM schema_version WHERE version = %s",
+                (version,),
+            ).fetchone()[0]
+            if recorded != checksum and recorded not in historical_checksums:
+                raise RuntimeError(
+                    f"migration checksum mismatch for version {version}: "
+                    f"database={recorded} file={checksum}"
+                )
+
+    connection.commit()
