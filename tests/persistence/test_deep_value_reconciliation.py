@@ -21,12 +21,24 @@ from persistence.recovery_outbox import OutboxBase, OutboxEvent
 
 
 def _session_factory():
-    engine = create_engine(os.environ.get("GERCHAIN_TEST_DATABASE_URL", "sqlite+pysqlite:///:memory:"), pool_pre_ping=True)
-    AtomicLedgerBase.metadata.create_all(engine)
-    EscrowBase.metadata.create_all(engine)
-    OutboxBase.metadata.create_all(engine)
-    IdempotencyBase.metadata.create_all(engine)
-    TransactionWitness.metadata.create_all(engine)
+    database_url = os.environ.get("GERCHAIN_TEST_DATABASE_URL", "sqlite+pysqlite:///:memory:")
+    engine = create_engine(database_url, pool_pre_ping=True)
+    if engine.dialect.name == "postgresql":
+        from services.gerchain_runtime_factory import ProductionRuntimeFactory
+        ProductionRuntimeFactory.create(
+            escrow_id="deep-reconcile-bootstrap",
+            amount=1,
+            currency="USD",
+            witness_id="deep-reconcile-witness",
+            engine=engine,
+            session_factory=sessionmaker(bind=engine),
+        )
+    else:
+        AtomicLedgerBase.metadata.create_all(engine)
+        EscrowBase.metadata.create_all(engine)
+        OutboxBase.metadata.create_all(engine)
+        IdempotencyBase.metadata.create_all(engine)
+        TransactionWitness.metadata.create_all(engine)
     return engine, sessionmaker(bind=engine)
 
 
