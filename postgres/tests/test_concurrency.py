@@ -14,7 +14,7 @@ from postgres.migrations import apply_migrations
 from postgres.repository import ConcurrentStateTransition, EscrowRepository
 
 DATABASE_URL = os.environ.get("GERCHAIN_POSTGRES_DSN")
-MIGRATION_DIR = Path(__file__).resolve().parents[1] / "schema"
+MIGRATION_DIR = Path(__file__).resolve().parents[1] / "migrations"
 
 pytestmark = pytest.mark.skipif(
     not DATABASE_URL,
@@ -30,9 +30,45 @@ def ensure_schema():
 
 def connect():
     return psycopg.connect(DATABASE_URL)
+def ensure_legacy_concurrency_tables():
+    with connect() as conn:
+        with conn.transaction():
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS audit_logs (
+                    id BIGSERIAL PRIMARY KEY,
+                    escrow_id TEXT NOT NULL REFERENCES escrows(id),
+                    previous_state TEXT,
+                    new_state TEXT NOT NULL,
+                    actor TEXT NOT NULL,
+                    occurred_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+                    tx_hash TEXT NOT NULL
+                )
+            """)
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS outbox (
+                    id BIGSERIAL PRIMARY KEY,
+                    event_id UUID NOT NULL UNIQUE,
+                    aggregate_type TEXT NOT NULL,
+                    aggregate_id TEXT NOT NULL,
+                    event_type TEXT NOT NULL,
+                    payload JSONB NOT NULL,
+                    status TEXT NOT NULL DEFAULT 'PENDING',
+                    attempts INTEGER NOT NULL DEFAULT 0,
+                    available_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+                    processing_started_at TIMESTAMPTZ,
+                    lease_until TIMESTAMPTZ,
+                    lease_token UUID,
+                    processed_at TIMESTAMPTZ,
+                    last_error TEXT,
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+                )
+            """)
+            conn.execute("CREATE TABLE IF NOT EXISTS processed_events (event_id UUID PRIMARY KEY, processed_at TIMESTAMPTZ NOT NULL DEFAULT now())")
+
 
 
 def reset_db():
+    ensure_legacy_concurrency_tables()
     with connect() as conn:
         with conn.transaction():
             conn.execute("TRUNCATE audit_logs, outbox, processed_events, escrows CASCADE")
@@ -43,8 +79,8 @@ def seed_escrow(escrow_id="race-1"):
         with conn.transaction():
             conn.execute(
                 """
-                INSERT INTO escrows(id, sender_address, receiver_address, amount, state)
-                VALUES (%s, 'sender', 'receiver', 100, 'CREATED')
+                INSERT INTO escrows(id, sender_address, receiver_address, amount, state, refund_destination, currency)
+                VALUES (%s, 'sender', 'receiver', 100, 'FUNDED', 'sender', 'MNT')
                 """,
                 (escrow_id,),
             )
@@ -61,7 +97,7 @@ def test_concurrent_state_transition_has_one_winner():
             repo = EscrowRepository(conn)
             try:
                 repo.transition(
-                    "race-1", "CREATED", "LOCKED", "worker",
+                    "race-1", "FUNDED", "LOCKED", "worker",
                     uuid4(), {"case": "race"}, uuid4().hex,
                 )
                 return "won"
@@ -86,12 +122,12 @@ def test_transition_rolls_back_audit_and_outbox_on_failure():
         repo = EscrowRepository(conn)
         with pytest.raises(Exception):
             repo.transition(
-                "race-1", "CREATED", "NOT_A_STATE", "worker",
-                uuid4(), {"case": "rollback"}, uuid4().hex,
+                "race-1", "CREATED", "LOCKED", "worker",
+                uuid4(), {"case": "rollback"}, None,
             )
 
     with connect() as conn:
-        assert conn.execute("SELECT state FROM escrows WHERE id = 'race-1'").fetchone()[0] == "CREATED"
+        assert conn.execute("SELECT state FROM escrows WHERE id = 'race-1'").fetchone()[0] == "FUNDED"
         assert conn.execute("SELECT count(*) FROM audit_logs").fetchone()[0] == 0
         assert conn.execute("SELECT count(*) FROM outbox").fetchone()[0] == 0
 
@@ -161,38 +197,117 @@ def test_expired_lease_is_recovered_and_stale_owner_cannot_complete():
 
 def test_migrations_are_serialized_and_checksum_is_stable():
     with connect() as conn:
-        conn.execute("DROP TABLE IF EXISTS processed_events, outbox, audit_logs, escrows, schema_version CASCADE")
+        conn.execute("""
+            DROP TABLE IF EXISTS
+                gerchain_transaction_witnesses,
+                gerchain_outbox_events,
+                gerchain_idempotency_records,
+                gerchain_ledger_movements,
+                gerchain_ledger_accounts,
+                processed_events,
+                outbox,
+                audit_logs,
+                escrows,
+                schema_version
+            CASCADE
+        """)
         conn.commit()
 
-    barrier = threading.Barrier(2)
+    barrier = threading.Barrier(4)
 
     def migrate():
         with connect() as conn:
             barrier.wait()
             apply_migrations(conn, MIGRATION_DIR)
 
-    with ThreadPoolExecutor(max_workers=2) as pool:
-        list(pool.map(lambda _: migrate(), range(2)))
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        list(pool.map(lambda _: migrate(), range(4)))
+
+    # Re-entry must remain idempotent after concurrent first boot.
+    # This is the production bootstrap contract: a second migration pass
+    # cannot duplicate schema history or mutate recorded checksums.
+    with connect() as conn:
+        apply_migrations(conn, MIGRATION_DIR)
 
     with connect() as conn:
         rows = conn.execute("SELECT version, checksum FROM schema_version ORDER BY version").fetchall()
-        assert [row[0] for row in rows] == [1]
-        assert len(rows[0][1]) == 64
+        expected_versions = sorted({int(path.name.split("_", 1)[0]) for path in MIGRATION_DIR.glob("*.sql")})
+        assert [row[0] for row in rows] == expected_versions
+        assert len({row[0] for row in rows}) == len(rows)
+        assert all(len(row[1]) == 64 for row in rows)
 
-
-def test_migration_checksum_mismatch_is_rejected(tmp_path):
+    # The second bootstrap pass must preserve the exact published history,
+    # not merely the version set and checksum shape.
     with connect() as conn:
-        conn.execute("DROP TABLE IF EXISTS processed_events, outbox, audit_logs, escrows, schema_version CASCADE")
+        before = conn.execute("SELECT version, checksum FROM schema_version ORDER BY version").fetchall()
+        apply_migrations(conn, MIGRATION_DIR)
+        after = conn.execute("SELECT version, checksum FROM schema_version ORDER BY version").fetchall()
+        assert after == before
+
+
+def test_production_runtime_factory_boots_with_canonical_authority():
+    from services.gerchain_runtime_factory import ProductionRuntimeConfig, ProductionRuntimeFactory
+
+    with connect() as conn:
+        conn.execute("DROP TABLE IF EXISTS gerchain_transaction_witnesses, gerchain_outbox_events, gerchain_idempotency_records, gerchain_ledger_movements, gerchain_ledger_accounts, processed_events, outbox, audit_logs, escrows, schema_version CASCADE")
+        conn.commit()
+
+    factory = ProductionRuntimeFactory(
+        ProductionRuntimeConfig(
+            database_url=DATABASE_URL,
+            escrow_id="boot-escrow",
+            amount=100,
+            currency="MNT",
+            witness_id="boot-witness",
+        )
+    )
+    runtime = factory.create()
+    assert runtime.is_canonical_ledger_authoritative
+    with connect() as conn:
+        assert conn.execute("SELECT MAX(version) FROM schema_version").fetchone()[0] >= 12
+    factory.engine.dispose()
+def test_migration_checksum_mismatch_is_rejected():
+    with connect() as conn:
+        conn.execute("""
+            DROP TABLE IF EXISTS
+                gerchain_transaction_witnesses,
+                gerchain_outbox_events,
+                gerchain_idempotency_records,
+                gerchain_ledger_movements,
+                gerchain_ledger_accounts,
+                processed_events,
+                outbox,
+                audit_logs,
+                escrows,
+                schema_version
+            CASCADE
+        """)
         conn.commit()
         apply_migrations(conn, MIGRATION_DIR)
 
-    migration = tmp_path / "001_modified.sql"
-    migration.write_text(
-        (MIGRATION_DIR / "001_concurrency.sql").read_text(encoding="utf-8")
-        + "\n-- modified after deployment\n",
-        encoding="utf-8",
-    )
-
+    # Simulate a deployed database whose recorded migration digest no longer
+    # matches the repository's immutable migration source.
     with connect() as conn:
-        with pytest.raises(RuntimeError, match="checksum mismatch"):
-            apply_migrations(conn, tmp_path)
+        original = conn.execute(
+            "SELECT checksum FROM schema_version WHERE version = %s",
+            (1,),
+        ).fetchone()[0]
+        conn.execute(
+            "UPDATE schema_version SET checksum = %s WHERE version = %s",
+            ("0" * 64, 1),
+        )
+        conn.commit()
+
+    try:
+        with connect() as conn:
+            with pytest.raises(RuntimeError, match="checksum mismatch"):
+                apply_migrations(conn, MIGRATION_DIR)
+    finally:
+        # Restore the fixture so later integration tests receive a valid
+        # migration history when they reuse the same PostgreSQL service.
+        with connect() as conn:
+            conn.execute(
+                "UPDATE schema_version SET checksum = %s WHERE version = %s",
+                (original, 1),
+            )
+            conn.commit()
