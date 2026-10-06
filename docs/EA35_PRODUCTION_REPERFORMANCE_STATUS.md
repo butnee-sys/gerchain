@@ -6,7 +6,7 @@ Status: IN PROGRESS / NOT LOCKED
 
 - Production entrypoint requires a PostgreSQL `GERCHAIN_DATABASE_URL`.
 - Production runtime construction uses `ProductionRuntimeFactory.create(...)`.
-- The factory applies versioned PostgreSQL migrations from `postgres/schema`.
+- The factory applies versioned PostgreSQL migrations from `postgres/migrations`.
 - The factory configures `GerchainRuntime` with `configure_canonical_ledger()`.
 - Production boot fails closed if canonical persistence tables/columns are missing.
 - Production boot validates the canonical escrow state constraint.
