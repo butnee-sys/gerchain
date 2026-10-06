@@ -1,22 +1,28 @@
 import os
+import pytest
 import base64
 from datetime import datetime, timezone
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from persistence.atomic_ledger import AtomicLedgerBase, LedgerAccountModel
-from persistence.atomic_value_transaction import WitnessBase, TransactionWitness
-from persistence.durable_idempotency import IdempotencyBase
-from persistence.escrow_aggregate import EscrowBase, CanonicalEscrow, EscrowState
-from persistence.recovery_outbox import OutboxBase
+pytestmark = pytest.mark.integration
+
+from persistence.atomic_ledger import LedgerAccountModel
+from persistence.atomic_value_transaction import TransactionWitness
+from persistence.escrow_aggregate import CanonicalEscrow, EscrowState
 from persistence.deep_value_reconciliation import deep_reconcile_value_truth
+from persistence.cancel_escrow import cancel_escrow_in_transaction
+from persistence.refund_escrow import refund_escrow_in_transaction
+from persistence.settlement_coordinator import SettlementCoordinator
+from persistence.fund_escrow import fund_escrow_in_transaction
+from persistence.lock_escrow import lock_escrow_in_transaction
 from services.gerchain_runtime_factory import ProductionRuntimeConfig, ProductionRuntimeFactory
 from dee_security.root_of_trust import RootOfTrust
 
 
 def test_postgresql_production_runtime_boot_and_value_truth():
-    url = os.environ["GERCHAIN_DATABASE_URL"]
+    url = os.environ["GERCHAIN_TEST_DATABASE_URL"]
     engine = create_engine(url, pool_pre_ping=True)
     sf = sessionmaker(bind=engine, expire_on_commit=False)
     factory = ProductionRuntimeFactory(
