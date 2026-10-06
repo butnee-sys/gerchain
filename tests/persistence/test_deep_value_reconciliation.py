@@ -100,7 +100,7 @@ def test_deep_reconciliation_clean_graph_is_matched():
         _seed_clean(session)
         report = deep_reconcile_value_truth(session)
         assert report.matched is True
-        assert report.issues == []
+        assert report.issues == ()
     engine.dispose()
 
 
@@ -295,12 +295,18 @@ def test_atomic_value_transaction_replay_with_different_payload_conflicts():
             event_type="GERCHAIN_RELEASE",
         )
         AtomicValueTransaction(session).transfer_and_transition(
-            **base, payload={"request": "A"})
+            **base,
+            payload={"request": "A"},
+            idempotency_payload={"operation": "RELEASE", "request": "A"},
+        )
         session.commit()
 
         try:
             AtomicValueTransaction(session).transfer_and_transition(
-                **base, payload={"request": "B"})
+                **base,
+                payload={"request": "B"},
+                idempotency_payload={"operation": "RELEASE", "request": "B"},
+            )
             raise AssertionError("expected idempotency conflict")
         except Exception as exc:
             assert "idempotency key reused with different request" in str(exc)
