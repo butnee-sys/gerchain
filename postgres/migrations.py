@@ -92,11 +92,20 @@ def _native_migration_transaction(conn):
     # Use a session-level advisory lock so the lock is acquired before the
     # publication transaction starts. This makes concurrent first boot
     # deterministic even when multiple runners create schema_version together.
+    # pg_advisory_lock() is session-scoped. It also starts the psycopg
+    # transaction that owns the migration publication work, so do not nest
+    # conn.transaction() here: doing so can release the publication
+    # transaction before the session lock is released.
     conn.execute("SELECT pg_advisory_lock(%s)", (MIGRATION_LOCK_KEY,))
     try:
-        with conn.transaction():
-            yield
+        yield
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
     finally:
+        # The session lock survives commit/rollback; release it only after the
+        # migration transaction has been durably committed or rolled back.
         conn.execute("SELECT pg_advisory_unlock(%s)", (MIGRATION_LOCK_KEY,))
         conn.commit()
 
