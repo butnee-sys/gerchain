@@ -4,7 +4,7 @@ import os
 
 import pytest
 
-from services.production_runtime_factory import ProductionRuntimeConfig, ProductionRuntimeFactory
+from services.gerchain_runtime_factory import ProductionRuntimeConfig, ProductionRuntimeFactory
 
 
 @pytest.mark.integration
