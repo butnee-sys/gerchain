@@ -153,4 +153,5 @@ def apply_migrations(connection, migration_dir: Path) -> None:
                     f"database={recorded} file={checksum}"
                 )
 
-    connection.commit()\n    _execute(connection, "SELECT pg_advisory_unlock(8342719)")
+    connection.commit()
+    _execute(connection, "SELECT pg_advisory_unlock(8342719)")
