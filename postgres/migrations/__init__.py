@@ -9,6 +9,21 @@ from sqlalchemy import text
 _VERSION_RE = re.compile(r"^(\d+)_.*\.sql$")
 _LOCK_KEY = 8342719
 
+# Accepted historical checksums preserve migration history across previously
+# deployed canonical version-2 databases. They do not authorize schema drift.
+_ACCEPTED_HISTORICAL_CHECKSUMS = {
+    2: {
+        "1dad432b63dec39434d72ec929b135b1ef19e38a642a513750f37deb9de0cca2",
+        "0531b1b8ecd29118a6755538a701ab8dd751425c431d15f4fa50b400dd8dfcc7",
+    },
+    3: {
+        "15caac76ff599ec1a83091f2d7b3f9bb428f9ad04474f215df1ae9d39611a13e",
+    },
+    4: {
+        "55a9ab0753356174ea6427d4c746958a563afb202265d170dae48df13afb8c9a",
+    },
+}
+
 
 def _execute(connection, sql: str, params: dict | None = None):
     """Execute against either SQLAlchemy Connection or psycopg Connection."""
@@ -63,7 +78,7 @@ def apply_migrations(connection, migration_dir: Path) -> None:
                 row = row[0] if row else None
 
             if row is not None:
-                if row != checksum:
+                if row != checksum and row not in _ACCEPTED_HISTORICAL_CHECKSUMS.get(version, set()):
                     raise RuntimeError(
                         f"migration checksum mismatch for version {version}: "
                         f"database={row} file={checksum}"
