@@ -19,6 +19,9 @@ class DurableIdempotencyRecord(IdempotencyBase):
     __tablename__ = "gerchain_idempotency_records"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    # PostgreSQL production schema requires an explicit operation discriminator.
+    # It is derived from the canonical request payload; it is not a second authority.
+    operation: Mapped[str] = mapped_column(String(64), nullable=False)
     key: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
     fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
     result_json: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -37,6 +40,9 @@ def begin_in_transaction(
         raise ValueError("idempotency key is required")
 
     fingerprint = IdempotencyEngine.fingerprint(payload)
+    operation = str(payload.get("operation") or payload.get("event_type") or "").removeprefix("GERCHAIN_").upper()
+    if not operation:
+        raise ValueError("idempotency operation is required")
     existing = session.execute(
         select(DurableIdempotencyRecord)
         .where(DurableIdempotencyRecord.key == key)
@@ -46,6 +52,7 @@ def begin_in_transaction(
     if existing is None:
         session.add(
             DurableIdempotencyRecord(
+                operation=operation,
                 key=key,
                 fingerprint=fingerprint,
                 result_json=None,
@@ -78,6 +85,9 @@ def complete_in_transaction(
     result_json: str,
 ) -> str:
     fingerprint = IdempotencyEngine.fingerprint(payload)
+    operation = str(payload.get("operation") or payload.get("event_type") or "").removeprefix("GERCHAIN_").upper()
+    if not operation:
+        raise ValueError("idempotency operation is required")
     existing = session.execute(
         select(DurableIdempotencyRecord)
         .where(DurableIdempotencyRecord.key == key)
