@@ -53,6 +53,9 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements-dee-security.txt pytest
 
+      - name: Record exact evidence commit
+        run: echo "EVIDENCE_COMMIT=${GITHUB_SHA}"
+
       - name: Python syntax gate
         run: python -m py_compile services/gerchain_runtime.py services/gerchain_runtime_factory.py production_entrypoint.py
 
