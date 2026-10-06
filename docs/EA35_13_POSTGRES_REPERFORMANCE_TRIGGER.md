@@ -15,3 +15,6 @@ The EA-35 PostgreSQL production smoke workflow is the authoritative CI execution
 
 ## 2026-10-06 verification trigger — production runtime correction
 The production runtime construction was corrected to instantiate ProductionRuntimeFactory with ProductionRuntimeConfig and to establish Canonical Ledger authority. This marker requires a fresh PostgreSQL gate against that corrected branch state.
+
+## 2026-10-06 verification trigger — fresh current-tip evidence
+This trigger exists solely to force fresh CI evidence against the current branch tip after the production runtime and migration hardening changes. Prior runs remain historical evidence only.
