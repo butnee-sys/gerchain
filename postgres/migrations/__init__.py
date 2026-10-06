@@ -51,7 +51,9 @@ def apply_migrations(connection, migration_dir: Path) -> None:
     # Transaction-scoped advisory lock makes concurrent first boots mutually exclusive.
     # The lock is released automatically by COMMIT/ROLLBACK, so migration history
     # and schema changes remain one serialized bootstrap transaction.
-    # Session-scoped lock prevents a failed migration transaction from releasing the\n    # serialization guard before the connection has finished its bootstrap attempt.\n    _execute(connection, "SELECT pg_advisory_lock(8342719)")
+    # Session-scoped lock prevents a failed migration transaction from releasing the
+    # serialization guard before the connection has finished its bootstrap attempt.
+    _execute(connection, "SELECT pg_advisory_lock(8342719)")
     _execute(
         connection,
         "CREATE TABLE IF NOT EXISTS schema_version ("
