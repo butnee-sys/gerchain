@@ -29,7 +29,7 @@ def _execute(connection, sql: str, params: dict | None = None):
 
 def apply_migrations(connection, migration_dir: Path) -> None:
     """Apply ordered PostgreSQL migrations exactly once with checksum locking."""
-    _execute(connection, "SELECT pg_advisory_xact_lock(8342719)")
+    _execute(connection, "SELECT pg_advisory_lock(8342719)")
     try:
         _execute(
             connection,
@@ -90,3 +90,4 @@ def apply_migrations(connection, migration_dir: Path) -> None:
     finally:
         if hasattr(connection, "rollback"):
             connection.rollback()
+        _execute(connection, "SELECT pg_advisory_unlock(8342719)")
