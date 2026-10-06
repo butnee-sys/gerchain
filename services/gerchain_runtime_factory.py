@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
 
@@ -16,8 +17,22 @@ from persistence.production_schema_guard import assert_canonical_production_sche
 from services.gerchain_runtime import GerchainRuntime
 
 
+@dataclass(frozen=True)
+class ProductionRuntimeConfig:
+    database_url: str
+    escrow_id: str
+    amount: int
+    currency: str
+    witness_id: str
+
+
 class ProductionRuntimeFactory:
     """Create the production GerChain runtime with PostgreSQL as authority."""
+
+    def __init__(self, config: ProductionRuntimeConfig, *, engine: Engine | None = None):
+        self.config = config
+        if engine is not None and engine.dialect.name != "postgresql":
+            raise ValueError("ProductionRuntimeFactory requires a PostgreSQL engine")
 
     @staticmethod
     def create(
@@ -53,4 +68,4 @@ class ProductionRuntimeFactory:
         return runtime
 
 
-__all__ = ["ProductionRuntimeFactory"]
+__all__ = ["ProductionRuntimeConfig", "ProductionRuntimeFactory"]
