@@ -43,7 +43,7 @@ def assert_canonical_production_schema(connection) -> None:
             f"canonical production schema incomplete; missing tables: {sorted(missing)}"
         )
     version = connection.execute(text("SELECT MAX(version) FROM schema_version")).scalar()
-    if version is None or int(version) < 5:
+    if version is None or int(version) < 12:
         raise RuntimeError(
             f"canonical production schema history incomplete; latest={version}; required=5"
         )
