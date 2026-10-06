@@ -29,9 +29,9 @@ def _execute(connection, sql: str, params: dict | None = None):
 
 def apply_migrations(connection, migration_dir: Path) -> None:
     """Apply ordered PostgreSQL migrations exactly once with checksum locking."""
-    # Transaction-scoped advisory lock serializes concurrent first boots for the
-    # entire migration transaction and is released automatically at commit/rollback.
-    _execute(connection, "SELECT pg_advisory_xact_lock(8342719)")
+    # Session-scoped advisory lock makes concurrent first boots mutually exclusive.
+    # This deliberately survives any transaction boundaries inside migration SQL.
+    _execute(connection, "SELECT pg_advisory_lock(8342719)")
     try:
         _execute(
             connection,
@@ -47,10 +47,8 @@ def apply_migrations(connection, migration_dir: Path) -> None:
             if _VERSION_RE.match(p.name)
         )
 
-        # The numeric filename prefix is historical and is not unique in this
-        # repository.  Use deterministic sorted-file ordinal as the durable
-        # schema_version identity so every migration has exactly one version.
-        for version, path in enumerate(files, start=1):
+        for path in files:
+            version = int(_VERSION_RE.match(path.name).group(1))
             sql = path.read_text(encoding="utf-8")
             checksum = hashlib.sha256(sql.encode("utf-8")).hexdigest()
 
@@ -94,3 +92,8 @@ def apply_migrations(connection, migration_dir: Path) -> None:
     finally:
         if hasattr(connection, "rollback"):
             connection.rollback()
+        try:
+            _execute(connection, "SELECT pg_advisory_unlock(8342719)")
+        except Exception:
+            # Never mask the original migration failure with unlock cleanup.
+            pass
