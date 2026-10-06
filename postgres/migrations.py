@@ -93,6 +93,8 @@ def _native_migration_transaction(conn):
     try:
         with conn.transaction():
             yield
+    finally:
+        conn.execute("SELECT pg_advisory_unlock(%s)", (MIGRATION_LOCK_KEY,))
 
 
 @contextmanager
