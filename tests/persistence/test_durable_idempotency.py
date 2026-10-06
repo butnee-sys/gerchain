@@ -18,7 +18,7 @@ def test_durable_idempotency_same_request_replays():
     engine = create_engine("sqlite+pysqlite:///:memory:", future=True)
     IdempotencyBase.metadata.create_all(engine)
     factory = sessionmaker(bind=engine, future=True)
-    payload = {"transaction_id": "T1", "amount": 100}
+    payload = {"transaction_id": "T1", "operation": "FUND", "amount": 100}
 
     with factory.begin() as session:
         assert begin_in_transaction(session, key="K1", payload=payload) is None
@@ -40,14 +40,14 @@ def test_durable_idempotency_different_request_conflicts():
     with factory.begin() as session:
         begin_in_transaction(
             session, key="K1",
-            payload={"transaction_id": "T1", "amount": 100},
+            payload={"transaction_id": "T1", "operation": "FUND", "amount": 100},
         )
 
     with factory() as session:
         try:
             begin_in_transaction(
                 session, key="K1",
-                payload={"transaction_id": "T1", "amount": 101},
+                payload={"transaction_id": "T1", "operation": "FUND", "amount": 101},
             )
         except IdempotencyConflictError:
             pass
