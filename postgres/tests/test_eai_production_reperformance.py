@@ -83,6 +83,7 @@ def test_eai_production_runtime_reperformance():
         for account_id, balance in (
             (source, 100),
             (beneficiary, 0),
+            (escrow_id, 0),
             (refund_source, 100),
             (refund_id, 0),
             (cancel_source, 100),
