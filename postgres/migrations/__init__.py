@@ -48,9 +48,11 @@ def _execute(connection, sql: str, params: dict | None = None):
 
 def apply_migrations(connection, migration_dir: Path) -> None:
     """Apply ordered PostgreSQL migrations exactly once with checksum locking."""
-    # Transaction-scoped advisory lock makes concurrent first boots mutually exclusive.
-    # The lock is held for the complete migration transaction and released only on commit/rollback.
-    _execute(connection, "SELECT pg_advisory_xact_lock(8342719)")
+    # Session-level advisory lock makes concurrent first boots mutually exclusive.
+    # This is deliberately explicit: migration runners may be invoked through
+    # different PostgreSQL/psycopg transaction wrappers, so the lock lifetime
+    # must not depend on implicit transaction semantics.
+    _execute(connection, "SELECT pg_advisory_lock(8342719)")
     try:
         _execute(
             connection,
@@ -130,5 +132,8 @@ def apply_migrations(connection, migration_dir: Path) -> None:
 
         connection.commit()
     finally:
-        if hasattr(connection, "rollback"):
-            connection.rollback()
+        try:
+            _execute(connection, "SELECT pg_advisory_unlock(8342719)")
+        finally:
+            if hasattr(connection, "rollback"):
+                connection.rollback()
