@@ -264,7 +264,7 @@ def test_production_runtime_factory_boots_with_canonical_authority():
     runtime = factory.create()
     assert runtime.is_canonical_ledger_authoritative
     with connect() as conn:
-        assert conn.execute("SELECT MAX(version) FROM schema_version").fetchone()[0] >= 11
+        assert conn.execute("SELECT MAX(version) FROM schema_version").fetchone()[0] >= 12
     factory.engine.dispose()
 def test_migration_checksum_mismatch_is_rejected():
     with connect() as conn:
