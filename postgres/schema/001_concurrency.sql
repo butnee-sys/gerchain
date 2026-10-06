@@ -99,6 +99,15 @@ CREATE TABLE IF NOT EXISTS gerchain_outbox_events (
     updated_at TIMESTAMPTZ NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS gerchain_transaction_witnesses (
+    id SERIAL PRIMARY KEY,
+    transaction_id VARCHAR(128) NOT NULL UNIQUE,
+    event_type VARCHAR(64) NOT NULL,
+    escrow_id VARCHAR(255) NOT NULL,
+    amount BIGINT NOT NULL CHECK (amount >= 0),
+    created_at TIMESTAMPTZ NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS gerchain_idempotency_records (
     id SERIAL PRIMARY KEY,
     key VARCHAR(255) NOT NULL UNIQUE,
