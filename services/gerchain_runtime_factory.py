@@ -11,6 +11,7 @@ from sqlalchemy.orm import sessionmaker
 from postgres.migrations import apply_migrations
 
 from persistence.atomic_ledger import AtomicLedgerBase
+from postgres.migrations import apply_migrations
 from persistence.atomic_value_transaction import WitnessBase, TransactionWitness
 from persistence.durable_idempotency import IdempotencyBase
 from persistence.escrow_aggregate import EscrowBase
@@ -90,6 +91,9 @@ class ProductionRuntimeFactory:
         initialize_canonical_postgres_schema(self.engine)
         # ORM metadata remains a compatibility guard for additive models;
         # migration SQL is the authoritative production schema definition.
+        migration_dir = Path(__file__).resolve().parents[1] / "postgres" / "migrations"
+        with self.engine.connect() as conn:
+            apply_migrations(conn, migration_dir)
         for base in (AtomicLedgerBase, EscrowBase, OutboxBase, IdempotencyBase, TransactionWitness):
             base.metadata.create_all(self.engine)
 
