@@ -36,4 +36,4 @@ jobs:
       - run: pip install -r requirements.txt
       - run: |
           GERCHAIN_ESCROW_ID=escrow-pg-1           GERCHAIN_ESCROW_AMOUNT=100           GERCHAIN_CURRENCY=USD           GERCHAIN_WITNESS_ID=witness-pg-1           timeout 10s python production_entrypoint.py
-      - run: pytest -q tests/persistence/test_deep_value_reconciliation.py
+      - run: pytest -q tests/integration/test_postgresql_canonical_flow.py tests/persistence/test_deep_value_reconciliation.py
