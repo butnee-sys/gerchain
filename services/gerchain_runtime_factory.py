@@ -9,6 +9,8 @@ from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import sessionmaker
 
+from postgres.migrations import apply_migrations
+
 from persistence.atomic_ledger import AtomicLedgerBase
 from persistence.atomic_value_transaction import WitnessBase, TransactionWitness
 from persistence.durable_idempotency import IdempotencyBase
@@ -85,41 +87,12 @@ class ProductionRuntimeFactory:
         )
 
     def initialize(self) -> None:
-        """Apply ordered PostgreSQL schema migrations and ensure ORM metadata exists."""
-        migration_dir = Path(__file__).resolve().parents[1] / "postgres" / "schema"
-        files = sorted(migration_dir.glob("*.sql"))
-        if not files:
-            raise RuntimeError("no PostgreSQL schema migrations found")
-
-        with self.engine.begin() as connection:
-            connection.exec_driver_sql(
-                "CREATE TABLE IF NOT EXISTS schema_version ("
-                "version BIGINT PRIMARY KEY, checksum TEXT NOT NULL, "
-                "applied_at TIMESTAMPTZ NOT NULL DEFAULT now())"
-            )
-            for path in files:
-                try:
-                    version = int(path.stem.split("_", 1)[0])
-                except ValueError as exc:
-                    raise RuntimeError(f"invalid migration filename: {path.name}") from exc
-                sql = path.read_text(encoding="utf-8")
-                checksum = hashlib.sha256(sql.encode("utf-8")).hexdigest()
-                row = connection.execute(
-                    text("SELECT checksum FROM schema_version WHERE version = :version"),
-                    {"version": version},
-                ).scalar_one_or_none()
-                if row is not None:
-                    if row != checksum:
-                        raise RuntimeError(f"migration checksum mismatch: {path.name}")
-                    continue
-                connection.exec_driver_sql(
-                    sql.replace("BEGIN;", "").replace("COMMIT;", "")
-                )
-                connection.execute(
-                    text("INSERT INTO schema_version(version, checksum) VALUES (:version, :checksum)"),
-                    {"version": version, "checksum": checksum},
-                )
-
+        """Apply the authoritative PostgreSQL migration history before boot."""
+        migration_dir = Path(__file__).resolve().parents[1] / "postgres" / "migrations"
+        with self.engine.connect() as connection:
+            apply_migrations(connection, migration_dir)
+        # ORM metadata remains a compatibility guard for additive models;
+        # migration SQL is the authoritative production schema definition.
         for base in (AtomicLedgerBase, EscrowBase, OutboxBase, IdempotencyBase, TransactionWitness):
             base.metadata.create_all(self.engine)
 
