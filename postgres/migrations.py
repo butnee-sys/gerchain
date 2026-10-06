@@ -87,29 +87,17 @@ def checksum(sql: str) -> str:
 
 @contextmanager
 def _native_migration_transaction(conn):
-    """Serialize native psycopg migration runners for the full publication lifecycle."""
+    """Serialize native psycopg migration runners for the full publication transaction."""
     if _connection_in_transaction(conn):
         raise RuntimeError("migration runner requires a clean psycopg transaction")
 
-    # Use a session-level advisory lock so the lock is acquired before the
-    # publication transaction starts. This makes concurrent first boot
-    # deterministic even when multiple runners create schema_version together.
-    # pg_advisory_lock() is session-scoped. It also starts the psycopg
-    # transaction that owns the migration publication work, so do not nest
-    # conn.transaction() here: doing so can release the publication
-    # transaction before the session lock is released.
-    conn.execute("SELECT pg_advisory_lock(%s)", (MIGRATION_LOCK_KEY,))
-    try:
+    # Keep the advisory lock and schema publication in the same transaction.
+    # pg_advisory_xact_lock() is released automatically only after COMMIT/ROLLBACK,
+    # so a concurrent first-boot runner cannot observe a partially published
+    # schema_version history.
+    with conn.transaction():
+        conn.execute("SELECT pg_advisory_xact_lock(%s)", (MIGRATION_LOCK_KEY,))
         yield
-        conn.commit()
-    except Exception:
-        conn.rollback()
-        raise
-    finally:
-        # The session lock survives commit/rollback; release it only after the
-        # migration transaction has been durably committed or rolled back.
-        conn.execute("SELECT pg_advisory_unlock(%s)", (MIGRATION_LOCK_KEY,))
-        conn.commit()
 
 @contextmanager
 def _sqlalchemy_migration_transaction(conn):
