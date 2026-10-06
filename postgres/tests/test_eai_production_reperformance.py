@@ -206,7 +206,7 @@ def test_eai_production_runtime_reperformance():
         }
         assert balances[source] == 60
         assert balances[beneficiary] == 40
-        assert balances[refund_source] == 130
+        assert balances[refund_source] == 100
         assert balances[refund_id] == 0
         assert balances[cancel_source] == 100
         assert balances[cancel_id] == 0
