@@ -53,3 +53,7 @@ database/db.py and gerchain/database.py expose SQLite stores. They are not produ
 ## Current conclusion
 
 EA-34.11 is NOT LOCKED. Direct legacy mutation surfaces identified above are now fail-closed, but production entrypoint, durable escrow READ, full movement reconciliation, legacy-store freeze/removal, CI evidence, and independent re-performance remain open.
+
+
+## EA-35.13 verification note
+ProductionRuntimeFactory now constructs the runtime through the instance API and configures Canonical Ledger authority. Production PostgreSQL gate tests use the same instance API. Fresh CI evidence remains required before production lock.
