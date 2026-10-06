@@ -98,3 +98,32 @@ The direct verification job recorded: lifecycle **1 passed**, production value-f
 Commit `ede6c10f48bf9a193d5719864cf6cc60d287c5bc` adds the historically observed version-1 checksum `494763e210c8a3839972ba21e8705dcf2e6564e5abca9c76161f2f49c6664ec8` to the migration compatibility set. Fresh PostgreSQL/EAI/core workflows are queued for this commit.
 
 Status remains **IN PROGRESS / NOT LOCKED** until those fresh runs complete. No GREEN or production-lock claim is made from queued evidence.
+
+## 2026-10-06 fresh exact-SHA verification
+
+The workflow DSN handoff was corrected in commit f3e46c5dc1abfa1408b8edc55da18c974509867a.
+
+Fresh GitHub Actions evidence for that exact commit:
+
+| Gate | Run | Result |
+|---|---:|---|
+| production-postgresql-gate | 37474177095 | SUCCESS |
+| EAI PostgreSQL Production Proof | 37474177052 | SUCCESS |
+| independent-postgresql-evidence | 37474177070 | SUCCESS |
+| production-postgres | 37474176989 | SUCCESS |
+
+The production-postgresql-gate completed successfully through all production checks:
+
+- production factory and canonical persistence;
+- PostgreSQL production entrypoint boot;
+- concurrent migration bootstrap and checksum stability;
+- deep value-truth reconciliation;
+- EAI production re-performance;
+- real PostgreSQL production value-flow gate.
+
+The independent PostgreSQL evidence run separately verified persisted production value state.
+The production-postgres run separately verified migration/boot, value flow, and deep value truth.
+
+This is fresh exact-SHA technical evidence. It is stronger than the historical evidence above, but it is still not a system-wide production lock declaration.
+
+Status: VERIFIED / NOT LOCKED.
