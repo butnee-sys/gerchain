@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
 
-from sqlalchemy import create_engine, inspect, text
+from sqlalchemy import create_engine, inspect, inspect, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import sessionmaker
 
@@ -62,15 +62,30 @@ class ProductionRuntimeFactory:
         self.engine = engine or create_engine(config.database_url, future=True)
         if self.engine.dialect.name != "postgresql":
             raise ValueError("ProductionRuntimeFactory requires a PostgreSQL engine")
-        self.session_factory: Callable[[], Any] = sessionmaker(bind=self.engine, expire_on_commit=False)
+        self.session_factory: Callable[[], Any] = sessionmaker(bind=self.engine, expire_on_commit    def initialize(self) -> None:
+        """Validate the explicit production schema; never silently create it."""
+        inspector = inspect(self.engine)
+        required = {
+            "escrows": {"id", "sender_address", "receiver_address", "amount", "state", "refund_destination", "currency", "version", "created_at", "updated_at"},
+            "gerchain_ledger_accounts": {"account_id", "currency", "balance", "version", "updated_at"},
+            "gerchain_ledger_movements": {"transaction_id", "source", "destination", "amount", "currency", "operation", "escrow_id", "integrity_hash", "created_at"},
+            "gerchain_transaction_witnesses": {"transaction_id", "event_type", "escrow_id", "amount", "created_at"},
+            "gerchain_outbox_events": {"event_id", "event_type", "aggregate_id", "payload_json", "state", "lease_until", "attempts", "created_at", "updated_at"},
+            "gerchain_idempotency_records": {"key", "fingerprint", "result_json", "state", "created_at", "updated_at"},
+        }
+        missing_tables = sorted(set(required) - set(inspector.get_table_names()))
+        if missing_tables:
+            raise RuntimeError(f"production schema incomplete; missing tables: {', '.join(missing_tables)}")
+        missing_columns = {}
+        for table, columns in required.items():
+            actual = {column["name"] for column in inspector.get_columns(table)}
+            missing = sorted(columns - actual)
+            if missing:
+                missing_columns[table] = missing
+        if missing_columns:
+            raise RuntimeError(f"production schema incomplete; missing columns: {missing_columns}")
 
-    def initialize(self) -> None:
-        migration_dir = Path(__file__).resolve().parents[1] / "postgres" / "migrations"
-        with self.engine.connect() as connection:
-            apply_migrations(connection, migration_dir)
-        initialize_canonical_postgres_schema(self.engine)
-        with self.engine.connect() as connection:
-            assert_canonical_production_schema(connection)
+ection)
 
     def create(self) -> GerchainRuntime:
         self.initialize()
