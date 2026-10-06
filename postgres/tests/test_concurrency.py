@@ -235,6 +235,8 @@ def test_migrations_are_serialized_and_checksum_is_stable():
         assert [row[0] for row in rows] == expected_versions
         assert len({row[0] for row in rows}) == len(rows)
         assert all(len(row[1]) == 64 for row in rows)
+        # Regression guard: concurrent first boot must never create duplicate schema history rows.
+        assert len(rows) == len({row[0] for row in rows})
 
     # The second bootstrap pass must preserve the exact published history,
     # not merely the version set and checksum shape.
