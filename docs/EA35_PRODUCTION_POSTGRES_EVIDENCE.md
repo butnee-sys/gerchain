@@ -51,6 +51,24 @@ GitHub Actions run 36231750255 — production-postgresql-proof: success.
 GitHub Actions run 36231750286 — PostgreSQL production proof: success.
 The EAI matrix covers FUND → LOCK → REFUND, FUND → CANCEL, SETTLEMENT, canonical balances, terminal escrow states, and deep value reconciliation.
 
+## 2026-10-06 Fresh Re-performance Evidence
+
+Exact tested commit: 27d9da1fe50c6e2dd3caa4b6120c35cde71c8e69
+
+GitHub Actions run 37432565636 — production-postgres:
+- PostgreSQL 16 service
+- production migration and boot verification: success
+- production PostgreSQL value-flow verification: success
+- deep value truth suite: success
+- complete job conclusion: success
+
+GitHub Actions run 37432565547 — independent-postgresql-evidence:
+- PostgreSQL service
+- independent persisted-value verification: success
+- complete job conclusion: success
+
+These two fresh runs establish direct PostgreSQL execution and independent persisted-value re-performance for the exact tested commit above. They supersede the earlier 2026-09-26 execution evidence for this verification point, while the overall EA-35 lock remains gated on final branch consolidation and remaining release controls.
+
 ## Architecture conclusion
 
 The verified PostgreSQL production path exercises:
