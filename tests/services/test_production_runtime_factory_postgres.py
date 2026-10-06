@@ -18,7 +18,6 @@ def test_production_runtime_factory_establishes_canonical_authority():
             witness_id="ea35-boot-witness",
         ),
         engine=engine,
-        session_factory=sessionmaker(bind=engine, expire_on_commit=False),
     )
     runtime = factory.create()
 
@@ -37,7 +36,7 @@ def test_production_runtime_factory_establishes_canonical_authority():
 
     with engine.connect() as connection:
         assert connection.execute(
-            text("SELECT count(*) FROM gerchain_schema_version")
-        ).scalar_one() >= 2
+            text("SELECT count(*) FROM schema_version")
+        ).scalar_one() >= 12
 
     engine.dispose()
