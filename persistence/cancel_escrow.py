@@ -54,15 +54,14 @@ def cancel_escrow_in_transaction(
         **dict(payload or {}),
     }
 
-    replay = begin_in_transaction(
-        session,
-        key=transaction_id,
-        payload=idempotency_payload,
-    )
-    if replay is not None:
-        return {"replayed": True, "result": replay}
-
     if state == EscrowState.CREATED:
+        replay = begin_in_transaction(
+            session,
+            key=transaction_id,
+            payload=idempotency_payload,
+        )
+        if replay is not None:
+            return {"replayed": True, "result": replay}
         transition_escrow(
             session, escrow_id, EscrowState.CREATED, EscrowState.CANCELLED
         )
@@ -71,6 +70,13 @@ def cancel_escrow_in_transaction(
             "value_movement": False,
             "amount": 0,
         }
+        complete_in_transaction(
+            session,
+            key=transaction_id,
+            payload=idempotency_payload,
+            result_json=json.dumps(result, sort_keys=True, separators=(",", ":")),
+        )
+        return {"replayed": False, "result": result}
     else:
         result = AtomicValueTransaction(session).transfer_and_transition(
             transaction_id=transaction_id,
@@ -95,13 +101,10 @@ def cancel_escrow_in_transaction(
             },
         )
 
-    complete_in_transaction(
-        session,
-        key=transaction_id,
-        payload=idempotency_payload,
-        result_json=json.dumps(result, sort_keys=True, separators=(",", ":")),
-    )
-    return {"replayed": False, "result": result}
+    return {
+        "replayed": bool(result.get("replayed", False)),
+        "result": result.get("result", result),
+    }
 
 
 __all__ = ["cancel_escrow_in_transaction"]
