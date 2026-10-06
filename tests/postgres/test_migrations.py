@@ -10,7 +10,8 @@ def test_repository_migration_versions_are_ordered():
     versions = [int(path.name.split("_", 1)[0]) for path in migration_dir.glob("*.sql")]
     assert versions == sorted(versions)
     assert len(versions) == len(set(versions))
-    assert max(versions) >= 3
+    assert max(versions) >= 12
+    assert 12 in versions
 
 
 def test_unresolved_duplicate_migration_version_fails_closed(tmp_path: Path):
