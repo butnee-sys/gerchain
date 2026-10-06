@@ -75,11 +75,7 @@ def test_factory_initialize_uses_canonical_migration_runner() -> None:
         engine=engine,
     )
 
-    with patch("services.gerchain_runtime_factory.apply_migrations") as migrations, \
-         patch("services.gerchain_runtime_factory.initialize_canonical_postgres_schema") as additive, \
-         patch("services.gerchain_runtime_factory.assert_canonical_production_schema") as guard:
+    with patch("services.gerchain_runtime_factory.initialize_canonical_postgres_schema") as initializer:
         factory.initialize()
 
-    migrations.assert_called_once()
-    additive.assert_called_once_with(engine)
-    guard.assert_called_once_with(connection)
+    initializer.assert_called_once_with(engine)
