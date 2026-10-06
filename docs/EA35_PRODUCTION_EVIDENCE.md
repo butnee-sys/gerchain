@@ -3,10 +3,10 @@
 ## Status
 - Production PostgreSQL gate: **PASS**
 - Production lock: **NOT YET LOCKED**
-- Evidence commit: `7b6586390f84e8c7e763b9bc20c815967ee9945c`
-- Workflow run: `37392894911`
+- Evidence commit: `b7631fbe62770141835b13d982287db9f3a0cbec`
+- Workflow run: `37411914509`
 - Job: `postgresql-production-gate`
-- Verified: 2026-10-06
+- Verified: 2026-10-06 (fresh run)
 
 ## Fresh PostgreSQL evidence
 
@@ -18,6 +18,8 @@ All steps in the production PostgreSQL gate completed successfully:
 4. Deep value-truth reconciliation tests — PASS
 5. EAI production re-performance — PASS
 6. Real PostgreSQL production value-flow gate — PASS
+
+Workflow job `postgresql-production-gate` completed successfully with all 11 execution steps PASS.
 
 Runtime factory evidence:
 - PRODUCTION_FACTORY_GATE=PASS
