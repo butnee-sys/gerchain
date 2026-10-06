@@ -12,7 +12,6 @@ from persistence.atomic_value_transaction import WitnessBase
 from persistence.durable_idempotency import IdempotencyBase
 from persistence.escrow_aggregate import EscrowBase
 from persistence.recovery_outbox import OutboxBase
-from persistence.transactional_outbox import TransactionalOutboxBase
 
 
 def initialize_canonical_production_schema(engine: Engine) -> None:
@@ -26,7 +25,6 @@ def initialize_canonical_production_schema(engine: Engine) -> None:
         WitnessBase,
         OutboxBase,
         IdempotencyBase,
-        TransactionalOutboxBase,
     ):
         base.metadata.create_all(engine)
 
