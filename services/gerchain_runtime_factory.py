@@ -86,11 +86,12 @@ class ProductionRuntimeFactory:
     def initialize(self) -> None:
         """Apply the canonical PostgreSQL migration history before boot."""
         with self.engine.connect() as connection:
-            apply_migrations(connection, "postgres/migrations")
+            apply_migrations(connection, Path(__file__).resolve().parents[1] / "postgres" / "migrations")
 
     def create(self) -> GerchainRuntime:
         self.initialize()
-        self.verify_schema()
+        with self.engine.connect() as connection:
+            assert_canonical_production_schema(connection)
         runtime = GerchainRuntime(
             escrow_id=self.config.escrow_id,
             amount=self.config.amount,
