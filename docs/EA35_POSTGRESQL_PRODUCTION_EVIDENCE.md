@@ -73,6 +73,12 @@ The current branch contains the corresponding corrections: the migration runner 
 
 Status: IN PROGRESS / NOT LOCKED.
 
+## Current branch-tip verification gate
+
+- Current branch tip: `4a705c1bd4c977c1c6bada90180661a2ad3211c3`
+- The historical successful merge-ref runs above are retained as historical evidence only.
+- A new pull-request execution against the current branch tip is required before promoting this evidence to current-tip GREEN.
+
 
 ## Latest production verification
 
