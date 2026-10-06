@@ -1,5 +1,6 @@
 name: production-postgresql-gate
 # EA-35.13 evidence trigger
+# Production verification trigger: PostgreSQL 16 + canonical migration/runtime gate.
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
   cancel-in-progress: true
