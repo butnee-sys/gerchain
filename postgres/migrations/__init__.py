@@ -9,6 +9,25 @@ from sqlalchemy import text
 _VERSION_RE = re.compile(r"^(\d+)_.*\.sql$")
 _LOCK_KEY = 8342719
 
+# One authoritative migration file per schema version. Other files sharing the
+# same numeric prefix are retained as historical evidence and are never applied
+# on a fresh database. Their checksums remain accepted for already-published
+# schema history so legacy databases can be re-entered safely.
+_PREFERRED_MIGRATIONS = {
+    1: "001_canonical_production.sql",
+    2: "002_canonical_production.sql",
+    3: "003_canonical_compatibility.sql",
+    4: "004_canonical_value_truth.sql",
+    5: "005_canonical_production.sql",
+    6: "006_canonical_movement_integrity.sql",
+    7: "007_canonical_production_reconciliation.sql",
+    8: "008_ea35_idempotency_compat.sql",
+    9: "009_canonical_movement_integrity_hardening.sql",
+    10: "010_canonical_evidence_constraints.sql",
+    11: "011_ea35_canonical_schema_finalization.sql",
+    12: "012_canonical_production.sql",
+}
+
 
 def _execute(connection, sql: str, params: dict | None = None):
     """Execute against either SQLAlchemy Connection or psycopg Connection."""
@@ -46,9 +65,30 @@ def apply_migrations(connection, migration_dir: Path) -> None:
             p for p in migration_dir.glob("*.sql")
             if _VERSION_RE.match(p.name)
         )
-
+        by_version: dict[int, list[Path]] = {}
         for path in files:
             version = int(_VERSION_RE.match(path.name).group(1))
+            by_version.setdefault(version, []).append(path)
+
+        selected: list[tuple[int, Path, set[str]]] = []
+        for version in sorted(by_version):
+            candidates = by_version[version]
+            preferred_name = _PREFERRED_MIGRATIONS.get(version)
+            preferred = next((p for p in candidates if p.name == preferred_name), None)
+            if preferred is None:
+                if len(candidates) != 1:
+                    raise RuntimeError(
+                        f"migration version {version} has no unique authoritative file: "
+                        + ", ".join(p.name for p in candidates)
+                    )
+                preferred = candidates[0]
+            historical_checksums = {
+                hashlib.sha256(p.read_text(encoding="utf-8").encode("utf-8")).hexdigest()
+                for p in candidates
+            }
+            selected.append((version, preferred, historical_checksums))
+
+        for version, path, historical_checksums in selected:
             sql = path.read_text(encoding="utf-8")
             checksum = hashlib.sha256(sql.encode("utf-8")).hexdigest()
 
@@ -65,7 +105,7 @@ def apply_migrations(connection, migration_dir: Path) -> None:
                 row = row[0] if row else None
 
             if row is not None:
-                if row != checksum:
+                if row != checksum and row not in historical_checksums:
                     raise RuntimeError(
                         f"migration checksum mismatch for version {version}: "
                         f"database={row} file={checksum}"
