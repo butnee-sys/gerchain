@@ -259,10 +259,10 @@ def apply_migrations(conn, migration_dir: str | Path) -> None:
                     raise RuntimeError(
                         f"Migration checksum mismatch for version {version}"
                     )
-        except Exception:
-            if hasattr(conn, "rollback"):
-                conn.rollback()
-            raise
+    except Exception:
+        if hasattr(conn, "rollback"):
+            conn.rollback()
+        raise
 
     # EA-35.23: fresh verification trigger after canonical production runtime correction.
 
