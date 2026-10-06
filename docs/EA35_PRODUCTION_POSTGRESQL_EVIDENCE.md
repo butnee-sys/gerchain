@@ -1,68 +1,87 @@
 # EA-35 Production PostgreSQL Evidence
 
-Status: VERIFIED AT BRANCH TIP — NOT A PRODUCTION LOCK
+Status: **VERIFIED — NOT A PRODUCTION LOCK**
 
-## Verified commit
+## Verified branch / commit
 - Branch: `feat/ea21-transaction-aware-ledger`
-- Commit: `6fe9acfa1997b01b8e226cd49082dd59e2c2d7b7`
-- Evidence date: 2026-09-29
+- Exact verified commit: `c4cd095d440145b7689758234c19fbee75e02b72`
+- Evidence date: 2026-10-06
 
-## PostgreSQL evidence
-
-The following GitHub Actions runs were completed successfully against the exact commit above:
+## Fresh GitHub Actions evidence
 
 | Evidence | Run | Result |
 |---|---:|---|
-| Production PostgreSQL verification | 36564420356 | SUCCESS |
-| PostgreSQL production re-performance | 36564420322 | SUCCESS |
-| Production PostgreSQL E2E | 36564420445 | SUCCESS |
-| production-postgresql | 36564420327 | SUCCESS |
-| production-postgres-gate | 36564420368 | SUCCESS |
+| production-postgresql-gate | 37416549634 | **SUCCESS** |
+| independent-postgresql-evidence | 37416549659 | **SUCCESS** |
 
-### Detailed verification
-Run 36564420356 job `postgres-production` executed:
-1. `tests/integration/test_real_postgresql_production.py` — 1 passed.
-2. `tests/integration/test_production_postgresql_value_flow.py tests/integration/test_production_postgres_flow.py` — 2 passed.
-3. `tests/persistence/test_deep_value_reconciliation.py` — 19 passed.
-4. PostgreSQL 16 service container was started and accepted connections.
+Both runs executed against the exact commit above and used a real PostgreSQL 16 service.
 
-The real PostgreSQL lifecycle test verifies:
-- canonical production schema migration and schema guard;
-- production runtime construction;
+## production-postgresql-gate
+
+Run `37416549634` completed successfully.
+
+Verified stages:
+1. Python syntax gate.
+2. Production factory and canonical persistence.
+3. Production entrypoint boot against PostgreSQL.
+4. Deep value-truth reconciliation tests.
+5. EAI production re-performance.
+6. Real PostgreSQL production value-flow gate.
+
+The gate explicitly verifies:
+- PostgreSQL-only production runtime;
+- canonical persistence tables;
 - Canonical Ledger authority;
+- Ledger movement idempotent replay;
+- production entrypoint initialization;
+- deep reconciliation;
+- EAI lifecycle re-performance;
+- real PostgreSQL value-flow.
+
+## EAI production re-performance
+
+The EAI re-performance covers, in one real PostgreSQL transaction environment:
 - FUND → LOCK → RELEASE;
-- REFUND;
-- CANCEL;
+- FUND → LOCK → REFUND;
+- FUND → CANCEL;
+- CREATED → CANCEL;
 - SETTLEMENT;
 - final balances;
 - final escrow states;
-- deep value-truth reconciliation;
-- second runtime construction after the first execution.
+- deep value-truth reconciliation.
 
-The production value-flow test verifies canonical PostgreSQL FUND/LOCK/RELEASE and deep reconciliation.
+The test asserts that the canonical Ledger remains the sole monetary value authority and that witness/outbox/idempotency evidence reconciles with committed value movements.
+
+## independent-postgresql-evidence
+
+Run `37416549659` completed successfully.
+
+This verification reads persisted PostgreSQL facts directly and independently checks:
+- account balances;
+- movement operation/source/destination/amount/currency;
+- movement integrity hashes;
+- escrow state/version;
+- witness records;
+- outbox records;
+- durable idempotency records.
 
 ## Production entrypoint
-Run 36564420327 completed successfully with:
-- Production PostgreSQL boot;
-- PostgreSQL value-flow integration and re-performance;
-- production entrypoint syntax verification.
 
-## Schema
-Canonical PostgreSQL migrations currently extend through migration 010:
-- 001 concurrency baseline
-- 002 canonical production
-- 003 canonical value authority
-- 004 canonical value truth
-- 005 canonical production persistence
-- 006 canonical movement integrity
-- 007 canonical production reconciliation
-- 008 EA-35 idempotency compatibility
-- 009 movement integrity hardening
-- 010 settlement binding fix
+The exact verified commit contains the corrected production construction path:
 
-The production schema guard requires the canonical tables, lifecycle states, movement integrity constraints, and settlement/escrow binding contract before runtime construction proceeds.
+`GERCHAIN_DATABASE_URL`
+→ `ProductionRuntimeConfig`
+→ `ProductionRuntimeFactory`
+→ canonical PostgreSQL persistence
+→ `configure_canonical_ledger()`
+→ `require_canonical_ledger_authority()`
 
-## Important limitation
-These results are strong repository-level technical evidence. They are not an external certification, production operational sign-off, or independent third-party audit.
+The entrypoint boot test completed successfully against PostgreSQL.
 
-EA-35 remains IN PROGRESS / NOT LOCKED until the remaining independent re-performance, operational governance, privileged-access/IAM evidence, and final release evidence gates are closed.
+## Conclusion
+
+**EA-35.13 PostgreSQL production gate: VERIFIED.**
+
+This is strong repository-level technical evidence from a real PostgreSQL 16 execution environment. It is not external certification or third-party production sign-off.
+
+**EA-35 overall remains IN PROGRESS / NOT LOCKED** until the remaining final evidence, operational governance, privileged-access/IAM, recovery/DR, and release-lock gates are formally closed.
