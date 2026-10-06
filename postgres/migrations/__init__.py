@@ -170,5 +170,6 @@ def _apply_migrations_once(connection, migration_dir: Path) -> None:
                     f"database={recorded} file={checksum}"
                 )
 
+    # pg_advisory_xact_lock is released automatically by COMMIT; no explicit
+    # unlock is valid after the transaction ends.
     connection.commit()
-    _execute(connection, "SELECT pg_advisory_unlock(8342719)")
