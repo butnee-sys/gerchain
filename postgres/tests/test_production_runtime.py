@@ -76,14 +76,16 @@ def test_production_runtime_boot_and_canonical_value_flow():
                 )
             )
 
-        runtime = ProductionRuntimeFactory.create(
-            escrow_id="gate-release",
-            amount=100,
-            currency="USD",
-            witness_id="gate-witness",
+        runtime = ProductionRuntimeFactory(
+            ProductionRuntimeConfig(
+                database_url=DATABASE_URL,
+                escrow_id="gate-release",
+                amount=100,
+                currency="USD",
+                witness_id="gate-witness",
+            ),
             engine=engine,
-            session_factory=factory,
-        )
+        ).create()
         assert runtime.is_canonical_ledger_authoritative
 
         with factory() as session:
