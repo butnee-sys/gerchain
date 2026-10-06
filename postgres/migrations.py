@@ -257,6 +257,12 @@ def apply_migrations(conn, migration_dir: str | Path) -> None:
                     conn,
                     "UPDATE gerchain_idempotency_records SET key = idempotency_key WHERE key IS NULL",
                 )
+                # Legacy idempotency_key is not a second canonical key authority.
+                # Reconcile it into `key`, then remove the obsolete NOT NULL column.
+                _execute(
+                    conn,
+                    "ALTER TABLE gerchain_idempotency_records DROP COLUMN IF EXISTS idempotency_key",
+                )
             null_key = _execute(
                 conn,
                 "SELECT EXISTS (SELECT 1 FROM gerchain_idempotency_records WHERE key IS NULL)",
