@@ -7,7 +7,7 @@ import pytest
 from sqlalchemy import create_engine, select, text
 from sqlalchemy.orm import sessionmaker
 
-from persistence.atomic_ledger import LedgerAccountModel
+from persistence.atomic_ledger import PostgreSQLAtomicLedger
 from persistence.cancel_escrow import cancel_escrow_in_transaction
 from persistence.deep_value_reconciliation import deep_reconcile_value_truth
 from persistence.escrow_aggregate import CanonicalEscrow, EscrowState
@@ -34,14 +34,8 @@ def _session_factory():
 
 
 def _seed_account(session, account_id: str, balance: int) -> None:
-    session.add(
-        LedgerAccountModel(
-            account_id=account_id,
-            currency="USD",
-            balance=balance,
-            version=0,
-            updated_at=datetime.now(timezone.utc),
-        )
+    PostgreSQLAtomicLedger(lambda: session).create_account_in_transaction(
+        session, account_id, "USD", balance
     )
 
 
