@@ -47,8 +47,10 @@ def apply_migrations(connection, migration_dir: Path) -> None:
             if _VERSION_RE.match(p.name)
         )
 
-        for path in files:
-            version = int(_VERSION_RE.match(path.name).group(1))
+        # The numeric filename prefix is historical and is not unique in this
+        # repository.  Use deterministic sorted-file ordinal as the durable
+        # schema_version identity so every migration has exactly one version.
+        for version, path in enumerate(files, start=1):
             sql = path.read_text(encoding="utf-8")
             checksum = hashlib.sha256(sql.encode("utf-8")).hexdigest()
 
