@@ -62,8 +62,6 @@ Run: `37475259476`
 
 Job: `eai-production-proof`
 
-Job: `eai-production-proof`
-
 Conclusion: **success**
 
 Verified:
