@@ -263,7 +263,19 @@ def apply_migrations(conn, migration_dir: str | Path) -> None:
             ).fetchone()[0]
             if null_key:
                 raise RuntimeError("cannot canonicalize idempotency records: NULL key remains")
-            _execute(conn, "ALTER TABLE gerchain_idempotency_records ALTER COLUMN key SET NOT NULL")
+            _execute(conn, "ALTER TABLE IF EXISTS gerchain_idempotency_records ADD COLUMN IF NOT EXISTS fingerprint VARCHAR(64)")
+            _execute(conn, "ALTER TABLE IF EXISTS gerchain_idempotency_records ADD COLUMN IF NOT EXISTS state VARCHAR(32) DEFAULT 'COMPLETED'")
+            missing_fingerprint = _execute(conn, "SELECT EXISTS (SELECT 1 FROM gerchain_idempotency_records WHERE fingerprint IS NULL)").fetchone()[0]
+            if missing_fingerprint:
+                raise RuntimeError("cannot canonicalize idempotency records: NULL fingerprint remains")
+            _execute(conn, "ALTER TABLE gerchain_idempotency_records ALTER COLUMN fingerprint SET NOT NULL")
+            _execute(conn, "ALTER TABLE gerchain_idempotency_records ALTER COLUMN state SET NOT NULL")
+            _execute(conn, "ALTER TABLE IF EXISTS escrows ADD COLUMN IF NOT EXISTS refund_destination TEXT")
+            _execute(conn, "ALTER TABLE IF EXISTS escrows ADD COLUMN IF NOT EXISTS currency VARCHAR(16)")
+            _execute(conn, "ALTER TABLE IF EXISTS escrows ADD COLUMN IF NOT EXISTS version BIGINT NOT NULL DEFAULT 0")
+            _execute(conn, "ALTER TABLE IF EXISTS escrows ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT now()")
+            _execute(conn, "ALTER TABLE IF EXISTS escrows DROP CONSTRAINT IF EXISTS escrows_state_check")
+            _execute(conn, "ALTER TABLE IF EXISTS escrows ADD CONSTRAINT escrows_state_check CHECK (state IN ('CREATED','FUNDED','LOCKED','RELEASED','REFUNDED','CANCELLED'))")
             _execute(conn, "CREATE UNIQUE INDEX IF NOT EXISTS uq_gerchain_idempotency_records_key ON gerchain_idempotency_records (key)")
     except Exception:
         if hasattr(conn, "rollback"):
