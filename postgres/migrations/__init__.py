@@ -52,7 +52,7 @@ def apply_migrations(connection, migration_dir: Path) -> None:
     # This is deliberately explicit: migration runners may be invoked through
     # different PostgreSQL/psycopg transaction wrappers, so the lock lifetime
     # must not depend on implicit transaction semantics.
-    _execute(connection, "SELECT pg_advisory_lock(8342719)")
+    _execute(connection, "SELECT pg_advisory_xact_lock(8342719)")
     try:
         _execute(
             connection,
@@ -155,8 +155,5 @@ def apply_migrations(connection, migration_dir: Path) -> None:
 
         connection.commit()
     finally:
-        try:
-            _execute(connection, "SELECT pg_advisory_unlock(8342719)")
-        finally:
-            if hasattr(connection, "rollback"):
-                connection.rollback()
+        if hasattr(connection, "rollback"):
+            connection.rollback()
