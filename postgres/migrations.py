@@ -92,7 +92,7 @@ def _native_migration_transaction(conn):
     conn.execute("SELECT pg_advisory_lock(%s)", (MIGRATION_LOCK_KEY,))
     try:
         with conn.transaction():
-        yield
+            yield
 
 
 @contextmanager
