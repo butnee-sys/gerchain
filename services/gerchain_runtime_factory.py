@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+import hashlib
 from typing import Any, Callable
 
 from sqlalchemy import create_engine, inspect, text
