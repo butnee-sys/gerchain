@@ -144,7 +144,7 @@ jobs:
 
       - name: Verify concurrent PostgreSQL migration bootstrap
         env:
-          GERCHAIN_POSTGRES_DSN: ${{ env.GERCHAIN_TEST_DATABASE_URL }}
+          GERCHAIN_POSTGRES_DSN: postgresql://gerchain:gerchain@localhost:5432/gerchain
         run: pytest -q postgres/tests/test_concurrency.py -k migrations_are_serialized_and_checksum_is_stable
 
       - name: Run deep reconciliation tests
