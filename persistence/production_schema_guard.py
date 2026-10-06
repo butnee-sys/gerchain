@@ -15,6 +15,7 @@ REQUIRED_TABLES = {
 
 REQUIRED_COLUMNS = {
     "gerchain_ledger_movements": {"operation", "escrow_id", "integrity_hash"},
+    "gerchain_idempotency_records": {"key", "fingerprint", "state"},
     "escrows": {"refund_destination", "currency", "version", "created_at"},
 }
 
