@@ -139,9 +139,19 @@ def apply_migrations(connection, migration_dir: Path) -> None:
             else:
                 connection.execute(sql)
                 connection.execute(
-                    "INSERT INTO schema_version(version, checksum) VALUES (%s, %s)",
+                    "INSERT INTO schema_version(version, checksum) VALUES (%s, %s) "
+                    "ON CONFLICT (version) DO NOTHING",
                     (version, checksum),
                 )
+                recorded = connection.execute(
+                    "SELECT checksum FROM schema_version WHERE version = %s",
+                    (version,),
+                ).fetchone()[0]
+                if recorded != checksum and recorded not in historical_checksums:
+                    raise RuntimeError(
+                        f"migration checksum mismatch for version {version}: "
+                        f"database={recorded} file={checksum}"
+                    )
 
         connection.commit()
     finally:
