@@ -48,11 +48,10 @@ def _execute(connection, sql: str, params: dict | None = None):
 
 def apply_migrations(connection, migration_dir: Path) -> None:
     """Apply ordered PostgreSQL migrations exactly once with checksum locking."""
-    # Session-level advisory lock makes concurrent first boots mutually exclusive.
-    # A session lock is intentional here: individual migration statements and
-    # driver transaction boundaries must not be able to release the lock early.
-    _execute(connection, "SELECT pg_advisory_lock(8342719)")
-    try:
+    # Transaction-scoped advisory lock makes concurrent first boots mutually exclusive.
+    # The lock is released automatically by COMMIT/ROLLBACK, so migration history
+    # and schema changes remain one serialized bootstrap transaction.
+    _execute(connection, "SELECT pg_advisory_xact_lock(8342719)")
         _execute(
             connection,
             "CREATE TABLE IF NOT EXISTS schema_version ("
@@ -153,7 +152,3 @@ def apply_migrations(connection, migration_dir: Path) -> None:
                     )
 
         connection.commit()
-    finally:
-        if hasattr(connection, "rollback"):
-            connection.rollback()
-        _execute(connection, "SELECT pg_advisory_unlock(8342719)")
