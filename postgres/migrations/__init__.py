@@ -121,7 +121,7 @@ def apply_migrations(connection, migration_dir: Path) -> None:
                 text(
                     "INSERT INTO schema_version(version, checksum) "
                     "VALUES (:version, :checksum) "
-                    "ON CONFLICT (version) DO NOTHING"
+                    "ON CONFLICT (version) DO UPDATE SET checksum = schema_version.checksum"
                 ),
                 {"version": version, "checksum": checksum},
             )
