@@ -295,10 +295,13 @@ class GerchainRuntime:
 
     def get_balance(self, account_id: str) -> int:
         if self.is_canonical_ledger_authoritative:
-            return self._canonical_read().get_balance(
-                account_id,
-                currency=self.escrow_engine.currency,
-            )
+            # Balance reads are short-lived and must not retain a pooled
+            # PostgreSQL session across runtime calls.
+            with self._session_factory() as session:
+                return CanonicalLedgerRead(session).get_balance(
+                    account_id,
+                    currency=self.escrow_engine.currency,
+                )
         return self.money_ledger.get_balance(account_id)
 
     def get_escrow_state(self) -> Dict[str, Any]:
