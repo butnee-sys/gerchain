@@ -29,3 +29,17 @@ def test_production_factory_builds_real_postgresql_canonical_runtime():
     runtime.require_canonical_ledger_authority()
     assert runtime._canonical_ledger is not None
     assert runtime._session_factory is factory.session_factory
+
+    with factory.engine.connect() as connection:
+        from sqlalchemy import inspect, text
+        version = connection.execute(text("SELECT MAX(version) FROM schema_version")).scalar()
+        assert int(version) >= 12
+        tables = set(inspect(connection).get_table_names())
+        assert {
+            "escrows",
+            "gerchain_ledger_accounts",
+            "gerchain_ledger_movements",
+            "gerchain_transaction_witnesses",
+            "gerchain_outbox_events",
+            "gerchain_idempotency_records",
+        }.issubset(tables)
