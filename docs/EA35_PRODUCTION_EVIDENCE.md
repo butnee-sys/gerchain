@@ -2,11 +2,12 @@
 
 ## Status
 - Production PostgreSQL gate: **PASS**
-- Production lock: **NOT YET LOCKED**
-- Evidence commit: `6caa3648dcb0bd168c52811cbdcf10bdf55c97e0` (current verified head)
-- Workflow runs: `37434010046` (EAI proof), `37434010060` (production PostgreSQL), `37434009985` (independent PostgreSQL evidence)
+- EAI production status: **VERIFIED**
+- Overall architecture lock: **NOT YET LOCKED**
+- Evidence correction commit: `3cd5b2a779bbce80413729b6a686d483f7cc82f6`
+- Workflow runs: `37577948306` (EAI proof), `37577948392` (production PostgreSQL), `37577948476` (independent PostgreSQL evidence), `37577948292` (production gate)
 - Job: `postgresql-production-gate`
-- Verified: 2026-10-06 (fresh runs)
+- Verified: 2026-10-07 (fresh runs)
 
 ## Fresh PostgreSQL evidence
 
@@ -51,8 +52,12 @@ The fresh PostgreSQL gate proves, on the tested CI database:
 - EAI re-performance passes across FUND, LOCK, RELEASE, REFUND, CANCEL and SETTLEMENT paths.
 - Real PostgreSQL production value-flow integration passes.
 
+## Migration concurrency correction
+
+The previous PostgreSQL concurrency evidence exposed a first-boot publication race on `schema_version(version=2)`. The migration runner was corrected to use transaction-scoped PostgreSQL advisory locking via `pg_advisory_xact_lock(8342719)`. The new production gate passed after this correction.
+
 ## Important boundary
 
 This evidence is **repository/CI technical evidence**, not an external production certification or independent third-party attestation.
 
-EA-35 remains **IN PROGRESS / NOT LOCKED** until the remaining production-readiness evidence package, independent re-performance, security/IAM controls, recovery/DR evidence, and final architecture lock criteria are closed.
+EA-35 production execution is **VERIFIED** on fresh CI evidence. EAI is production-ready within the tested scope. The overall canonical architecture remains **IN PROGRESS / NOT LOCKED** until security/IAM controls, privileged access governance, recovery/DR evidence, architecture-wide independent re-performance, and final lock criteria are closed.
