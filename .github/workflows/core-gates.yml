@@ -41,7 +41,17 @@ jobs:
           python -m pip install --upgrade pip
           if [ -f requirements-dee-security.txt ]; then pip install -r requirements-dee-security.txt; fi
           if [ -f postgres/requirements-test.txt ]; then pip install -r postgres/requirements-test.txt; fi
-          pip install "sqlalchemy>=2" "psycopg[binary]" fastapi uvicorn httpx pytest
+          pip install "sqlalchemy>=2" "psycopg[binary]" fastapi uvicorn httpx pytest pyyaml
+      - name: Validate workflow YAML
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import yaml
+          for path in Path(".github/workflows").glob("*.yml"):
+              with path.open(encoding="utf-8") as handle:
+                  yaml.safe_load(handle)
+          print("WORKFLOW_YAML=PASS")
+          PY
       - name: Verify production runtime source compiles
         run: python -m compileall -q services production_entrypoint.py persistence postgres
       - name: Run canonical fundamental architecture gate
