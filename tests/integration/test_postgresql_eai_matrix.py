@@ -163,3 +163,127 @@ def test_postgresql_eai_refund_cancel_and_settlement_paths():
             ]
     finally:
         engine.dispose()
+
+
+def test_postgresql_failure_matrix_and_duplicate_fund_concurrency():
+    """Real PostgreSQL failure/replay/concurrency matrix for the canonical path."""
+    from concurrent.futures import ThreadPoolExecutor
+    from persistence.fund_escrow import fund_escrow_in_transaction
+    from persistence.atomic_value_transaction import TransactionWitness
+    from persistence.recovery_outbox import OutboxEvent
+    from persistence.durable_idempotency import DurableIdempotencyRecord
+    from sqlalchemy import text
+
+    url = os.environ["GERCHAIN_DATABASE_URL"]
+    engine = create_engine(url, pool_pre_ping=True)
+    Session = sessionmaker(bind=engine, expire_on_commit=False)
+    try:
+        runtime = ProductionRuntimeFactory(
+            ProductionRuntimeConfig(url, "eai-failure-matrix", 40, "USD", "w-failure-matrix"),
+            engine=engine,
+        ).create()
+        with Session.begin() as session:
+            session.execute(text("DELETE FROM gerchain_ledger_movements"))
+            session.execute(text("DELETE FROM gerchain_transaction_witnesses"))
+            session.execute(text("DELETE FROM gerchain_outbox_events"))
+            session.execute(text("DELETE FROM gerchain_idempotency_records"))
+            session.execute(text("DELETE FROM gerchain_ledger_accounts"))
+            session.execute(text("DELETE FROM escrows"))
+
+        runtime.create_escrow(
+            escrow_id="eai-failure-matrix", sender="FM-SOURCE", beneficiary="FM-BEN",
+            refund_destination="FM-SOURCE", amount=40, currency="USD", condition="failure-matrix"
+        )
+        runtime.create_account("FM-SOURCE", initial_balance=50)
+        runtime.create_account("eai-failure-matrix", initial_balance=0)
+
+        # Invalid state transition: LOCK before FUND must fail without evidence or value movement.
+        try:
+            runtime.lock("fm-invalid-lock", datetime.now(timezone.utc).isoformat(), {"matrix": "invalid-lock"})
+            raise AssertionError("LOCK before FUND unexpectedly succeeded")
+        except ValueError:
+            pass
+
+        # Insufficient source balance must fail closed and leave the aggregate untouched.
+        with Session() as session:
+            try:
+                fund_escrow_in_transaction(
+                    session, transaction_id="fm-insufficient", escrow_id="eai-failure-matrix",
+                    source="FM-SOURCE", amount=40, currency="USD",
+                )
+                raise AssertionError("insufficient FUND unexpectedly succeeded")
+            except ValueError as exc:
+                assert "Insufficient balance" in str(exc)
+                session.rollback()
+
+        # First valid FUND, then idempotency conflict with a changed request.
+        runtime.fund("fm-fund", "FM-SOURCE", datetime.now(timezone.utc).isoformat(), {"matrix": "valid"})
+        with Session() as session:
+            try:
+                fund_escrow_in_transaction(
+                    session, transaction_id="fm-fund", escrow_id="eai-failure-matrix",
+                    source="FM-SOURCE", amount=39, currency="USD",
+                )
+                raise AssertionError("idempotency conflict unexpectedly succeeded")
+            except Exception as exc:
+                assert "idempotency key reused with different request" in str(exc)
+                session.rollback()
+
+        with Session() as session:
+            movement_count = session.query(LedgerMovementModel).count()
+            witness_count = session.query(TransactionWitness).count()
+            outbox_count = session.query(OutboxEvent).count()
+            idem_count = session.query(DurableIdempotencyRecord).count()
+            escrow = session.get(CanonicalEscrow, "eai-failure-matrix")
+            source = session.get(LedgerAccountModel, "FM-SOURCE")
+            assert movement_count == 1
+            assert witness_count == 1
+            assert outbox_count == 1
+            assert idem_count == 1
+            assert escrow.state == EscrowState.FUNDED.value
+            assert source.balance == 10
+            assert deep_reconcile_value_truth(session).matched
+
+        # Two concurrent identical FUND requests may execute once and replay once.
+        with Session.begin() as session:
+            session.execute(text("DELETE FROM gerchain_ledger_movements"))
+            session.execute(text("DELETE FROM gerchain_transaction_witnesses"))
+            session.execute(text("DELETE FROM gerchain_outbox_events"))
+            session.execute(text("DELETE FROM gerchain_idempotency_records"))
+            session.execute(text("DELETE FROM gerchain_ledger_accounts"))
+            session.execute(text("DELETE FROM escrows"))
+        runtime.create_escrow(
+            escrow_id="eai-concurrency", sender="CC-SOURCE", beneficiary="CC-BEN",
+            refund_destination="CC-SOURCE", amount=40, currency="USD", condition="concurrency"
+        )
+        runtime.create_account("CC-SOURCE", initial_balance=100)
+        runtime.create_account("eai-concurrency", initial_balance=0)
+
+        def concurrent_fund():
+            with Session() as session:
+                try:
+                    result = fund_escrow_in_transaction(
+                        session, transaction_id="cc-fund", escrow_id="eai-concurrency",
+                        source="CC-SOURCE", amount=40, currency="USD",
+                    )
+                    session.commit()
+                    return result
+                except Exception:
+                    session.rollback()
+                    raise
+
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            results = list(pool.map(lambda _: concurrent_fund(), range(2)))
+        assert sorted(r["replayed"] for r in results) == [False, True]
+
+        with Session() as session:
+            source = session.get(LedgerAccountModel, "CC-SOURCE")
+            escrow_account = session.get(LedgerAccountModel, "eai-concurrency")
+            escrow = session.get(CanonicalEscrow, "eai-concurrency")
+            assert source.balance == 60
+            assert escrow_account.balance == 40
+            assert escrow.state == EscrowState.FUNDED.value
+            assert session.query(LedgerMovementModel).count() == 1
+            assert deep_reconcile_value_truth(session).matched
+    finally:
+        engine.dispose()
