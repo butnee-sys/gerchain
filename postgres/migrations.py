@@ -833,7 +833,3 @@ def apply_migrations(conn, migration_dir: str | Path) -> None:
             conn.rollback()
         raise
 
-    # EA-35.23: fresh verification trigger after canonical production runtime correction.
-
-    finally:
-        pass
