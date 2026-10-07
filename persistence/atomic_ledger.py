@@ -104,6 +104,14 @@ class PostgreSQLAtomicLedger:
         if source == destination:
             raise ValueError("Source and destination must differ")
 
+        first, second = sorted((source, destination))
+        first_row = session.execute(select(LedgerAccountModel).where(LedgerAccountModel.account_id == first).with_for_update()).scalar_one()
+        second_row = session.execute(select(LedgerAccountModel).where(LedgerAccountModel.account_id == second).with_for_update()).scalar_one()
+        source_row = first_row if first == source else second_row
+        destination_row = first_row if first == destination else second_row
+
+        # Re-check after account locks so concurrent identical requests replay
+        # the committed movement instead of racing on the unique transaction_id.
         existing = session.execute(
             select(LedgerMovementModel)
             .where(LedgerMovementModel.transaction_id == transaction_id)
@@ -113,12 +121,6 @@ class PostgreSQLAtomicLedger:
             if (existing.source, existing.destination, existing.amount, existing.currency, existing.operation, existing.escrow_id, existing.integrity_hash) != (source, destination, amount, currency, operation, escrow_id, integrity_hash):
                 raise ValueError("Transaction ID was reused with different movement")
             return {"transaction_id": transaction_id, "source": source, "destination": destination, "amount": amount, "currency": currency, "replayed": True}
-
-        first, second = sorted((source, destination))
-        first_row = session.execute(select(LedgerAccountModel).where(LedgerAccountModel.account_id == first).with_for_update()).scalar_one()
-        second_row = session.execute(select(LedgerAccountModel).where(LedgerAccountModel.account_id == second).with_for_update()).scalar_one()
-        source_row = first_row if first == source else second_row
-        destination_row = first_row if first == destination else second_row
 
         if source_row.currency != currency or destination_row.currency != currency:
             raise ValueError("Currency mismatch")
