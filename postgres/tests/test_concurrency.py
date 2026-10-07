@@ -38,3 +38,11 @@ def test_migrations_are_serialized_and_checksum_is_stable():
     assert versions
     assert max(versions) >= 12
     assert all(checksum for _, checksum in rows)
+
+    # A second publication pass must remain idempotent after the concurrent race.
+    _run_migrations()
+    with psycopg.connect(_dsn()) as conn:
+        rows_after = conn.execute(
+            "SELECT version, checksum FROM schema_version ORDER BY version"
+        ).fetchall()
+    assert rows_after == rows
