@@ -173,3 +173,4 @@ def test_production_factory_creates_canonical_ledger_runtime(monkeypatch):
     runtime = factory.create()
     assert runtime.is_canonical_ledger_authoritative is True
     assert runtime.runtime_mode == "production-postgresql"
+    assert runtime._postgres_release is None
