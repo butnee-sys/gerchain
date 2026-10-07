@@ -85,12 +85,7 @@ class ProductionRuntimeFactory:
         )
 
     def initialize(self) -> None:
-        """Apply the authoritative PostgreSQL migration set.
-
-        Production boot never uses ORM create_all() as a schema authority.
-        The numbered migration runner provides ordering, checksum validation,
-        and transaction-scoped concurrency serialization.
-        """
+        """Apply the versioned canonical PostgreSQL migration set."""
         initialize_canonical_postgres_schema(self.engine)
 
     def create(self) -> GerchainRuntime:
