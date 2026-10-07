@@ -1,4 +1,4 @@
-# EA-35.32: fresh exact-SHA PostgreSQL concurrency verification on current branch state.
+# EA-35.34: harden native migration publication with session-scoped advisory serialization.
 # EA-35.33: re-trigger exact-SHA concurrency evidence after publication-barrier verification.
 # EA-35.31: fresh exact-SHA PostgreSQL concurrency verification after migration publication hardening.
 # EA-35.30: fresh CI evidence requested after migration publication hardening.
@@ -90,15 +90,22 @@ def checksum(sql: str) -> str:
 
 @contextmanager
 def _native_migration_transaction(conn):
-    """Serialize native psycopg migration publication inside one DB transaction."""
+    """Serialize native psycopg migration publication for the full lifecycle."""
     if _connection_in_transaction(conn):
         raise RuntimeError("migration runner requires a clean psycopg transaction")
 
-    # Keep lock acquisition, migration execution, and schema_version publication
-    # inside one transaction so publication is serialized as one lifecycle.
-    with conn.transaction():
-        conn.execute("SELECT pg_advisory_xact_lock(%s)", (MIGRATION_LOCK_KEY,))
-        yield
+    # Use a session-level advisory lock so the same connection holds the
+    # serialization barrier across transaction creation, migration DDL, and
+    # schema_version publication. This avoids snapshot/transaction-boundary
+    # races between independent bootstrap sessions.
+    conn.execute("SELECT pg_advisory_lock(%s)", (MIGRATION_LOCK_KEY,))
+    conn.commit()
+    try:
+        with conn.transaction():
+            yield
+    finally:
+        conn.execute("SELECT pg_advisory_unlock(%s)", (MIGRATION_LOCK_KEY,))
+        conn.commit()
 
 @contextmanager
 def _sqlalchemy_migration_transaction(conn):
