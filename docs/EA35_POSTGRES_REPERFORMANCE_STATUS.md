@@ -32,3 +32,7 @@ This proves a real PostgreSQL execution path for the production re-performance t
 ## 2026-10-06 verification note
 
 A fresh workflow execution on the production-proof branch exposed two pre-lock defects: a stale runtime syntax publication and a PostgreSQL migration-history publication race. The current branch contains the corrected runtime source and conflict-safe migration publication path. Production remains **NOT LOCKED** until a fresh exact-SHA PostgreSQL re-performance run passes.
+
+
+## Exact-branch verification
+Fresh verification is required after every production runtime construction change.
