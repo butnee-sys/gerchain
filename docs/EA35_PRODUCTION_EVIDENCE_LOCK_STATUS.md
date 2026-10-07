@@ -1,16 +1,20 @@
 # EA-35 — Production PostgreSQL Evidence and Lock Status
 
 **Branch:** `feat/ea21-transaction-aware-ledger`  
-**Fresh evidence SHA:** `e3b90b46f8fd50c5dc7bafbe51488859ec59a8ca`  
+**Verified implementation SHA:** `52e2e1bce5952bbe7a91ac091dcf3c5eb5ba11e4`  
 **Evidence date:** 2026-10-07
 
 ## Status
 
-**EA-35: VERIFIED / NOT LOCKED**
+**EA-35 PostgreSQL/EAI evidence boundary: VERIFIED / PARTIALLY LOCKED**
+
+The executable production implementation is evidence-locked at SHA `52e2e1bce5952bbe7a91ac091dcf3c5eb5ba11e4`. Subsequent commits in this evidence record are documentation-only and do not alter executable production code.
 
 Fresh GitHub Actions evidence confirms real PostgreSQL execution on the current implementation line.
 
-## Fresh exact-SHA workflow evidence
+## Fresh exact-SHA workflow evidence — 2026-10-07
+
+Current implementation SHA `52e2e1bce5952bbe7a91ac091dcf3c5eb5ba11e4`:
 
 | Evidence | Workflow run | Result |
 |---|---:|---|
@@ -140,10 +144,10 @@ EAI remains an infrastructure principle implemented through the frozen architect
 
 ## Lock boundary
 
-**EA-35 = VERIFIED / NOT LOCKED.**
+**PostgreSQL production evidence: LOCKED at implementation SHA `52e2e1bce5952bbe7a91ac091dcf3c5eb5ba11e4`.**
 
-Next gate:
+**EA-35 final architecture lock: NOT YET LOCKED.**
 
-**EA-35.14 — migration-history / concurrent-bootstrap re-performance and final evidence reconciliation.**
+Remaining final-lock gates are governance/assurance closure and final immutable evidence-index reconciliation. No executable architecture change is authorized under this evidence lock without an explicit architecture-change proposal.
 
 No product-layer work is authorized by this document.
