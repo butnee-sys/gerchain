@@ -4,7 +4,7 @@ import os
 
 import psycopg
 
-from postgres.migrations import apply_migrations
+from postgres.migrations import apply_migrations, checksum
 
 
 def _dsn() -> str:
@@ -38,3 +38,14 @@ def test_migrations_are_serialized_and_checksum_is_stable():
     assert versions
     assert max(versions) >= 12
     assert all(checksum for _, checksum in rows)
+
+    migration_dir = Path(__file__).resolve().parents[1] / "migrations"
+    expected = {
+        int(path.name.split("_", 1)[0]): checksum(path.read_text(encoding="utf-8"))
+        for path in migration_dir.glob("*.sql")
+        if path.name.startswith(("001_", "002_", "003_", "004_", "005_", "006_", "007_", "008_", "009_", "010_", "011_", "012_"))
+    }
+    # Publication must retain the checksum of the migration source selected by
+    # the runner; duplicate historical aliases are validated separately by the
+    # migration runner's frozen/legacy checksum policy.
+    assert all(row_checksum in expected.values() for _, row_checksum in rows)
