@@ -1,10 +1,11 @@
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+import hashlib
 import os
 
 import psycopg
 
-from postgres.migrations import apply_migrations, checksum
+from postgres.migrations import apply_migrations
 
 
 def _dsn() -> str:
@@ -41,7 +42,7 @@ def test_migrations_are_serialized_and_checksum_is_stable():
 
     migration_dir = Path(__file__).resolve().parents[1] / "migrations"
     expected = {
-        int(path.name.split("_", 1)[0]): checksum(path.read_text(encoding="utf-8"))
+        int(path.name.split("_", 1)[0]): hashlib.sha256(path.read_text(encoding="utf-8").encode("utf-8")).hexdigest()
         for path in migration_dir.glob("*.sql")
         if path.name.startswith(("001_", "002_", "003_", "004_", "005_", "006_", "007_", "008_", "009_", "010_", "011_", "012_"))
     }
