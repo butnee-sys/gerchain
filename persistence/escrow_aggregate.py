@@ -48,6 +48,67 @@ class CanonicalEscrow(EscrowBase):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
 
+def create_escrow_in_transaction(
+    session: Session,
+    *,
+    escrow_id: str,
+    sender: str,
+    beneficiary: str,
+    refund_destination: str,
+    amount: int,
+    currency: str,
+    condition: str | None = None,
+) -> CanonicalEscrow:
+    """Create the authoritative durable escrow aggregate without moving value.
+
+    Creation is an aggregate-state operation only. Value movement, witness and
+    outbox evidence begin with the first value/state transition (FUND).
+    Repeating the same aggregate definition is an idempotent replay; conflicting
+    definitions are rejected.
+    """
+    if not escrow_id or not sender or not beneficiary or not refund_destination:
+        raise ValueError("escrow_id, sender, beneficiary and refund_destination are required")
+    if amount <= 0:
+        raise ValueError("escrow amount must be positive")
+    if not currency:
+        raise ValueError("currency is required")
+
+    existing = session.execute(
+        select(CanonicalEscrow).where(CanonicalEscrow.id == escrow_id).with_for_update()
+    ).scalar_one_or_none()
+    if existing is not None:
+        expected = (
+            existing.sender_address,
+            existing.receiver_address,
+            existing.refund_destination,
+            int(existing.amount),
+            existing.currency,
+            existing.condition_desc,
+        )
+        actual = (sender, beneficiary, refund_destination, amount, currency, condition)
+        if expected != actual:
+            raise ValueError(f"escrow {escrow_id} already exists with conflicting definition")
+        return existing
+
+    now = datetime.now(timezone.utc)
+    escrow = CanonicalEscrow(
+        id=escrow_id,
+        sender_address=sender,
+        receiver_address=beneficiary,
+        amount=amount,
+        state=EscrowState.CREATED.value,
+        condition_desc=condition,
+        refund_destination=refund_destination,
+        currency=currency,
+        version=0,
+        created_at=now,
+        updated_at=now,
+    )
+    session.add(escrow)
+    session.flush()
+    return escrow
+
+
 def transition_escrow(
     session: Session,
     escrow_id: str,
