@@ -3,18 +3,14 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
-from pathlib import Path
 
-from postgres.migrations import apply_migrations
 
 from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import sessionmaker
 
-from postgres.migrations import apply_migrations
 
 from persistence.atomic_ledger import AtomicLedgerBase
-from postgres.migrations import apply_migrations
 from persistence.atomic_value_transaction import WitnessBase, TransactionWitness
 from persistence.durable_idempotency import IdempotencyBase
 from persistence.escrow_aggregate import EscrowBase
