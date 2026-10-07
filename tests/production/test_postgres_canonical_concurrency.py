@@ -7,7 +7,7 @@ import pytest
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker
 
-from persistence.atomic_ledger import LedgerAccountModel, LedgerMovementModel, PostgreSQLAtomicLedger
+from persistence.atomic_ledger import AtomicLedgerBase, LedgerAccountModel, LedgerMovementModel, PostgreSQLAtomicLedger
 
 
 @pytest.mark.integration
@@ -17,7 +17,7 @@ def test_canonical_ledger_concurrent_same_transaction_replays_once():
         pytest.skip("GERCHAIN_TEST_DATABASE_URL is required")
 
     engine = create_engine(url, pool_pre_ping=True)
-    PostgreSQLAtomicLedger.initialize_schema(engine)
+    AtomicLedgerBase.metadata.create_all(engine)
     Session = sessionmaker(bind=engine, expire_on_commit=False)
 
     with engine.begin() as connection:
