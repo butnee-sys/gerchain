@@ -43,3 +43,9 @@ def test_shuud_sandbox_declares_dee_security_dependency():
     root = Path(__file__).resolve().parents[1]
     dockerfile = (root / "sandbox" / "Dockerfile").read_text(encoding="utf-8")
     assert "cryptography>=46,<47" in dockerfile
+
+
+def test_shuud_smoke_preserves_release_before_clearance_order():
+    root = Path(__file__).resolve().parents[1]
+    text = (root / ".github" / "workflows" / "shuud-sandbox-smoke.yml").read_text(encoding="utf-8")
+    assert text.index('$API/release') < text.index('$API/metrics/clearance')
