@@ -86,12 +86,15 @@ class ProductionRuntimeFactory:
         )
 
     def initialize(self) -> None:
-        """Apply and verify the authoritative PostgreSQL schema before boot."""
-        initialize_canonical_postgres_schema(self.engine)
-        # Migration SQL is the sole production schema authority. ORM metadata
-        # is only an additive compatibility guard after migrations complete.
-        for base in (AtomicLedgerBase, EscrowBase, OutboxBase, IdempotencyBase, TransactionWitness):
-            base.metadata.create_all(self.engine)
+        """Apply the authoritative PostgreSQL migration set.
+
+        Production boot never uses ORM create_all() as a schema authority.
+        The numbered migration runner provides ordering, checksum validation,
+        and transaction-scoped concurrency serialization.
+        """
+        migration_dir = Path(__file__).resolve().parents[1] / "postgres" / "migrations"
+        with self.engine.connect() as connection:
+            apply_migrations(connection, migration_dir)
 
     def create(self) -> GerchainRuntime:
         self.initialize()
