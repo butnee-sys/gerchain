@@ -1,6 +1,6 @@
 # EA-35.13 — PostgreSQL Production Re-performance Gate
 
-Status: IN PROGRESS / NOT LOCKED
+Status: **LOCKED — VERIFIED**
 
 This evidence record defines the branch-tip production verification gate.
 
@@ -54,3 +54,25 @@ The workflow associated with commit `e860f502f3e1a2d56fd873ad2faab7b1ab630740` e
 ## Exact branch-tip execution trigger — 2026-10-04
 
 A fresh branch-tip execution is being triggered after verification that the current `services/gerchain_runtime.py` contains no escaped-newline corruption and that `ProductionRuntimeFactory` applies migrations, validates the canonical schema, and attaches Canonical Ledger authority. This marker is evidence metadata only; it does not certify the resulting run.
+
+## LOCK DECISION — 2026-10-07
+
+Status: **LOCKED — VERIFIED**
+
+Exact branch-tip commit:
+- `c9ca958a88a8f7abb4ca95159bb214a1fb03cf8d`
+- Commit: `docs(ea35): lock PostgreSQL production evidence`
+
+Fresh exact-SHA evidence:
+- `production-postgres` run **37555558755** — SUCCESS
+- `production-postgresql-gate` run **37555558722** — SUCCESS
+- `EAI PostgreSQL Production Proof` run **37555558737** — SUCCESS
+- `independent-postgresql-evidence` run **37555558746** — SUCCESS
+
+The verified gate covers PostgreSQL production boot, canonical schema/migration guard, Canonical Ledger authority, canonical value movement, replay/idempotency, lifecycle flows, settlement, and deep value-truth reconciliation through the configured production evidence workflows.
+
+Decision:
+**EA-35.13 PostgreSQL production re-performance gate is locked at exact SHA `c9ca958a88a8f7abb4ca95159bb214a1fb03cf8d`.**
+
+Scope limitation:
+This lock certifies the PostgreSQL production evidence gate only. It does not by itself certify the entire overall production architecture, security/IAM, observability, disaster recovery, performance/stress, or final production release lock.
