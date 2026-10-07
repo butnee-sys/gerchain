@@ -27,7 +27,8 @@ def test_production_factory_boots_against_postgresql():
     assert engine.dialect.name == "postgresql"
     assert runtime.is_canonical_ledger_authoritative
     assert runtime.runtime_mode == "production-postgresql"
-    assert runtime.get_balance("ci-missing-account") if False else True
+    runtime.create_account("ci-boot-account", 17)
+    assert runtime.get_balance("ci-boot-account") == 17
 
     inspector = inspect(engine)
     required = {
