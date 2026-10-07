@@ -138,8 +138,8 @@ def test_production_factory_uses_authoritative_migration_history(monkeypatch):
     )
     factory.initialize()
 
-    assert calls == []
-    assert len(initializer) == 1
+    assert calls == ["migrations"]
+    assert initializer == []
 
 
 def test_production_factory_creates_canonical_ledger_runtime(monkeypatch):
