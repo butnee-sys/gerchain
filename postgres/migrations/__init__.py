@@ -65,11 +65,9 @@ def apply_migrations(connection, migration_dir: Path) -> None:
             time.sleep(0.05 * (2 ** (attempt - 1)))
 def _apply_migrations_once(connection, migration_dir: Path) -> None:
     """Apply ordered PostgreSQL migrations exactly once with checksum locking."""
-    # Session-scoped advisory lock is intentionally used here instead of a
-    # transaction-scoped lock. The migration runner itself commits the bootstrap
-    # transaction, and the lock must remain held until that commit has completed.
-    # This makes concurrent first boots serialize the entire schema_version write.
-    _execute(connection, "SELECT pg_advisory_lock(8342719)")
+    # Transaction-scoped advisory locking serializes the entire migration batch.
+    # The lock is released automatically by COMMIT/ROLLBACK, including retry paths.
+    _execute(connection, "SELECT pg_advisory_xact_lock(8342719)")
     _execute(
         connection,
         "CREATE TABLE IF NOT EXISTS schema_version ("
@@ -170,4 +168,3 @@ def _apply_migrations_once(connection, migration_dir: Path) -> None:
                 )
 
     connection.commit()
-    _execute(connection, "SELECT pg_advisory_unlock(8342719)")
