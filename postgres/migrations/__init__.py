@@ -48,15 +48,12 @@ def _execute(connection, sql: str, params: dict | None = None):
 
 
 def apply_migrations(connection, migration_dir: Path) -> None:
-    """Apply migrations under a session-level PostgreSQL bootstrap lock."""
-    _execute(connection, "SELECT pg_advisory_lock(8342719)")
-    try:
-        _apply_migrations_once(connection, migration_dir)
-    finally:
-        try:
-            connection.rollback()
-        finally:
-            _execute(connection, "SELECT pg_advisory_unlock(8342719)")
+    """Apply ordered migrations under one transaction-level PostgreSQL lock.
+
+    The lock and the migration writes share the same transaction, so concurrent
+    first boots cannot observe a partially applied schema history.
+    """
+    _apply_migrations_once(connection, migration_dir)
 
 def _apply_migrations_once(connection, migration_dir: Path) -> None:
     """Apply ordered PostgreSQL migrations exactly once with checksum locking."""
