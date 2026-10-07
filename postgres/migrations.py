@@ -173,6 +173,8 @@ def _canonical_migration_files(path: Path) -> list[Path]:
             10: "010_canonical_evidence_constraints.sql",
             11: "011_ea35_canonical_schema_finalization.sql",
             12: "012_canonical_production.sql",
+        13: "013_ea35_canonical_schema_hardening.sql",
+            13: "013_ea35_canonical_schema_hardening.sql",
         }.get(version)
         if preferred_name:
             preferred_path = next((p for p in candidates if p.name == preferred_name), None)
