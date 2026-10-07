@@ -37,3 +37,9 @@ def test_core_gate_does_not_execute_shuud_tests():
     text = (root / ".github" / "workflows" / "core-gates.yml").read_text(encoding="utf-8")
     assert "tests/test_shuud_" not in text
     assert "shuud/" not in text
+
+
+def test_shuud_sandbox_declares_dee_security_dependency():
+    root = Path(__file__).resolve().parents[1]
+    dockerfile = (root / "sandbox" / "Dockerfile").read_text(encoding="utf-8")
+    assert "cryptography>=46,<47" in dockerfile
