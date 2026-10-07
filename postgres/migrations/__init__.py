@@ -63,7 +63,7 @@ def _apply_migrations_once(connection, migration_dir: Path) -> None:
     # Serialize first boot and every migration write in one PostgreSQL transaction.
     # The migration history insert is additionally ON CONFLICT-safe so a re-entry
     # cannot create duplicate version rows even if an older runner races this code.
-    # Session-level advisory lock is held until the migration batch explicitly\n    # releases it. This avoids any ambiguity around transaction boundaries while\n    # DDL and schema_version publication are being serialized across first boots.\n    _execute(connection, "SELECT pg_advisory_lock(8342719)")
+    # Transaction-scoped advisory locking is released automatically when the\n    # migration publication commits or rolls back.\n    _execute(connection, "SELECT pg_advisory_xact_lock(8342719)")
     _execute(
         connection,
         "CREATE TABLE IF NOT EXISTS schema_version ("
