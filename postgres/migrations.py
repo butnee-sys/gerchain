@@ -1,3 +1,4 @@
+# EA-35.31: fresh exact-SHA PostgreSQL concurrency verification after migration publication hardening.
 # EA-35.30: fresh CI evidence requested after migration publication hardening.
 # EA-35.20: fresh PostgreSQL re-performance must prove duplicate publication is harmless.
 # EA-35.18: retain session-scoped advisory serialization for bootstrap-safe migration publication.
