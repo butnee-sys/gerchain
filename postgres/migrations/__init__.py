@@ -59,6 +59,9 @@ def _apply_migrations_once(connection, migration_dir: Path) -> None:
     """Apply ordered PostgreSQL migrations exactly once with checksum locking."""
     # Transaction-scoped advisory locking serializes the entire migration batch.
     # The lock is released automatically by COMMIT/ROLLBACK, including retry paths.
+    # Serialize first boot and every migration write in one PostgreSQL transaction.
+    # The migration history insert is additionally ON CONFLICT-safe so a re-entry
+    # cannot create duplicate version rows even if an older runner races this code.
     _execute(connection, "SELECT pg_advisory_xact_lock(8342719)")
     _execute(
         connection,
