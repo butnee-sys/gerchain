@@ -1,30 +1,31 @@
-import os
-import pytest
+from __future__ import annotations
+
 import base64
+import os
 from datetime import datetime, timezone
 
-from sqlalchemy import create_engine
+import pytest
+from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker
 
-pytestmark = pytest.mark.integration
-
+from dee_security.root_of_trust import RootOfTrust
 from persistence.atomic_ledger import LedgerAccountModel
 from persistence.atomic_value_transaction import TransactionWitness
-from persistence.escrow_aggregate import CanonicalEscrow, EscrowState
 from persistence.deep_value_reconciliation import deep_reconcile_value_truth
-from persistence.cancel_escrow import cancel_escrow_in_transaction
-from persistence.refund_escrow import refund_escrow_in_transaction
-from persistence.settlement_coordinator import SettlementCoordinator
-from persistence.fund_escrow import fund_escrow_in_transaction
-from persistence.lock_escrow import lock_escrow_in_transaction
-from services.gerchain_runtime_factory import ProductionRuntimeConfig, ProductionRuntimeFactory
-from dee_security.root_of_trust import RootOfTrust
+from persistence.escrow_aggregate import CanonicalEscrow, EscrowState
+from services.gerchain_runtime_factory import (
+    ProductionRuntimeConfig,
+    ProductionRuntimeFactory,
+)
+
+pytestmark = pytest.mark.integration
 
 
 def test_postgresql_production_runtime_boot_and_value_truth():
     url = os.environ["GERCHAIN_TEST_DATABASE_URL"]
+    assert url.startswith("postgresql")
+
     engine = create_engine(url, pool_pre_ping=True)
-    sf = sessionmaker(bind=engine, expire_on_commit=False)
     factory = ProductionRuntimeFactory(
         ProductionRuntimeConfig(
             database_url=url,
@@ -38,43 +39,68 @@ def test_postgresql_production_runtime_boot_and_value_truth():
     runtime = factory.create()
     assert runtime.is_canonical_ledger_authoritative
 
-    now = datetime.now(timezone.utc)
-    with sf.begin() as session:
-        session.add_all([
-            LedgerAccountModel(account_id="pg-alice", currency="USD", balance=100, version=0, updated_at=now),
-            LedgerAccountModel(account_id="pg-escrow-1", currency="USD", balance=0, version=0, updated_at=now),
-            LedgerAccountModel(account_id="pg-bob", currency="USD", balance=0, version=0, updated_at=now),
-            CanonicalEscrow(
-                id="pg-escrow-1", sender_address="pg-alice", receiver_address="pg-bob",
-                amount=40, state=EscrowState.CREATED.value, condition_desc=None,
-                refund_destination="pg-alice", currency="USD", version=0,
-                created_at=now, updated_at=now,
-            ),
-        ])
+    runtime.create_account("pg-alice", 100)
+    runtime.create_account("pg-escrow-1", 0)
+    runtime.create_account("pg-bob", 0)
+    runtime.create_escrow(
+        escrow_id="pg-escrow-1",
+        sender="pg-alice",
+        beneficiary="pg-bob",
+        refund_destination="pg-alice",
+        amount=40,
+        currency="USD",
+        condition="production-postgresql-reperformance",
+    )
 
-    funded = runtime.fund("pg-fund-1", "pg-alice", "T0", {"evidence": "ok"})
+    funded = runtime.fund(
+        "pg-fund-1", "pg-alice", "T0", {"evidence": "ok"}
+    )
     assert funded["replayed"] is False
-    runtime.lock("pg-lock-1", "T1", {"evidence": "ok"})
+
+    locked = runtime.lock("pg-lock-1", "T1", {"evidence": "ok"})
+    assert locked["replayed"] is False
+
     released = runtime.release(
-        root=RootOfTrust("pg-owner", base64.b64encode(bytes(32)).decode("ascii")),
-        owner_id="pg-owner",
         transaction_id="pg-release-1",
         destination="pg-bob",
-        authorized=True,
-        trinity_proof={"trust": True, "transparency": True, "performance": True},
-        evidence_verified=True,
         timestamp="T2",
         evidence={"evidence": "ok"},
+        root=RootOfTrust(
+            "pg-owner",
+            base64.b64encode(bytes(32)).decode("ascii"),
+        ),
+        owner_id="pg-owner",
+        authorized=True,
+        evidence_verified=True,
+        trinity_proof={
+            "trust": True,
+            "transparency": True,
+            "performance": True,
+        },
     )
     assert released["replayed"] is False
 
-    with sf() as session:
+    with sessionmaker(bind=engine, expire_on_commit=False)() as session:
         report = deep_reconcile_value_truth(session)
-        assert report.matched, [f"{i.code}:{i.transaction_id}:{i.detail}" for i in report.issues]
-        assert session.get(LedgerAccountModel, "pg-alice").balance == 60
-        assert session.get(LedgerAccountModel, "pg-escrow-1").balance == 0
-        assert session.get(LedgerAccountModel, "pg-bob").balance == 40
-        assert session.get(CanonicalEscrow, "pg-escrow-1").state == EscrowState.RELEASED.value
+        assert report.matched, [
+            f"{i.code}:{i.transaction_id}:{i.detail}" for i in report.issues
+        ]
+
+        escrow = session.execute(
+            select(CanonicalEscrow).where(CanonicalEscrow.id == "pg-escrow-1")
+        ).scalar_one()
+        assert escrow.state == EscrowState.RELEASED.value
+
+        balances = {
+            row.account_id: int(row.balance)
+            for row in session.execute(select(LedgerAccountModel)).scalars()
+            if row.account_id in {"pg-alice", "pg-escrow-1", "pg-bob"}
+        }
+        assert balances == {
+            "pg-alice": 60,
+            "pg-escrow-1": 0,
+            "pg-bob": 40,
+        }
         assert session.query(TransactionWitness).count() == 3
 
     engine.dispose()
