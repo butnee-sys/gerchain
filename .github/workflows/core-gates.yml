@@ -62,6 +62,7 @@ jobs:
             tests/test_nef_gerchain_boundary.py \
             tests/test_nef_gerchain_port.py \
             tests/production/test_runtime_source_compiles.py \
+            postgres/tests/test_concurrency.py \
             tests/production/test_postgres_canonical_concurrency.py \
             tests/test_postgres_atomic_ledger.py \
             tests/test_production_runtime_factory.py \
