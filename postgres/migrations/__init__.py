@@ -165,4 +165,4 @@ def _apply_migrations_once(connection, migration_dir: Path) -> None:
 
     connection.commit()
 
-# EA-35.15: PostgreSQL migration publication remains transaction-serialized and idempotent.
+# EA-35.16: PostgreSQL migration publication remains transaction-serialized and idempotent; fresh CI must verify concurrent first boot.
