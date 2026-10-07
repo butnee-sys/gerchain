@@ -4,13 +4,15 @@ Status: **VERIFIED — PRODUCTION POSTGRESQL GATE PASSED**
 
 Evidence date: 2026-10-07  
 Branch: `feat/ea21-transaction-aware-ledger`  
-Verified commit: `db2b057c4e8d823dde11cca971f12cf0ec447158`
+Verified baseline commit: `db2b057c4e8d823dde11cca971f12cf0ec447158`
+
+Superseding branch-tip verification: `041f2babdd90a6eb521e0b2af4b9c19c39cd4454`
 
 ## Primary production gate
 
 Workflow: `production-postgresql-gate`  
-Run: `37571470436`  
-Job: `112631018984`  
+Run: `37571470436` (baseline evidence)  
+Job: `112631018984` (baseline evidence)  
 Conclusion: **success**
 
 All production gate steps passed:
@@ -28,6 +30,16 @@ Fresh test evidence from the gate includes:
 - 19 deep reconciliation tests passed
 - 1 EAI PostgreSQL re-performance test passed
 - 2 PostgreSQL production value-flow tests passed
+
+## Branch-tip verification
+
+Workflow: `production-postgresql-gate`  
+Run: `37572041414`  
+Job: `112632620410`  
+Head SHA: `041f2babdd90a6eb521e0b2af4b9c19c39cd4454`  
+Conclusion: **success**
+
+This branch-tip run re-executed the full production PostgreSQL gate after the runtime-construction corrections. The job completed successfully.
 
 ## Independent PostgreSQL evidence
 
