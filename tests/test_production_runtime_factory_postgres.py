@@ -4,11 +4,11 @@ import os
 
 import pytest
 
-from services.production_runtime_factory import ProductionRuntimeConfig, ProductionRuntimeFactory
+from services.gerchain_runtime_factory import ProductionRuntimeConfig, ProductionRuntimeFactory
 
 
 @pytest.mark.integration
-def test_production_factory_builds_real_postgresql_runtime():
+def test_production_factory_builds_real_postgresql_canonical_runtime():
     database_url = os.getenv("GERCHAIN_TEST_DATABASE_URL")
     if not database_url:
         pytest.skip("GERCHAIN_TEST_DATABASE_URL is required")
@@ -25,7 +25,21 @@ def test_production_factory_builds_real_postgresql_runtime():
     runtime = factory.create()
 
     assert runtime.runtime_mode == "production-postgresql"
-    assert runtime.is_postgresql_authoritative is True
-    runtime.require_postgresql_authority()
-    assert runtime._postgres_release is not None
-    assert runtime._postgres_release.release_engine.session_factory is factory.session_factory
+    assert runtime.is_canonical_ledger_authoritative is True
+    runtime.require_canonical_ledger_authority()
+    assert runtime._canonical_ledger is not None
+    assert runtime._session_factory is factory.session_factory
+
+    with factory.engine.connect() as connection:
+        from sqlalchemy import inspect, text
+        version = connection.execute(text("SELECT MAX(version) FROM schema_version")).scalar()
+        assert int(version) >= 12
+        tables = set(inspect(connection).get_table_names())
+        assert {
+            "escrows",
+            "gerchain_ledger_accounts",
+            "gerchain_ledger_movements",
+            "gerchain_transaction_witnesses",
+            "gerchain_outbox_events",
+            "gerchain_idempotency_records",
+        }.issubset(tables)
