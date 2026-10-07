@@ -21,6 +21,8 @@ def _run_migrations() -> None:
 
 def test_migrations_are_serialized_and_checksum_is_stable():
     # Two independent database sessions race the same fresh PostgreSQL database.
+    # The migration runner must use a transaction-scoped advisory lock so a
+    # completed publication cannot be duplicated by the competing session.
     # The migration runner must serialize publication and leave exactly one
     # authoritative schema_version row per version.
     with ThreadPoolExecutor(max_workers=2) as pool:
