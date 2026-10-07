@@ -7,15 +7,15 @@ This matrix is a controlled working document. It deliberately distinguishes impl
 | GC-IDM-001 | Identity / privileged access governance | Organizational IAM/MFA evidence required | MISSING |
 | GC-IDM-002 | MFA / privileged account assurance | MFA enforcement and account evidence required | MISSING |
 | GC-WIT-002 | Witness integrity / tamper evidence | Witness and DEE security tests | GREEN |
-| GC-RES-002 | Release atomicity / idempotency | Atomic release + PostgreSQL concurrency evidence | GREEN |
+| GC-RES-002 | Value-movement atomicity / idempotency | Canonical Ledger transaction boundary + concurrency integration gate | IN PROGRESS |
 | GC-RES-003 | Abandoned PROCESSING recovery | Recovery implementation + PostgreSQL tests + PR #63 | GREEN |
 | GC-IND-001 | Independent audit/re-performance | Independent re-performance package | OPEN |
 
 ## Supporting CORE controls
 
 - Operating DB reconciliation: GREEN.
-- PostgreSQL concurrency: GREEN.
-- CORE reconciliation CI: GREEN.
+- Canonical Ledger PostgreSQL concurrency: IN PROGRESS until fresh workflow evidence is recorded.
+- CORE/fundamental-architecture CI: IN PROGRESS until the current branch workflow is executed successfully.
 - CodeQL: GREEN.
 - CORE/SHUUD boundary: GREEN.
 - PwC baseline: FROZEN.
