@@ -164,6 +164,7 @@ def apply_migrations(conn, migration_dir: str | Path) -> None:
     preferred_names = {
         1: "001_canonical_production.sql",
         2: "002_canonical_production.sql",
+        3: "003_canonical_compatibility.sql",
         5: "005_canonical_production.sql",
         6: "006_canonical_production.sql",
         7: "007_canonical_production.sql",
