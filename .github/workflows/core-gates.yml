@@ -4,6 +4,7 @@ concurrency:
   cancel-in-progress: true
 
 # Production PostgreSQL evidence gate: EA-35.13
+# Re-performance rerun: validate current branch state after runtime construction correction.
 # Single authoritative PostgreSQL/core gate; duplicate migration/concurrency workflows are not permitted
 
 on:
