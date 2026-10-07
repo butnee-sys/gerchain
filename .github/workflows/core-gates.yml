@@ -4,7 +4,7 @@ concurrency:
   cancel-in-progress: true
 
 # Production PostgreSQL evidence gate: EA-35.27 exact-branch re-performance
-# Re-performance rerun: validate current branch state after runtime construction correction.
+# EA-35.42: exact-SHA final production evidence gate after runtime/migration fixes.
 # Single authoritative PostgreSQL/core gate; duplicate migration/concurrency workflows are not permitted
 
 on:
