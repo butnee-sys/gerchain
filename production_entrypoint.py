@@ -63,6 +63,35 @@ def build_production_runtime():
     return runtime, engine
 
 
+def build_production_runtime():
+    """Build the canonical production runtime from environment configuration."""
+    database_url = os.environ.get("GERCHAIN_DATABASE_URL")
+    escrow_id = os.environ.get("GERCHAIN_ESCROW_ID")
+    currency = os.environ.get("GERCHAIN_CURRENCY")
+    witness_id = os.environ.get("GERCHAIN_WITNESS_ID")
+    amount_raw = os.environ.get("GERCHAIN_ESCROW_AMOUNT")
+    if not database_url or not database_url.startswith("postgresql"):
+        raise RuntimeError("production entrypoint requires PostgreSQL GERCHAIN_DATABASE_URL")
+    if not all((escrow_id, currency, witness_id, amount_raw)):
+        raise RuntimeError("production entrypoint requires escrow, amount, currency, and witness configuration")
+    try:
+        amount = int(amount_raw)
+    except ValueError as exc:
+        raise RuntimeError("GERCHAIN_ESCROW_AMOUNT must be an integer") from exc
+    engine = create_engine(database_url, pool_pre_ping=True)
+    factory = ProductionRuntimeFactory(
+        ProductionRuntimeConfig(
+            database_url=database_url,
+            escrow_id=escrow_id,
+            amount=amount,
+            currency=currency,
+            witness_id=witness_id,
+        ),
+        engine=engine,
+    )
+    return factory.create(), engine
+
+
 def main() -> None:
     runtime, engine = build_production_runtime()
     escrow_id = runtime.escrow_engine.escrow_id
