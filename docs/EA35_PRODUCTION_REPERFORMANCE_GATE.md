@@ -30,3 +30,34 @@ This document defines the evidence gate for production PostgreSQL re-performance
 ## Lock rule
 
 No production lock may be declared until a fresh exact-SHA CI run passes the relevant gates and the PostgreSQL re-performance evidence is independently reproduced.
+
+## Fresh exact-SHA evidence — 2026-10-07
+
+Verified branch head: `933cff155a90b6ab4d2f16697e084499cabc07b6`.
+
+The following GitHub Actions runs completed successfully at this exact revision:
+
+- production-postgresql-reperformance — run 37684758322
+- EAI PostgreSQL Production Proof — run 37684758266
+- production-postgresql-gate — run 37684758298
+- independent-postgresql-evidence — run 37684758179
+- production-postgres — run 37684758308
+- core-gates — run 37684758365
+- CodeQL Advanced — run 37684758337
+- CORE Operating Reconciliation — run 37684758263
+
+Key execution evidence:
+
+- PostgreSQL 16 service booted successfully.
+- Production factory/schema verification passed.
+- Production entrypoint boot against PostgreSQL passed.
+- Concurrent migration bootstrap test passed.
+- Deep reconciliation suite: 19 passed.
+- PostgreSQL production smoke: passed.
+- EAI production re-performance: passed.
+- Independent persisted-value verification: passed.
+- Production PostgreSQL value-flow gate: passed.
+
+This establishes fresh exact-SHA PostgreSQL production evidence. It does not by itself waive remaining governance, access-control, disaster-recovery, or formal architecture-lock requirements.
+
+**Current determination: PRODUCTION EVIDENCE VERIFIED / ARCHITECTURE LOCK NOT YET DECLARED.**
