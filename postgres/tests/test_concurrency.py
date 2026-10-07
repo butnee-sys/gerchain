@@ -8,7 +8,7 @@ from postgres.migrations import apply_migrations
 
 
 def _dsn() -> str:
-    return os.environ["GERCHAIN_POSTGRES_DSN"]
+    return os.environ.get("GERCHAIN_TEST_DATABASE_URL") or os.environ["GERCHAIN_POSTGRES_DSN"]
 
 
 def _run_migrations() -> None:
