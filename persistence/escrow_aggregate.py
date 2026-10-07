@@ -103,4 +103,4 @@ def escrow_to_dict(escrow: CanonicalEscrow) -> dict[str, object]:
     }
 
 
-__all__ = ["CanonicalEscrow", "EscrowState", "transition_escrow", "get_escrow", "escrow_to_dict"]
+__all__ = ["CanonicalEscrow", "EscrowState", "create_escrow_in_transaction", "transition_escrow", "get_escrow", "escrow_to_dict"]
