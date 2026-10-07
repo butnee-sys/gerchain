@@ -3,8 +3,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
-from pathlib import Path
-from postgres.migrations import apply_migrations
 
 
 from sqlalchemy import create_engine, inspect, text
@@ -18,8 +16,6 @@ from persistence.durable_idempotency import IdempotencyBase
 from persistence.escrow_aggregate import EscrowBase
 from persistence.recovery_outbox import OutboxBase
 from services.gerchain_runtime import GerchainRuntime
-from postgres.migrations import apply_migrations
-
 
 @dataclass(frozen=True)
 class ProductionRuntimeConfig:
