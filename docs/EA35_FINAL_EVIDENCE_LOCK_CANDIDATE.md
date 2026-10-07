@@ -3,7 +3,7 @@
 **Status:** VERIFIED / LOCK CANDIDATE — NOT YET LOCKED  
 **Scope:** Fundamental GerChain value-flow infrastructure + EAI / Canonical Ledger / Canonical Escrow / Witness / Outbox / Durable Idempotency  
 **Working branch:** feat/ea21-transaction-aware-ledger  
-**Last reviewed:** 2026-09-28
+**Last reviewed:** 2026-10-07
 
 ## 1. Purpose
 
@@ -63,19 +63,33 @@ LOCK is explicitly state-only and therefore does not require a Ledger movement.
 
 ## 5. PostgreSQL evidence
 
-An exact PostgreSQL execution SHA `890a78f36dcfe161e195da649b3cd124133d6535` has recorded successful production evidence:
+### Current exact-SHA production verification
 
-- PostgreSQL production re-performance — run 36317914217 — SUCCESS
-- Production PostgreSQL Runtime — run 36317914351 — SUCCESS
-- production-postgres-smoke — run 36317914313 — SUCCESS
-- production-postgres-proof — run 36317914446 — SUCCESS
-- production-postgresql-gate — run 36317914344 — SUCCESS
-- PostgreSQL production verification — run 36317914254 — SUCCESS
-- EAI PostgreSQL Reperformance — run 36317914266 — SUCCESS
-- EA-35 PostgreSQL re-performance — run 36317914249 — SUCCESS
-- CodeQL Advanced — run 36317914278 — SUCCESS
+Current branch tip before this evidence-record commit: `52e2e1bce5952bbe7a91ac091dcf3c5eb5ba11e4`.
 
-These prove that real PostgreSQL execution has been achieved for the corresponding execution SHA.
+Fresh exact-SHA GitHub Actions evidence:
+
+- `production-postgresql-gate` — run `37578103101` — SUCCESS
+- `EAI PostgreSQL Production Proof` — run `37578103120` — SUCCESS
+- `production-postgres` — run `37578103114` — SUCCESS
+- `independent-postgresql-evidence` — run `37578103086` — SUCCESS
+- `production-postgres-reperformance` — run `37578099616` — SUCCESS
+- `EA-35 PostgreSQL production smoke` — run `37578099605` — SUCCESS
+- `production-postgresql-e2e` — run `37578099474` — SUCCESS
+- `postgres-production` — run `37578099673` — SUCCESS
+
+The canonical production gate log records:
+- PostgreSQL 16 live service
+- production entrypoint initialized successfully
+- Canonical Ledger authority established
+- migration concurrency: `1 passed`
+- deep value-truth reconciliation: `19 passed`
+- EAI production re-performance: `1 passed`
+- production PostgreSQL integration gate: `2 passed`
+
+This is the first current-tip evidence set that covers the production-factory correction on the same execution SHA.
+
+Historical successful evidence remains retained but is not used to substitute for current-tip proof.
 
 ## 6. Failed-run disposition
 
