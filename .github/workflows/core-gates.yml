@@ -3,7 +3,7 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
   cancel-in-progress: true
 
-# Production PostgreSQL evidence gate: EA-35.13
+# Production PostgreSQL evidence gate: EA-35.27 exact-branch re-performance
 # Re-performance rerun: validate current branch state after runtime construction correction.
 # Single authoritative PostgreSQL/core gate; duplicate migration/concurrency workflows are not permitted
 
