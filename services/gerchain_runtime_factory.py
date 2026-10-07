@@ -2,12 +2,15 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+from pathlib import Path
 from typing import Any, Callable
 
 
 from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import sessionmaker
+
+from postgres.migrations import apply_migrations
 
 
 from persistence.atomic_ledger import AtomicLedgerBase
@@ -85,8 +88,10 @@ class ProductionRuntimeFactory:
         )
 
     def initialize(self) -> None:
-        """Apply the versioned canonical PostgreSQL migration set."""
-        initialize_canonical_postgres_schema(self.engine)
+        """Apply the authoritative PostgreSQL migration history before boot."""
+        migration_dir = Path(__file__).resolve().parents[1] / "postgres" / "migrations"
+        with self.engine.connect() as connection:
+            apply_migrations(connection, migration_dir)
 
     def create(self) -> GerchainRuntime:
         self.initialize()
