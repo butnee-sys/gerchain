@@ -92,16 +92,20 @@ def checksum(sql: str) -> str:
 
 @contextmanager
 def _native_migration_transaction(conn):
-    """Serialize native psycopg migration publication across the full transaction."""
+    """Serialize native psycopg migration publication for the full session lifecycle."""
     if _connection_in_transaction(conn):
         raise RuntimeError("migration runner requires a clean psycopg transaction")
 
-    # Acquire the advisory lock inside the same transaction that publishes
-    # schema_version. The xact-scoped lock is released only after commit/rollback,
-    # so a competing runner cannot observe a partially published history.
-    with conn.transaction():
-        conn.execute("SELECT pg_advisory_xact_lock(%s)", (MIGRATION_LOCK_KEY,))
-        yield
+    # Hold the advisory lock until the complete migration publication transaction
+    # has committed. This closes the race between migration transactions.
+    conn.execute("SELECT pg_advisory_lock(%s)", (MIGRATION_LOCK_KEY,))
+    conn.commit()
+    try:
+        with conn.transaction():
+            yield
+    finally:
+        conn.execute("SELECT pg_advisory_unlock(%s)", (MIGRATION_LOCK_KEY,))
+        conn.commit()
 
 @contextmanager
 def _sqlalchemy_migration_transaction(conn):
@@ -315,7 +319,8 @@ def apply_migrations(conn, migration_dir: str | Path) -> None:
                     """
                     INSERT INTO schema_version(version, checksum)
                     VALUES (%s, %s)
-                    ON CONFLICT (version) DO NOTHING
+                    ON CONFLICT (version) DO UPDATE
+                    SET checksum = schema_version.checksum
                     """,
                     (version, digest),
                 )
