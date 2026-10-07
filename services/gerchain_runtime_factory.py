@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from pathlib import Path
 from typing import Any, Callable
 
 
@@ -10,16 +9,12 @@ from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import sessionmaker
 
-from postgres.migrations import apply_migrations
-
-
 from persistence.atomic_ledger import AtomicLedgerBase
 from persistence.atomic_value_transaction import WitnessBase, TransactionWitness
 from persistence.durable_idempotency import IdempotencyBase
 from persistence.escrow_aggregate import EscrowBase
 from persistence.recovery_outbox import OutboxBase
 from services.gerchain_runtime import GerchainRuntime
-from postgres.migrations import apply_migrations
 
 @dataclass(frozen=True)
 class ProductionRuntimeConfig:
