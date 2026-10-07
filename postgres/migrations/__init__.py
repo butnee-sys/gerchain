@@ -164,3 +164,5 @@ def _apply_migrations_once(connection, migration_dir: Path) -> None:
                 )
 
     connection.commit()
+
+# EA-35.15: PostgreSQL migration publication remains transaction-serialized and idempotent.
