@@ -94,18 +94,13 @@ def _native_migration_transaction(conn):
     if _connection_in_transaction(conn):
         raise RuntimeError("migration runner requires a clean psycopg transaction")
 
-    # Use a session-level advisory lock so the same connection holds the
-    # serialization barrier across transaction creation, migration DDL, and
-    # schema_version publication. This avoids snapshot/transaction-boundary
-    # races between independent bootstrap sessions.
-    conn.execute("SELECT pg_advisory_lock(%s)", (MIGRATION_LOCK_KEY,))
-    conn.commit()
-    try:
-        with conn.transaction():
-            yield
-    finally:
-        conn.execute("SELECT pg_advisory_unlock(%s)", (MIGRATION_LOCK_KEY,))
-        conn.commit()
+    # Acquire the transaction-scoped advisory lock as the first statement
+    # inside the publication transaction. READ COMMITTED statements issued
+    # after the lock acquisition then observe the committed state left by the
+    # preceding publisher, while the lock is released automatically at commit.
+    with conn.transaction():
+        conn.execute("SELECT pg_advisory_xact_lock(%s)", (MIGRATION_LOCK_KEY,))
+        yield
 
 @contextmanager
 def _sqlalchemy_migration_transaction(conn):
