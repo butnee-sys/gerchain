@@ -92,35 +92,21 @@ def checksum(sql: str) -> str:
 
 @contextmanager
 def _native_migration_transaction(conn):
-    """Serialize native psycopg migration publication for the full session lifecycle."""
+    """Serialize native psycopg migration publication inside one transaction."""
     if _connection_in_transaction(conn):
         raise RuntimeError("migration runner requires a clean psycopg transaction")
-
-    # Hold the advisory lock until the complete migration publication transaction
-    # has committed. This closes the race between migration transactions.
-    conn.execute("SELECT pg_advisory_lock(%s)", (MIGRATION_LOCK_KEY,))
-    conn.commit()
-    try:
-        with conn.transaction():
-            yield
-    finally:
-        conn.execute("SELECT pg_advisory_unlock(%s)", (MIGRATION_LOCK_KEY,))
-        conn.commit()
+    with conn.transaction():
+        conn.execute("SELECT pg_advisory_xact_lock(%s)", (MIGRATION_LOCK_KEY,))
+        yield
 
 @contextmanager
 def _sqlalchemy_migration_transaction(conn):
-    """Serialize SQLAlchemy migration runners for the full publication lifecycle."""
+    """Serialize SQLAlchemy migration publication inside one transaction."""
     if conn.in_transaction():
         raise RuntimeError("migration runner requires a clean SQLAlchemy transaction")
-
-    conn.exec_driver_sql("SELECT pg_advisory_lock(%s)", (MIGRATION_LOCK_KEY,))
-    conn.commit()
-    try:
-        with conn.begin():
-            yield
-    finally:
-        conn.exec_driver_sql("SELECT pg_advisory_unlock(%s)", (MIGRATION_LOCK_KEY,))
-        conn.commit()
+    with conn.begin():
+        conn.exec_driver_sql("SELECT pg_advisory_xact_lock(%s)", (MIGRATION_LOCK_KEY,))
+        yield
 
 def _transaction(conn):
     """Return a real transaction context for SQLAlchemy or native psycopg."""
@@ -129,6 +115,7 @@ def _transaction(conn):
     if hasattr(conn, "transaction"):
         return _native_migration_transaction(conn)
     return nullcontext()
+
 def _execute(conn, sql: str, params=None):
     # Non-parameterized DDL/PLpgSQL may contain literal percent signs.
     # Avoid psycopg's pyformat parser when there are no parameters.
