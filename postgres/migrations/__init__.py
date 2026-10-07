@@ -53,7 +53,14 @@ def apply_migrations(connection, migration_dir: Path) -> None:
     The lock and the migration writes share the same transaction, so concurrent
     first boots cannot observe a partially applied schema history.
     """
-    _apply_migrations_once(connection, migration_dir)
+    _execute(connection, "SELECT pg_advisory_lock(8342719)")
+    try:
+        _apply_migrations_once(connection, migration_dir)
+    finally:
+        try:
+            _execute(connection, "SELECT pg_advisory_unlock(8342719)")
+        except Exception:
+            pass
 
 def _apply_migrations_once(connection, migration_dir: Path) -> None:
     """Apply ordered PostgreSQL migrations exactly once with checksum locking."""
