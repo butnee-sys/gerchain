@@ -1,96 +1,81 @@
 # EA-35 PostgreSQL Production Evidence
 
-## Scope
+Status: **VERIFIED — PRODUCTION POSTGRESQL GATE PASSED**
 
-Fresh evidence for the canonical PostgreSQL production runtime, EAI value-flow boundary, migration bootstrap, and deep value-truth reconciliation.
+Evidence date: 2026-10-07  
+Branch: `feat/ea21-transaction-aware-ledger`  
+Verified commit: `db2b057c4e8d823dde11cca971f12cf0ec447158`
 
-## Exact execution commit
+## Primary production gate
 
-- Branch: `feat/ea21-transaction-aware-ledger`
-- Commit: `5e556ec151ece90fab2dc1d524fe1b651f005f7b`
-- PostgreSQL service: PostgreSQL 16
-- Python: 3.13
+Workflow: `production-postgresql-gate`  
+Run: `37571470436`  
+Job: `112631018984`  
+Conclusion: **success**
 
-## Fresh GitHub Actions evidence
-
-### Production PostgreSQL gate
-
-- Run: `37557753135`
-- Workflow: `production-postgresql-gate`
-- Conclusion: **SUCCESS**
-- Pull request: #90
-- Head SHA: `5e556ec151ece90fab2dc1d524fe1b651f005f7b`
-
-Substantive steps all completed successfully:
+All production gate steps passed:
 
 1. Python syntax gate
-2. Production factory + canonical persistence
-3. Production entrypoint boot against PostgreSQL
+2. Production factory + canonical persistence verification
+3. Production entrypoint boot against PostgreSQL 16
 4. Concurrent PostgreSQL migration bootstrap
-5. Deep value-truth reconciliation
+5. Deep value-truth reconciliation suite
 6. EAI production re-performance
 7. Real PostgreSQL production value-flow gate
 
-Observed outputs:
+Fresh test evidence from the gate includes:
 
-- Concurrent migration bootstrap: **2 passed**
-- Deep reconciliation: **19 passed**
-- EAI production re-performance: **1 passed**
-- PostgreSQL production value-flow gate: **2 passed**
+- 19 deep reconciliation tests passed
+- 1 EAI PostgreSQL re-performance test passed
+- 2 PostgreSQL production value-flow tests passed
 
-Canonical runtime evidence:
+## Independent PostgreSQL evidence
 
-- `PRODUCTION_FACTORY_GATE=PASS`
-- `CANONICAL_TABLES_GATE=PASS`
-- `CANONICAL_LEDGER_MOVEMENT_GATE=PASS`
-- `CANONICAL_LEDGER_REPLAY_GATE=PASS`
+Workflow: `independent-postgresql-evidence`  
+Run: `37571470428`  
+Job: `112630845484`  
+Conclusion: **success**
 
-Production boot evidence:
+Independent persisted-value verification:
 
-- `GerChain production runtime initialized: escrow=ci-escrow-1 currency=USD`
+- 1 test passed
+- PostgreSQL 16 service container used
+- production persistence was exercised against a real PostgreSQL instance
 
-### Independent PostgreSQL evidence
+## EAI production proof
 
-- Run: `37557753187`
-- Workflow: `independent-postgresql-evidence`
-- Conclusion: **SUCCESS**
-- Independent persisted-value verification: **1 passed**
+Workflow: `EAI PostgreSQL Production Proof`  
+Run: `37571470409`  
+Job: `112630845561`  
+Conclusion: **success**
 
-### EAI PostgreSQL production proof
+The EAI production proof completed successfully against PostgreSQL 16.
 
-- Run: `37557753111`
-- Workflow: `EAI PostgreSQL Production Proof`
-- Conclusion: **SUCCESS**
+## Additional production workflow
 
-## Migration-lock hardening
+Workflow: `production-postgres`  
+Run: `37571470410`  
+Job: `112630846191`  
+Conclusion: **success**
 
-The canonical production factory imports the `postgres.migrations` package. Its migration runner uses a PostgreSQL transaction-scoped advisory lock.
+Verified:
 
-The runner previously attempted an explicit advisory unlock after COMMIT. A transaction-scoped advisory lock is already released by COMMIT, so that explicit unlock generated PostgreSQL warnings.
+- production PostgreSQL migration and boot
+- production PostgreSQL value flow
+- deep value-truth suite
 
-Fixed in:
+## Production entrypoint evidence
 
-`5e556ec151ece90fab2dc1d524fe1b651f005f7b`
+The production entrypoint now constructs the runtime through:
 
-The invalid post-COMMIT unlock was removed. The fresh production PostgreSQL gate then completed successfully on the corrected commit.
+`ProductionRuntimeConfig → ProductionRuntimeFactory → configure_canonical_ledger → require_canonical_ledger_authority`
 
-## Verified production properties
+The PostgreSQL production gate explicitly booted `production_entrypoint.py` and verified controlled startup.
 
-The fresh evidence establishes that the branch can:
+## Interpretation
 
-1. start PostgreSQL 16;
-2. apply the canonical migration history;
-3. construct a Canonical Ledger-authoritative runtime;
-4. boot the production entrypoint;
-5. execute canonical ledger movement and replay protection;
-6. run deep value-truth reconciliation;
-7. reproduce EAI value-flow behavior;
-8. independently verify persisted value state.
+This evidence establishes that the **EAI / Canonical PostgreSQL runtime path is executable and reproducible in CI against PostgreSQL 16** at the verified commit.
 
-## Status
+It does **not** by itself constitute final overall production lock. Remaining gates include repository-wide governance/security controls, final architecture evidence reconciliation, recovery/DR evidence, release governance, and final independent re-performance/approval where required.
 
-**EA-35.13 — VERIFIED on fresh PostgreSQL evidence**
-
-This is not the final overall production lock.
-
-Remaining overall gates include broader recovery/DR, security and IAM governance, observability/performance, release governance, and final independent re-performance across the complete frozen architecture.
+**Important:** GREEN here means fresh repository/CI technical evidence only. It is not an external certification or operational production attestation.
