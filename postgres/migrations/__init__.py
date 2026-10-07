@@ -48,19 +48,13 @@ def _execute(connection, sql: str, params: dict | None = None):
 
 
 def apply_migrations(connection, migration_dir: Path) -> None:
-    """Apply ordered migrations under one transaction-level PostgreSQL lock.
+    """Apply ordered migrations under one transaction-scoped PostgreSQL lock.
 
-    The lock and the migration writes share the same transaction, so concurrent
-    first boots cannot observe a partially applied schema history.
+    The advisory lock, schema DDL, and schema-version writes share one
+    transaction. This makes concurrent first boots serialize without relying on
+    a session-level lock that can outlive the transaction.
     """
-    _execute(connection, "SELECT pg_advisory_lock(8342719)")
-    try:
-        _apply_migrations_once(connection, migration_dir)
-    finally:
-        try:
-            _execute(connection, "SELECT pg_advisory_unlock(8342719)")
-        except Exception:
-            pass
+    _apply_migrations_once(connection, migration_dir)
 
 def _apply_migrations_once(connection, migration_dir: Path) -> None:
     """Apply ordered PostgreSQL migrations exactly once with checksum locking."""
