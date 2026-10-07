@@ -48,3 +48,23 @@ def test_production_factory_boots_and_uses_canonical_ledger() -> None:
         assert session.execute(select(TransactionWitness)).all() == []
 
     engine.dispose()
+
+def test_production_entrypoint_builds_canonical_runtime(monkeypatch) -> None:
+    database_url = os.environ.get("GERCHAIN_TEST_DATABASE_URL")
+    if not database_url:
+        pytest.skip("GERCHAIN_TEST_DATABASE_URL is required")
+
+    monkeypatch.setenv("GERCHAIN_DATABASE_URL", database_url)
+    monkeypatch.setenv("GERCHAIN_ESCROW_ID", "entrypoint-escrow")
+    monkeypatch.setenv("GERCHAIN_ESCROW_AMOUNT", "100")
+    monkeypatch.setenv("GERCHAIN_CURRENCY", "USD")
+    monkeypatch.setenv("GERCHAIN_WITNESS_ID", "entrypoint-witness")
+
+    from production_entrypoint import build_production_runtime
+
+    runtime, engine = build_production_runtime()
+    try:
+        assert runtime.is_canonical_ledger_authoritative
+        assert runtime._canonical_ledger is not None
+    finally:
+        engine.dispose()
