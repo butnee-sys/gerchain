@@ -61,3 +61,26 @@ def build_production_runtime():
 
 
 
+
+
+def main() -> None:
+    global _running
+    runtime, engine = build_production_runtime()
+    escrow_id = os.environ["GERCHAIN_ESCROW_ID"]
+    currency = os.environ["GERCHAIN_CURRENCY"]
+    print(
+        "GerChain production runtime initialized: "
+        f"escrow={escrow_id} currency={currency}"
+    )
+
+    signal.signal(signal.SIGTERM, _stop)
+    signal.signal(signal.SIGINT, _stop)
+    try:
+        while _running:
+            time.sleep(1)
+    finally:
+        engine.dispose()
+
+
+if __name__ == "__main__":
+    main()
