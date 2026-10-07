@@ -63,6 +63,24 @@ CODE
 → PRODUCTION LOCK
 ```
 
+## 2026-10-07 exact-SHA verification checkpoint
+
+Current corrective branch checkpoint: `9f77986c2f0e22017929da780d3d6a46319236b7`.
+
+Freshly inspected production construction:
+- `ProductionRuntimeFactory` uses `ProductionRuntimeConfig` and instance `.create()`.
+- Production initialization applies the PostgreSQL migration authority and verifies schema version >= 12.
+- Runtime authority is explicitly `configure_canonical_ledger()`.
+- `production_entrypoint.py` constructs the factory correctly and requires Canonical Ledger authority.
+
+Historical exact-SHA failures were also verified from GitHub Actions:
+- core-gates run `36542458205`: Python collection failure caused by an intermediate literal `\\n` source corruption; current branch source has real newlines.
+- PostgreSQL Concurrency run `36542458201`: duplicate `schema_version(version=2)` publication; current migration publisher has advisory serialization, table publication barrier, and `ON CONFLICT DO NOTHING`.
+
+Important: these corrective code changes require a fresh GitHub Actions execution on the current checkpoint SHA. Historical SUCCESS runs on older SHAs are retained evidence but are not promoted to current proof.
+
+**Checkpoint decision: EA-35 IN PROGRESS / NOT LOCKED.**
+
 ## Current decision
 
 **EA-35: VERIFIED / NOT LOCKED**
