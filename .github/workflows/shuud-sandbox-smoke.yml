@@ -10,7 +10,6 @@ on:
     paths:
       - "shuud/**"
       - "tests/test_shuud_*.py"
-      - "nef_gerchain_port/**"
       - "sandbox/**"
   pull_request:
     branches: ["main"]
