@@ -122,6 +122,10 @@ jobs:
               assert source.balance == 900
               assert destination.balance == 100
               assert len(movements) == 1
+              session.delete(movements[0])
+              session.delete(source)
+              session.delete(destination)
+              session.commit()
 
           print("PRODUCTION_FACTORY_GATE=PASS")
           print("CANONICAL_TABLES_GATE=PASS")
