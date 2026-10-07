@@ -7,13 +7,18 @@ concurrency:
 on:
   push:
     branches: ["main"]
+    paths:
+      - "shuud/**"
+      - "tests/test_shuud_*.py"
+      - "nef_gerchain_port/**"
+      - "sandbox/**"
   pull_request:
-  paths:
-    - "shuud/**"
-    - "tests/test_shuud_*.py"
-    - "nef_gerchain_port/**"
-    - "sandbox/**"
     branches: ["main"]
+    paths:
+      - "shuud/**"
+      - "tests/test_shuud_*.py"
+      - "nef_gerchain_port/**"
+      - "sandbox/**"
   workflow_dispatch:
 
 jobs:
