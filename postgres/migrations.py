@@ -1,4 +1,4 @@
-# EA-35.29: fresh CI evidence requested after runtime-construction correction and migration publication hardening.
+# EA-35.30: fresh CI evidence requested after migration publication hardening.
 # EA-35.20: fresh PostgreSQL re-performance must prove duplicate publication is harmless.
 # EA-35.18: retain session-scoped advisory serialization for bootstrap-safe migration publication.
 # EA-35.19: re-performance evidence must execute the conflict-safe publication path.
