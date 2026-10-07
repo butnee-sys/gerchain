@@ -20,7 +20,7 @@ def _run_migrations() -> None:
 
 
 def test_migrations_are_serialized_and_checksum_is_stable():
-    # EA-35.36: exact fresh PostgreSQL re-performance gate.
+    # EA-35.38: exact fresh PostgreSQL re-performance gate on the current migration runner.
     # Two independent database sessions race the same fresh PostgreSQL database.
     # The migration runner must use a transaction-scoped advisory lock so a
     # completed publication cannot be duplicated by the competing session.
