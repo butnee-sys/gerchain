@@ -62,7 +62,7 @@ jobs:
         run: |
           pytest -q \
             tests/test_core_structure.py \
-            tests/test_final_lock_contract.py \
+            tests/test_core_final_lock_contract.py \
             tests/test_boundary_adapters.py \
             tests/test_composition_root.py \
             tests/test_governed_flow_adapters.py \
