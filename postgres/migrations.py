@@ -91,21 +91,17 @@ def checksum(sql: str) -> str:
 
 @contextmanager
 def _native_migration_transaction(conn):
-    """Serialize native psycopg migration publication for the full session."""
+    """Serialize native psycopg migration publication in one transaction."""
     if _connection_in_transaction(conn):
         raise RuntimeError("migration runner requires a clean psycopg transaction")
 
-    # Hold a session-scoped advisory lock across the complete publication
-    # transaction. This prevents a competing native psycopg session from
-    # entering the schema_version read/write window between transactions.
-    conn.execute("SELECT pg_advisory_lock(%s)", (MIGRATION_LOCK_KEY,))
-    conn.commit()
-    try:
-        with conn.transaction():
-            yield
-    finally:
-        conn.execute("SELECT pg_advisory_unlock(%s)", (MIGRATION_LOCK_KEY,))
-        conn.commit()
+    # Acquire the advisory lock inside the same transaction that performs
+    # schema publication. Transaction-scoped locking makes the serialization
+    # boundary explicit: the lock is held from the schema_version read through
+    # migration execution and publication, then released atomically on commit.
+    with conn.transaction():
+        conn.execute("SELECT pg_advisory_xact_lock(%s)", (MIGRATION_LOCK_KEY,))
+        yield
 
 @contextmanager
 def _sqlalchemy_migration_transaction(conn):
