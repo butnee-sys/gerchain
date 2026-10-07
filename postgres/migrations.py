@@ -169,6 +169,28 @@ def _canonical_migration_files(path: Path) -> list[Path]:
     selected: list[Path] = []
     for version in sorted(grouped):
         candidates = grouped[version]
+        # Prefer the explicitly frozen canonical filename when present.
+        # This avoids relying on substring matching when historical aliases
+        # share the same numeric migration version.
+        preferred_name = {
+            1: "001_canonical_production.sql",
+            2: "002_canonical_production.sql",
+            3: "003_canonical_compatibility.sql",
+            4: "004_canonical_value_truth.sql",
+            5: "005_canonical_production.sql",
+            6: "006_canonical_production.sql",
+            7: "007_canonical_production.sql",
+            8: "008_ea35_idempotency_compat.sql",
+            9: "009_canonical_movement_integrity_hardening.sql",
+            10: "010_canonical_evidence_constraints.sql",
+            11: "011_ea35_canonical_schema_finalization.sql",
+            12: "012_canonical_production.sql",
+        }.get(version)
+        if preferred_name:
+            preferred_path = next((p for p in candidates if p.name == preferred_name), None)
+            if preferred_path is not None:
+                selected.append(preferred_path)
+                continue
         canonical = [p for p in candidates if "canonical" in p.stem]
         if len(canonical) == 1:
             selected.append(canonical[0])
