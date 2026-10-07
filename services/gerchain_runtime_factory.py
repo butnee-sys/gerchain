@@ -88,11 +88,8 @@ class ProductionRuntimeFactory:
     def initialize(self) -> None:
         """Apply and verify the authoritative PostgreSQL schema before boot."""
         initialize_canonical_postgres_schema(self.engine)
-        # ORM metadata remains a compatibility guard for additive models;
-        # migration SQL is the authoritative production schema definition.
-        migration_dir = Path(__file__).resolve().parents[1] / "postgres" / "migrations"
-        with self.engine.connect() as conn:
-            apply_migrations(conn, migration_dir)
+        # Migration SQL is the sole production schema authority. ORM metadata
+        # is only an additive compatibility guard after migrations complete.
         for base in (AtomicLedgerBase, EscrowBase, OutboxBase, IdempotencyBase, TransactionWitness):
             base.metadata.create_all(self.engine)
 
