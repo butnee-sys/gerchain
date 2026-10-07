@@ -36,7 +36,7 @@ def test_real_postgresql_production_boot_and_value_flow():
 
     now = datetime.now(timezone.utc)
     session_factory = sessionmaker(bind=engine, expire_on_commit=False)
-    with session_factory() as session:
+    with session_factory.begin() as session:
         for table in (
             "gerchain_ledger_movements",
             "gerchain_transaction_witnesses",
@@ -46,23 +46,16 @@ def test_real_postgresql_production_boot_and_value_flow():
             "escrows",
         ):
             session.execute(text(f"DELETE FROM {table}"))
-        session.add(
-            CanonicalEscrow(
-                id="pg-ea35-escrow",
-                sender_address="SRC",
-                receiver_address="BEN",
-                amount=25,
-                state="CREATED",
-                condition_desc="production integration",
-                refund_destination="SRC",
-                currency="MNT",
-                version=0,
-                created_at=now,
-                updated_at=now,
-            )
-        )
-        session.commit()
 
+    runtime.create_escrow(
+        escrow_id="pg-ea35-escrow",
+        sender="SRC",
+        beneficiary="BEN",
+        refund_destination="SRC",
+        amount=25,
+        currency="MNT",
+        condition="production integration",
+    )
     runtime.create_account("SRC", initial_balance=100)
     runtime.create_account("BEN", initial_balance=0)
     # FUND moves source -> the canonical escrow ledger account; provision it explicitly.
@@ -137,27 +130,9 @@ def test_real_postgresql_full_value_lifecycle_and_settlement():
     cancel_rt = make_runtime("full-cancel", 10)
     settlement_rt = make_runtime("full-settlement", 1)
 
-    with sessions.begin() as session:
-        session.add_all([
-            CanonicalEscrow(
-                id="full-release", sender_address="SRC-R", receiver_address="BEN-R",
-                refund_destination="SRC-R", amount=25, state="CREATED",
-                condition_desc="release", currency="MNT", version=0,
-                created_at=now, updated_at=now,
-            ),
-            CanonicalEscrow(
-                id="full-refund", sender_address="SRC-F", receiver_address="BEN-F",
-                refund_destination="SRC-F", amount=15, state="CREATED",
-                condition_desc="refund", currency="MNT", version=0,
-                created_at=now, updated_at=now,
-            ),
-            CanonicalEscrow(
-                id="full-cancel", sender_address="SRC-C", receiver_address="BEN-C",
-                refund_destination="SRC-C", amount=10, state="CREATED",
-                condition_desc="cancel", currency="MNT", version=0,
-                created_at=now, updated_at=now,
-            ),
-        ])
+    release_rt.create_escrow(escrow_id="full-release", sender="SRC-R", beneficiary="BEN-R", refund_destination="SRC-R", amount=25, currency="MNT", condition="release")
+    refund_rt.create_escrow(escrow_id="full-refund", sender="SRC-F", beneficiary="BEN-F", refund_destination="SRC-F", amount=15, currency="MNT", condition="refund")
+    cancel_rt.create_escrow(escrow_id="full-cancel", sender="SRC-C", beneficiary="BEN-C", refund_destination="SRC-C", amount=10, currency="MNT", condition="cancel")
 
     for account_id, balance in (
         ("SRC-R", 100), ("BEN-R", 0), ("full-release", 0),
