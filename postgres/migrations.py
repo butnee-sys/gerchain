@@ -1,4 +1,4 @@
-# EA-35.34: harden native migration publication with session-scoped advisory serialization.
+# EA-35.35: fresh exact-SHA PostgreSQL re-performance after migration publication barrier verification.
 # EA-35.33: re-trigger exact-SHA concurrency evidence after publication-barrier verification.
 # EA-35.31: fresh exact-SHA PostgreSQL concurrency verification after migration publication hardening.
 # EA-35.30: fresh CI evidence requested after migration publication hardening.
