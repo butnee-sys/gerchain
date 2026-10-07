@@ -20,7 +20,7 @@ def _stop(*_args) -> None:
     _running = False
 
 
-def main() -> None:
+def build_production_runtime():
     database_url = os.environ.get("GERCHAIN_DATABASE_URL")
     if not database_url or not database_url.startswith("postgresql"):
         raise RuntimeError(
@@ -59,9 +59,14 @@ def main() -> None:
     if not runtime.is_canonical_ledger_authoritative:
         raise RuntimeError("canonical ledger authority was not established")
 
+    return runtime, engine
+
+
+def main() -> None:
+    runtime, engine = build_production_runtime()
     print(
         "GerChain production runtime initialized: "
-        f"escrow={escrow_id} currency={currency}"
+        f"escrow={runtime.escrow_engine.escrow_id} currency={runtime.escrow_engine.currency}"
     )
 
     signal.signal(signal.SIGTERM, _stop)
