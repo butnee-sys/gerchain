@@ -151,10 +151,42 @@ def _connection_in_transaction(conn) -> bool:
     return value() if callable(value) else bool(value)
 
 
+
+def _canonical_migration_files(path: Path) -> list[Path]:
+    """Select one authoritative SQL file per numeric migration version.
+
+    Historical SQL files may remain for evidence, but they must never compete
+    with the canonical numbered migration.
+    """
+    grouped: dict[int, list[Path]] = {}
+    for migration in path.glob("*.sql"):
+        try:
+            version = int(migration.name.split("_", 1)[0])
+        except (ValueError, IndexError):
+            continue
+        grouped.setdefault(version, []).append(migration)
+
+    selected: list[Path] = []
+    for version in sorted(grouped):
+        candidates = grouped[version]
+        canonical = [p for p in candidates if "canonical" in p.stem]
+        if len(canonical) == 1:
+            selected.append(canonical[0])
+        elif len(candidates) == 1:
+            selected.append(candidates[0])
+        else:
+            names = ", ".join(sorted(p.name for p in candidates))
+            raise RuntimeError(
+                f"ambiguous migration version {version}: {names}; "
+                "exactly one canonical migration is required"
+            )
+    return selected
+
+
 def apply_migrations(conn, migration_dir: str | Path) -> None:
     """Apply migrations atomically for SQLAlchemy or native psycopg connections."""
     path = Path(migration_dir)
-    files = sorted(path.glob("*.sql"))
+    files = _canonical_migration_files(path)
     # A few early canonical migrations were shipped under the same numeric
     # version before the migration history was frozen. Treat those files as
     # historical aliases: one deterministic file is applied on a fresh
