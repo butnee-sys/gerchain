@@ -1,6 +1,6 @@
 # EAI — PRODUCTION GATE EVIDENCE
 
-Status: VERIFIED / NOT LOCKED
+Status: EXACT-SHA VERIFIED / LOCK CANDIDATE — NOT LOCKED
 
 ## Scope
 
@@ -24,13 +24,33 @@ Observed test evidence includes canonical production runtime establishment, Post
 
 Representative exact outputs included `canonical production runtime: OK`, `1 passed`, `2 passed`, and `19 passed` for the relevant proof jobs.
 
-## Current release boundary
+## Current exact-SHA verification — 2026-10-07
 
-The later production-factory correction commit `e860f502f3e1a2d56fd873ad2faab7b1ab630740` changes production construction from the legacy PostgreSQL release configuration to the Canonical Ledger configuration and corrects the entrypoint to instantiate `ProductionRuntimeFactory` with `ProductionRuntimeConfig`.
+Branch tip: `52e2e1bce5952bbe7a91ac091dcf3c5eb5ba11e4`.
 
-This correction is implemented but its exact-SHA PostgreSQL re-performance evidence has not yet been independently retrieved. Therefore the earlier successful evidence must not be relabeled as evidence for the later SHA.
+Fresh GitHub Actions evidence for this exact SHA:
+
+- `production-postgresql-gate` — run `37578103101` — SUCCESS
+- `EAI PostgreSQL Production Proof` — run `37578103120` — SUCCESS
+- `production-postgres` — run `37578103114` — SUCCESS
+- `independent-postgresql-evidence` — run `37578103086` — SUCCESS
+- `production-postgres-reperformance` — run `37578099616` — SUCCESS
+- `EA-35 PostgreSQL production smoke` — run `37578099605` — SUCCESS
+- `production-postgresql-e2e` — run `37578099474` — SUCCESS
+- `postgres-production` — run `37578099673` — SUCCESS
+
+The exact current production gate log proves:
+- PostgreSQL 16 live service
+- production entrypoint booted and established Canonical Ledger authority
+- migration concurrency test: `1 passed`
+- deep value-truth reconciliation: `19 passed`
+- EAI PostgreSQL re-performance: `1 passed`
+- production PostgreSQL gate integration: `2 passed`
+
+Therefore the earlier construction correction is now re-performed on the current exact SHA and is no longer relying on historical evidence.
 
 ## Lock blockers
+
 
 1. Exact-SHA PostgreSQL re-performance for the current release tip.
 2. Final independent re-performance/oracle package.
