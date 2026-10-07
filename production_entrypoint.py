@@ -7,7 +7,7 @@ import signal
 import time
 
 from sqlalchemy import create_engine
-from services.gerchain_runtime_factory import ProductionRuntimeConfig, ProductionRuntimeFactory
+from services.gerchain_runtime_factory import ProductionRuntimeFactory
 
 # EA-35.30: production boot verification marker; authority must be canonical.
 
@@ -55,6 +55,38 @@ def build_production_runtime():
         engine=engine,
     )
     runtime = runtime_factory.create()
+
+    if not runtime.is_canonical_ledger_authoritative:
+        raise RuntimeError("canonical ledger authority was not established")
+
+    return runtime, engine
+
+
+def main() -> None:
+    runtime, engine = build_production_runtime()
+    print(
+        "GerChain production runtime initialized: "
+        f"escrow={runtime.escrow_engine.escrow_id} currency={runtime.escrow_engine.currency}"
+    )
+
+    signal.signal(signal.SIGTERM, _stop)
+    signal.signal(signal.SIGINT, _stop)
+    try:
+        while _running:
+            time.sleep(1)
+    finally:
+        engine.dispose()
+
+
+if __name__ == "__main__":
+    main()    runtime = ProductionRuntimeFactory.create(
+        escrow_id=escrow_id,
+        amount=amount,
+        currency=currency,
+        witness_id=witness_id,
+        engine=engine,
+        session_factory=session_factory,
+    )
 
     if not runtime.is_canonical_ledger_authoritative:
         raise RuntimeError("canonical ledger authority was not established")
