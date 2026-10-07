@@ -32,6 +32,7 @@ def test_production_entrypoint_uses_factory_instance(monkeypatch):
 
         class escrow_engine:
             escrow_id = "FACTORY-ESC"
+            currency = "MNT"
 
     class FakeFactory:
         def __init__(self, config, *, engine=None):
