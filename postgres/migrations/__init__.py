@@ -48,21 +48,16 @@ def _execute(connection, sql: str, params: dict | None = None):
 
 
 def apply_migrations(connection, migration_dir: Path) -> None:
-    """Apply migrations with serialized bootstrap and bounded catalog-race retry."""
-    for attempt in range(1, 6):
+    """Apply migrations under a session-level PostgreSQL bootstrap lock."""
+    _execute(connection, "SELECT pg_advisory_lock(8342719)")
+    try:
+        _apply_migrations_once(connection, migration_dir)
+    finally:
         try:
-            _apply_migrations_once(connection, migration_dir)
-            return
-        except Exception as exc:
-            sqlstate = getattr(exc, "sqlstate", None)
-            detail = str(exc)
-            retryable = sqlstate == "23505" and (
-                "schema_version" in detail or "pg_type_typname_nsp_index" in detail
-            )
-            if not retryable or attempt == 5:
-                raise
             connection.rollback()
-            time.sleep(0.05 * (2 ** (attempt - 1)))
+        finally:
+            _execute(connection, "SELECT pg_advisory_unlock(8342719)")
+
 def _apply_migrations_once(connection, migration_dir: Path) -> None:
     """Apply ordered PostgreSQL migrations exactly once with checksum locking."""
     # Transaction-scoped advisory locking serializes the entire migration batch.
