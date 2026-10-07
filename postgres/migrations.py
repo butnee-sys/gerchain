@@ -217,6 +217,7 @@ def apply_migrations(conn, migration_dir: str | Path) -> None:
         10: "010_canonical_evidence_constraints.sql",
         11: "011_ea35_canonical_schema_finalization.sql",
         12: "012_canonical_production.sql",
+        13: "013_ea35_canonical_schema_hardening.sql",
     }
     versions: dict[int, list[Path]] = {}
     for migration in files:
