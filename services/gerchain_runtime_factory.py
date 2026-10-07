@@ -32,7 +32,7 @@ class ProductionRuntimeFactory:
     def __init__(self, config: ProductionRuntimeConfig, *, engine: Engine | None = None):
         self.config = config
         if engine is not None and engine.dialect.name != "postgresql":
-            raise ValueError("ProductionRuntimeFactory requires a PostgreSQL engine")
+            raise ValueError("ProductionRuntimeFactory requires PostgreSQL engine")
 
     @staticmethod
     def create(
