@@ -90,12 +90,10 @@ def test_exim_port_is_the_published_shuud_boundary() -> None:
 
 def test_exim_port_rejects_float_money_at_boundary() -> None:
     """Money entering the Port must be integer MNT units, never floating point."""
-    port = ExternalPortImport()
-    request = EscrowRequest(
-        escrow_id="SHUUD-BOUNDARY-001",
-        amount=1000.5,
-        currency="MNT",
-        settlement_provider="NEF",
-    )
     with pytest.raises(TypeError, match="integer amount"):
-        port.create_escrow(request, object())
+        EscrowRequest(
+            escrow_id="SHUUD-BOUNDARY-001",
+            amount=1000.5,
+            currency="MNT",
+            settlement_provider="NEF",
+        )
