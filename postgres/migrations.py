@@ -1,3 +1,4 @@
+# EA-35.37: exact-SHA verification trigger after migration publication conflict-barrier review.
 # EA-35.35: fresh exact-SHA PostgreSQL re-performance after migration publication barrier verification.
 # EA-35.33: re-trigger exact-SHA concurrency evidence after publication-barrier verification.
 # EA-35.31: fresh exact-SHA PostgreSQL concurrency verification after migration publication hardening.
