@@ -16,6 +16,7 @@ from persistence.durable_idempotency import IdempotencyBase
 from persistence.escrow_aggregate import EscrowBase
 from persistence.recovery_outbox import OutboxBase
 from services.gerchain_runtime import GerchainRuntime
+from postgres.migrations import apply_migrations
 
 @dataclass(frozen=True)
 class ProductionRuntimeConfig:
@@ -90,9 +91,7 @@ class ProductionRuntimeFactory:
         The numbered migration runner provides ordering, checksum validation,
         and transaction-scoped concurrency serialization.
         """
-        migration_dir = Path(__file__).resolve().parents[1] / "postgres" / "migrations"
-        with self.engine.connect() as connection:
-            apply_migrations(connection, migration_dir)
+        initialize_canonical_postgres_schema(self.engine)
 
     def create(self) -> GerchainRuntime:
         self.initialize()
