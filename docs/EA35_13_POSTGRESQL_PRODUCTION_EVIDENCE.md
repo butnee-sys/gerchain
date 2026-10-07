@@ -2,6 +2,8 @@
 
 Status: IN PROGRESS / NOT LOCKED
 
+Fresh-gate trigger: 2026-10-07 PostgreSQL concurrency failure reproduced; fix verification pending.
+
 This evidence marker exists to force a fresh PostgreSQL production-gate execution against the current branch tip.
 
 Required gates:
