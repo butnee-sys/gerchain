@@ -9,6 +9,8 @@ import time
 from sqlalchemy import create_engine
 from services.gerchain_runtime_factory import ProductionRuntimeConfig, ProductionRuntimeFactory
 
+# EA-35.30: production boot verification marker; authority must be canonical.
+
 
 _running = True
 
