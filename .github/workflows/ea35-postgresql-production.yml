@@ -42,5 +42,9 @@ jobs:
       - name: Run PostgreSQL production smoke
         env:
           GERCHAIN_DATABASE_URL: postgresql+psycopg://gerchain:gerchain@127.0.0.1:5432/gerchain
+          GERCHAIN_ESCROW_ID: pg-entrypoint-escrow
+          GERCHAIN_ESCROW_AMOUNT: "100"
+          GERCHAIN_CURRENCY: MNT
+          GERCHAIN_WITNESS_ID: pg-entrypoint-witness
         run: |
-          python -m pytest -q tests/integration/test_postgresql_production_smoke.py
+          python -m pytest -q tests/integration/test_production_entrypoint_bootstrap.py tests/integration/test_postgresql_production_smoke.py
