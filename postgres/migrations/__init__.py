@@ -54,12 +54,12 @@ def apply_migrations(connection, migration_dir: Path) -> None:
     transaction. This makes concurrent first boots serialize without relying on
     a session-level lock that can outlive the transaction.
     """
+    _execute(connection, f"SELECT pg_advisory_xact_lock({_LOCK_KEY})")
     _apply_migrations_once(connection, migration_dir)
 
 def _apply_migrations_once(connection, migration_dir: Path) -> None:
     """Apply ordered PostgreSQL migrations exactly once with checksum locking."""
-    # The caller owns the session-scoped advisory lock for the entire batch.
-    # Migration publication is committed before the lock is released.
+    # The transaction-scoped advisory lock is held until this migration batch commits.
     _execute(
         connection,
         "CREATE TABLE IF NOT EXISTS schema_version ("
