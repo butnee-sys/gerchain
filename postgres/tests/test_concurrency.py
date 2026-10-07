@@ -39,7 +39,7 @@ def test_migrations_are_serialized_and_checksum_is_stable():
     versions = [row[0] for row in rows]
     assert versions == sorted(set(versions))
     assert versions
-    assert max(versions) >= 12
+    assert max(versions) >= 13
     assert all(checksum for _, checksum in rows)
 
     # A second publication pass must remain idempotent after the concurrent race.
