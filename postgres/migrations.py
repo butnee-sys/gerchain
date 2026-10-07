@@ -1,4 +1,5 @@
 # EA-35.32: fresh exact-SHA PostgreSQL concurrency verification on current branch state.
+# EA-35.33: re-trigger exact-SHA concurrency evidence after publication-barrier verification.
 # EA-35.31: fresh exact-SHA PostgreSQL concurrency verification after migration publication hardening.
 # EA-35.30: fresh CI evidence requested after migration publication hardening.
 # EA-35.20: fresh PostgreSQL re-performance must prove duplicate publication is harmless.
