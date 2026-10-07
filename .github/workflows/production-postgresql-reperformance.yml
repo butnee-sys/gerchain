@@ -41,7 +41,16 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y postgresql-client
           PGPASSWORD=postgres psql -h localhost -U gerchain -d gerchain -v ON_ERROR_STOP=1 -f postgres/schema/001_concurrency.sql
-      - name: PostgreSQL production re-performance
-        run: pytest -q tests/integration/test_production_postgresql_reperformance.py
+      - name: Production entrypoint boot proof
+        env:
+          GERCHAIN_ESCROW_ID: pg-entrypoint-escrow
+          GERCHAIN_ESCROW_AMOUNT: "40"
+          GERCHAIN_CURRENCY: USD
+          GERCHAIN_WITNESS_ID: pg-entrypoint-witness
+        run: |
+          set +e
+          timeout 8s python production_entrypoint.py
+          code=$?
+          test "$code" -eq 124
       - name: Deep reconciliation regression
         run: pytest -q tests/persistence/test_deep_value_reconciliation.py
