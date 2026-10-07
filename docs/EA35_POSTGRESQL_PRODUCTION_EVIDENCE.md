@@ -7,7 +7,7 @@ Fresh evidence for the canonical PostgreSQL production runtime, EAI value-flow b
 ## Exact execution commit
 
 - Branch: `feat/ea21-transaction-aware-ledger`
-- Commit: `d56315b178c087829860893b2af98d43a7c18a35`
+- Commit: `5e556ec151ece90fab2dc1d524fe1b651f005f7b`
 - PostgreSQL service: PostgreSQL 16
 - Python: 3.13
 
@@ -15,11 +15,11 @@ Fresh evidence for the canonical PostgreSQL production runtime, EAI value-flow b
 
 ### Production PostgreSQL gate
 
-- Run: `37492347897`
+- Run: `37557753135`
 - Workflow: `production-postgresql-gate`
 - Conclusion: **SUCCESS**
 - Pull request: #90
-- Head SHA: `d56315b178c087829860893b2af98d43a7c18a35`
+- Head SHA: `5e556ec151ece90fab2dc1d524fe1b651f005f7b`
 
 Substantive steps all completed successfully:
 
@@ -51,14 +51,14 @@ Production boot evidence:
 
 ### Independent PostgreSQL evidence
 
-- Run: `37492347721`
+- Run: `37557753187`
 - Workflow: `independent-postgresql-evidence`
 - Conclusion: **SUCCESS**
 - Independent persisted-value verification: **1 passed**
 
 ### EAI PostgreSQL production proof
 
-- Run: `37492347772`
+- Run: `37557753111`
 - Workflow: `EAI PostgreSQL Production Proof`
 - Conclusion: **SUCCESS**
 
@@ -70,7 +70,7 @@ The runner previously attempted an explicit advisory unlock after COMMIT. A tran
 
 Fixed in:
 
-`d56315b178c087829860893b2af98d43a7c18a35`
+`5e556ec151ece90fab2dc1d524fe1b651f005f7b`
 
 The invalid post-COMMIT unlock was removed. The fresh production PostgreSQL gate then completed successfully on the corrected commit.
 
@@ -89,7 +89,7 @@ The fresh evidence establishes that the branch can:
 
 ## Status
 
-**EA-35.13 — VERIFIED**
+**EA-35.13 — VERIFIED on fresh PostgreSQL evidence**
 
 This is not the final overall production lock.
 
