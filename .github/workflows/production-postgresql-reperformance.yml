@@ -5,6 +5,7 @@ on:
     branches:
       - "feat/ea21-transaction-aware-ledger"
   pull_request:
+  workflow_dispatch:
 
 jobs:
   postgres-smoke:
@@ -25,6 +26,7 @@ jobs:
           --health-retries 20
     env:
       GERCHAIN_DATABASE_URL: postgresql+psycopg://gerchain:postgres@localhost:5432/gerchain
+      GERCHAIN_TEST_DATABASE_URL: postgresql+psycopg://gerchain:postgres@localhost:5432/gerchain
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -34,7 +36,12 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements-dee-security.txt pytest
-      - name: PostgreSQL production smoke
-        run: pytest -q tests/integration/test_production_postgresql_smoke.py
+      - name: Apply production PostgreSQL schema
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+          PGPASSWORD=postgres psql -h localhost -U gerchain -d gerchain -v ON_ERROR_STOP=1 -f postgres/schema/001_concurrency.sql
+      - name: PostgreSQL production re-performance
+        run: pytest -q tests/integration/test_production_postgresql_reperformance.py
       - name: Deep reconciliation regression
         run: pytest -q tests/persistence/test_deep_value_reconciliation.py
