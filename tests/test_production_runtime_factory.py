@@ -30,6 +30,9 @@ def test_production_entrypoint_uses_factory_instance(monkeypatch):
     class FakeRuntime:
         is_canonical_ledger_authoritative = True
 
+        class escrow_engine:
+            escrow_id = "FACTORY-ESC"
+
     class FakeFactory:
         def __init__(self, config, *, engine=None):
             created["config"] = config
