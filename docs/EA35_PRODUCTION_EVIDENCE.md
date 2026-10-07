@@ -4,8 +4,8 @@
 - Production PostgreSQL gate: **PASS**
 - EAI production status: **VERIFIED**
 - Overall architecture lock: **NOT YET LOCKED**
-- Evidence correction commit: `3cd5b2a779bbce80413729b6a686d483f7cc82f6`
-- Workflow runs: `37577948306` (EAI proof), `37577948392` (production PostgreSQL), `37577948476` (independent PostgreSQL evidence), `37577948292` (production gate)
+- Evidence correction commit: `6fdbce7d74aff21e084b616460247e8faed77f7f`
+- Workflow runs: `37621992299` (EAI proof), `37621992207` (production PostgreSQL), `37621992236` (independent PostgreSQL evidence), `37621992149` (production gate)
 - Job: `postgresql-production-gate`
 - Verified: 2026-10-07 (fresh runs)
 
@@ -50,14 +50,14 @@ The fresh PostgreSQL gate proves, on the tested CI database:
 - Production entrypoint boots against PostgreSQL.
 - Deep value-truth reconciliation passes.
 - EAI re-performance passes across FUND, LOCK, RELEASE, REFUND, CANCEL and SETTLEMENT paths.
-- Real PostgreSQL production value-flow integration passes.
+- Real PostgreSQL production value-flow integration passes across release, refund, cancel and settlement scenarios.
 
 ## Migration concurrency correction
 
-The previous PostgreSQL concurrency evidence exposed a first-boot publication race on `schema_version(version=2)`. The migration runner was corrected to use transaction-scoped PostgreSQL advisory locking via `pg_advisory_xact_lock(8342719)`. The new production gate passed after this correction.
+The previous PostgreSQL concurrency evidence exposed a first-boot publication race on `schema_version(version=2)`. The migration runner was corrected to use transaction-scoped PostgreSQL advisory locking via `pg_advisory_xact_lock(73546501)`. The new production gate passed after this correction.
 
 ## Important boundary
 
 This evidence is **repository/CI technical evidence**, not an external production certification or independent third-party attestation.
 
-EA-35 production execution is **VERIFIED** on fresh CI evidence. EAI is production-ready within the tested scope. The overall canonical architecture remains **IN PROGRESS / NOT LOCKED** until security/IAM controls, privileged access governance, recovery/DR evidence, architecture-wide independent re-performance, and final lock criteria are closed.
+EA-35 production execution is **VERIFIED** on fresh exact-SHA CI evidence for `6fdbce7d74aff21e084b616460247e8faed77f7f`. EAI is production-ready within the tested scope. The overall canonical architecture remains **IN PROGRESS / NOT LOCKED** until security/IAM controls, privileged access governance, recovery/DR evidence, architecture-wide independent re-performance, and final lock criteria are closed.
