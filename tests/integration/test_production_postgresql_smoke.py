@@ -49,9 +49,9 @@ def test_production_postgresql_factory_and_canonical_read():
         session.commit()
 
     with Session(engine) as session:
-        read = CanonicalLedgerRead(lambda: session)
-        assert read.get_balance("pg-smoke-source", "USD")["balance"] == 1000
-        assert read.get_balance("pg-smoke-escrow", "USD")["balance"] == 0
+        read = CanonicalLedgerRead(session)
+        assert read.get_balance("pg-smoke-source", "USD") == 1000
+        assert read.get_balance("pg-smoke-escrow", "USD") == 0
         escrow = session.get(CanonicalEscrow, "pg-smoke-escrow")
         assert escrow is not None
         assert escrow.state == EscrowState.CREATED.value
