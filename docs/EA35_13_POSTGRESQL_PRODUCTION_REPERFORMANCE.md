@@ -76,3 +76,6 @@ Decision:
 
 Scope limitation:
 This lock certifies the PostgreSQL production evidence gate only. It does not by itself certify the entire overall production architecture, security/IAM, observability, disaster recovery, performance/stress, or final production release lock.
+
+
+EA-35.35 fresh PostgreSQL verification trigger: current branch contains the runtime syntax correction and conflict-safe migration publication path; CI must re-perform both gates before any production lock.
