@@ -194,8 +194,13 @@ def test_postgresql_failure_matrix_and_duplicate_fund_concurrency():
             escrow_id="eai-failure-matrix", sender="FM-SOURCE", beneficiary="FM-BEN",
             refund_destination="FM-SOURCE", amount=40, currency="USD", condition="failure-matrix"
         )
+        runtime.create_escrow(
+            escrow_id="eai-insufficient", sender="FM-SOURCE", beneficiary="FM-BEN",
+            refund_destination="FM-SOURCE", amount=60, currency="USD", condition="insufficient"
+        )
         runtime.create_account("FM-SOURCE", initial_balance=50)
         runtime.create_account("eai-failure-matrix", initial_balance=0)
+        runtime.create_account("eai-insufficient", initial_balance=0)
 
         # Invalid state transition: LOCK before FUND must fail without evidence or value movement.
         try:
@@ -208,8 +213,8 @@ def test_postgresql_failure_matrix_and_duplicate_fund_concurrency():
         with Session() as session:
             try:
                 fund_escrow_in_transaction(
-                    session, transaction_id="fm-insufficient", escrow_id="eai-failure-matrix",
-                    source="FM-SOURCE", amount=40, currency="USD",
+                    session, transaction_id="fm-insufficient", escrow_id="eai-insufficient",
+                    source="FM-SOURCE", amount=60, currency="USD",
                 )
                 raise AssertionError("insufficient FUND unexpectedly succeeded")
             except ValueError as exc:
