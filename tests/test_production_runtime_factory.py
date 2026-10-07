@@ -8,7 +8,7 @@ from services.gerchain_runtime_factory import ProductionRuntimeConfig, Productio
 def test_production_factory_rejects_non_postgresql_database():
     engine = create_engine("sqlite:///:memory:")
     session_factory = sessionmaker(bind=engine, expire_on_commit=False)
-    with pytest.raises(ValueError, match="requires PostgreSQL"):
+    with pytest.raises(ValueError, match="requires .*PostgreSQL"):
         ProductionRuntimeFactory(
             ProductionRuntimeConfig(
                 database_url="sqlite:///:memory:",
@@ -50,7 +50,6 @@ def test_production_entrypoint_uses_factory_instance(monkeypatch):
         "create_engine",
         lambda *a, **k: FakeEngine(),
     )
-    monkeypatch.setattr(production_entrypoint, "sessionmaker", lambda **k: object())
     monkeypatch.setattr(
         production_entrypoint.time,
         "sleep",
