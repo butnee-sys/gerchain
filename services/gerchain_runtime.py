@@ -189,6 +189,34 @@ class GerchainRuntime:
             session.commit()
             return result
 
+    def create_escrow(
+        self,
+        *,
+        escrow_id: str,
+        sender: str,
+        beneficiary: str,
+        refund_destination: str,
+        amount: int,
+        currency: str,
+        condition: str | None = None,
+    ) -> dict[str, Any]:
+        """Create the authoritative durable escrow aggregate in production."""
+        self.require_canonical_ledger_authority()
+        from persistence.escrow_aggregate import create_escrow_in_transaction, escrow_to_dict
+        with self._session_factory() as session:
+            escrow = create_escrow_in_transaction(
+                session,
+                escrow_id=escrow_id,
+                sender=sender,
+                beneficiary=beneficiary,
+                refund_destination=refund_destination,
+                amount=amount,
+                currency=currency,
+                condition=condition,
+            )
+            session.commit()
+            return escrow_to_dict(escrow)
+
     def create_transaction(self, transaction_id: str) -> TransactionStateMachine:
         if not transaction_id:
             raise ValueError("transaction_id is required")
