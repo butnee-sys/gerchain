@@ -4,7 +4,7 @@ name: production-postgresql-gate
 # Migration ordinal fix verification.
 # Evidence refresh: execute against PostgreSQL 16 on every branch push.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
+  group: ${{ github.workflow }}-${{ github.sha }}
   cancel-in-progress: true
 
 
