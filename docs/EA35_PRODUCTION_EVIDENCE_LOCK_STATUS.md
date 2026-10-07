@@ -1,89 +1,149 @@
 # EA-35 — Production PostgreSQL Evidence and Lock Status
 
 **Branch:** `feat/ea21-transaction-aware-ledger`  
-**Evidence baseline:** `98f8f9005d58220dece4a1e44b36e8bc452b8069`  
-**Evidence date:** 2026-10-06
+**Fresh evidence SHA:** `e3b90b46f8fd50c5dc7bafbe51488859ec59a8ca`  
+**Evidence date:** 2026-10-07
 
 ## Status
 
 **EA-35: VERIFIED / NOT LOCKED**
 
-The production PostgreSQL execution gates passed on the exact implementation line after the migration-concurrency correction.
+Fresh GitHub Actions evidence confirms real PostgreSQL execution on the current implementation line.
 
-## Exact workflow evidence
+## Fresh exact-SHA workflow evidence
 
 | Evidence | Workflow run | Result |
 |---|---:|---|
-| Production PostgreSQL runtime | 37420203547 | SUCCESS |
-| Independent PostgreSQL evidence | 37420203563 | SUCCESS |
-| Production PostgreSQL gate | 37420203612 | SUCCESS |
+| EA-35 PostgreSQL production smoke | 37556985851 | SUCCESS |
+| Production PostgreSQL re-performance | 37556985723 | SUCCESS |
+| Production PostgreSQL E2E | 37556985756 | SUCCESS |
+| Independent PostgreSQL evidence | 37556985808 | SUCCESS |
+| production-postgres | 37556985832 | SUCCESS |
+| PostgreSQL production smoke | 37556985860 | SUCCESS |
 
-### Production PostgreSQL runtime
+### EA-35 PostgreSQL production smoke
 
-Run `37420203547` completed successfully.
+Run `37556985851` / job `112585373556`.
+
+The workflow started a real PostgreSQL 16 service and executed:
+
+`python -m pytest -q tests/integration/test_production_entrypoint_bootstrap.py tests/integration/test_postgresql_production_smoke.py`
+
+Result:
+
+**2 passed in 0.40s**
 
 Verified:
-- canonical PostgreSQL migration and boot;
-- production PostgreSQL value flow;
-- deep value-truth suite.
+- production entrypoint bootstrap;
+- canonical ledger authority;
+- durable PostgreSQL escrow lifecycle;
+- FUND → LOCK → RELEASE;
+- RELEASE replay idempotency;
+- REFUND authoritative destination protection;
+- CANCEL state-only path;
+- SETTLEMENT through Canonical Ledger;
+- deep value-truth reconciliation.
+
+### Production PostgreSQL re-performance
+
+Run `37556985723` / job `112585373378`.
+
+Executed against PostgreSQL 16:
+
+`pytest -q -m integration tests/test_production_postgresql_runtime.py`
+
+Result:
+
+**1 passed in 0.69s**
+
+Verified:
+- PostgreSQL production runtime construction;
+- canonical authority;
+- required canonical tables;
+- migration/bootstrap path.
+
+### Production PostgreSQL E2E
+
+Run `37556985756` / job `112585373235`.
+
+Executed:
+
+`pytest -q tests/integration/test_production_postgresql_e2e.py`
+
+Result:
+
+**1 passed in 0.50s**
+
+Verified:
+- real PostgreSQL boot;
+- FUND;
+- LOCK;
+- RELEASE;
+- persisted balances;
+- durable escrow state;
+- deep value-truth reconciliation.
 
 ### Independent PostgreSQL evidence
 
-Run `37420203563` completed successfully.
+Run `37556985808` / job `112585373255`.
 
-Verified:
-- independently persisted-value verification against PostgreSQL.
+Executed:
 
-### Production PostgreSQL gate
+`pytest -q tests/independent/test_postgresql_independent_evidence.py`
 
-Run `37420203612` completed successfully.
+Result:
 
-Verified:
-- exact evidence commit recording;
-- Python syntax gate;
-- production factory and canonical persistence;
-- production entrypoint boot against PostgreSQL;
-- deep reconciliation;
-- EAI production re-performance;
-- real PostgreSQL production value-flow gate.
+**1 passed in 0.40s**
 
-The production entrypoint emitted:
+This verification reads raw persisted PostgreSQL facts independently of the runtime result:
+- canonical balances;
+- movement records;
+- movement operation and escrow binding;
+- integrity hashes;
+- escrow state/version;
+- witness records;
+- outbox records;
+- idempotency records.
 
-`GerChain production runtime initialized: escrow=ci-escrow-1 currency=USD`
+## Migration authority correction
 
-The same gate reported:
-- deep reconciliation: **19 passed**;
-- EAI PostgreSQL re-performance: **1 passed**;
-- production PostgreSQL gate: **1 passed**.
+The current `ProductionRuntimeFactory` no longer treats ORM `create_all()` as the production schema authority.
 
-## Correction validated by this evidence
+Production initialization now:
 
-The previous migration-concurrency defect produced:
+**PostgreSQL canonical migration runner → schema verification → canonical runtime**
 
-`duplicate key value violates unique constraint "schema_version_pkey"`
+The migration runner serializes publication with PostgreSQL advisory locking and records schema history/checksums.
 
-Migration execution was changed to use a transaction-scoped PostgreSQL advisory lock and one migration transaction. The production gate subsequently passed.
+ORM metadata remains only an additive compatibility guard after migration.
+
+## Important boundary
+
+These results prove **fresh PostgreSQL execution on the current implementation line**.
+
+They do **not** by themselves constitute:
+- organizational IAM/MFA assurance;
+- privileged-access review;
+- main-branch governance evidence;
+- external independent assurance;
+- final global production lock.
+
+Some broader workflows were cancelled because newer branch executions superseded them. A cancelled workflow is not treated as a failure and is not used as positive evidence.
 
 ## EAI conclusion
 
-The evidence demonstrates that:
+The fresh evidence supports the production path:
 
-**Escrow-as-Infrastructure → PostgreSQL durable state → Canonical Ledger → Witness → Outbox → Idempotency → Deep Value Truth Reconciliation**
+**Escrow-as-Infrastructure → durable PostgreSQL escrow → Canonical Ledger → Witness → Outbox → Idempotency → Deep Value Truth Reconciliation**
 
-can execute as one production-tested infrastructure path.
-
-This does not create a new architecture layer. EAI remains the infrastructure principle implemented through the frozen G3/CORE architecture.
+EAI remains an infrastructure principle implemented through the frozen architecture; it is not introduced as a new architecture layer.
 
 ## Lock boundary
 
-EA-35 is **verified but not globally locked**.
+**EA-35 = VERIFIED / NOT LOCKED.**
 
-Global production lock remains dependent on broader assurance gates, including:
-- legacy persistence removal/archive closure;
-- organizational IAM/MFA evidence;
-- privileged-access review;
-- branch/main governance evidence;
-- final independent assurance package;
-- overall fundamental architecture reconciliation.
+Next gate:
 
-**No product-layer work is authorized by this document.**
+**EA-35.14 — migration-history / concurrent-bootstrap re-performance and final evidence reconciliation.**
+
+No product-layer work is authorized by this document.
