@@ -81,7 +81,20 @@ def test_production_postgresql_boot_fund_lock_release_and_reconcile():
             assert report.matched, [f"{i.code}:{i.detail}" for i in report.issues]
     finally:
         with factory.session_factory() as session:
-            session.execute(\n                delete(LedgerMovementModel).where(\n                    LedgerMovementModel.transaction_id.in_([\n                        "pg-fund-" + suffix,\n                        "pg-release-" + suffix,\n                    ])\n                )\n            )\n            session.execute(\n                delete(TransactionWitness).where(TransactionWitness.escrow_id == escrow_id)\n            )\n            session.execute(\n                delete(OutboxEvent).where(OutboxEvent.aggregate_id == escrow_id)\n            )
+            session.execute(
+                delete(LedgerMovementModel).where(
+                    LedgerMovementModel.transaction_id.in_([
+                        "pg-fund-" + suffix,
+                        "pg-release-" + suffix,
+                    ])
+                )
+            )
+            session.execute(
+                delete(TransactionWitness).where(TransactionWitness.escrow_id == escrow_id)
+            )
+            session.execute(
+                delete(OutboxEvent).where(OutboxEvent.aggregate_id == escrow_id)
+            )
             session.execute(delete(DurableIdempotencyRecord).where(
                 DurableIdempotencyRecord.key.in_([
                     "pg-fund-" + suffix, "pg-lock-" + suffix, "pg-release-" + suffix,
