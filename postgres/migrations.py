@@ -1,3 +1,4 @@
+# EA-35.45: final lock candidate — exact-SHA PostgreSQL concurrency must prove one publication per version.
 # EA-35.42: exact-SHA rerun trigger after restoring the conflict-safe migration runner.
 # EA-35.44: fresh exact-SHA CI re-performance after the conflict-safe publication barrier was verified in source.
 # EA-35.43: fresh CI publication evidence after the conflict-safe ON CONFLICT barrier was verified in source.
