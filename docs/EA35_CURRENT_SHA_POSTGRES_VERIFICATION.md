@@ -6,3 +6,5 @@ Required interpretation: this file is not evidence by itself. Evidence is the Gi
 
 
 Current-SHA re-verification trigger: execute the canonical PostgreSQL production gates against this commit; prior successful SHAs are not sufficient for final lock.
+
+Re-triggered: 2026-10-09 exact-branch verification after production-entrypoint constructor correction.
