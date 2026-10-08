@@ -112,10 +112,9 @@ def _migration_transaction(conn):
             conn.execute("SELECT pg_advisory_lock(%s)", (MIGRATION_LOCK_KEY,))
         lock_acquired = True
 
-        if is_sqlalchemy:
-            conn.exec_driver_sql("BEGIN")
-        else:
-            conn.execute("BEGIN")
+        # The advisory-lock statement itself opens the transaction on a clean
+        # psycopg/SQLAlchemy connection. Do not issue a nested BEGIN: that can
+        # weaken the publication barrier and produce duplicate schema_version rows.
         yield
         conn.commit()
     except Exception:
