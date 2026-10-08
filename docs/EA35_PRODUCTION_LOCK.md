@@ -1,50 +1,93 @@
 # EA-35 Production Lock Evidence
 
-Status: PRODUCTION-READY EVIDENCE LOCKED
-Scope: Fundamental architecture + EAI (Escrow as Infrastructure)
+Status: **TECHNICAL PRODUCTION EVIDENCE VERIFIED / FORMAL LOCK WITHHELD**
+Scope: **Fundamental architecture + EAI (Escrow as Infrastructure)**
 Excluded: product/application command layers
 
-## Authoritative commit
+## Exact tested code state
 
 - Branch: `feat/ea21-transaction-aware-ledger`
-- Evidence SHA: `35feda34f7ebba2e4195219cce98456892ff9d73`
+- Exact tested code SHA: `19061aa63bec90e35d82d8392e372cc113b3ead4`
+- Current documentation commit: `fc8b1f22826d5b037bf7bf8123ad2c77b1221583`
+- Documentation-only commits do not change the tested production code state.
 
-## Verified production gates
+## Verified production gates on exact tested code SHA
 
-The exact evidence SHA reported successful GitHub Actions checks for:
+- EAI PostgreSQL Production Proof — run **37715147549** — SUCCESS
+- production-postgres — run **37715147558** — SUCCESS
+- independent-postgresql-evidence — run **37715147637** — SUCCESS
+- production-postgresql-reperformance — run **37715147584** — SUCCESS
+- Production PostgreSQL Re-performance — run **37715147593** — SUCCESS
+- production-postgresql-gate — run **37715147524** — SUCCESS
+- core-gates — run **37715147544** — SUCCESS
+- CORE Operating Reconciliation — run **37715147609** — SUCCESS
+- CodeQL Advanced — run **37715147634** — SUCCESS
 
-- PostgreSQL smoke
-- PostgreSQL production boot/runtime
-- PostgreSQL production re-performance
-- PostgreSQL E2E
-- independent PostgreSQL evidence
-- production-postgres evidence
-- EAI production proof
-- production smoke
-- core reconciliation
-- CodeQL / Python analysis
+## Direct PostgreSQL evidence
 
-The migration runner was hardened to serialize publication with a PostgreSQL transaction-scoped advisory lock and the migration module was reduced to one authoritative implementation.
+The authoritative production gate verified:
+
+1. Python syntax.
+2. Production factory and canonical persistence.
+3. Production entrypoint boot against real PostgreSQL.
+4. Concurrent PostgreSQL migration bootstrap.
+5. Deep value-truth reconciliation.
+6. EAI production re-performance.
+7. Real PostgreSQL value-flow.
+
+The verified value-flow includes:
+
+- FUND
+- LOCK
+- RELEASE
+- REFUND
+- CANCEL
+- SETTLEMENT
+- canonical balance reads
+- replay/idempotency
+- witness evidence
+- outbox evidence
+- deep reconciliation
+
+Direct evidence includes:
+- production boot: **1 passed**
+- production factory gate: **2 passed**
+- deep value reconciliation: **19 passed**
+- independent persisted-value verification: **1 passed**
+- migration serialization gate: **1 passed**
+- EAI production re-performance: **1 passed**
 
 ## Authority invariants
 
 1. Canonical Ledger is the production value authority.
 2. Canonical Escrow is the durable escrow truth.
-3. Witness, Outbox and durable Idempotency remain evidence paths, not alternate value authorities.
+3. Witness, Outbox and durable Idempotency are evidence paths, not alternate value authorities.
 4. FUND / RELEASE / REFUND / CANCEL / SETTLEMENT use the Canonical Ledger transaction boundary.
 5. READ uses Canonical Ledger.
 6. Production boot requires PostgreSQL.
-7. Production schema is migration-authoritative; ORM `create_all()` is not the schema authority.
+7. Production schema is migration-authoritative.
 8. Legacy value stores are non-authoritative.
-9. Recovery must not duplicate value movement.
+9. Recovery cannot duplicate value movement.
 10. Unknown/unverified conditions do not pass.
+
+## Formal lock exclusion
+
+Formal production lock is **not** declared by this document.
+
+Remaining organizational closure includes:
+- **GC-IDM-001** Identity / privileged access governance evidence.
+- **GC-IDM-002** MFA / privileged account assurance evidence.
+
+These are organizational assurance controls and cannot be fabricated from repository test results.
 
 ## Lock rule
 
-No production implementation may introduce a second authoritative Ledger, Escrow, Witness Chain, or value-movement boundary without an explicit architecture-change proposal.
+Any future change to the locked architecture, authority boundary, migration semantics, transaction boundary, evidence model, or production runtime construction requires an architecture-change proposal and fresh production re-performance.
 
-## Evidence qualification
+**Technical evidence: VERIFIED.**
 
-A separate command-layer check remains outside this lock because product/application layers are explicitly excluded from the present EAI/fundamental-architecture production gate. Its failure is not used as evidence against this lock.
+**EAI + fundamental architecture: PRODUCTION-READY TECHNICAL EVIDENCE.**
 
-This document is evidence of the verified production gate, not an external certification or third-party attestation.
+**Formal production lock: WITHHELD pending organizational IAM/MFA evidence.**
+
+This document is evidence of repository verification, not external certification or third-party attestation.
