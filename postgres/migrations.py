@@ -311,8 +311,7 @@ def apply_migrations(conn, migration_dir: str | Path) -> None:
                     """
                     INSERT INTO schema_version(version, checksum)
                     VALUES (%s, %s)
-                    ON CONFLICT (version) DO UPDATE
-                    SET checksum = schema_version.checksum
+                    ON CONFLICT (version) DO NOTHING
                     """,
                     (version, digest),
                 )
