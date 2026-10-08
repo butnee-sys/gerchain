@@ -34,3 +34,5 @@ def test_production_factory_builds_real_postgresql_runtime():
     assert runtime._canonical_ledger is not None
     assert runtime._session_factory is not None
     engine.dispose()
+
+# EA-35 runner synchronization marker: canonical factory API verified.
