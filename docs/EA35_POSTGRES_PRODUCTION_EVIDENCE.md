@@ -4,7 +4,10 @@
 
 **Status: VERIFIED — NOT YET PRODUCTION LOCKED**
 
-Evidence commit:
+Latest verified branch tip:
+`bef54b697c2d35673fcfb5becd7061f1de8f308f`
+
+Original evidence publication commit:
 `f63218b7833589a11a94e2e085550a475c8dfa25`
 
 Repository:
@@ -17,7 +20,7 @@ Branch:
 
 ### 1. PostgreSQL production gate
 
-Run: `37475259712`
+Run: `37707140772`
 
 Job: `postgresql-production-gate`
 
@@ -34,7 +37,7 @@ Verified steps:
 
 ### 2. PostgreSQL production value suite
 
-Run: `37475259601`
+Run: `37707140825`
 
 Job: `postgres-production`
 
@@ -47,7 +50,7 @@ Verified steps:
 
 ### 3. Independent PostgreSQL evidence
 
-Run: `37475259363`
+Run: `37707140836`
 
 Job: `independent-postgresql-evidence`
 
@@ -58,7 +61,7 @@ Verified:
 
 ### 4. EAI production proof
 
-Run: `37475259476`
+Run: `37707140769`
 
 Job: `eai-production-proof`
 
@@ -66,6 +69,17 @@ Conclusion: **success**
 
 Verified:
 - EAI PostgreSQL production proof
+
+### 5. Exact-SHA production re-performance
+
+Run: `37707140771`
+
+Job: `production-postgresql-reperformance`
+
+Conclusion: **success**
+
+Verified:
+- fresh PostgreSQL production re-performance against the current branch tip
 
 ## What is now proven
 
@@ -92,6 +106,8 @@ It does **not** by itself constitute final production lock, external audit attes
 Therefore:
 
 **EA-35 = VERIFIED / IN PROGRESS / NOT LOCKED**
+
+Latest verification: exact branch tip `bef54b697c2d35673fcfb5becd7061f1de8f308f` has successful production PostgreSQL, production re-performance, EAI, independent evidence, core-gates, CodeQL, CORE reconciliation, and SHUUD checks.
 
 Next lock gates remain:
 - security/IAM/MFA governance evidence
