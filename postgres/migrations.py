@@ -139,7 +139,8 @@ def apply_migrations(conn, migration_dir: str | Path) -> None:
         9: "009_canonical_movement_integrity_hardening.sql",
         10: "010_canonical_evidence_constraints.sql",
         11: "011_ea35_canonical_schema_finalization.sql",
-        6: "006_ea35_idempotency_schema_compat.sql",
+        12: "012_canonical_production.sql",
+        13: "013_ea35_canonical_schema_hardening.sql",
     }
     versions: dict[int, list[Path]] = {}
     for migration in files:
@@ -195,7 +196,9 @@ def apply_migrations(conn, migration_dir: str | Path) -> None:
                 )
                 """,
             )
-            # Defensive table-level barrier for legacy migration runners that do not honor the advisory lock.\n            _execute(conn, "LOCK TABLE schema_version IN ACCESS EXCLUSIVE MODE")
+            # Defensive publication barrier: compliant runners use the advisory lock;
+            # the table lock also serializes legacy runners that bypass that contract.
+            _execute(conn, "LOCK TABLE schema_version IN ACCESS EXCLUSIVE MODE")
             rows = _execute(
                 conn,
                 "SELECT version, checksum FROM schema_version ORDER BY version",
