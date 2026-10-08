@@ -7,43 +7,43 @@ Evidence date: 2026-10-08
 ## Exact branch state
 
 - Branch: `feat/ea21-transaction-aware-ledger`
-- Branch tip: `bbca9256f68de198799f17cc73f4f2269d04e52c`
-- Branch tip message: `test(production): align postgres schema gate with v13 contract`
-- The branch tip has a successful Snyk commit status.
-- The production workflow evidence executed against the PR merge ref and recorded tested SHA `fceb0582a57682e47dffd06cf5308020c64efcbf`.
+- Branch tip: `19061aa63bec90e35d82d8392e372cc113b3ead4`
+- Branch tip message: `docs(ea35): record PostgreSQL production proof`
+- The branch tip has fresh successful production PostgreSQL, EAI proof, independent evidence, CodeQL, CORE reconciliation, and production-gate workflow runs.
+- The production workflow evidence executed directly against branch tip `19061aa63bec90e35d82d8392e372cc113b3ead4`.
 
 ## Production PostgreSQL evidence
 
 ### Production PostgreSQL re-performance
 Workflow: `production-postgresql-reperformance`
-Run: **37714780861**
+Run: **37715147584**
 Job: `postgres-smoke`
 Result: **SUCCESS**
 Verified: PostgreSQL schema application, production entrypoint boot, deep reconciliation regression.
 
 ### Production PostgreSQL value-flow re-performance
 Workflow: `Production PostgreSQL Re-performance`
-Run: **37714780742**
+Run: **37715147593**
 Job: `production-postgresql`
 Result: **SUCCESS**
 Verified: production PostgreSQL boot and deep value-truth PostgreSQL re-performance.
 
 ### Independent persisted-value evidence
 Workflow: `independent-postgresql-evidence`
-Run: **37714780849**
+Run: **37715147637**
 Job: `independent-postgresql-evidence`
 Result: **SUCCESS**
 Verified: independent persisted-value verification.
 
 ### EAI production proof
 Workflow: `EAI PostgreSQL Production Proof`
-Run: **37714780660**
+Run: **37715147549**
 Job: `eai-production-proof`
 Result: **SUCCESS**
 
 ### Canonical PostgreSQL production gate
 Workflow: `production-postgresql-gate`
-Run: **37714780659**
+Run: **37715147524**
 Job: `postgresql-production-gate`
 Result: **SUCCESS**
 Verified: exact evidence commit, syntax, production factory/canonical persistence, entrypoint boot, concurrent migration bootstrap, deep reconciliation, EAI re-performance, and real PostgreSQL production value-flow gate.
