@@ -90,7 +90,7 @@ jobs:
             postgres/tests/test_concurrency.py
           )
           for test in "${tests[@]}"; do
-            test -f "\$test"
+            test -f "$test"
           done
           echo "TEST_MANIFEST=PASS"
 
