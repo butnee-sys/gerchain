@@ -1,11 +1,13 @@
 # EA-35 PRODUCTION LOCK STATUS
 
-Status: **PRODUCTION LOCKED**
+Status: **TECHNICAL EVIDENCE VERIFIED / FORMAL LOCK WITHHELD**
 Lock scope: **Overall/Fundamental Architecture + EAI (Escrow as Infrastructure)**
 Repository: `butnee-sys/gerchain`
 Branch: `feat/ea21-transaction-aware-ledger`
 
 ## Lock decision
+
+The earlier LOCKED wording in this document is superseded by the current frozen verification governance and control matrix. Technical production evidence is verified, but final formal lock is withheld while organizational IAM/MFA assurance remains missing.
 
 EA-35 production readiness is locked only after real PostgreSQL execution, canonical migration bootstrap, value-flow execution, deep value-truth reconciliation, EAI re-performance, independent PostgreSQL evidence, and repository security/operating gates all passed.
 
@@ -101,4 +103,8 @@ Product/application layers are outside this lock and must not mutate the protect
 
 Any future change to the locked architecture, authority boundary, migration semantics, transaction boundary, evidence model, or production runtime construction requires a new architecture-change proposal and a fresh production re-performance before the lock may be considered valid again.
 
-Lock state: **LOCKED**
+Lock state: **FORMAL LOCK WITHHELD**
+
+Technical evidence state: **VERIFIED**.
+
+Required remaining closure: GC-IDM-001 and GC-IDM-002 organizational IAM/MFA evidence, plus final exact-SHA canonical-gate confirmation on the latest documentation commit.
