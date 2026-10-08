@@ -96,35 +96,37 @@ def checksum(sql: str) -> str:
 
 @contextmanager
 def _migration_transaction(conn):
-    """Serialize and commit one complete migration publication transaction.
-
-    The lock and migration DDL share the same explicit transaction. This avoids
-    nested psycopg/SQLAlchemy transaction contexts while retaining a final
-    schema_version uniqueness barrier for legacy callers.
-    """
+    """Serialize migration publication with a session-scoped PostgreSQL lock."""
     if _connection_in_transaction(conn):
         raise RuntimeError("migration runner requires a clean transaction")
 
     is_sqlalchemy = hasattr(conn, "exec_driver_sql")
+    lock_acquired = False
     try:
+        # Session-scoped locking closes the publication race across independent
+        # transactions and remains held until the complete migration publication
+        # transaction has committed.
+        if is_sqlalchemy:
+            conn.exec_driver_sql("SELECT pg_advisory_lock(%s)", (MIGRATION_LOCK_KEY,))
+        else:
+            conn.execute("SELECT pg_advisory_lock(%s)", (MIGRATION_LOCK_KEY,))
+        lock_acquired = True
+
         if is_sqlalchemy:
             conn.exec_driver_sql("BEGIN")
-            conn.exec_driver_sql(
-                "SELECT pg_advisory_xact_lock(%s)",
-                (MIGRATION_LOCK_KEY,),
-            )
         else:
             conn.execute("BEGIN")
-            conn.execute(
-                "SELECT pg_advisory_xact_lock(%s)",
-                (MIGRATION_LOCK_KEY,),
-            )
         yield
         conn.commit()
     except Exception:
         conn.rollback()
         raise
-
+    finally:
+        if lock_acquired:
+            if is_sqlalchemy:
+                conn.exec_driver_sql("SELECT pg_advisory_unlock(%s)", (MIGRATION_LOCK_KEY,))
+            else:
+                conn.execute("SELECT pg_advisory_unlock(%s)", (MIGRATION_LOCK_KEY,))
 
 def _connection_in_transaction(conn) -> bool:
     value = getattr(conn, "in_transaction", False)
