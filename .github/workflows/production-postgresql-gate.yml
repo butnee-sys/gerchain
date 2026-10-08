@@ -161,3 +161,15 @@ jobs:
 
       - name: Run real PostgreSQL production value-flow gate
         run: pytest -q tests/integration/test_postgresql_production_gate.py
+
+      - name: Run PostgreSQL recovery gate
+        run: pytest -q tests/test_postgres_outbox_recovery.py
+
+      - name: Run independent persisted-evidence gate
+        run: pytest -q tests/independent/test_postgresql_independent_evidence.py
+
+      - name: Record exact SHA evidence
+        run: |
+          echo "EXACT_SHA=${GITHUB_SHA}"
+          git rev-parse HEAD
+          test "${GITHUB_SHA}" = "$(git rev-parse HEAD)"
