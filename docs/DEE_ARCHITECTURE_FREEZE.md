@@ -66,6 +66,22 @@ DIGITAL ECONOMY ACTIVITIES
 
 The architecture is frozen. Implementation may be added, repaired, refactored, or moved only to conform to this document unless an explicit architecture-change proposal is approved.
 
+## 1A. SHUUD is outside the fundamental infrastructure
+
+**SHUUD is NOT part of the fundamental infrastructure architecture and must remain fully isolated from it.**
+
+SHUUD is a separate application layer/runtime. Its published integration boundary is the EXIM Port; it must not become a GerChain core layer, core engine, production entrypoint, or alternate value authority.
+
+The fundamental infrastructure production gate must therefore never treat SHUUD functional success as evidence that the fundamental infrastructure itself is production-ready.
+
+The mandatory SHUUD isolation invariants are enforced by `tests/test_shuud_exim_boundary.py`:
+- no direct imports from canonical GerChain core/services/architecture namespaces;
+- no SHUUD service modules under canonical `services/`;
+- no legacy `shuud.integration` dependency;
+- EXIM Port is the published SHUUD boundary.
+
+SHUUD's Docker sandbox is separately composed under `sandbox/docker-compose.yml` and starts `shuud.server:app`. It is not the production GerChain entrypoint.
+
 ## 2. Adapter principle
 
 Every layer-to-layer connection shown in the canonical path is an explicit adapter boundary.
@@ -328,7 +344,152 @@ Applications and Digital Economy Activities sit outside the core infrastructure.
 
 Existing `nef_gerchain_port` remains compatible with this architecture and may be refactored behind the canonical adapters; it must not be used to bypass them.
 
-## 15. Hard rules
+## 15. SHUUD — Digital Economy Activity Integration Boundary
+
+**SHUUD is a governed Digital Economy application/activity, not a new canonical infrastructure layer.**
+
+SHUUD therefore sits **below I2B** and consumes protected infrastructure capabilities through the frozen boundary sequence:
+
+```text
+DE
+ ↓
+DE Adapter
+ ↓
+DEE
+ ↓
+DEE ↔ G-3 Adapter
+ ↓
+G-3 Escrow Foundation
+ ↓
+G-3 ↔ Core Adapter
+ ↓
+NEF + GERCHAIN CORE
+ ↓
+Core ↔ EXIM Adapter
+ ↓
+EXIM Port
+ ↓
+EXIM ↔ I2B Adapter
+ ↓
+I2B
+ ↓
+I2B ↔ Multi-Connector Adapter
+ ↓
+STATE / COMPANY / PERSON
+ ↓
+DIGITAL ECONOMY ACTIVITIES
+ ↓
+SHUUD
+```
+
+SHUUD may provide a governed registration, verification, request, service, and transaction-activity interface, but it **does not own authoritative infrastructure truth**.
+
+### SHUUD authority boundary
+
+SHUUD MUST NOT become an independent:
+
+- Ledger
+- Money authority
+- Escrow authority
+- Witness Chain
+- Asset Registry
+- Release authority
+- Settlement authority
+- Audit authority
+- Recovery authority
+
+When SHUUD requires any of these capabilities, it must request them through the defined infrastructure boundaries.
+
+### SHUUD request path
+
+```text
+SHUUD REQUEST
+     ↓
+I2B
+     ↓
+I2B ↔ EXIM ADAPTER
+     ↓
+EXIM PORT
+     ↓
+CORE ↔ EXIM ADAPTER
+     ↓
+NEF / GERCHAIN / G-3
+     ↓
+DECISION
+     ↓
+AUTHORIZATION
+     ↓
+RELEASE / SETTLEMENT / RESULT
+     ↓
+EVIDENCE
+     ↓
+I2B
+     ↓
+SHUUD
+```
+
+For asset-related requests:
+
+```text
+SHUUD
+ ↓
+I2B
+ ↓
+NEF: asset truth
+ ↓
+GerChain: governed value flow
+ ↓
+G-3: conditions / escrow governance
+ ↓
+DEE: ecosystem policy / protection
+ ↓
+Result + Evidence
+ ↓
+SHUUD
+```
+
+### SHUUD hard invariants
+
+1. SHUUD cannot mutate NEF authoritative truth directly.
+2. SHUUD cannot mutate Canonical Ledger balances directly.
+3. SHUUD cannot create a parallel escrow state machine.
+4. SHUUD cannot create a parallel Witness Chain.
+5. SHUUD cannot release value directly.
+6. SHUUD cannot bypass EXIM/I2B boundaries to reach core internals.
+7. SHUUD application state is not infrastructure truth.
+8. A SHUUD failure must not corrupt canonical value truth.
+9. A repeated SHUUD request must resolve through the canonical idempotency boundary.
+10. SHUUD receives evidence/result; it does not redefine the authoritative evidence.
+11. Unknown required conditions remain DENY/HOLD.
+12. Any future SHUUD capability must conform to this boundary unless an explicit architecture-change proposal is approved.
+
+### SHUUD and PDEIZ
+
+SHUUD is a **downstream consumer** of the Protected Digital Economic Infrastructure Zone (PDEIZ).
+
+```text
+PDEIZ
+┌──────────────────────────────────────────────┐
+│ NEF + G-3 + GERCHAIN                        │
+│                                              │
+│ Truth │ Conditions │ Value Flow │ Evidence   │
+└──────────────────────────────────────────────┘
+                     ▲
+                     │ controlled interface
+                     │
+                   I2B
+                     ▲
+                     │
+                   SHUUD
+```
+
+Hard rule:
+
+**SHUUD may request a protected-zone service; SHUUD may not alter protected-zone truth, authority, policy, or core execution state.**
+
+This integration does not create a new canonical architecture layer and does not change the frozen DE → DEE → G-3 → Core → EXIM → I2B path.
+
+## 16. Hard rules
 
 1. **DE is mandatory and top-level.**
 2. **DE is distinct from EXIM.** DE is the top-level Digital Economy space; EXIM is the core external-system boundary.

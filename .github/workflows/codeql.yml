@@ -1,4 +1,8 @@
 # For most projects, this workflow file will not need changing; you simply need
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+
 # to commit it to your repository.
 #
 # You may wish to alter this file to override the set of languages analyzed,
