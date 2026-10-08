@@ -8,6 +8,24 @@ Date: 2026-10-08
 
 This document is valid only for the exact commit above.
 
+
+## 1A. Evidence document integrity / commit-role separation
+
+This document is an **evidence record**, not the code commit whose state it verifies.
+
+- **Verified code/evidence SHA:** `90f8cef1a2f27a198a3d80e13f0c4c65106a455d`
+- **Evidence-document commit:** `d22cccb` (the commit that introduced this document)
+
+These two SHAs MUST NOT be conflated. The evidence SHA identifies the repository state on which the listed verification runs were executed; the document commit identifies the version of this evidence record.
+
+The document therefore does **not** claim that `d22cccb` itself was the tested code state. It records the verification performed against `90f8cef`.
+
+## 1B. Current-state lock rule
+
+The lock is valid only for the exact verified code/evidence SHA stated above. Any code, workflow, test, schema, runtime, or production-entrypoint change after that SHA invalidates the lock for the newer repository state until the full exact-SHA verification cycle is repeated.
+
+A documentation-only commit may preserve the historical evidence record without changing the verified code SHA. A subsequent code change MUST NOT be described as covered by this historical lock.
+
 ## 2. Failure corrected
 
 Predecessor evidence at `972db96e0ee3f913daed7f9bf7b5f6d944953d85` produced:
