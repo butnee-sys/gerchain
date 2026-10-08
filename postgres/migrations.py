@@ -94,30 +94,41 @@ def checksum(sql: str) -> str:
 
 
 @contextmanager
-def _native_migration_transaction(conn):
-    """Serialize native psycopg migration publication inside one transaction."""
+def _migration_transaction(conn):
+    """Serialize and commit one complete migration publication transaction.
+
+    The lock and migration DDL share the same explicit transaction. This avoids
+    nested psycopg/SQLAlchemy transaction contexts while retaining a final
+    schema_version uniqueness barrier for legacy callers.
+    """
     if _connection_in_transaction(conn):
-        raise RuntimeError("migration runner requires a clean psycopg transaction")
-    with conn.transaction():
-        conn.execute("SELECT pg_advisory_xact_lock(%s)", (MIGRATION_LOCK_KEY,))
-        yield
+        raise RuntimeError("migration runner requires a clean transaction")
 
-@contextmanager
-def _sqlalchemy_migration_transaction(conn):
-    """Serialize SQLAlchemy migration publication inside one transaction."""
-    if conn.in_transaction():
-        raise RuntimeError("migration runner requires a clean SQLAlchemy transaction")
-    with conn.begin():
-        conn.exec_driver_sql("SELECT pg_advisory_xact_lock(%s)", (MIGRATION_LOCK_KEY,))
+    is_sqlalchemy = hasattr(conn, "exec_driver_sql")
+    try:
+        if is_sqlalchemy:
+            conn.exec_driver_sql("BEGIN")
+            conn.exec_driver_sql(
+                "SELECT pg_advisory_xact_lock(%s)",
+                (MIGRATION_LOCK_KEY,),
+            )
+        else:
+            conn.execute("BEGIN")
+            conn.execute(
+                "SELECT pg_advisory_xact_lock(%s)",
+                (MIGRATION_LOCK_KEY,),
+            )
         yield
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
 
-def _transaction(conn):
-    """Return a real transaction context for SQLAlchemy or native psycopg."""
-    if hasattr(conn, "exec_driver_sql") and hasattr(conn, "begin"):
-        return _sqlalchemy_migration_transaction(conn)
-    if hasattr(conn, "transaction"):
-        return _native_migration_transaction(conn)
-    return nullcontext()
+
+def _connection_in_transaction(conn) -> bool:
+    value = getattr(conn, "in_transaction", False)
+    return value() if callable(value) else bool(value)
+
 
 def _execute(conn, sql: str, params=None):
     # Non-parameterized DDL/PLpgSQL may contain literal percent signs.
@@ -253,11 +264,7 @@ def apply_migrations(conn, migration_dir: str | Path) -> None:
 
     # Serialize concurrent migration runners before any migration transaction is opened.
     # Native psycopg uses a session advisory lock; SQLAlchemy uses a transaction-scoped lock.
-    migration_context = (
-        _native_migration_transaction(conn)
-        if hasattr(conn, "transaction") and not hasattr(conn, "exec_driver_sql")
-        else _transaction(conn)
-    )
+    migration_context = _migration_transaction(conn)
     try:
         with migration_context:
             # Use psycopg-native positional parameters for both SQLAlchemy's
