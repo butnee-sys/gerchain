@@ -109,3 +109,7 @@ Any subsequent code change invalidates this lock and requires a new exact-SHA ve
 This lock covers the verified fundamental architecture / EAI production evidence represented by the listed gates. It does not silently authorize unrelated future architectural changes.
 
 **Rule: evidence first; lock second.**
+
+
+## EA-35.47 verification trigger
+Fresh exact-SHA verification is required after the migration publication barrier and production-runtime syntax corrections. This entry intentionally carries no PASS/LOCK claim; only GitHub Actions evidence for the resulting commit may establish completion.
