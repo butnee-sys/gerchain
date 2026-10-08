@@ -27,18 +27,21 @@ Legacy value authorities remain non-authoritative.
 
 ## Exact evidence
 
-Evidence commit before lock-document publication:
-`12d154298944aa2c40a11d98cc4dfec17ccc1d94`
+Latest executable evidence SHA:
+`cd41c6ebd24783b7873405c59890358d03e7e653`
 
-Successful production evidence:
-- production-postgresql-gate run **3306** / `37663246048`
-- production-postgres run **5104** / `37663245970`
-- production-postgresql-reperformance run **2534** / `37663245937`
-- independent-postgresql-evidence run **1577** / `37663245935`
-- EAI PostgreSQL Production Proof run **297** / `37663246007`
-- CORE Operating Reconciliation run **3363** / `37663246030`
-- core-gates run **5844** / `37663246036`
-- CodeQL Advanced run **3516** / `37663246177`
+Latest documentation consolidation commit:
+`a5dbe49880eea81012ec4c2783edc03681e1660f`
+
+Successful exact-SHA production evidence for `cd41c6ebd24783b7873405c59890358d03e7e653`:
+- production-postgresql-gate run **37720845287** — SUCCESS
+- independent-postgresql-evidence run **37720845257** — SUCCESS
+- EAI PostgreSQL Production Proof run **37720850002** — SUCCESS
+- Production PostgreSQL Re-performance run **37720845329** — SUCCESS
+- production-postgres run **37720845345** — SUCCESS
+- production-postgresql-e2e run **37720845333** — SUCCESS
+- EA-35 PostgreSQL production smoke run **37720845299** — SUCCESS
+
 
 ## Production gate results
 
@@ -107,4 +110,4 @@ Lock state: **FORMAL LOCK WITHHELD**
 
 Technical evidence state: **VERIFIED**.
 
-Required remaining closure: GC-IDM-001 and GC-IDM-002 organizational IAM/MFA evidence, plus final exact-SHA canonical-gate confirmation on the latest documentation commit.
+Required remaining closure: GC-IDM-001 and GC-IDM-002 organizational IAM/MFA evidence, plus organizational IAM/MFA evidence. The canonical production gate is already confirmed on the latest executable SHA; the documentation consolidation commit is documentation-only and is not substituted as executable evidence.
