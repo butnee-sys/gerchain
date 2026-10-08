@@ -96,41 +96,29 @@ def checksum(sql: str) -> str:
 
 @contextmanager
 def _migration_transaction(conn):
-    """Serialize migration publication with a session-scoped PostgreSQL lock."""
+    """Serialize the complete migration publication transaction."""
     if _connection_in_transaction(conn):
         raise RuntimeError("migration runner requires a clean transaction")
 
+    # One transaction-scoped advisory lock is sufficient for every compliant
+    # migration runner. The lock is released automatically with the transaction,
+    # so there is no separate session-lock/unlock lifecycle to race or leak.
     is_sqlalchemy = hasattr(conn, "exec_driver_sql")
-    lock_acquired = False
     try:
-        # Session-scoped locking closes the publication race across independent
-        # transactions and remains held until the complete migration publication
-        # transaction has committed.
         if is_sqlalchemy:
-            conn.exec_driver_sql("SELECT pg_advisory_lock(%s)", (MIGRATION_LOCK_KEY,))
+            conn.exec_driver_sql("SELECT pg_advisory_xact_lock(%s)", (MIGRATION_LOCK_KEY,))
         else:
-            conn.execute("SELECT pg_advisory_lock(%s)", (MIGRATION_LOCK_KEY,))
-        lock_acquired = True
-
-        # The advisory-lock statement itself opens the transaction on a clean
-        # psycopg/SQLAlchemy connection. Do not issue a nested BEGIN: that can
-        # weaken the publication barrier and produce duplicate schema_version rows.
+            conn.execute("SELECT pg_advisory_xact_lock(%s)", (MIGRATION_LOCK_KEY,))
         yield
         conn.commit()
     except Exception:
         conn.rollback()
         raise
-    finally:
-        if lock_acquired:
-            if is_sqlalchemy:
-                conn.exec_driver_sql("SELECT pg_advisory_unlock(%s)", (MIGRATION_LOCK_KEY,))
-            else:
-                conn.execute("SELECT pg_advisory_unlock(%s)", (MIGRATION_LOCK_KEY,))
+
 
 def _connection_in_transaction(conn) -> bool:
     value = getattr(conn, "in_transaction", False)
     return value() if callable(value) else bool(value)
-
 
 def _execute(conn, sql: str, params=None):
     # Non-parameterized DDL/PLpgSQL may contain literal percent signs.
@@ -264,8 +252,7 @@ def apply_migrations(conn, migration_dir: str | Path) -> None:
                 + ", ".join(p.name for p in candidates)
             )
 
-    # Serialize concurrent migration runners before any migration transaction is opened.
-    # Native psycopg uses a session advisory lock; SQLAlchemy uses a transaction-scoped lock.
+    # Serialize concurrent migration runners before publishing any migration row.
     migration_context = _migration_transaction(conn)
     try:
         with migration_context:
