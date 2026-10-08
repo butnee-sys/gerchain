@@ -24,7 +24,16 @@ def _postgres_session():
         raise AssertionError("EA-36 requires a real PostgreSQL database URL")
 
     engine = create_engine(url, pool_pre_ping=True)
-    ProductionRuntimeFactory.create(\n        escrow_id="ea36-bootstrap",\n        amount=1,\n        currency="USD",\n        witness_id="ea36-bootstrap-witness",\n        engine=engine,\n        session_factory=sessionmaker(bind=engine, expire_on_commit=False),\n    )\n\n    with engine.begin() as conn:
+    ProductionRuntimeFactory.create(
+        escrow_id="ea36-bootstrap",
+        amount=1,
+        currency="USD",
+        witness_id="ea36-bootstrap-witness",
+        engine=engine,
+        session_factory=sessionmaker(bind=engine, expire_on_commit=False),
+    )
+
+    with engine.begin() as conn:
         conn.execute(text(
             "TRUNCATE TABLE gerchain_transaction_witnesses, "
             "gerchain_outbox_events, gerchain_idempotency_records, "
