@@ -1,40 +1,50 @@
 # EA-35 FINAL LOCK
 
-Status: FINAL LOCK
+Status: SUPERSEDED — NOT VALID FOR CURRENT TIP
 
-Locked SHA: d182d33681403bf14fad80cb357ddb3bd1f395bc
+Superseded historical lock SHA: d182d33681403bf14fad80cb357ddb3bd1f395bc
+Current verification target SHA: 4e336c4b8e0f766e188887a90a52791987ae6a56
 
-## Scope
-EA-35 deep value-truth reconciliation and the production PostgreSQL runtime proof chain.
+## Reason
 
-## Required gates
-- core-gates #5984: SUCCESS
-- CORE Operating Reconciliation #3491: SUCCESS
-- production-postgres #5221: SUCCESS
-- production-postgresql-reperformance #2650: SUCCESS
-- Production PostgreSQL Re-performance #4616: SUCCESS
-- production-postgresql-gate #3422: SUCCESS
-- EAI PostgreSQL Production Proof #355: SUCCESS
-- independent-postgresql-evidence #1693: SUCCESS
-- CodeQL Advanced #3586: SUCCESS
-- SHUUD Command Layer #3275: SUCCESS
-- SHUUD Sandbox Smoke #3324: SUCCESS
-- Snyk status: SUCCESS
+The historical lock was issued for an earlier exact SHA. The current branch contains subsequent production-runtime, migration, and Runner-gate changes and therefore requires fresh exact-SHA evidence.
 
-## Lock conditions
-1. Production runtime construction uses ProductionRuntimeConfig + ProductionRuntimeFactory instance construction.
-2. Production authority is Canonical Ledger, not legacy ReleaseAccount/AtomicRelease.
-3. PostgreSQL production runtime boot is independently re-performed.
-4. Deep value-truth reconciliation is covered by the verified gate chain.
-5. Core operating reconciliation is successful.
-6. Security/static analysis gates are successful.
-7. No unresolved failed gate remains for this SHA.
+The current SHA MUST NOT be declared locked until the live GitHub Actions gates complete successfully for this exact SHA.
 
-## Important evidence note
-The preceding SHA e860f502f3e1a2d56fd873ad2faab7b1ab630740 was NOT locked because core-gates and PostgreSQL Concurrency failed. The runtime syntax defect and constructor mismatch were corrected; the resulting SHA d182d33681403bf14fad80cb357ddb3bd1f395bc passed the required gate set above.
+## Required fresh gates
 
-## Boundary
-This lock covers the current EA-35 production-readiness evidence scope. It does not silently freeze unrelated future architecture changes.
+- EA-35 Runner Gate
+- production-postgres
+- production-postgresql-e2e
+- production-postgres-evidence
+- EAI PostgreSQL Production Proof
+- production PostgreSQL re-performance
+- independent PostgreSQL evidence
+- canonical/fundamental architecture gates
+- CORE operating reconciliation
+- DEE security / CodeQL as applicable
 
-## Next gate
-Proceed to the next production gate only after this lock is recorded.
+## Current status
+
+Runner execution is currently queued. No current-SHA PASS has been established.
+
+Therefore:
+
+**EA-35 = IN PROGRESS / NOT LOCKED**
+
+Historical successful evidence remains historical evidence and cannot be silently promoted to current-SHA evidence.
+
+## Lock rule
+
+Only after every required current-SHA gate is successful may this document be replaced by a FINAL LOCK document recording:
+1. exact locked SHA;
+2. exact successful run IDs;
+3. PostgreSQL production proof;
+4. EAI proof;
+5. Deep Value Truth proof;
+6. Recovery proof;
+7. Independent re-performance;
+8. Evidence Index;
+9. final lock decision.
+
+No downstream product-layer work is authorized by this status.
