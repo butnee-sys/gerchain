@@ -1,16 +1,49 @@
 # EA-35 — Production PostgreSQL Evidence and Lock Status
 
 **Branch:** `feat/ea21-transaction-aware-ledger`  
-**Verified implementation SHA:** `52e2e1bce5952bbe7a91ac091dcf3c5eb5ba11e4`  
-**Evidence date:** 2026-10-07
+**Verified implementation SHA:** `cd41c6ebd24783b7873405c59890358d03e7e653`  
+**Evidence date:** 2026-10-08
 
 ## Status
 
 **EA-35 PostgreSQL/EAI evidence boundary: VERIFIED / PARTIALLY LOCKED**
 
+Fresh exact-SHA production evidence supersedes the prior 2026-10-07 evidence record.
+
 The executable production implementation is evidence-locked at SHA `52e2e1bce5952bbe7a91ac091dcf3c5eb5ba11e4`. Subsequent commits in this evidence record are documentation-only and do not alter executable production code.
 
 Fresh GitHub Actions evidence confirms real PostgreSQL execution on the current implementation line.
+
+
+## Fresh exact-SHA production gate — 2026-10-08
+
+Implementation/evidence SHA: `cd41c6ebd24783b7873405c59890358d03e7e653`
+
+Production PostgreSQL gate run: `37720845287` / job `113127862402` — **SUCCESS**.
+
+All production gate steps completed successfully:
+- exact evidence SHA recorded;
+- Python syntax gate;
+- production factory + canonical persistence gate;
+- canonical ledger movement + replay gate;
+- real PostgreSQL production entrypoint boot;
+- concurrent PostgreSQL migration bootstrap;
+- deep value-truth reconciliation (**19 passed**);
+- EAI production re-performance (**1 passed**);
+- real PostgreSQL production value-flow (**2 passed**).
+
+Recorded runtime evidence:
+- `PRODUCTION_FACTORY_GATE=PASS`
+- `CANONICAL_TABLES_GATE=PASS`
+- `CANONICAL_LEDGER_MOVEMENT_GATE=PASS`
+- `CANONICAL_LEDGER_REPLAY_GATE=PASS`
+- `GerChain production runtime initialized: escrow=ci-escrow-1 currency=USD`
+- concurrent migration suite: **1 passed, 5 passed total**
+- deep reconciliation suite: **19 passed in 2.39s**
+- EAI re-performance: **1 passed in 0.57s**
+- full PostgreSQL value-flow gate: **2 passed in 0.61s**
+
+The previously observed `schema_version(version=2)` duplicate-publication failure is no longer present on this exact-SHA run; the current migration publication path completed successfully under the PostgreSQL concurrency gate.
 
 ## Fresh exact-SHA workflow evidence — 2026-10-07
 
