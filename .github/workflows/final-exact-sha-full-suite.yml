@@ -40,4 +40,4 @@ jobs:
       - name: Record exact SHA
         run: git rev-parse HEAD
       - name: Full test suite
-        run: pytest -q
+        run: pytest -q --import-mode=importlib
