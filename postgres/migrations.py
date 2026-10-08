@@ -1,4 +1,5 @@
 # EA-35.42: exact-SHA rerun trigger after restoring the conflict-safe migration runner.
+# EA-35.44: fresh exact-SHA CI re-performance after the conflict-safe publication barrier was verified in source.
 # EA-35.43: fresh CI publication evidence after the conflict-safe ON CONFLICT barrier was verified in source.
 # EA-35.41: final exact-SHA verification trigger after conflict-safe publication evidence review.
 # EA-35.38: fresh exact-SHA verification trigger after conflict-safe publication evidence review.
