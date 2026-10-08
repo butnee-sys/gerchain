@@ -33,7 +33,7 @@ def test_production_factory_builds_real_postgresql_canonical_runtime():
     with factory.engine.connect() as connection:
         from sqlalchemy import inspect, text
         version = connection.execute(text("SELECT MAX(version) FROM schema_version")).scalar()
-        assert int(version) >= 12
+        assert int(version) >= 13
         tables = set(inspect(connection).get_table_names())
         assert {
             "escrows",
