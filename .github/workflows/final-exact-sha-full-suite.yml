@@ -4,6 +4,8 @@ on:
   push:
     branches: ["feat/ea21-transaction-aware-ledger"]
   workflow_dispatch:
+  pull_request:
+    branches: ["main"]
 
 jobs:
   full-suite:
