@@ -4,12 +4,16 @@
 - Production PostgreSQL gate: **PASS**
 - EAI production status: **VERIFIED**
 - Overall architecture lock: **NOT YET LOCKED**
-- Evidence correction commit: `6fdbce7d74aff21e084b616460247e8faed77f7f`
+- Current exact verification SHA: `91222ae5ec7aa350206cd192bb00cdcd7a80ccd3`
 - Workflow runs: `37621992299` (EAI proof), `37621992207` (production PostgreSQL), `37621992236` (independent PostgreSQL evidence), `37621992149` (production gate)
 - Job: `postgresql-production-gate`
 - Verified: 2026-10-07 (fresh runs)
 
-## Fresh PostgreSQL evidence
+## Fresh PostgreSQL evidence — 2026-10-08
+
+The current branch HEAD was independently re-executed by the following successful GitHub Actions gates: production PostgreSQL re-performance `37714226000`, production-postgresql `37714226025`, production-postgresql-reperformance `37714226043`, EAI PostgreSQL Production Proof `37714226122`, independent PostgreSQL evidence `37714226042`, production-postgresql-gate `37714226038`, and core-gates `37714226119`.
+
+
 
 All steps in the production PostgreSQL gate completed successfully:
 
@@ -60,4 +64,4 @@ The previous PostgreSQL concurrency evidence exposed a first-boot publication ra
 
 This evidence is **repository/CI technical evidence**, not an external production certification or independent third-party attestation.
 
-EA-35 production execution is **VERIFIED** on fresh exact-SHA CI evidence for `6fdbce7d74aff21e084b616460247e8faed77f7f`. EAI is production-ready within the tested scope. The overall canonical architecture remains **IN PROGRESS / NOT LOCKED** until security/IAM controls, privileged access governance, recovery/DR evidence, architecture-wide independent re-performance, and final lock criteria are closed.
+EA-35 production execution is **VERIFIED** on fresh exact-SHA CI evidence for `91222ae5ec7aa350206cd192bb00cdcd7a80ccd3`. EAI is production-ready within the tested scope. The overall canonical architecture remains **IN PROGRESS / NOT LOCKED** until security/IAM controls, privileged access governance, recovery/DR evidence, architecture-wide independent re-performance, and final lock criteria are closed.
