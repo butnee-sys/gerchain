@@ -59,7 +59,7 @@ Artifact SHA-256:
 
 The exact-SHA PostgreSQL runtime boot and deep value-truth reconciliation gates are both successful at the evidence SHA above.
 
-This is strong EA-36 evidence, but it is not yet the final EA-36 lock because an independent re-performance must still be tied to the final current implementation SHA and the complete transaction graph must be independently re-executed after the latest changes.
+Independent EA-36 re-performance is now successful on the current implementation SHA `b3fb4f94b57e6026f92573d86a702dec995a5088`.
 
 ## Lock rule
 
@@ -72,3 +72,42 @@ EA-36 may be locked only when:
 - evidence references the final implementation SHA.
 
 No GREEN/LOCK claim is made before those conditions are met.
+
+
+## EA-36 independent re-performance — SUCCESS
+
+Implementation SHA: `b3fb4f94b57e6026f92573d86a702dec995a5088`
+
+Workflow run: `37743459462`
+
+Job: `ea36-postgresql`
+
+Result: **SUCCESS**
+
+The gate executed against a real PostgreSQL 16 service and completed the independent transaction-graph test successfully.
+
+Verified graph:
+
+- transaction_id
+- operation
+- escrow_id
+- source
+- destination
+- amount
+- currency
+- integrity hash
+- canonical Ledger movement
+- durable Escrow state
+- Witness
+- Outbox
+- durable Idempotency
+- deep value-truth reconciliation
+- exact replay without duplicate evidence
+- conflicting replay rejection
+
+Artifact: `ea36-postgresql-reperformance`
+
+Artifact SHA-256:
+`10e7057e6b9331e7cf7abeb23ad6dc7b290ca4bb721d7ef51a741ea137ce09d0`
+
+The earlier false-positive PostgreSQL gate was also identified: the previous job executed the reconciliation test against its SQLite in-memory helper despite exposing a PostgreSQL URL. EA-36 closes that evidence-quality gap by using a dedicated test that rejects non-PostgreSQL URLs and executes directly against the PostgreSQL service.
