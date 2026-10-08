@@ -1,4 +1,5 @@
 # EA-35.42: exact-SHA rerun trigger after restoring the conflict-safe migration runner.
+# EA-35.43: fresh CI publication evidence after the conflict-safe ON CONFLICT barrier was verified in source.
 # EA-35.41: final exact-SHA verification trigger after conflict-safe publication evidence review.
 # EA-35.38: fresh exact-SHA verification trigger after conflict-safe publication evidence review.
 # EA-35.35: fresh exact-SHA PostgreSQL re-performance after migration publication barrier verification.
