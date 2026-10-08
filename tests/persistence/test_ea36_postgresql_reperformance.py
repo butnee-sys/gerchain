@@ -15,7 +15,7 @@ from persistence.deep_value_reconciliation import deep_reconcile_value_truth
 from persistence.durable_idempotency import DurableIdempotencyRecord
 from persistence.escrow_aggregate import CanonicalEscrow, EscrowState
 from persistence.recovery_outbox import OutboxEvent
-from services.gerchain_runtime_factory import ProductionRuntimeConfig, ProductionRuntimeFactory
+from services.gerchain_runtime_factory import ProductionRuntimeFactory
 
 
 def _postgres_session():
@@ -24,19 +24,7 @@ def _postgres_session():
         raise AssertionError("EA-36 requires a real PostgreSQL database URL")
 
     engine = create_engine(url, pool_pre_ping=True)
-    factory = ProductionRuntimeFactory(
-        ProductionRuntimeConfig(
-            database_url=url,
-            escrow_id="ea36-bootstrap",
-            amount=1,
-            currency="USD",
-            witness_id="ea36-bootstrap-witness",
-        ),
-        engine=engine,
-    )
-    factory.create()
-
-    with engine.begin() as conn:
+    ProductionRuntimeFactory.create(\n        escrow_id="ea36-bootstrap",\n        amount=1,\n        currency="USD",\n        witness_id="ea36-bootstrap-witness",\n        engine=engine,\n        session_factory=sessionmaker(bind=engine, expire_on_commit=False),\n    )\n\n    with engine.begin() as conn:
         conn.execute(text(
             "TRUNCATE TABLE gerchain_transaction_witnesses, "
             "gerchain_outbox_events, gerchain_idempotency_records, "
