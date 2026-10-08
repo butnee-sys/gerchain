@@ -5,7 +5,7 @@ name: core-gates
 # This gate intentionally excludes legacy/product-only workflows and tests that assert superseded authorities.
 
 concurrency:
-  group: core-gates-\${{ github.event.pull_request.number || github.ref }}
+  group: core-gates-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 on:
@@ -89,7 +89,7 @@ jobs:
             tests/persistence/test_deep_value_reconciliation.py
             postgres/tests/test_concurrency.py
           )
-          for test in "\${tests[@]}"; do
+          for test in "${tests[@]}"; do
             test -f "\$test"
           done
           echo "TEST_MANIFEST=PASS"
