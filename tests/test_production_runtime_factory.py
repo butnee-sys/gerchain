@@ -174,4 +174,5 @@ def test_production_factory_creates_canonical_ledger_runtime(monkeypatch):
     assert runtime.is_canonical_ledger_authoritative is True
     assert runtime.runtime_mode == "production-postgresql"
     assert runtime._postgres_release is None
-    # Production construction must not silently restore the deprecated Release authority.\n    assert runtime.is_postgresql_authoritative is False\n
+    # Production construction must not silently restore the deprecated Release authority.
+    assert runtime.is_postgresql_authoritative is False
