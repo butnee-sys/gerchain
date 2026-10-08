@@ -38,10 +38,9 @@ def test_production_factory_boots_canonical_postgresql_runtime():
         rows = connection.execute(
             text(
                 "SELECT table_name FROM information_schema.tables "
-                "WHERE table_schema = 'public' AND table_name = ANY(:names)"
-            ),
-            {"names": list(required)},
+                "WHERE table_schema = 'public'"
+            )
         ).scalars().all()
-        assert set(rows) == required
+        assert required.issubset(set(rows))
 
     engine.dispose()
