@@ -96,24 +96,45 @@ def checksum(sql: str) -> str:
 
 @contextmanager
 def _migration_transaction(conn):
-    """Serialize the complete migration publication transaction."""
+    """Serialize migration publication across commits using a session lock.
+
+    Migration files and legacy callers may commit internally. A transaction-
+    scoped advisory lock would then be released before schema_version publication,
+    allowing two runners to insert the same version concurrently. The session lock
+    remains held across those transaction boundaries and is always explicitly
+    released, including after rollback.
+    """
     if _connection_in_transaction(conn):
         raise RuntimeError("migration runner requires a clean transaction")
 
-    # One transaction-scoped advisory lock is sufficient for every compliant
-    # migration runner. The lock is released automatically with the transaction,
-    # so there is no separate session-lock/unlock lifecycle to race or leak.
     is_sqlalchemy = hasattr(conn, "exec_driver_sql")
-    try:
+
+    def execute(sql, params=()):
         if is_sqlalchemy:
-            conn.exec_driver_sql("SELECT pg_advisory_xact_lock(%s)", (MIGRATION_LOCK_KEY,))
-        else:
-            conn.execute("SELECT pg_advisory_xact_lock(%s)", (MIGRATION_LOCK_KEY,))
+            return conn.exec_driver_sql(sql, params)
+        return conn.execute(sql, params)
+
+    acquired = False
+    try:
+        execute("SELECT pg_advisory_lock(%s)", (MIGRATION_LOCK_KEY,))
+        acquired = True
         yield
         conn.commit()
     except Exception:
         conn.rollback()
         raise
+    finally:
+        if acquired:
+            try:
+                # A failed migration may leave the connection in an aborted
+                # transaction; clear it before issuing the session unlock.
+                if _connection_in_transaction(conn):
+                    conn.rollback()
+                execute("SELECT pg_advisory_unlock(%s)", (MIGRATION_LOCK_KEY,))
+                conn.commit()
+            except Exception:
+                conn.rollback()
+                raise
 
 
 def _connection_in_transaction(conn) -> bool:
@@ -259,8 +280,6 @@ def apply_migrations(conn, migration_dir: str | Path) -> None:
             # Use psycopg-native positional parameters for both SQLAlchemy's
             # exec_driver_sql path and native psycopg. SQLAlchemy does not
             # translate :name placeholders when exec_driver_sql() is used.
-            if hasattr(conn, "exec_driver_sql"):
-                _execute(conn, "SELECT pg_advisory_xact_lock(%s)", (MIGRATION_LOCK_KEY,))
             _execute(
                 conn,
                 """
