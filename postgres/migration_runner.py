@@ -226,8 +226,47 @@ def apply_migrations(conn, migration_dir: str | Path) -> None:
                     )
                     """,
                 )
-            # Defensive table-level barrier for legacy migration runners that do not honor the advisory lock.
+            # Serialize legacy runners too, then repair duplicate historical rows
+            # only when they are exact duplicates. Conflicting checksums for one
+            # version are ambiguous migration history and must fail closed.
             _execute(conn, "LOCK TABLE schema_version IN ACCESS EXCLUSIVE MODE")
+            conflicting = _execute(
+                conn,
+                """
+                SELECT version
+                FROM schema_version
+                GROUP BY version
+                HAVING COUNT(DISTINCT checksum) > 1
+                ORDER BY version
+                """,
+            ).fetchall()
+            if conflicting:
+                versions = ", ".join(str(int(row[0])) for row in conflicting)
+                raise RuntimeError(
+                    "Conflicting schema_version checksums require manual reconciliation "
+                    f"for migration version(s): {versions}"
+                )
+
+            # A legacy schema_version table may have been created without its
+            # canonical primary key. Collapse byte-identical duplicate rows before
+            # enforcing uniqueness; keep the earliest row deterministically.
+            _execute(
+                conn,
+                """
+                DELETE FROM schema_version AS duplicate
+                USING schema_version AS keeper
+                WHERE duplicate.version = keeper.version
+                  AND duplicate.checksum = keeper.checksum
+                  AND duplicate.ctid > keeper.ctid
+                """,
+            )
+            _execute(
+                conn,
+                """
+                CREATE UNIQUE INDEX IF NOT EXISTS uq_schema_version_version
+                ON schema_version (version)
+                """,
+            )
             rows = _execute(
                 conn,
                 "SELECT version, checksum FROM schema_version ORDER BY version",
