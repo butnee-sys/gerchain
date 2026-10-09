@@ -49,6 +49,7 @@ def test_duplicate_identical_schema_version_rows_are_reconciled(postgres_schema)
         conn.exec_driver_sql(
             "CREATE TABLE schema_version (version BIGINT NOT NULL, checksum TEXT NOT NULL, applied_at TIMESTAMPTZ DEFAULT now())"
         )
+        conn.exec_driver_sql("CREATE TABLE migration_probe (id INTEGER PRIMARY KEY)")
         conn.exec_driver_sql(
             "INSERT INTO schema_version(version, checksum) VALUES (1, %s), (1, %s)",
             (digest, digest),
