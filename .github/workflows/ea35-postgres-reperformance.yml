@@ -31,6 +31,7 @@ jobs:
           --health-retries 20
     env:
       GERCHAIN_DATABASE_URL: postgresql+psycopg://gerchain:gerchain@localhost:5432/gerchain_test
+      GERCHAIN_TEST_DATABASE_URL: postgresql+psycopg://gerchain:gerchain@localhost:5432/gerchain_reperformance
       GERCHAIN_ESCROW_ID: ea35-reperformance-escrow
       GERCHAIN_ESCROW_AMOUNT: "100"
       GERCHAIN_CURRENCY: MNT
@@ -64,7 +65,12 @@ jobs:
           engine.dispose()
           PY
 
-      - name: Re-perform durable value-truth test suite
+      - name: Create isolated PostgreSQL database for value-truth tests
+        run: |
+          PGPASSWORD=gerchain createdb -h localhost -U gerchain gerchain_reperformance
+          PGPASSWORD=gerchain psql -h localhost -U gerchain -d gerchain_reperformance -c "SELECT current_database();"
+
+      - name: Re-perform durable value-truth test suite on PostgreSQL
         run: |
           pytest -q tests/persistence/test_deep_value_reconciliation.py
 
