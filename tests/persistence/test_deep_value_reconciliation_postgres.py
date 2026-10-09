@@ -85,7 +85,7 @@ def test_deep_value_truth_reconciliation_executes_against_postgresql(postgres_se
     session.add(
         TransactionWitness(
             transaction_id=tx,
-            event_type="GERCHAIN_RELEASE",
+            event_type="GERCHAIN_RELEASED",
             escrow_id=escrow_id,
             amount=amount,
             created_at=now,
@@ -93,8 +93,8 @@ def test_deep_value_truth_reconciliation_executes_against_postgresql(postgres_se
     )
     session.add(
         OutboxEvent(
-            event_id="gerchain_release:pg-tx-1",
-            event_type="GERCHAIN_RELEASE",
+            event_id="gerchain_released:pg-tx-1",
+            event_type="GERCHAIN_RELEASED",
             aggregate_id=escrow_id,
             payload_json="{}",
             state="PENDING",
@@ -112,7 +112,7 @@ def test_deep_value_truth_reconciliation_executes_against_postgresql(postgres_se
         "currency": currency,
         "expected_state": "LOCKED",
         "new_state": "RELEASED",
-        "event_type": "GERCHAIN_RELEASE",
+        "event_type": "GERCHAIN_RELEASED",
     }
     session.add(
         DurableIdempotencyRecord(
