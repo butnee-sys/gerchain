@@ -11,7 +11,9 @@ from postgres.migrations import apply_migrations
 
 
 def _dsn() -> str:
-    return os.environ.get("GERCHAIN_POSTGRES_DSN") or os.environ.get("GERCHAIN_DATABASE_URL") or os.environ["GERCHAIN_TEST_DATABASE_URL"]
+    # psycopg accepts PostgreSQL DSNs, not SQLAlchemy driver-qualified URLs.
+    value = os.environ.get("GERCHAIN_POSTGRES_DSN") or os.environ.get("GERCHAIN_DATABASE_URL") or os.environ["GERCHAIN_TEST_DATABASE_URL"]
+    return value.replace("postgresql+psycopg://", "postgresql://").replace("postgresql+psycopg2://", "postgresql://")
 
 
 def _run_migrations() -> None:
