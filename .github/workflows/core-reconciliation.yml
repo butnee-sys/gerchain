@@ -4,11 +4,10 @@ concurrency:
   cancel-in-progress: true
 
 
+# Run manually for focused diagnosis. Push/PR coverage is provided by the
+# authoritative core-gates and FINAL Exact-SHA Full Suite workflows; retaining
+# automatic triggers here duplicated the same PostgreSQL integration jobs.
 on:
-  push:
-    branches:
-      - "feat/ea21-transaction-aware-ledger"
-  pull_request:
   workflow_dispatch:
 
 jobs:
