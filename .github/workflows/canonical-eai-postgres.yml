@@ -3,6 +3,9 @@ name: Canonical EAI PostgreSQL Gate
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - feat/ea21-transaction-aware-ledger
 jobs:
   canonical-eai-postgres:
     runs-on: ubuntu-latest
