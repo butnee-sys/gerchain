@@ -34,10 +34,14 @@ def test_factory_create_configures_canonical_ledger_authority() -> None:
         engine=engine,
     )
 
-    with patch("services.gerchain_runtime_factory.assert_canonical_production_schema") as schema_check:
+    with (
+        patch("services.gerchain_runtime_factory.assert_canonical_production_schema") as schema_check,
+        patch.object(factory, "_validate_configured_escrow") as escrow_check,
+    ):
         runtime = factory.create()
 
     schema_check.assert_called_once_with(connection)
+    escrow_check.assert_called_once_with()
     assert runtime.is_canonical_ledger_authoritative
     assert runtime.runtime_mode == "production-postgresql"
 
