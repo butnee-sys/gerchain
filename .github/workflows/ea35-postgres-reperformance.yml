@@ -2,6 +2,9 @@ name: EA-35 PostgreSQL Re-performance
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - feat/ea21-transaction-aware-ledger
 
 jobs:
   postgres-reperformance:
