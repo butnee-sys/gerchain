@@ -127,6 +127,10 @@ jobs:
         run: |
           pytest -q tests/persistence/test_deep_value_reconciliation_postgres.py
 
+      - name: Re-perform canonical atomic lifecycle, rollback, and replay tests on PostgreSQL
+        run: |
+          pytest -q -s tests/persistence/test_deep_value_reconciliation.py
+
       - name: Verify production factory boots with canonical Ledger authority
         run: |
           python - <<'PY'
