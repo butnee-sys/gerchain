@@ -48,8 +48,38 @@ jobs:
       - name: Boot real PostgreSQL production runtime and validate schema
         run: |
           python - <<'PY'
-          from sqlalchemy import inspect
+          from sqlalchemy import create_engine, inspect, text
           from production_entrypoint import build_production_runtime
+          from services.gerchain_runtime_factory import initialize_canonical_postgres_schema
+          import os
+
+          # Production boot requires pre-existing authoritative escrow truth.
+          # Bootstrap schema first, then seed only the isolated CI database.
+          engine = create_engine(os.environ["GERCHAIN_DATABASE_URL"], pool_pre_ping=True)
+          initialize_canonical_postgres_schema(engine)
+          with engine.begin() as connection:
+              connection.execute(
+                  text("""
+                      INSERT INTO escrows
+                          (id, sender_address, receiver_address, amount, state,
+                           condition_desc, refund_destination, currency, version,
+                           created_at, updated_at)
+                      VALUES
+                          (:id, :sender, :receiver, :amount, 'CREATED',
+                           'CI production boot', :refund_destination, :currency, 0,
+                           now(), now())
+                      ON CONFLICT (id) DO NOTHING
+                  """),
+                  {
+                      "id": os.environ["GERCHAIN_ESCROW_ID"],
+                      "sender": "ci-source",
+                      "receiver": "ci-beneficiary",
+                      "amount": int(os.environ["GERCHAIN_ESCROW_AMOUNT"]),
+                      "refund_destination": "ci-source",
+                      "currency": os.environ["GERCHAIN_CURRENCY"],
+                  },
+              )
+          engine.dispose()
 
           runtime, engine = build_production_runtime()
           try:
