@@ -157,6 +157,13 @@ class GerchainRuntime:
                 "Canonical Ledger authoritative runtime is required for production value flow"
             )
 
+    def _require_test_memory_fallback(self, operation: str) -> None:
+        """Prevent a configured production runtime from silently falling back to memory."""
+        if self.runtime_mode != "test-memory":
+            raise RuntimeError(
+                f"{operation} requires Canonical Ledger authority; refusing legacy/in-memory fallback"
+            )
+
     def _canonical_read(self) -> CanonicalLedgerRead:
         self.require_canonical_ledger_authority()
         return CanonicalLedgerRead(self._session_factory())
@@ -361,6 +368,7 @@ class GerchainRuntime:
                 session.commit()
                 return result
 
+        self._require_test_memory_fallback("FUND")
         return self.escrow_service.fund(
             transaction_id=transaction_id,
             source=source,
@@ -382,6 +390,7 @@ class GerchainRuntime:
                 session.commit()
                 return result
 
+        self._require_test_memory_fallback("LOCK")
         return self.escrow_service.lock(
             transaction_id=transaction_id,
             timestamp=timestamp,
@@ -433,6 +442,7 @@ class GerchainRuntime:
                 session.commit()
                 return result
 
+        self._require_test_memory_fallback("RELEASE")
         return self.escrow_service.release(
             transaction_id=transaction_id,
             destination=destination,
@@ -488,6 +498,7 @@ class GerchainRuntime:
                 session.commit()
                 return result
 
+        self._require_test_memory_fallback("REFUND")
         return self.escrow_service.refund(
             transaction_id=transaction_id,
             destination=destination,
