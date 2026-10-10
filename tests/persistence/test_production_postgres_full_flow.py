@@ -18,6 +18,7 @@ from persistence.cancel_escrow import cancel_escrow_in_transaction
 from services.gerchain_runtime_factory import (
     ProductionRuntimeConfig,
     ProductionRuntimeFactory,
+    initialize_canonical_postgres_schema,
 )
 
 
@@ -27,6 +28,34 @@ POSTGRES_URL = os.getenv("TEST_POSTGRES_URL")
 @pytest.mark.skipif(not POSTGRES_URL, reason="TEST_POSTGRES_URL is required")
 def test_production_postgres_full_value_flow():
     engine = create_engine(POSTGRES_URL, pool_pre_ping=True)
+    # ProductionRuntimeFactory.create() intentionally fails closed unless the
+    # configured escrow already exists in canonical PostgreSQL truth. Prepare
+    # the schema and seed the three test aggregates before booting the runtime.
+    initialize_canonical_postgres_schema(engine)
+    now = datetime.now(timezone.utc)
+    with sessionmaker(bind=engine, expire_on_commit=False)() as seed_session:
+        for escrow_id, sender, receiver, refund in (
+            ("esc-release", "SRC", "BEN", "REF"),
+            ("esc-refund", "SRC", "BEN", "REF"),
+            ("esc-cancel", "SRC", "BEN", "REF"),
+        ):
+            seed_session.add(
+                CanonicalEscrow(
+                    id=escrow_id,
+                    sender_address=sender,
+                    receiver_address=receiver,
+                    amount=100,
+                    state=EscrowState.CREATED.value,
+                    condition_desc="production integration test",
+                    refund_destination=refund,
+                    currency="MNT",
+                    version=0,
+                    created_at=now,
+                    updated_at=now,
+                )
+            )
+        seed_session.commit()
+
     factory = ProductionRuntimeFactory(
         ProductionRuntimeConfig(
             database_url=POSTGRES_URL,
@@ -40,7 +69,6 @@ def test_production_postgres_full_value_flow():
     runtime = factory.create()
     assert runtime.is_canonical_ledger_authoritative
 
-    now = datetime.now(timezone.utc)
     with sessionmaker(bind=engine, expire_on_commit=False)() as session:
         for account, balance in (
             ("SRC", 300),
@@ -60,26 +88,6 @@ def test_production_postgres_full_value_flow():
                 )
             )
 
-        for escrow_id, sender, receiver, refund in (
-            ("esc-release", "SRC", "BEN", "REF"),
-            ("esc-refund", "SRC", "BEN", "REF"),
-            ("esc-cancel", "SRC", "BEN", "REF"),
-        ):
-            session.add(
-                CanonicalEscrow(
-                    id=escrow_id,
-                    sender_address=sender,
-                    receiver_address=receiver,
-                    amount=100,
-                    state=EscrowState.CREATED.value,
-                    condition_desc="production integration test",
-                    refund_destination=refund,
-                    currency="MNT",
-                    version=0,
-                    created_at=now,
-                    updated_at=now,
-                )
-            )
         session.commit()
 
         # FUND + LOCK + RELEASE
