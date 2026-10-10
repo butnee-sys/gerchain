@@ -11,7 +11,7 @@ from postgres.migrations import apply_migrations
 
 
 def _dsn() -> str:
-    value = os.environ.get("GERCHAIN_POSTGRES_DSN") or os.environ.get("GERCHAIN_DATABASE_URL") or os.environ["GERCHAIN_TEST_DATABASE_URL"]
+    value = (os.environ.get("GERCHAIN_POSTGRES_DSN") or os.environ.get("GERCHAIN_DATABASE_URL") or os.environ.get("GERCHAIN_TEST_DATABASE_URL") or os.environ["GERCHAIN_MIGRATION_TEST_DATABASE_URL"])
     return value.replace("postgresql+psycopg://", "postgresql://").replace("postgresql+psycopg2://", "postgresql://")
 
 
@@ -19,7 +19,7 @@ def test_checksum_mismatch_rolls_back_without_partial_schema_or_history(tmp_path
     admin_dsn = _dsn()
     database_name = f"gerchain_checksum_test_{uuid.uuid4().hex[:12]}"
     with psycopg.connect(admin_dsn, autocommit=True) as admin:
-        admin.execute("CREATE DATABASE " + '"'"'"'"' + database_name + '"'"'"'"'"')
+        admin.execute(sql.SQL("CREATE DATABASE {}").format(sql.Identifier(database_name)))
 
     dsn = make_conninfo(admin_dsn, dbname=database_name)
     first = tmp_path / "001_first.sql"
@@ -52,4 +52,4 @@ def test_checksum_mismatch_rolls_back_without_partial_schema_or_history(tmp_path
         assert "should_rollback" not in tables
     finally:
         with psycopg.connect(admin_dsn, autocommit=True) as admin:
-            admin.execute("DROP DATABASE IF EXISTS " + '"'"'"'"' + database_name + '"'"'"'"' + " WITH (FORCE)")
+            admin.execute(sql.SQL("DROP DATABASE IF EXISTS {} WITH (FORCE)").format(sql.Identifier(database_name)))
