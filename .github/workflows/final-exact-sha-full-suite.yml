@@ -1,8 +1,6 @@
 name: FINAL EAI/CORE Exact-SHA Gate
 
 on:
-  push:
-    branches: ["feat/ea21-transaction-aware-ledger"]
   pull_request:
     branches: ["main"]
   workflow_dispatch:
@@ -11,7 +9,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: final-eai-core-${{ github.event.pull_request.head.ref || github.ref }}
+  group: final-eai-core-${{ github.head_ref || github.ref_name }}
   cancel-in-progress: true
 
 # Sole automatic authority for fundamental architecture + EAI production evidence.
