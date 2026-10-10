@@ -27,26 +27,83 @@ class ProductionRuntimeConfig:
 
 
 def assert_canonical_production_schema(connection) -> None:
-    required = {
-        "schema_version",
-        "escrows",
-        "gerchain_ledger_accounts",
-        "gerchain_ledger_movements",
-        "gerchain_transaction_witnesses",
-        "gerchain_outbox_events",
-        "gerchain_idempotency_records",
+    """Fail closed unless the full canonical runtime schema is present.
+
+    A migration version alone is not sufficient: restored databases and manual
+    schema edits can leave a version-13 marker alongside missing columns.
+    """
+    required_columns = {
+        "schema_version": {
+            "version", "checksum", "applied_at",
+        },
+        "escrows": {
+            "id", "sender_address", "receiver_address", "amount", "state",
+            "condition_desc", "refund_destination", "currency", "version",
+            "created_at", "updated_at",
+        },
+        "gerchain_ledger_accounts": {
+            "account_id", "currency", "balance", "version", "updated_at",
+        },
+        "gerchain_ledger_movements": {
+            "id", "transaction_id", "source", "destination", "amount",
+            "currency", "operation", "escrow_id", "integrity_hash", "created_at",
+        },
+        "gerchain_transaction_witnesses": {
+            "id", "transaction_id", "event_type", "escrow_id", "amount", "created_at",
+        },
+        "gerchain_outbox_events": {
+            "id", "event_id", "event_type", "aggregate_id", "payload_json",
+            "state", "lease_until", "attempts", "created_at", "updated_at",
+        },
+        "gerchain_idempotency_records": {
+            "id", "key", "fingerprint", "result_json", "state", "created_at", "updated_at",
+        },
     }
-    tables = set(inspect(connection).get_table_names())
-    missing = required - tables
-    if missing:
+    inspector = inspect(connection)
+    tables = set(inspector.get_table_names())
+    missing_tables = set(required_columns) - tables
+    if missing_tables:
         raise RuntimeError(
-            f"canonical production schema incomplete; missing tables: {sorted(missing)}"
+            f"canonical production schema incomplete; missing tables: {sorted(missing_tables)}"
         )
+
+    missing_columns = {
+        table: sorted(columns - {column["name"] for column in inspector.get_columns(table)})
+        for table, columns in required_columns.items()
+    }
+    missing_columns = {table: columns for table, columns in missing_columns.items() if columns}
+    if missing_columns:
+        raise RuntimeError(
+            f"canonical production schema incomplete; missing columns: {missing_columns}"
+        )
+
     version = connection.execute(text("SELECT MAX(version) FROM schema_version")).scalar()
     if version is None or int(version) < 13:
         raise RuntimeError(
             f"canonical production schema history incomplete; latest={version}; required=13"
         )
+
+    required_unique = {
+        "gerchain_ledger_accounts": {"account_id"},
+        "gerchain_ledger_movements": {"transaction_id"},
+        "gerchain_transaction_witnesses": {"transaction_id"},
+        "gerchain_outbox_events": {"event_id"},
+        "gerchain_idempotency_records": {"key"},
+    }
+    for table, column in required_unique.items():
+        constraints = inspector.get_unique_constraints(table)
+        indexes = inspector.get_indexes(table)
+        unique_sets = {
+            tuple(item.get("column_names") or ())
+            for item in constraints
+        } | {
+            tuple(item.get("column_names") or ())
+            for item in indexes if item.get("unique")
+        }
+        if (column,) not in unique_sets:
+            raise RuntimeError(
+                f"canonical production schema incomplete; {table}.{column} must be unique"
+            )
 
 
 def initialize_canonical_postgres_schema(engine: Engine) -> None:
