@@ -12,6 +12,8 @@ on:
       - "services/gerchain_runtime_factory.py"
       - "services/gerchain_runtime.py"
       - "postgres/migration_runner.py"
+      - "postgres/migrations.py"
+      - "tests/postgres/test_migrations.py"
       - "postgres/tests/test_concurrency.py"
       - "persistence/**"
       - "postgres/migrations/**"
@@ -64,7 +66,7 @@ jobs:
 
       - name: Compile production runtime and migration modules
         run: |
-          python -m py_compile production_entrypoint.py services/gerchain_runtime.py services/gerchain_runtime_factory.py postgres/migration_runner.py persistence/deep_value_reconciliation.py
+          python -m py_compile production_entrypoint.py services/gerchain_runtime.py services/gerchain_runtime_factory.py postgres/migration_runner.py postgres/migrations.py persistence/deep_value_reconciliation.py
 
       - name: Verify PostgreSQL connection
         run: |
@@ -94,6 +96,10 @@ jobs:
               assert [row[0] for row in rows] == list(range(1, 14)), rows
               assert all(row[1] for row in rows), rows
           PY
+
+      - name: Verify canonical migration runner compatibility and migration contracts
+        run: |
+          pytest -q tests/postgres/test_migrations.py
 
       - name: Re-perform concurrent migration publication on fresh PostgreSQL database
         run: |
