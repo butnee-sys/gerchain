@@ -215,3 +215,40 @@ jobs:
           print("CANONICAL_LEDGER_TABLES=PASS")
           engine.dispose()
           PY
+
+
+      - name: Verify the actual production entrypoint boots against PostgreSQL
+        run: |
+          python - <<'PY'
+          import os
+          import subprocess
+          import sys
+
+          command = [sys.executable, "-u", "production_entrypoint.py"]
+          try:
+              completed = subprocess.run(
+                  command,
+                  env=os.environ.copy(),
+                  capture_output=True,
+                  text=True,
+                  timeout=8,
+                  check=False,
+              )
+          except subprocess.TimeoutExpired as exc:
+              stdout = exc.stdout or ""
+              stderr = exc.stderr or ""
+              if isinstance(stdout, bytes):
+                  stdout = stdout.decode("utf-8", errors="replace")
+              if isinstance(stderr, bytes):
+                  stderr = stderr.decode("utf-8", errors="replace")
+              output = stdout + "\\n" + stderr
+              assert "GerChain production runtime initialized:" in output, output
+              print("PRODUCTION_ENTRYPOINT_BOOT=PASS")
+              print("PRODUCTION_ENTRYPOINT_REMAINS_ALIVE=PASS")
+          else:
+              output = completed.stdout + "\\n" + completed.stderr
+              assert completed.returncode == 0, output
+              assert "GerChain production runtime initialized:" in output, output
+              print("PRODUCTION_ENTRYPOINT_BOOT=PASS")
+              print("PRODUCTION_ENTRYPOINT_EXITED_CLEANLY=PASS")
+          PY
