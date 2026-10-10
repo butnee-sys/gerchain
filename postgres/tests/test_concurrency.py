@@ -4,6 +4,8 @@ import os
 import time
 import uuid
 
+import pytest
+
 import psycopg
 from psycopg.conninfo import conninfo_to_dict, make_conninfo
 from psycopg import sql
@@ -154,3 +156,45 @@ def test_migrations_are_serialized_and_checksum_is_stable(monkeypatch):
                     sql.Identifier(database_name)
                 )
             )
+
+
+def test_checksum_failure_rolls_back_prior_migration_ddl_and_history(monkeypatch, tmp_path):
+    """A later checksum mismatch must roll back earlier DDL in the same pass."""
+    dsn = _dsn()
+    migration_dir = tmp_path / "migration_bundle"
+    migration_dir.mkdir()
+    (migration_dir / "001_create_probe.sql").write_text(
+        "CREATE TABLE migration_rollback_probe (id INTEGER);", encoding="utf-8"
+    )
+    (migration_dir / "002_expected.sql").write_text(
+        "CREATE TABLE migration_second_probe (id INTEGER);", encoding="utf-8"
+    )
+
+    with psycopg.connect(dsn) as conn:
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS schema_version (
+                version INTEGER PRIMARY KEY,
+                checksum TEXT NOT NULL,
+                applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
+            )
+            """
+        )
+        conn.execute(
+            "INSERT INTO schema_version(version, checksum) VALUES (2, 'deliberately-wrong-checksum') "
+            "ON CONFLICT (version) DO UPDATE SET checksum = EXCLUDED.checksum"
+        )
+        conn.commit()
+
+        with pytest.raises(RuntimeError, match="Migration checksum mismatch for version 2"):
+            apply_migrations(conn, migration_dir)
+
+        # The v1 DDL and its schema_version row must be rolled back atomically.
+        probe_exists = conn.execute(
+            "SELECT to_regclass('public.migration_rollback_probe')"
+        ).fetchone()[0]
+        versions = conn.execute(
+            "SELECT version, checksum FROM schema_version ORDER BY version"
+        ).fetchall()
+        assert probe_exists is None
+        assert versions == [(2, "deliberately-wrong-checksum")]
