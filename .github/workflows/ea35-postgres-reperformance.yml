@@ -72,7 +72,7 @@ jobs:
 
       - name: Re-perform durable value-truth test suite on PostgreSQL
         run: |
-          pytest -q tests/persistence/test_deep_value_reconciliation.py
+          pytest -q tests/persistence/test_deep_value_reconciliation_postgres.py
 
       - name: Verify production factory boots with canonical Ledger authority
         run: |
