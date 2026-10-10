@@ -1,22 +1,11 @@
-name: SHUUD Sandbox Smoke
+name: SHUUD Sandbox Smoke (separate project; manual only)
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
   cancel-in-progress: true
 
 
 on:
-  push:
-    branches: ["main"]
-    paths:
-      - "shuud/**"
-      - "tests/test_shuud_*.py"
-      - "sandbox/**"
-  pull_request:
-    branches: ["main"]
-    paths:
-      - "shuud/**"
-      - "tests/test_shuud_*.py"
-      - "sandbox/**"
+  # SHUUD is a separate project; do not include it in GERCHAIN EAI production gates.
   workflow_dispatch:
 
 jobs:
