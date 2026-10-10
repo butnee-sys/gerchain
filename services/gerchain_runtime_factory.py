@@ -77,6 +77,25 @@ def assert_canonical_production_schema(connection) -> None:
             f"canonical production schema incomplete; missing columns: {missing_columns}"
         )
 
+    # A legacy escrows table can have all required columns while retaining an
+    # old restrictive state CHECK (for example CREATED/LOCKED/RELEASED only).
+    # Column-only validation would falsely approve a runtime that cannot persist
+    # FUNDED, REFUNDED, or CANCELLED. Require one CHECK that permits every
+    # canonical lifecycle state before declaring the schema production-ready.
+    canonical_states = {
+        "'created'", "'funded'", "'locked'", "'released'", "'refunded'", "'cancelled'",
+    }
+    state_checks = [
+        (item.get("name"), (item.get("sqltext") or "").lower())
+        for item in inspector.get_check_constraints("escrows")
+        if "state" in (item.get("sqltext") or "").lower()
+    ]
+    if not any(all(state in sqltext for state in canonical_states) for _, sqltext in state_checks):
+        raise RuntimeError(
+            "canonical production schema incomplete; escrows must have a state CHECK "
+            "permitting CREATED, FUNDED, LOCKED, RELEASED, REFUNDED, and CANCELLED"
+        )
+
     version = connection.execute(text("SELECT MAX(version) FROM schema_version")).scalar()
     if version is None or int(version) < 12:
         raise RuntimeError(
