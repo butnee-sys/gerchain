@@ -102,6 +102,28 @@ def assert_canonical_production_schema(connection) -> None:
             f"canonical production schema history incomplete; latest={version}; required=13"
         )
 
+    required_checks = {
+        "gerchain_ledger_accounts": {"gerchain_ledger_balance_nonnegative"},
+        "gerchain_ledger_movements": {"gerchain_movement_distinct_accounts"},
+        "gerchain_transaction_witnesses": {"gerchain_witness_event_type_check"},
+        "gerchain_outbox_events": {"gerchain_outbox_state_check"},
+        "gerchain_idempotency_records": {"gerchain_idempotency_fingerprint_check"},
+        "escrows": {"escrows_amount_positive_check"},
+    }
+    missing_checks = {}
+    for table, expected_names in required_checks.items():
+        actual_names = {
+            item.get("name")
+            for item in inspector.get_check_constraints(table)
+            if item.get("name")
+        }
+        absent = sorted(expected_names - actual_names)
+        if absent:
+            missing_checks[table] = absent
+    if missing_checks:
+        raise RuntimeError(
+            f"canonical production schema incomplete; missing CHECK constraints: {missing_checks}"
+        )
     required_unique = {
         "gerchain_ledger_accounts": {"account_id"},
         "gerchain_ledger_movements": {"transaction_id"},
