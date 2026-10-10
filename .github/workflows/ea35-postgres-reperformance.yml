@@ -217,13 +217,14 @@ jobs:
           print(f"EVIDENCE_COMMIT_SHA={os.environ['EVIDENCE_COMMIT_SHA']}")
           PY
 
-      - name: Upload migration registry evidence
+      - name: Upload exact-SHA PostgreSQL evidence bundle
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: ea35-migration-registry-${{ github.sha }}
-          path: artifacts/ea35/*.json
-          if-no-files-found: error
-          retention-days: 30
+          name: ea35-postgres-evidence-${{ github.sha }}
+          path: artifacts/ea35/
+          if-no-files-found: warn
+          retention-days: 90
 
       - name: Verify canonical migration runner compatibility and migration contracts
         run: |
@@ -231,11 +232,13 @@ jobs:
 
       - name: Verify checksum mismatch fails without partial schema or history changes
         run: |
-          pytest -q -s postgres/tests/test_migration_checksum_atomicity.py
+          set -o pipefail
+          pytest -vv -s postgres/tests/test_migration_checksum_atomicity.py 2>&1 | tee artifacts/ea35/checksum-runner.log
 
       - name: Re-perform concurrent migration publication on fresh PostgreSQL database
         run: |
-          pytest -q -s postgres/tests/test_concurrency.py
+          set -o pipefail
+          pytest -vv -s postgres/tests/test_concurrency.py 2>&1 | tee artifacts/ea35/concurrency-runner.log
 
       - name: Create isolated PostgreSQL database for value-truth tests
         run: |
