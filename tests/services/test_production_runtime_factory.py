@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from types import SimpleNamespace
 from unittest.mock import MagicMock, Mock, patch
 
 from services.gerchain_runtime_factory import (
@@ -16,7 +15,13 @@ class _NoopFactory(ProductionRuntimeFactory):
 
 
 def test_factory_create_configures_canonical_ledger_authority() -> None:
-    engine = SimpleNamespace(dialect=SimpleNamespace(name="postgresql"))
+    engine = Mock()
+    engine.dialect.name = "postgresql"
+    connection = Mock()
+    connect_context = MagicMock()
+    connect_context.__enter__.return_value = connection
+    connect_context.__exit__.return_value = None
+    engine.connect.return_value = connect_context
 
     factory = _NoopFactory(
         ProductionRuntimeConfig(
@@ -29,14 +34,17 @@ def test_factory_create_configures_canonical_ledger_authority() -> None:
         engine=engine,
     )
 
-    runtime = factory.create()
+    with patch("services.gerchain_runtime_factory.assert_canonical_production_schema") as schema_check:
+        runtime = factory.create()
 
+    schema_check.assert_called_once_with(connection)
     assert runtime.is_canonical_ledger_authoritative
     assert runtime.runtime_mode == "production-postgresql"
 
 
 def test_factory_rejects_non_postgresql_engine() -> None:
-    engine = SimpleNamespace(dialect=SimpleNamespace(name="sqlite"))
+    engine = Mock()
+    engine.dialect.name = "sqlite"
 
     try:
         _NoopFactory(
