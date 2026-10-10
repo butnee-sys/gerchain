@@ -27,9 +27,14 @@ def test_checksum_mismatch_rolls_back_without_partial_schema_or_history(tmp_path
     try:
         with psycopg.connect(dsn) as connection:
             apply_migrations(connection, tmp_path)
+        # Reapplying the same migration source/checksum is idempotent: it must
+        # not publish a duplicate schema_version row.
+        with psycopg.connect(dsn) as connection:
+            apply_migrations(connection, tmp_path)
         with psycopg.connect(dsn) as connection:
             before = connection.execute("SELECT version, checksum FROM schema_version ORDER BY version").fetchall()
             assert [row[0] for row in before] == [1]
+            assert len(before) == 1, f"duplicate migration publication: {before!r}"
 
         # Tamper with an already-published migration and introduce a later one.
         first.write_text("CREATE TABLE checksum_probe (id INTEGER PRIMARY KEY, note TEXT);", encoding="utf-8")
