@@ -45,6 +45,8 @@ jobs:
           pip install -r requirements-dee-security.txt pytest
       - name: Re-perform PostgreSQL migration concurrency and checksum gate
         run: python -m pytest -q postgres/tests/test_concurrency.py
+      - name: Re-perform duplicate publication and checksum fail-closed cases on PostgreSQL
+        run: pytest -q postgres/tests/test_migration_publication_integrity.py
       - name: Test production entrypoint contract
         run: pytest -q tests/services/test_production_entrypoint.py
       - name: Boot real PostgreSQL production runtime and validate schema
