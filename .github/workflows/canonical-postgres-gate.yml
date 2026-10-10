@@ -1,19 +1,7 @@
 name: Canonical PostgreSQL production gate
 
 on:
-  push:
-    branches:
-      - feat/ea21-transaction-aware-ledger
-  pull_request:
-    branches:
-      - main
   workflow_dispatch:
-
-# Keep one authoritative PostgreSQL gate per source branch. Push and PR events
-# for the same branch otherwise create redundant queued runs and obscure evidence.
-concurrency:
-  group: canonical-postgres-gate-${{ github.event.pull_request.head.ref || github.ref }}
-  cancel-in-progress: true
 
 jobs:
   canonical-postgres-gate:

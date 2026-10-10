@@ -1,28 +1,7 @@
 name: EA-35 PostgreSQL Re-performance
 
 on:
-  # Run exact-SHA PostgreSQL re-performance whenever this focused gate changes
-  # or production-runtime work lands on its working branch.
-  push:
-    branches:
-      - feat/ea21-transaction-aware-ledger
-    paths:
-      - ".github/workflows/ea35-postgres-reperformance.yml"
-      - "production_entrypoint.py"
-      - "services/gerchain_runtime_factory.py"
-      - "services/gerchain_runtime.py"
-      - "postgres/migration_runner.py"
-      - "postgres/migrations.py"
-      - "tests/postgres/test_migrations.py"
-      - "postgres/tests/test_concurrency.py"
-      - "postgres/tests/test_migration_checksum_atomicity.py"
-      - "persistence/**"
-      - "postgres/migrations/**"
-      - "tests/persistence/test_deep_value_reconciliation_postgres.py"
   workflow_dispatch:
-
-permissions:
-  contents: read
 
 jobs:
   postgres-reperformance:

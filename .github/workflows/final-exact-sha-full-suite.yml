@@ -1,14 +1,23 @@
-name: FINAL Exact-SHA Full Suite
+name: FINAL EAI/CORE Exact-SHA Gate
 
 on:
   push:
     branches: ["feat/ea21-transaction-aware-ledger"]
-  workflow_dispatch:
   pull_request:
     branches: ["main"]
+  workflow_dispatch:
 
+permissions:
+  contents: read
+
+concurrency:
+  group: final-eai-core-${{ github.event.pull_request.head.ref || github.ref }}
+  cancel-in-progress: true
+
+# Sole automatic authority for fundamental architecture + EAI production evidence.
+# SHUUD remains isolated in its own workflows and is intentionally not included.
 jobs:
-  full-suite:
+  core-and-migration:
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -25,21 +34,222 @@ jobs:
           --health-timeout 5s
           --health-retries 20
     env:
-      GERCHAIN_TEST_DATABASE_URL: postgresql+psycopg://gerchain:gerchain@127.0.0.1:5432/gerchain_test
       GERCHAIN_DATABASE_URL: postgresql+psycopg://gerchain:gerchain@127.0.0.1:5432/gerchain_test
+      GERCHAIN_TEST_DATABASE_URL: postgresql+psycopg://gerchain:gerchain@127.0.0.1:5432/gerchain_test
+      GERCHAIN_POSTGRES_DSN: postgresql+psycopg://gerchain:gerchain@127.0.0.1:5432/gerchain_test
+      GERCHAIN_MIGRATION_TEST_DSN: postgresql://gerchain:gerchain@127.0.0.1:5432/gerchain_migration_proof
+      PYTHONPATH: .
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
+          cache: pip
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          if [ -f requirements-dee-security.txt ]; then pip install -r requirements-dee-security.txt; fi
+          pip install -r requirements-dee-security.txt
           if [ -f postgres/requirements-test.txt ]; then pip install -r postgres/requirements-test.txt; fi
           pip install "sqlalchemy>=2" "psycopg[binary]" fastapi uvicorn httpx pytest pyyaml
-      - name: Record exact SHA
-        run: git rev-parse HEAD
-      - name: Full test suite
-        run: PYTHONPATH=. pytest -q --import-mode=importlib
+      - name: Record immutable run identity
+        run: |
+          echo "EXACT_SHA=$(git rev-parse HEAD)"
+          python --version
+          python -m pip freeze
+      - name: Validate workflow YAML and compile canonical sources
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import yaml
+          for path in Path(".github/workflows").glob("*.yml"):
+              with path.open(encoding="utf-8") as stream:
+                  yaml.safe_load(stream)
+          print("WORKFLOW_YAML=PASS")
+          PY
+          python -m compileall -q services production_entrypoint.py persistence postgres scripts
+      - name: Create isolated migration proof database
+        run: |
+          PGPASSWORD=gerchain createdb -h 127.0.0.1 -U gerchain gerchain_migration_proof
+          PGPASSWORD=gerchain psql -h 127.0.0.1 -U gerchain -d gerchain_migration_proof -c "SELECT current_database();"
+      - name: Apply and verify canonical migration baseline
+        run: |
+          python - <<'PY'
+          import os
+          from pathlib import Path
+          import psycopg
+          from postgres.migrations import apply_migrations
+          dsn = os.environ["GERCHAIN_DATABASE_URL"].replace("postgresql+psycopg://", "postgresql://")
+          with psycopg.connect(dsn) as connection:
+              apply_migrations(connection, Path("postgres/migrations"))
+              rows = connection.execute("SELECT version, checksum FROM schema_version ORDER BY version").fetchall()
+              print(f"MIGRATION_ROWS={rows!r}")
+              assert [row[0] for row in rows] == list(range(1, 14)), rows
+              assert all(row[1] for row in rows), rows
+          print("MIGRATION_BASELINE=PASS")
+          PY
+      - name: Verify canonical fundamental architecture gates (SHUUD excluded)
+        run: |
+          pytest -q \
+            tests/test_core_structure.py \
+            tests/test_core_final_lock_contract.py \
+            tests/test_boundary_adapters.py \
+            tests/test_composition_root.py \
+            tests/test_governed_flow_adapters.py \
+            tests/test_g3_core_boundary.py \
+            tests/test_g3_core_runtime_e2e.py \
+            tests/test_g3_dee_authorized_handler.py \
+            tests/test_dee_security.py \
+            tests/test_nef_gerchain_boundary.py \
+            tests/test_nef_gerchain_port.py \
+            tests/production/test_runtime_source_compiles.py \
+            tests/production/test_postgres_canonical_concurrency.py \
+            tests/test_postgres_atomic_ledger.py
+      - name: Verify migration contracts and checksum fail-closed behavior
+        run: |
+          pytest -q tests/postgres/test_migrations.py
+          pytest -q -s postgres/tests/test_migration_checksum_atomicity.py
+      - name: Re-perform PostgreSQL migration concurrency (canonical runner)
+        run: pytest -q -s postgres/tests/test_concurrency.py
+      - name: Re-perform PostgreSQL migration concurrency (independent runner)
+        env:
+          GERCHAIN_DATABASE_URL: postgresql://gerchain:gerchain@127.0.0.1:5432/gerchain_migration_proof
+        run: pytest -q -s tests/integration/test_postgres_migration_concurrency.py
+      - name: Verify production runtime factory contracts
+        run: pytest -q tests/test_production_runtime_factory.py
+
+  production-eai:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: gerchain
+          POSTGRES_PASSWORD: gerchain
+          POSTGRES_DB: gerchain_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U gerchain -d gerchain_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      GERCHAIN_DATABASE_URL: postgresql+psycopg://gerchain:gerchain@127.0.0.1:5432/gerchain_test
+      GERCHAIN_TEST_DATABASE_URL: postgresql+psycopg://gerchain:gerchain@127.0.0.1:5432/gerchain_reperformance
+      GERCHAIN_ESCROW_ID: final-lock-escrow
+      GERCHAIN_ESCROW_AMOUNT: "100"
+      GERCHAIN_CURRENCY: MNT
+      GERCHAIN_WITNESS_ID: final-lock-witness
+      PYTHONPATH: .
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dee-security.txt pytest "psycopg[binary]"
+      - name: Record immutable run identity
+        run: echo "EXACT_SHA=$(git rev-parse HEAD)"
+      - name: Apply canonical migrations and seed only isolated CI escrow
+        run: |
+          python - <<'PY'
+          import os
+          from sqlalchemy import create_engine, text
+          from services.gerchain_runtime_factory import initialize_canonical_postgres_schema
+          engine = create_engine(os.environ["GERCHAIN_DATABASE_URL"], pool_pre_ping=True)
+          initialize_canonical_postgres_schema(engine)
+          with engine.begin() as connection:
+              connection.execute(text("""
+                INSERT INTO escrows
+                  (id, sender_address, receiver_address, amount, state, condition_desc,
+                   refund_destination, currency, version, created_at, updated_at)
+                VALUES (:id, 'ci-source', 'ci-beneficiary', :amount, 'CREATED',
+                        'isolated exact-SHA production gate', 'ci-source', :currency, 0, now(), now())
+                ON CONFLICT (id) DO NOTHING
+              """), {"id": os.environ["GERCHAIN_ESCROW_ID"],
+                     "amount": int(os.environ["GERCHAIN_ESCROW_AMOUNT"]),
+                     "currency": os.environ["GERCHAIN_CURRENCY"]})
+          engine.dispose()
+          PY
+      - name: Verify production entrypoint contract
+        run: pytest -q tests/services/test_production_entrypoint.py
+      - name: Boot real PostgreSQL runtime and prove canonical authority
+        run: |
+          python - <<'PY'
+          import os
+          from sqlalchemy import create_engine, inspect
+          from services.gerchain_runtime_factory import ProductionRuntimeConfig, ProductionRuntimeFactory
+          url = os.environ["GERCHAIN_DATABASE_URL"]
+          engine = create_engine(url, pool_pre_ping=True)
+          runtime = ProductionRuntimeFactory(
+            ProductionRuntimeConfig(
+              database_url=url,
+              escrow_id=os.environ["GERCHAIN_ESCROW_ID"],
+              amount=int(os.environ["GERCHAIN_ESCROW_AMOUNT"]),
+              currency=os.environ["GERCHAIN_CURRENCY"],
+              witness_id=os.environ["GERCHAIN_WITNESS_ID"],
+            ),
+            engine=engine,
+          ).create()
+          assert runtime.is_canonical_ledger_authoritative
+          required = {
+            "schema_version", "escrows", "gerchain_ledger_accounts",
+            "gerchain_ledger_movements", "gerchain_transaction_witnesses",
+            "gerchain_outbox_events", "gerchain_idempotency_records",
+          }
+          with engine.connect() as connection:
+            actual = set(inspect(connection).get_table_names())
+          missing = required - actual
+          assert not missing, f"missing canonical tables: {sorted(missing)}"
+          print("REAL_POSTGRES_BOOT=PASS")
+          print("CANONICAL_LEDGER_AUTHORITY=PASS")
+          print("CANONICAL_SCHEMA=PASS")
+          engine.dispose()
+          PY
+      - name: Create isolated value-truth database
+        run: |
+          PGPASSWORD=gerchain createdb -h 127.0.0.1 -U gerchain gerchain_reperformance
+      - name: Re-perform deep value-truth graph on real PostgreSQL
+        run: pytest -q tests/persistence/test_deep_value_reconciliation_postgres.py
+      - name: Build exact-SHA evidence manifest
+        if: always()
+        run: |
+          python - <<'PY'
+          import hashlib, json, os, platform, subprocess
+          from pathlib import Path
+          root = Path.cwd()
+          migrations = sorted((root / "postgres/migrations").glob("*.sql"))
+          manifest = {
+            "repository": os.environ.get("GITHUB_REPOSITORY"),
+            "commit_sha": os.environ.get("GITHUB_SHA"),
+            "run_id": os.environ.get("GITHUB_RUN_ID"),
+            "run_attempt": os.environ.get("GITHUB_RUN_ATTEMPT"),
+            "python": platform.python_version(),
+            "migration_files": [
+              {"path": str(p.relative_to(root)),
+               "sha256": hashlib.sha256(p.read_bytes()).hexdigest(),
+               "bytes": p.stat().st_size}
+              for p in migrations
+            ],
+            "git_status_porcelain": subprocess.run(
+              ["git", "status", "--porcelain"], capture_output=True,
+              text=True, check=False
+            ).stdout.splitlines(),
+          }
+          out = Path("artifacts/final-eai-core-evidence")
+          out.mkdir(parents=True, exist_ok=True)
+          (out / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+          (out / "commit-sha.txt").write_text(manifest["commit_sha"] + "\n", encoding="utf-8")
+          print(json.dumps(manifest, indent=2))
+          PY
+      - name: Upload exact-SHA evidence bundle
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: final-eai-core-evidence-${{ github.sha }}
+          path: artifacts/final-eai-core-evidence/
+          if-no-files-found: warn
+          retention-days: 90

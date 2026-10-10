@@ -8,9 +8,7 @@ concurrency:
 # Single authoritative PostgreSQL/core gate; duplicate migration/concurrency workflows are not permitted
 
 on:
-  push:
-    branches: ["feat/de-dee-gate01", "feat/gerchain-flow-hardening", "feat/core-gate02-capability-audit", "feat/ea21-transaction-aware-ledger", "main"]
-  pull_request:
+  workflow_dispatch:
 
 jobs:
   core-gates:
