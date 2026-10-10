@@ -1,12 +1,8 @@
 name: EA-35 PostgreSQL Re-performance
 
 on:
-  push:
-    branches:
-      - feat/ea21-transaction-aware-ledger
-  pull_request:
-    branches:
-      - main
+  # Focused duplicate PostgreSQL gate retained for manual diagnosis.
+  # Automatic PostgreSQL/Core evidence is owned by core-gates and the canonical production gate.
   workflow_dispatch:
 
 permissions:
