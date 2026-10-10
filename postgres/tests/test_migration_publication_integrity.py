@@ -49,12 +49,19 @@ def _version_13_checksum() -> str:
 
 def test_identical_legacy_duplicate_publication_is_collapsed(isolated_database):
     """Byte-identical legacy duplicates are repaired; versions 1..13 remain unique."""
-    migration = MIGRATION_DIR / "001_canonical_production.sql"
-    digest = hashlib.sha256(migration.read_text(encoding="utf-8").encode("utf-8")).hexdigest()
     with psycopg.connect(isolated_database) as conn:
-        # Simulate a legacy history table created before its primary-key constraint.
-        conn.execute("CREATE TABLE schema_version (version BIGINT NOT NULL, checksum TEXT NOT NULL, applied_at TIMESTAMPTZ NOT NULL DEFAULT now())")
-        conn.execute("INSERT INTO schema_version(version, checksum) VALUES (1, %s), (1, %s)", (digest, digest))
+        # Apply the real schema first so the test exercises duplicate history
+        # repair without falsely marking an unapplied migration as complete.
+        apply_migrations(conn, MIGRATION_DIR)
+        digest = conn.execute(
+            "SELECT checksum FROM schema_version WHERE version = 1"
+        ).fetchone()[0]
+        conn.execute("ALTER TABLE schema_version DROP CONSTRAINT schema_version_pkey")
+        conn.execute("DROP INDEX IF EXISTS uq_schema_version_version")
+        conn.execute(
+            "INSERT INTO schema_version(version, checksum) VALUES (1, %s)",
+            (digest,),
+        )
         conn.commit()
         apply_migrations(conn, MIGRATION_DIR)
         rows = conn.execute("SELECT version, checksum FROM schema_version ORDER BY version").fetchall()
