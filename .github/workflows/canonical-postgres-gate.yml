@@ -102,4 +102,4 @@ jobs:
               engine.dispose()
           PY
       - name: Deep value-truth reconciliation tests on PostgreSQL
-        run: pytest -q tests/persistence/test_deep_value_reconciliation.py
+        run: pytest -q tests/persistence/test_deep_value_reconciliation_postgres.py
