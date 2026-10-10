@@ -22,6 +22,8 @@ from witness.chain import WitnessChain
 class GerchainRuntime:
     """GerChain Core authoritative runtime.
 
+Production syntax gate: this module must remain importable before runtime construction.
+
     Production construction must use the Canonical Ledger boundary.
 
     The default construction is a test-memory harness. Production mode attaches
