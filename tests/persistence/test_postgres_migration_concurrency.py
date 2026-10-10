@@ -27,6 +27,7 @@ def test_two_connections_publish_same_migration_version_once() -> None:
             encoding="utf-8",
         )
         with psycopg.connect(dsn) as connection:
+            connection.execute("CREATE TABLE IF NOT EXISTS schema_version (version INTEGER PRIMARY KEY, checksum TEXT NOT NULL, applied_at TIMESTAMPTZ NOT NULL DEFAULT now())")
             connection.execute("DROP TABLE IF EXISTS gerchain_migration_concurrency_probe")
             connection.execute("DELETE FROM schema_version WHERE version = 1")
             connection.commit()
@@ -79,6 +80,7 @@ def test_checksum_mismatch_rolls_back_schema_and_history() -> None:
             encoding="utf-8",
         )
         with psycopg.connect(dsn) as connection:
+            connection.execute("CREATE TABLE IF NOT EXISTS schema_version (version INTEGER PRIMARY KEY, checksum TEXT NOT NULL, applied_at TIMESTAMPTZ NOT NULL DEFAULT now())")
             connection.execute("DROP TABLE IF EXISTS gerchain_migration_checksum_probe")
             connection.execute("DELETE FROM schema_version WHERE version = 1")
             connection.commit()
