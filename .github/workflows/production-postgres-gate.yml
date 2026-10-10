@@ -43,5 +43,30 @@ jobs:
           python -m pip install -r requirements-dee-security.txt pytest
       - name: Compile all Python modules
         run: python -m compileall -q .
-      - name: Verify PostgreSQL migration concurrency and production factory
+      - name: Apply all 13 canonical migrations to a fresh PostgreSQL database
+        run: |
+          python - <<'PY'
+          import os
+          import psycopg
+          from pathlib import Path
+          from postgres.migrations import apply_migrations
+
+          dsn = os.environ["GERCHAIN_MIGRATION_TEST_DATABASE_URL"]
+          admin_dsn = dsn.rsplit("/", 1)[0] + "/postgres"
+          with psycopg.connect(admin_dsn, autocommit=True) as admin:
+              admin.execute("DROP DATABASE IF EXISTS gerchain_migration_chain")
+              admin.execute("CREATE DATABASE gerchain_migration_chain")
+          chain_dsn = dsn.rsplit("/", 1)[0] + "/gerchain_migration_chain"
+          with psycopg.connect(chain_dsn) as conn:
+              first = apply_migrations(conn, Path("postgres/migrations"))
+              assert first == tuple(range(1, 14)), f"expected 13 migrations, got {first!r}"
+          with psycopg.connect(chain_dsn) as conn:
+              second = apply_migrations(conn, Path("postgres/migrations"))
+              assert second == (), f"rerun was not idempotent: {second!r}"
+              rows = conn.execute("SELECT version, checksum FROM schema_version ORDER BY version").fetchall()
+              assert [row[0] for row in rows] == list(range(1, 14)), rows
+              assert all(len(row[1]) == 64 for row in rows), "invalid SHA-256 checksum"
+          print("CANONICAL_MIGRATIONS=13/13; SECOND_RUN=NOOP; CHECKSUMS=SHA256")
+          PY
+      - name: Verify PostgreSQL migration concurrency, checksum rollback, and production factory
         run: python -m pytest -q tests/persistence/test_postgres_migration_concurrency.py
