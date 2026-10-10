@@ -1,0 +1,175 @@
+name: Canonical PostgreSQL production gate
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - feat/ea21-transaction-aware-ledger
+
+jobs:
+  canonical-postgres-gate:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: gerchain_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d gerchain_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      GERCHAIN_TEST_DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/gerchain_test
+      GERCHAIN_DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/gerchain_test
+      GERCHAIN_ESCROW_ID: ci-escrow
+      GERCHAIN_ESCROW_AMOUNT: "10"
+      GERCHAIN_CURRENCY: MNT
+      GERCHAIN_WITNESS_ID: ci-witness
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dee-security.txt -r postgres/requirements-test.txt
+      - name: Prepare migration evidence directory
+        if: always()
+        run: mkdir -p artifacts/canonical-postgres-evidence/logs
+      - name: Compile production and persistence modules
+        run: python -m compileall -q production_entrypoint.py persistence services core postgres
+      - name: Run CORE foundation regression tests
+        run: >-
+          pytest -q
+          tests/services/test_gerchain_runtime_atomic_lifecycle.py
+          tests/services/test_gerchain_runtime_canonical_ledger.py
+          tests/services/test_gerchain_runtime_factory.py
+          tests/persistence/test_deep_value_reconciliation.py
+          tests/postgres/test_migrations.py
+          tests/postgres/test_migration_manifest.py
+      - name: Verify PostgreSQL connection
+        run: |
+          python - <<'PY'
+          import os
+          import psycopg
+          with psycopg.connect(os.environ["GERCHAIN_TEST_DATABASE_URL"]) as connection:
+              with connection.cursor() as cursor:
+                  cursor.execute("SELECT current_database(), version()")
+                  database, version = cursor.fetchone()
+                  assert database == "gerchain_test", database
+                  print(f"PASS: PostgreSQL connection: {database}; {version}")
+          PY
+      - name: Validate checksum atomicity and duplicate migration publication
+        run: set -o pipefail; pytest -vv -s postgres/tests/test_migration_checksum_atomicity.py tests/postgres/test_migration_runner_concurrency.py 2>&1 | tee artifacts/canonical-postgres-evidence/logs/checksum-atomicity-concurrency.log
+      - name: Re-perform canonical PostgreSQL escrow lifecycle
+        run: set -o pipefail; pytest -vv -s tests/postgres/test_production_postgres_reperformance.py 2>&1 | tee artifacts/canonical-postgres-evidence/logs/production-lifecycle.log
+      - name: Re-perform PostgreSQL migration concurrency and checksum gate
+        run: set -o pipefail; python -m pytest -vv -s postgres/tests/test_concurrency.py 2>&1 | tee artifacts/canonical-postgres-evidence/logs/migration-concurrency.log
+      - name: Re-perform duplicate publication and checksum fail-closed cases on PostgreSQL
+        run: set -o pipefail; pytest -vv -s postgres/tests/test_migration_publication_integrity.py 2>&1 | tee artifacts/canonical-postgres-evidence/logs/migration-publication-integrity.log
+      - name: Test production entrypoint contract
+        run: set -o pipefail; pytest -vv -s tests/services/test_production_entrypoint.py 2>&1 | tee artifacts/canonical-postgres-evidence/logs/production-entrypoint.log
+      - name: Boot real PostgreSQL production runtime and validate schema
+        run: |
+          python - <<'PY'
+          from sqlalchemy import create_engine, inspect, text
+          from production_entrypoint import build_production_runtime
+          from services.gerchain_runtime_factory import initialize_canonical_postgres_schema
+          import os
+
+          # Production boot requires pre-existing authoritative escrow truth.
+          # Bootstrap schema first, then seed only the isolated CI database.
+          engine = create_engine(os.environ["GERCHAIN_DATABASE_URL"], pool_pre_ping=True)
+          initialize_canonical_postgres_schema(engine)
+          with engine.begin() as connection:
+              connection.execute(
+                  text("""
+                      INSERT INTO escrows
+                          (id, sender_address, receiver_address, amount, state,
+                           condition_desc, refund_destination, currency, version,
+                           created_at, updated_at)
+                      VALUES
+                          (:id, :sender, :receiver, :amount, 'CREATED',
+                           'CI production boot', :refund_destination, :currency, 0,
+                           now(), now())
+                      ON CONFLICT (id) DO NOTHING
+                  """),
+                  {
+                      "id": os.environ["GERCHAIN_ESCROW_ID"],
+                      "sender": "ci-source",
+                      "receiver": "ci-beneficiary",
+                      "amount": int(os.environ["GERCHAIN_ESCROW_AMOUNT"]),
+                      "refund_destination": "ci-source",
+                      "currency": os.environ["GERCHAIN_CURRENCY"],
+                  },
+              )
+          engine.dispose()
+
+          runtime, engine = build_production_runtime()
+          try:
+              assert runtime.is_canonical_ledger_authoritative
+              required = {
+                  "schema_version",
+                  "escrows",
+                  "gerchain_ledger_accounts",
+                  "gerchain_ledger_movements",
+                  "gerchain_transaction_witnesses",
+                  "gerchain_outbox_events",
+                  "gerchain_idempotency_records",
+              }
+              with engine.connect() as connection:
+                  actual = set(inspect(connection).get_table_names())
+                  missing = required - actual
+                  assert not missing, f"missing canonical tables: {sorted(missing)}"
+              print("PASS: real PostgreSQL boot and canonical authority verified")
+          finally:
+              engine.dispose()
+          PY
+      - name: Deep value-truth reconciliation tests on PostgreSQL
+        run: set -o pipefail; pytest -vv -s tests/persistence/test_deep_value_reconciliation_postgres.py 2>&1 | tee artifacts/canonical-postgres-evidence/logs/deep-value-reconciliation.log
+
+      - name: Build canonical migration evidence manifest
+        if: always()
+        env:
+          EVIDENCE_COMMIT_SHA: ${{ github.sha }}
+          EVIDENCE_RUN_ID: ${{ github.run_id }}
+          EVIDENCE_RUN_ATTEMPT: ${{ github.run_attempt }}
+        run: |
+          python - <<'PY'
+          import hashlib, json, os, platform, subprocess
+          from pathlib import Path
+          root = Path.cwd()
+          migrations = sorted((root / 'postgres/migrations').glob('*.sql'))
+          manifest = {
+              'repository': os.environ.get('GITHUB_REPOSITORY'),
+              'commit_sha': os.environ['EVIDENCE_COMMIT_SHA'],
+              'workflow_run_id': os.environ['EVIDENCE_RUN_ID'],
+              'workflow_run_attempt': os.environ['EVIDENCE_RUN_ATTEMPT'],
+              'python': platform.python_version(),
+              'migration_files': [
+                  {'path': str(p.relative_to(root)), 'sha256': hashlib.sha256(p.read_bytes()).hexdigest(), 'bytes': p.stat().st_size}
+                  for p in migrations
+              ],
+          }
+          manifest['git_status_porcelain'] = subprocess.run(['git', 'status', '--porcelain'], capture_output=True, text=True, check=False).stdout.splitlines()
+          out = root / 'artifacts/canonical-postgres-evidence'
+          out.mkdir(parents=True, exist_ok=True)
+          (out / 'manifest.json').write_text(json.dumps(manifest, indent=2) + '\n', encoding='utf-8')
+          (out / 'commit-sha.txt').write_text(manifest['commit_sha'] + '\n', encoding='utf-8')
+          print(json.dumps({'commit_sha': manifest['commit_sha'], 'migration_count': len(migrations), 'manifest': str(out / 'manifest.json')}, indent=2))
+          PY
+      - name: Upload canonical PostgreSQL evidence bundle
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: canonical-postgres-evidence-${{ github.sha }}
+          path: artifacts/canonical-postgres-evidence/
+          if-no-files-found: warn
+          retention-days: 90

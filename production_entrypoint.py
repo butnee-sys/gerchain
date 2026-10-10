@@ -1,0 +1,86 @@
+from __future__ import annotations
+
+import os
+import signal
+import time
+
+from sqlalchemy import create_engine
+
+from services.gerchain_runtime_factory import ProductionRuntimeConfig, ProductionRuntimeFactory
+
+
+_running = True
+
+
+def _stop(*_args) -> None:
+    global _running
+    _running = False
+
+
+def build_production_runtime():
+    """Build the production runtime from validated environment configuration.
+
+    Returns (runtime, engine); caller owns engine disposal.
+    """
+    database_url = os.environ.get("GERCHAIN_DATABASE_URL")
+    if not database_url or not database_url.startswith(
+        ("postgresql://", "postgresql+psycopg://", "postgresql+psycopg2://")
+    ):
+        raise RuntimeError("production entrypoint requires GERCHAIN_DATABASE_URL pointing to PostgreSQL")
+
+    escrow_id = os.environ.get("GERCHAIN_ESCROW_ID")
+    currency = os.environ.get("GERCHAIN_CURRENCY")
+    witness_id = os.environ.get("GERCHAIN_WITNESS_ID")
+    amount_raw = os.environ.get("GERCHAIN_ESCROW_AMOUNT")
+    if not all((escrow_id, currency, witness_id, amount_raw)):
+        raise RuntimeError(
+            "production entrypoint requires GERCHAIN_ESCROW_ID, "
+            "GERCHAIN_ESCROW_AMOUNT, GERCHAIN_CURRENCY, and GERCHAIN_WITNESS_ID"
+        )
+
+    try:
+        amount = int(amount_raw)
+    except ValueError as exc:
+        raise RuntimeError("GERCHAIN_ESCROW_AMOUNT must be an integer") from exc
+    if amount <= 0:
+        raise RuntimeError("GERCHAIN_ESCROW_AMOUNT must be positive")
+
+    engine = create_engine(database_url, pool_pre_ping=True)
+    try:
+        factory = ProductionRuntimeFactory(
+            ProductionRuntimeConfig(
+                database_url=database_url,
+                escrow_id=escrow_id,
+                amount=amount,
+                currency=currency,
+                witness_id=witness_id,
+            ),
+            engine=engine,
+        )
+        runtime = factory.create()
+        if not runtime.is_canonical_ledger_authoritative:
+            raise RuntimeError("canonical ledger authority was not established")
+        return runtime, engine
+    except BaseException:
+        engine.dispose()
+        raise
+
+
+def main() -> None:
+    global _running
+    runtime, engine = build_production_runtime()
+    print(
+        "GerChain production runtime initialized: "
+        f"escrow={runtime.escrow_engine.escrow_id} currency={runtime.escrow_engine.currency}"
+    )
+    signal.signal(signal.SIGTERM, _stop)
+    signal.signal(signal.SIGINT, _stop)
+    try:
+        while _running:
+            time.sleep(1)
+    finally:
+        engine.dispose()
+
+
+if __name__ == "__main__":
+    main()

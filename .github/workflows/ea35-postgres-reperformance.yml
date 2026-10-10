@@ -1,0 +1,252 @@
+name: EA-35 PostgreSQL Re-performance
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - feat/ea21-transaction-aware-ledger
+
+jobs:
+  postgres-reperformance:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: gerchain_test
+          POSTGRES_USER: gerchain
+          POSTGRES_PASSWORD: gerchain
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U gerchain -d gerchain_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      GERCHAIN_DATABASE_URL: postgresql+psycopg://gerchain:gerchain@localhost:5432/gerchain_test
+      GERCHAIN_TEST_DATABASE_URL: postgresql+psycopg://gerchain:gerchain@localhost:5432/gerchain_reperformance
+      GERCHAIN_ESCROW_ID: ea35-reperformance-escrow
+      GERCHAIN_ESCROW_AMOUNT: "100"
+      GERCHAIN_CURRENCY: MNT
+      GERCHAIN_WITNESS_ID: ea35-reperformance-witness
+      PYTHONPATH: .
+    steps:
+      - name: Checkout exact revision
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            requirements-dee-security.txt
+            postgres/requirements-test.txt
+
+      - name: Install runtime dependencies and test runner
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements-dee-security.txt -r postgres/requirements-test.txt
+
+      - name: Compile all production, persistence, migration, and CORE modules first
+        run: python -m compileall -q services production_entrypoint.py persistence postgres
+
+      - name: Run exact CORE fundamental-architecture gates (only after compileall passes)
+        env:
+          GERCHAIN_DATABASE_URL: postgresql+psycopg://gerchain:gerchain@localhost:5432/gerchain_test
+          GERCHAIN_TEST_DATABASE_URL: postgresql+psycopg://gerchain:gerchain@localhost:5432/gerchain_test
+          GERCHAIN_POSTGRES_DSN: postgresql+psycopg://gerchain:gerchain@localhost:5432/gerchain_test
+        run: |
+          pytest -q \
+            tests/test_core_structure.py \
+            tests/test_core_final_lock_contract.py \
+            tests/test_boundary_adapters.py \
+            tests/test_composition_root.py \
+            tests/test_governed_flow_adapters.py \
+            tests/test_g3_core_boundary.py \
+            tests/test_g3_core_runtime_e2e.py \
+            tests/test_g3_dee_authorized_handler.py \
+            tests/test_dee_security.py \
+            tests/test_nef_gerchain_boundary.py \
+            tests/test_nef_gerchain_port.py \
+            tests/production/test_runtime_source_compiles.py \
+            tests/production/test_postgres_canonical_concurrency.py \
+            tests/test_postgres_atomic_ledger.py \
+            postgres/tests/test_concurrency.py \
+            tests/test_production_runtime_factory.py
+
+      - name: Verify PostgreSQL connection
+        run: |
+          python - <<'PY'
+          import os
+          from sqlalchemy import create_engine, text
+          engine = create_engine(os.environ["GERCHAIN_DATABASE_URL"], pool_pre_ping=True)
+          with engine.connect() as connection:
+              assert connection.execute(text("SELECT 1")).scalar_one() == 1
+              print("POSTGRES_CONNECTION=PASS")
+          engine.dispose()
+          PY
+
+      - name: Capture migration registry before migration
+        run: |
+          mkdir -p artifacts/ea35
+          python - <<'PY'
+          import json, os
+          import psycopg
+          dsn = os.environ["GERCHAIN_DATABASE_URL"].replace("postgresql+psycopg://", "postgresql://").replace("postgresql+psycopg2://", "postgresql://")
+          with psycopg.connect(dsn) as connection:
+              exists = connection.execute("SELECT to_regclass('public.schema_version')").fetchone()[0]
+              rows = connection.execute("SELECT version, checksum, applied_at::text FROM schema_version ORDER BY version").fetchall() if exists else []
+          with open("artifacts/ea35/migration-registry-before.json", "w") as f:
+              json.dump({"registry_exists": bool(exists), "rows": [list(row) for row in rows]}, f, indent=2)
+          print(f"MIGRATION_REGISTRY_BEFORE_COUNT={len(rows)}")
+          PY
+
+      - name: Apply migrations and capture registry after migration
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          import psycopg
+          from postgres.migrations import apply_migrations
+          dsn = os.environ["GERCHAIN_DATABASE_URL"]
+          dsn = dsn.replace("postgresql+psycopg://", "postgresql://").replace("postgresql+psycopg2://", "postgresql://")
+          with psycopg.connect(dsn) as connection:
+              apply_migrations(connection, Path("postgres/migrations"))
+              rows = connection.execute("SELECT version, checksum, applied_at::text FROM schema_version ORDER BY version").fetchall()
+              assert [row[0] for row in rows] == list(range(1, 14)), rows
+              assert all(row[1] for row in rows), rows
+          with open("artifacts/ea35/migration-registry-after.json", "w") as f:
+              json.dump({"rows": [list(row) for row in rows]}, f, indent=2)
+          print(f"MIGRATION_REGISTRY_AFTER_COUNT={len(rows)}")
+          print(f"MIGRATION_REGISTRY_AFTER_SHA256_INPUT={[(row[0], row[1]) for row in rows]!r}")
+          PY
+
+      - name: Upload migration registry evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: ea35-migration-registry-${{ github.sha }}
+          path: artifacts/ea35/*.json
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Verify canonical migration runner compatibility and migration contracts
+        run: |
+          pytest -q tests/postgres/test_migrations.py
+
+      - name: Verify checksum mismatch fails without partial schema or history changes
+        run: |
+          pytest -q -s postgres/tests/test_migration_checksum_atomicity.py
+
+      - name: Re-perform concurrent migration publication on fresh PostgreSQL database
+        run: |
+          pytest -q -s postgres/tests/test_concurrency.py
+
+      - name: Create isolated PostgreSQL database for value-truth tests
+        run: |
+          PGPASSWORD=gerchain createdb -h localhost -U gerchain gerchain_reperformance
+          PGPASSWORD=gerchain psql -h localhost -U gerchain -d gerchain_reperformance -c "SELECT current_database();"
+
+      - name: Re-perform durable value-truth test suite on PostgreSQL
+        run: |
+          pytest -q tests/persistence/test_deep_value_reconciliation_postgres.py
+
+      - name: Re-perform canonical atomic lifecycle, rollback, and replay tests on PostgreSQL
+        run: |
+          pytest -q -s tests/persistence/test_deep_value_reconciliation.py
+
+      - name: Verify production factory boots with canonical Ledger authority
+        run: |
+          python - <<'PY'
+          import os
+          from sqlalchemy import create_engine, inspect, text
+          from services.gerchain_runtime_factory import (
+              ProductionRuntimeConfig,
+              ProductionRuntimeFactory,
+          )
+          url = os.environ["GERCHAIN_DATABASE_URL"]
+          engine = create_engine(url, pool_pre_ping=True)
+          with engine.begin() as connection:
+              connection.execute(
+                  text("""
+                      INSERT INTO escrows
+                          (id, sender_address, receiver_address, amount, state,
+                           condition_desc, refund_destination, currency, version,
+                           created_at, updated_at)
+                      VALUES
+                          (:id, :sender, :receiver, :amount, 'CREATED',
+                           'CI production boot', :refund_destination, :currency, 0,
+                           now(), now())
+                      ON CONFLICT (id) DO NOTHING
+                  """),
+                  {
+                      "id": os.environ["GERCHAIN_ESCROW_ID"],
+                      "sender": "ci-source",
+                      "receiver": "ci-beneficiary",
+                      "amount": int(os.environ["GERCHAIN_ESCROW_AMOUNT"]),
+                      "refund_destination": "ci-source",
+                      "currency": os.environ["GERCHAIN_CURRENCY"],
+                  },
+              )
+          factory = ProductionRuntimeFactory(
+              ProductionRuntimeConfig(
+                  database_url=url,
+                  escrow_id=os.environ["GERCHAIN_ESCROW_ID"],
+                  amount=int(os.environ["GERCHAIN_ESCROW_AMOUNT"]),
+                  currency=os.environ["GERCHAIN_CURRENCY"],
+                  witness_id=os.environ["GERCHAIN_WITNESS_ID"],
+              ),
+              engine=engine,
+          )
+          runtime = factory.create()
+          assert runtime.is_canonical_ledger_authoritative, "canonical Ledger authority not configured"
+          tables = set(inspect(engine).get_table_names())
+          required = {
+              "gerchain_ledger_accounts",
+              "gerchain_ledger_movements",
+          }
+          missing = required - tables
+          assert not missing, f"missing canonical Ledger tables: {sorted(missing)}"
+          print("PRODUCTION_FACTORY_BOOT=PASS")
+          print("CANONICAL_LEDGER_AUTHORITY=PASS")
+          print("CANONICAL_LEDGER_TABLES=PASS")
+          engine.dispose()
+          PY
+
+
+      - name: Verify the actual production entrypoint boots against PostgreSQL
+        run: |
+          python - <<'PY'
+          import os
+          import subprocess
+          import sys
+
+          command = [sys.executable, "-u", "production_entrypoint.py"]
+          try:
+              completed = subprocess.run(
+                  command,
+                  env=os.environ.copy(),
+                  capture_output=True,
+                  text=True,
+                  timeout=8,
+                  check=False,
+              )
+          except subprocess.TimeoutExpired as exc:
+              stdout = exc.stdout or ""
+              stderr = exc.stderr or ""
+              if isinstance(stdout, bytes):
+                  stdout = stdout.decode("utf-8", errors="replace")
+              if isinstance(stderr, bytes):
+                  stderr = stderr.decode("utf-8", errors="replace")
+              output = stdout + "\\n" + stderr
+              assert "GerChain production runtime initialized:" in output, output
+              print("PRODUCTION_ENTRYPOINT_BOOT=PASS")
+              print("PRODUCTION_ENTRYPOINT_REMAINS_ALIVE=PASS")
+          else:
+              output = completed.stdout + "\\n" + completed.stderr
+              assert completed.returncode == 0, output
+              assert "GerChain production runtime initialized:" in output, output
+              print("PRODUCTION_ENTRYPOINT_BOOT=PASS")
+              print("PRODUCTION_ENTRYPOINT_EXITED_CLEANLY=PASS")
+          PY

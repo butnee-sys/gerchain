@@ -1,0 +1,74 @@
+name: PostgreSQL migration concurrency proof
+
+on:
+  workflow_dispatch:
+
+jobs:
+  postgres-migration-proof:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: gerchain
+          POSTGRES_PASSWORD: gerchain_test
+          POSTGRES_DB: gerchain_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U gerchain -d gerchain_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      GERCHAIN_DATABASE_URL: postgresql://gerchain:gerchain_test@localhost:5432/gerchain_test
+      GERCHAIN_MIGRATION_TEST_DSN: postgresql://gerchain:gerchain_test@localhost:5432/gerchain_test
+      PYTHONUNBUFFERED: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install test dependencies
+        run: python -m pip install --upgrade pip pytest "psycopg[binary]"
+      - name: Record exact test identity
+        run: |
+          {
+            echo "GITHUB_SHA=$GITHUB_SHA"
+            python --version
+            python -m pip show psycopg
+            python -c "import psycopg; print('PSYCOPG_VERSION=' + psycopg.__version__)"
+            python -c "import psycopg, os; c=psycopg.connect(os.environ['GERCHAIN_DATABASE_URL']); print('POSTGRES_SERVER_VERSION=' + c.execute('SHOW server_version').fetchone()[0]); c.close()"
+            sha256sum scripts/postgres_migration_runner.py tests/integration/test_postgres_migration_concurrency.py
+          } | tee migration-proof-identity.log
+      - name: Run real PostgreSQL migration concurrency tests
+        run: |
+          set -o pipefail
+          pytest -vv -s tests/integration/test_postgres_migration_concurrency.py 2>&1 | tee migration-proof-test.log
+      - name: Capture migration registry
+        if: always()
+        run: |
+          python - <<'PY' | tee migration-proof-registry.log
+          import os
+          import psycopg
+          try:
+              with psycopg.connect(os.environ["GERCHAIN_DATABASE_URL"]) as conn:
+                  print("POSTGRES_SERVER_VERSION=" + conn.execute("SHOW server_version").fetchone()[0])
+                  exists = conn.execute("SELECT to_regclass('public.schema_version')").fetchone()[0]
+                  print("SCHEMA_VERSION_TABLE=" + str(exists))
+                  if exists:
+                      for row in conn.execute("SELECT version, checksum, applied_at FROM schema_version ORDER BY version"):
+                          print(row)
+          except Exception as exc:
+              print("REGISTRY_CAPTURE_ERROR=" + repr(exc))
+          PY
+      - name: Upload exact-SHA proof logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: postgres-migration-proof-${{ github.sha }}
+          path: |
+            migration-proof-identity.log
+            migration-proof-test.log
+            migration-proof-registry.log
+          if-no-files-found: warn

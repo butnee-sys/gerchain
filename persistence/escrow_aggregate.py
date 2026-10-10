@@ -1,0 +1,167 @@
+from __future__ import annotations
+
+from datetime import datetime, timezone
+from enum import StrEnum
+
+from sqlalchemy import BigInteger, DateTime, Numeric, String, select
+from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
+
+
+class EscrowBase(DeclarativeBase):
+    pass
+
+
+class EscrowState(StrEnum):
+    CREATED = "CREATED"
+    FUNDED = "FUNDED"
+    LOCKED = "LOCKED"
+    RELEASED = "RELEASED"
+    REFUNDED = "REFUNDED"
+    CANCELLED = "CANCELLED"
+
+
+_ALLOWED_TRANSITIONS = {
+    EscrowState.CREATED: {EscrowState.FUNDED, EscrowState.CANCELLED},
+    EscrowState.FUNDED: {EscrowState.LOCKED, EscrowState.CANCELLED},
+    EscrowState.LOCKED: {EscrowState.RELEASED, EscrowState.REFUNDED},
+    EscrowState.RELEASED: set(),
+    EscrowState.REFUNDED: set(),
+    EscrowState.CANCELLED: set(),
+}
+
+
+class CanonicalEscrow(EscrowBase):
+    """Durable representation of the existing canonical escrow aggregate."""
+
+    __tablename__ = "escrows"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    sender_address: Mapped[str] = mapped_column(String, nullable=False)
+    receiver_address: Mapped[str] = mapped_column(String, nullable=False)
+    amount: Mapped[float] = mapped_column(Numeric(38, 8), nullable=False)
+    state: Mapped[str] = mapped_column(String(32), nullable=False, default=EscrowState.CREATED.value)
+    condition_desc: Mapped[str | None] = mapped_column(String, nullable=True)
+    refund_destination: Mapped[str | None] = mapped_column(String, nullable=True)
+    currency: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    version: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+def create_escrow_in_transaction(
+    session: Session,
+    *,
+    escrow_id: str,
+    sender: str,
+    beneficiary: str,
+    refund_destination: str,
+    amount: int,
+    currency: str,
+    condition: str | None = None,
+) -> CanonicalEscrow:
+    """Create the authoritative durable escrow aggregate without moving value.
+
+    Creation is an aggregate-state operation only. Value movement, witness and
+    outbox evidence begin with the first value/state transition (FUND).
+    Repeating the same aggregate definition is an idempotent replay; conflicting
+    definitions are rejected.
+    """
+    if not escrow_id or not sender or not beneficiary or not refund_destination:
+        raise ValueError("escrow_id, sender, beneficiary and refund_destination are required")
+    if amount <= 0:
+        raise ValueError("escrow amount must be positive")
+    if not currency:
+        raise ValueError("currency is required")
+
+    existing = session.execute(
+        select(CanonicalEscrow).where(CanonicalEscrow.id == escrow_id).with_for_update()
+    ).scalar_one_or_none()
+    if existing is not None:
+        expected = (
+            existing.sender_address,
+            existing.receiver_address,
+            existing.refund_destination,
+            int(existing.amount),
+            existing.currency,
+            existing.condition_desc,
+        )
+        actual = (sender, beneficiary, refund_destination, amount, currency, condition)
+        if expected != actual:
+            raise ValueError(f"escrow {escrow_id} already exists with conflicting definition")
+        return existing
+
+    now = datetime.now(timezone.utc)
+    escrow = CanonicalEscrow(
+        id=escrow_id,
+        sender_address=sender,
+        receiver_address=beneficiary,
+        amount=amount,
+        state=EscrowState.CREATED.value,
+        condition_desc=condition,
+        refund_destination=refund_destination,
+        currency=currency,
+        version=0,
+        created_at=now,
+        updated_at=now,
+    )
+    session.add(escrow)
+    session.flush()
+    return escrow
+
+
+def transition_escrow(
+    session: Session,
+    escrow_id: str,
+    expected_state: EscrowState,
+    new_state: EscrowState,
+) -> CanonicalEscrow:
+    escrow = session.execute(
+        select(CanonicalEscrow)
+        .where(CanonicalEscrow.id == escrow_id)
+        .with_for_update()
+    ).scalar_one()
+
+    actual = EscrowState(escrow.state)
+    if actual != expected_state:
+        raise ValueError(
+            f"escrow {escrow_id} expected {expected_state.value}, got {actual.value}"
+        )
+    if new_state not in _ALLOWED_TRANSITIONS[actual]:
+        raise ValueError(
+            f"invalid escrow transition: {actual.value} -> {new_state.value}"
+        )
+
+    escrow.state = new_state.value
+    escrow.version += 1
+    escrow.updated_at = datetime.now(timezone.utc)
+    return escrow
+
+
+def get_escrow(session: Session, escrow_id: str, *, for_update: bool = False) -> CanonicalEscrow:
+    """Read the authoritative durable escrow aggregate."""
+    stmt = select(CanonicalEscrow).where(CanonicalEscrow.id == escrow_id)
+    if for_update:
+        stmt = stmt.with_for_update()
+    escrow = session.execute(stmt).scalar_one_or_none()
+    if escrow is None:
+        raise ValueError(f"escrow {escrow_id} not found")
+    return escrow
+
+
+def escrow_to_dict(escrow: CanonicalEscrow) -> dict[str, object]:
+    return {
+        "escrow_id": escrow.id,
+        "sender": escrow.sender_address,
+        "receiver": escrow.receiver_address,
+        "amount": escrow.amount,
+        "state": escrow.state,
+        "condition": escrow.condition_desc,
+        "refund_destination": escrow.refund_destination,
+        "currency": escrow.currency,
+        "version": escrow.version,
+        "created_at": escrow.created_at,
+        "updated_at": escrow.updated_at,
+    }
+
+
+__all__ = ["CanonicalEscrow", "EscrowState", "create_escrow_in_transaction", "transition_escrow", "get_escrow", "escrow_to_dict"]
