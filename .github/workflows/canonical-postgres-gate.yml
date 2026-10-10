@@ -43,6 +43,33 @@ jobs:
       - name: Prepare migration evidence directory
         if: always()
         run: mkdir -p artifacts/canonical-postgres-evidence/logs
+      - name: Compile production and persistence modules
+        run: python -m compileall -q production_entrypoint.py persistence services core postgres
+      - name: Run CORE foundation regression tests
+        run: >-
+          pytest -q
+          tests/services/test_gerchain_runtime_atomic_lifecycle.py
+          tests/services/test_gerchain_runtime_canonical_ledger.py
+          tests/services/test_gerchain_runtime_factory.py
+          tests/persistence/test_deep_value_reconciliation.py
+          tests/postgres/test_migrations.py
+          tests/postgres/test_migration_manifest.py
+      - name: Verify PostgreSQL connection
+        run: |
+          python - <<'PY'
+          import os
+          import psycopg
+          with psycopg.connect(os.environ["GERCHAIN_TEST_DATABASE_URL"]) as connection:
+              with connection.cursor() as cursor:
+                  cursor.execute("SELECT current_database(), version()")
+                  database, version = cursor.fetchone()
+                  assert database == "gerchain_test", database
+                  print(f"PASS: PostgreSQL connection: {database}; {version}")
+          PY
+      - name: Validate checksum atomicity and duplicate migration publication
+        run: set -o pipefail; pytest -vv -s postgres/tests/test_migration_checksum_atomicity.py tests/postgres/test_migration_runner_concurrency.py 2>&1 | tee artifacts/canonical-postgres-evidence/logs/checksum-atomicity-concurrency.log
+      - name: Re-perform canonical PostgreSQL escrow lifecycle
+        run: set -o pipefail; pytest -vv -s tests/postgres/test_production_postgres_reperformance.py 2>&1 | tee artifacts/canonical-postgres-evidence/logs/production-lifecycle.log
       - name: Re-perform PostgreSQL migration concurrency and checksum gate
         run: set -o pipefail; python -m pytest -vv -s postgres/tests/test_concurrency.py 2>&1 | tee artifacts/canonical-postgres-evidence/logs/migration-concurrency.log
       - name: Re-perform duplicate publication and checksum fail-closed cases on PostgreSQL
