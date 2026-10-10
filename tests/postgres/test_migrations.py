@@ -51,9 +51,12 @@ def test_unresolved_duplicate_migration_version_fails_closed(tmp_path: Path):
     (tmp_path / "001_first.sql").write_text("SELECT 1;", encoding="utf-8")
     (tmp_path / "001_duplicate.sql").write_text("SELECT 2;", encoding="utf-8")
 
+    class DummyInfo:
+        transaction_status = 0
+
     class DummyConnection:
-        def in_transaction(self):
-            return False
+        closed = False
+        info = DummyInfo()
 
     with pytest.raises(RuntimeError, match="ambiguous migration version 1"):
         apply_migrations(DummyConnection(), tmp_path)
