@@ -15,6 +15,7 @@ on:
       - "postgres/migrations.py"
       - "tests/postgres/test_migrations.py"
       - "postgres/tests/test_concurrency.py"
+      - "postgres/tests/test_migration_checksum_atomicity.py"
       - "persistence/**"
       - "postgres/migrations/**"
       - "tests/persistence/test_deep_value_reconciliation_postgres.py"
@@ -100,6 +101,10 @@ jobs:
       - name: Verify canonical migration runner compatibility and migration contracts
         run: |
           pytest -q tests/postgres/test_migrations.py
+
+      - name: Verify checksum mismatch fails without partial schema or history changes
+        run: |
+          pytest -q -s postgres/tests/test_migration_checksum_atomicity.py
 
       - name: Re-perform concurrent migration publication on fresh PostgreSQL database
         run: |
