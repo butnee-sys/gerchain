@@ -1,6 +1,7 @@
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 import os
+import time
 import uuid
 
 import psycopg
@@ -16,12 +17,29 @@ def _dsn() -> str:
     return value.replace("postgresql+psycopg://", "postgresql://").replace("postgresql+psycopg2://", "postgresql://")
 
 
-def _run_migrations() -> None:
+def _run_migrations() -> dict[str, object]:
+    started = time.monotonic()
     with psycopg.connect(_dsn()) as conn:
+        backend_pid = conn.execute("SELECT pg_backend_pid()").fetchone()[0]
+        database_name = conn.info.dbname
+        print(
+            f"MIGRATION_CONNECTION_START pid={backend_pid} database={database_name}",
+            flush=True,
+        )
         apply_migrations(
             conn,
             Path(__file__).resolve().parents[1] / "migrations",
         )
+        versions = conn.execute(
+            "SELECT version, checksum FROM schema_version ORDER BY version"
+        ).fetchall()
+        elapsed = time.monotonic() - started
+        print(
+            f"MIGRATION_CONNECTION_DONE pid={backend_pid} database={database_name} "
+            f"versions={len(versions)} elapsed_seconds={elapsed:.3f}",
+            flush=True,
+        )
+        return {"pid": backend_pid, "database": database_name, "rows": versions}
 
 
 def test_migrations_are_serialized_and_checksum_is_stable(monkeypatch):
@@ -42,8 +60,18 @@ def test_migrations_are_serialized_and_checksum_is_stable(monkeypatch):
         # authoritative schema_version row per version.
         with ThreadPoolExecutor(max_workers=2) as pool:
             futures = [pool.submit(_run_migrations) for _ in range(2)]
-            for future in futures:
-                future.result()
+            connection_results = [future.result(timeout=90) for future in futures]
+
+        connection_pids = [result["pid"] for result in connection_results]
+        print(
+            "MIGRATION_CONCURRENCY_CONNECTIONS "
+            f"pid_1={connection_pids[0]} pid_2={connection_pids[1]}",
+            flush=True,
+        )
+        assert len(set(connection_pids)) == 2, (
+            "concurrency test did not use two independent PostgreSQL backend connections: "
+            f"{connection_results!r}"
+        )
 
         with psycopg.connect(_dsn()) as conn:
             rows = conn.execute(
