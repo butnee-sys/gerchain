@@ -38,7 +38,9 @@ def test_factory_creates_canonical_ledger_runtime() -> None:
     engine.dialect.name = "postgresql"
 
     factory = ProductionRuntimeFactory(config, engine=engine)
-    with patch.object(factory, "initialize"):
+    with patch.object(factory, "initialize"), patch(
+        "services.gerchain_runtime_factory.assert_canonical_production_schema"
+    ):
         runtime = factory.create()
 
     assert runtime.is_canonical_ledger_authoritative
