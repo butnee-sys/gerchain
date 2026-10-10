@@ -137,8 +137,8 @@ jobs:
           manifest['git_status_porcelain'] = subprocess.run(['git', 'status', '--porcelain'], capture_output=True, text=True, check=False).stdout.splitlines()
           out = root / 'artifacts/canonical-postgres-evidence'
           out.mkdir(parents=True, exist_ok=True)
-          (out / 'manifest.json').write_text(json.dumps(manifest, indent=2) + '\\n', encoding='utf-8')
-          (out / 'commit-sha.txt').write_text(manifest['commit_sha'] + '\\n', encoding='utf-8')
+          (out / 'manifest.json').write_text(json.dumps(manifest, indent=2) + '\n', encoding='utf-8')
+          (out / 'commit-sha.txt').write_text(manifest['commit_sha'] + '\n', encoding='utf-8')
           print(json.dumps({'commit_sha': manifest['commit_sha'], 'migration_count': len(migrations), 'manifest': str(out / 'manifest.json')}, indent=2))
           PY
       - name: Upload canonical PostgreSQL evidence bundle
