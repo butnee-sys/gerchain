@@ -119,7 +119,29 @@ def apply_migrations(connection: Connection, migration_dir: Path) -> tuple[int, 
         raise ValueError("migration connection must be open")
     if connection.info.transaction_status != 0:
         raise RuntimeError("migration runner requires a clean connection with no active transaction")
-    selected = _canonical_migration_files(Path(migration_dir))
+    directory = Path(migration_dir)
+    canonical_first = directory / _CANONICAL_FILES[0]
+    if canonical_first.is_file():
+        selected = _canonical_migration_files(directory)
+    else:
+        # Isolated test/migration bundles may use a generic sequential chain.
+        # Production always uses the explicit 13-file canonical chain above.
+        candidates = sorted(directory.glob("*.sql"))
+        if not candidates:
+            raise RuntimeError("no SQL migrations found")
+        versions: dict[int, list[Path]] = {}
+        for path in candidates:
+            match = re.match(r"^(\\d+)_", path.name)
+            if not match:
+                raise RuntimeError(f"invalid migration filename: {path.name}")
+            versions.setdefault(int(match.group(1)), []).append(path)
+        duplicates = [version for version, paths in versions.items() if len(paths) > 1]
+        if duplicates:
+            raise RuntimeError(f"ambiguous migration version {min(duplicates)}")
+        expected = list(range(1, max(versions) + 1))
+        if sorted(versions) != expected:
+            raise RuntimeError(f"migration versions contain gaps: {sorted(versions)}")
+        selected = [versions[version][0] for version in expected]
     applied_now: list[int] = []
     # Advisory lock, schema changes, and history publication share one transaction.
     with connection.transaction():
