@@ -128,4 +128,4 @@ def test_deep_value_truth_reconciliation_executes_against_postgresql(postgres_se
 
     report = deep_reconcile_value_truth(session)
     assert report.matched is True
-    assert report.issues == []
+    assert not report.issues
