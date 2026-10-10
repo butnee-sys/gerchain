@@ -93,6 +93,7 @@ def assert_canonical_production_schema(connection) -> None:
     for table, column in required_unique.items():
         constraints = inspector.get_unique_constraints(table)
         indexes = inspector.get_indexes(table)
+        primary_key = inspector.get_pk_constraint(table)
         unique_sets = {
             tuple(item.get("column_names") or ())
             for item in constraints
@@ -100,6 +101,9 @@ def assert_canonical_production_schema(connection) -> None:
             tuple(item.get("column_names") or ())
             for item in indexes if item.get("unique")
         }
+        primary_key_columns = tuple(primary_key.get("constrained_columns") or ())
+        if primary_key_columns:
+            unique_sets.add(primary_key_columns)
         if (column,) not in unique_sets:
             raise RuntimeError(
                 f"canonical production schema incomplete; {table}.{column} must be unique"
