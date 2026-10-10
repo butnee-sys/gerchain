@@ -2,6 +2,9 @@ name: Canonical PostgreSQL production gate
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - feat/ea21-transaction-aware-ledger
 
 jobs:
   canonical-postgres-gate:
