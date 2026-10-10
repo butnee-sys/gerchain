@@ -343,6 +343,17 @@ def apply_migrations(conn, migration_dir: str | Path) -> None:
                     "SELECT version, checksum FROM schema_version ORDER BY version",
                 ).fetchall()
 
+            # Legacy schema_version tables may predate the PRIMARY KEY. After
+            # rejecting conflicting checksums and repairing identical duplicates,
+            # enforce the uniqueness required by INSERT ... ON CONFLICT(version).
+            _execute(
+                conn,
+                """
+                CREATE UNIQUE INDEX IF NOT EXISTS schema_version_version_uidx
+                ON schema_version(version)
+                """,
+            )
+
             applied = {int(row[0]): row[1] for row in rows}
 
             for version in sorted(preferred):
