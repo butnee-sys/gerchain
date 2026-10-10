@@ -78,6 +78,27 @@ jobs:
           engine.dispose()
           PY
 
+      - name: Apply migrations to gate database before baseline assertions
+        run: |
+          python - <<'PY'
+          import os
+          from pathlib import Path
+          import psycopg
+          from postgres.migrations import apply_migrations
+          dsn = os.environ["GERCHAIN_DATABASE_URL"]
+          dsn = dsn.replace("postgresql+psycopg://", "postgresql://").replace("postgresql+psycopg2://", "postgresql://")
+          with psycopg.connect(dsn) as connection:
+              apply_migrations(connection, Path("postgres/migrations"))
+              rows = connection.execute("SELECT version, checksum FROM schema_version ORDER BY version").fetchall()
+              print(f"BASELINE_MIGRATION_ROWS={rows!r}")
+              assert [row[0] for row in rows] == list(range(1, 14)), rows
+              assert all(row[1] for row in rows), rows
+          PY
+
+      - name: Re-perform concurrent migration publication on fresh PostgreSQL database
+        run: |
+          pytest -q -s postgres/tests/test_concurrency.py
+
       - name: Create isolated PostgreSQL database for value-truth tests
         run: |
           PGPASSWORD=gerchain createdb -h localhost -U gerchain gerchain_reperformance
