@@ -5,9 +5,11 @@ import signal
 import time
 
 from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
 
-from services.gerchain_runtime_factory import ProductionRuntimeFactory
+from services.gerchain_runtime_factory import (
+    ProductionRuntimeConfig,
+    ProductionRuntimeFactory,
+)
 
 
 _running = True
@@ -20,8 +22,12 @@ def _stop(*_args) -> None:
 
 def build_production_runtime():
     database_url = os.environ.get("GERCHAIN_DATABASE_URL")
-    if not database_url or not database_url.startswith(("postgresql://", "postgresql+psycopg://", "postgresql+psycopg2://")):
-        raise RuntimeError("production entrypoint requires GERCHAIN_DATABASE_URL pointing to PostgreSQL")
+    if not database_url or not database_url.startswith(
+        ("postgresql://", "postgresql+psycopg://", "postgresql+psycopg2://")
+    ):
+        raise RuntimeError(
+            "production entrypoint requires GERCHAIN_DATABASE_URL pointing to PostgreSQL"
+        )
 
     escrow_id = os.environ.get("GERCHAIN_ESCROW_ID")
     currency = os.environ.get("GERCHAIN_CURRENCY")
@@ -41,14 +47,14 @@ def build_production_runtime():
 
     engine = create_engine(database_url, pool_pre_ping=True)
     try:
-        runtime = ProductionRuntimeFactory.create(
-        escrow_id=escrow_id,
-        amount=amount,
-        currency=currency,
-        witness_id=witness_id,
-        engine=engine,
-        session_factory=session_factory,
-    )
+        config = ProductionRuntimeConfig(
+            database_url=database_url,
+            escrow_id=escrow_id,
+            amount=amount,
+            currency=currency,
+            witness_id=witness_id,
+        )
+        runtime = ProductionRuntimeFactory(config, engine=engine).create()
         if not runtime.is_canonical_ledger_authoritative:
             raise RuntimeError("canonical ledger authority was not established")
         return runtime, engine
