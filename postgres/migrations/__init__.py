@@ -131,7 +131,7 @@ def apply_migrations(connection: Connection, migration_dir: Path) -> tuple[int, 
             raise RuntimeError("no SQL migrations found")
         versions: dict[int, list[Path]] = {}
         for path in candidates:
-            match = re.match(r"^(\\d+)_", path.name)
+            match = re.match(r"^(\d+)_", path.name)
             if not match:
                 raise RuntimeError(f"invalid migration filename: {path.name}")
             versions.setdefault(int(match.group(1)), []).append(path)
