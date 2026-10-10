@@ -127,8 +127,8 @@ jobs:
           timeout --signal=TERM 8s python production_entrypoint.py > production-entrypoint.log 2>&1
           rc=$?
           cat production-entrypoint.log
-          if [ "\$rc" -ne 124 ]; then
-            echo "expected controlled timeout after successful production boot, got rc=\$rc"
+          if [ "$rc" -ne 124 ]; then
+            echo "expected controlled timeout after successful production boot, got rc=$rc"
             exit 1
           fi
           grep -q "GerChain production runtime initialized" production-entrypoint.log
