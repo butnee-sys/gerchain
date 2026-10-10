@@ -1,8 +1,18 @@
 name: EA-35 PostgreSQL Re-performance
 
 on:
-  # Focused duplicate PostgreSQL gate retained for manual diagnosis.
-  # Automatic PostgreSQL/Core evidence is owned by core-gates and the canonical production gate.
+  # Run exact-SHA PostgreSQL re-performance whenever this focused gate changes
+  # or production-runtime work lands on its working branch.
+  push:
+    branches:
+      - feat/ea21-transaction-aware-ledger
+    paths:
+      - ".github/workflows/ea35-postgres-reperformance.yml"
+      - "production_entrypoint.py"
+      - "services/gerchain_runtime_factory.py"
+      - "persistence/**"
+      - "postgres/migrations/**"
+      - "tests/persistence/test_deep_value_reconciliation_postgres.py"
   workflow_dispatch:
 
 permissions:
