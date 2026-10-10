@@ -14,7 +14,7 @@ from persistence.atomic_value_transaction import WitnessBase, TransactionWitness
 from persistence.durable_idempotency import IdempotencyBase
 from persistence.escrow_aggregate import CanonicalEscrow, EscrowBase
 from persistence.recovery_outbox import OutboxBase
-from postgres.migration_runner import apply_migrations
+from postgres.migrations import apply_migrations
 from services.gerchain_runtime import GerchainRuntime
 
 @dataclass(frozen=True)
