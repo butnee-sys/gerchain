@@ -43,8 +43,14 @@ def seed_escrow(escrow_id="race-1"):
         with conn.transaction():
             conn.execute(
                 """
-                INSERT INTO escrows(id, sender_address, receiver_address, amount, state)
-                VALUES (%s, 'sender', 'receiver', 100, 'CREATED')
+                INSERT INTO escrows(
+                    id, sender_address, receiver_address, amount, state,
+                    refund_destination, currency, version, created_at
+                )
+                VALUES (
+                    %s, 'sender', 'receiver', 100, 'CREATED',
+                    'sender', 'USD', 0, now()
+                )
                 """,
                 (escrow_id,),
             )
@@ -176,8 +182,9 @@ def test_migrations_are_serialized_and_checksum_is_stable():
 
     with connect() as conn:
         rows = conn.execute("SELECT version, checksum FROM schema_version ORDER BY version").fetchall()
-        assert [row[0] for row in rows] == [1]
-        assert len(rows[0][1]) == 64
+        expected_versions = sorted({int(path.name.split("_", 1)[0]) for path in MIGRATION_DIR.glob("*.sql")})
+        assert [row[0] for row in rows] == expected_versions
+        assert all(len(row[1]) == 64 for row in rows)
 
 
 def test_migration_checksum_mismatch_is_rejected(tmp_path):
