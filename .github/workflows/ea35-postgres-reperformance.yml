@@ -49,9 +49,32 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r requirements-dee-security.txt -r postgres/requirements-test.txt
 
-      - name: Compile production runtime and migration modules
+      - name: Compile all production, persistence, migration, and CORE modules first
+        run: python -m compileall -q services production_entrypoint.py persistence postgres
+
+      - name: Run exact CORE fundamental-architecture gates (only after compileall passes)
+        env:
+          GERCHAIN_DATABASE_URL: postgresql+psycopg://gerchain:gerchain@localhost:5432/gerchain_test
+          GERCHAIN_TEST_DATABASE_URL: postgresql+psycopg://gerchain:gerchain@localhost:5432/gerchain_test
+          GERCHAIN_POSTGRES_DSN: postgresql+psycopg://gerchain:gerchain@localhost:5432/gerchain_test
         run: |
-          python -m py_compile production_entrypoint.py services/gerchain_runtime.py services/gerchain_runtime_factory.py postgres/migration_runner.py postgres/migrations.py persistence/deep_value_reconciliation.py
+          pytest -q \
+            tests/test_core_structure.py \
+            tests/test_core_final_lock_contract.py \
+            tests/test_boundary_adapters.py \
+            tests/test_composition_root.py \
+            tests/test_governed_flow_adapters.py \
+            tests/test_g3_core_boundary.py \
+            tests/test_g3_core_runtime_e2e.py \
+            tests/test_g3_dee_authorized_handler.py \
+            tests/test_dee_security.py \
+            tests/test_nef_gerchain_boundary.py \
+            tests/test_nef_gerchain_port.py \
+            tests/production/test_runtime_source_compiles.py \
+            tests/production/test_postgres_canonical_concurrency.py \
+            tests/test_postgres_atomic_ledger.py \
+            postgres/tests/test_concurrency.py \
+            tests/test_production_runtime_factory.py
 
       - name: Verify PostgreSQL connection
         run: |
