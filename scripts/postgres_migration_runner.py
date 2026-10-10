@@ -31,7 +31,7 @@ def apply_migration(dsn: str, migration_path: Path) -> str:
         with conn.transaction():
             with conn.cursor() as cur:
                 # Transaction-scoped: automatically released on commit/rollback.
-                cur.execute("SELECT pg_advisory_xact_lock(%s, %s)", (LOCK_NAMESPACE, version))
+                cur.execute("SELECT pg_advisory_xact_lock(%s, %s)", (LOCK_NAMESPACE, 0))
                 cur.execute(
                     """
                     CREATE TABLE IF NOT EXISTS schema_version (
