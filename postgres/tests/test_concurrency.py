@@ -28,6 +28,10 @@ def _run_migrations(runner_id: str) -> dict[str, object]:
             f"database={database_name} started_at={started_wall:.6f}",
             flush=True,
         )
+        # The diagnostic SELECT above opens a psycopg transaction. End it before
+        # the migration runner acquires its session-scoped advisory lock; the
+        # runner requires a clean connection at entry.
+        conn.commit()
         apply_migrations(
             conn,
             Path(__file__).resolve().parents[1] / "migrations",
