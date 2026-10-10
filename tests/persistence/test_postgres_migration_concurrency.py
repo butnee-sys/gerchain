@@ -108,6 +108,9 @@ def test_checksum_mismatch_rolls_back_schema_and_history() -> None:
             ).fetchall()
             assert after == before
             assert connection.execute(
+                "SELECT to_regclass('gerchain_migration_checksum_probe')"
+            ).fetchone()[0] is not None
+            assert connection.execute(
                 "SELECT to_regclass('gerchain_migration_checksum_probe_changed')"
             ).fetchone()[0] is None
 
