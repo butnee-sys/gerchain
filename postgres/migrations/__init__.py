@@ -143,39 +143,49 @@ def apply_migrations(connection: Connection, migration_dir: Path) -> tuple[int, 
             raise RuntimeError(f"migration versions contain gaps: {sorted(versions)}")
         selected = [versions[version][0] for version in expected]
     applied_now: list[int] = []
-    # Advisory lock, schema changes, and history publication share one transaction.
-    with connection.transaction():
-        connection.execute("SELECT pg_advisory_xact_lock(%s)", (_MIGRATION_LOCK_KEY,))
-        connection.execute(
-            """
-            CREATE TABLE IF NOT EXISTS schema_version (
-                version INTEGER PRIMARY KEY,
-                checksum TEXT NOT NULL,
-                applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
-            )
-            """
-        )
-        for version, path in enumerate(selected, start=1):
-            source = path.read_text(encoding="utf-8")
-            if not source.strip():
-                raise ValueError(f"empty migration is not allowed: {path.name}")
-            digest = checksum(source)
-            row = connection.execute(
-                "SELECT checksum FROM schema_version WHERE version = %s",
-                (version,),
-            ).fetchone()
-            if row is not None:
-                if row[0] != digest:
-                    raise RuntimeError(f"Migration checksum mismatch for version {version}: {path.name}")
-                continue
-            for statement in _split_sql_statements(source):
-                connection.execute(statement)
+    # Hold a session-scoped advisory lock across the entire migration transaction.
+    # A transaction-scoped lock was insufficiently robust in nested/implicit
+    # psycopg transaction contexts and allowed concurrent schema_version inserts.
+    connection.execute("SELECT pg_advisory_lock(%s)", (_MIGRATION_LOCK_KEY,))
+    connection.commit()
+    try:
+        with connection.transaction():
             connection.execute(
-                "INSERT INTO schema_version(version, checksum) VALUES (%s, %s)",
-                (version, digest),
+                """
+                CREATE TABLE IF NOT EXISTS schema_version (
+                    version INTEGER PRIMARY KEY,
+                    checksum TEXT NOT NULL,
+                    applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
+                )
+                """
             )
-            applied_now.append(version)
-    return tuple(applied_now)
+            for version, path in enumerate(selected, start=1):
+                source = path.read_text(encoding="utf-8")
+                if not source.strip():
+                    raise ValueError(f"empty migration is not allowed: {path.name}")
+                digest = checksum(source)
+                row = connection.execute(
+                    "SELECT checksum FROM schema_version WHERE version = %s",
+                    (version,),
+                ).fetchone()
+                if row is not None:
+                    if row[0] != digest:
+                        raise RuntimeError(f"Migration checksum mismatch for version {version}: {path.name}")
+                    continue
+                for statement in _split_sql_statements(source):
+                    connection.execute(statement)
+                connection.execute(
+                    "INSERT INTO schema_version(version, checksum) VALUES (%s, %s)",
+                    (version, digest),
+                )
+                applied_now.append(version)
+        return tuple(applied_now)
+    finally:
+        # Ensure the transaction has ended before releasing the session lock.
+        if connection.info.transaction_status != 0:
+            connection.rollback()
+        connection.execute("SELECT pg_advisory_unlock(%s)", (_MIGRATION_LOCK_KEY,))
+        connection.commit()
 
 
 __all__ = ["apply_migrations", "checksum", "_canonical_migration_files", "_split_sql_statements"]
