@@ -164,11 +164,9 @@ jobs:
           from services.gerchain_runtime_factory import (
               ProductionRuntimeConfig,
               ProductionRuntimeFactory,
-              initialize_canonical_postgres_schema,
           )
           url = os.environ["GERCHAIN_DATABASE_URL"]
           engine = create_engine(url, pool_pre_ping=True)
-          initialize_canonical_postgres_schema(engine)
           with engine.begin() as connection:
               connection.execute(
                   text("""
