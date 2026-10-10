@@ -72,3 +72,9 @@ def test_sql_splitter_preserves_single_quoted_semicolons():
 
     statements = _split_sql_statements("INSERT INTO t VALUES ('a;b'); SELECT 1;")
     assert statements == ["INSERT INTO t VALUES ('a;b')", "SELECT 1"]
+def test_compatibility_runner_reexports_the_single_canonical_runner():
+    from postgres import migration_runner, migrations
+
+    assert migration_runner.apply_migrations is migrations.apply_migrations
+    assert migration_runner.checksum is migrations.checksum
+
