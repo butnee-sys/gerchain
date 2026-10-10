@@ -111,12 +111,20 @@ def test_migrations_are_serialized_and_checksum_is_stable(monkeypatch):
             f"{connection_results!r}"
         )
 
-        with psycopg.connect(_dsn()) as conn:
-            rows = conn.execute(
+        # Read the isolated database both concurrent migration runners used.
+        # _dsn() points at the shared CI database and makes this assertion
+        # order-dependent on unrelated setup if it is not migrated yet.
+        with psycopg.connect(fresh_dsn) as conn:
+            rows_after_concurrency = conn.execute(
                 "SELECT version, checksum FROM schema_version ORDER BY version"
             ).fetchall()
 
-        print(f"MIGRATION_SCHEMA_VERSION_ASSERT_ROWS rows={rows!r}", flush=True)
+        print(
+            "MIGRATION_SCHEMA_VERSION_ASSERT_ROWS "
+            f"database={database_name} rows={rows_after_concurrency!r}",
+            flush=True,
+        )
+        rows = rows_after_concurrency
         versions = [row[0] for row in rows]
         assert versions == sorted(set(versions)), (
             f"duplicate schema_version publication: rows={rows!r}"
@@ -130,7 +138,7 @@ def test_migrations_are_serialized_and_checksum_is_stable(monkeypatch):
         # are unchanged after a second complete migration pass.
         rerun_result = _run_migrations("RERUN")
         print(f"MIGRATION_RERUN_RESULT result={rerun_result!r}", flush=True)
-        with psycopg.connect(_dsn()) as conn:
+        with psycopg.connect(fresh_dsn) as conn:
             rows_after = conn.execute(
                 "SELECT version, checksum FROM schema_version ORDER BY version"
             ).fetchall()
