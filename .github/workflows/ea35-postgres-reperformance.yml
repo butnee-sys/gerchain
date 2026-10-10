@@ -63,10 +63,25 @@ jobs:
           engine.dispose()
           PY
 
-      - name: Apply migrations to gate database before baseline assertions
+      - name: Capture migration registry before migration
+        run: |
+          mkdir -p artifacts/ea35
+          python - <<'PY'
+          import json, os
+          import psycopg
+          dsn = os.environ["GERCHAIN_DATABASE_URL"].replace("postgresql+psycopg://", "postgresql://").replace("postgresql+psycopg2://", "postgresql://")
+          with psycopg.connect(dsn) as connection:
+              exists = connection.execute("SELECT to_regclass('public.schema_version')").fetchone()[0]
+              rows = connection.execute("SELECT version, checksum, applied_at::text FROM schema_version ORDER BY version").fetchall() if exists else []
+          with open("artifacts/ea35/migration-registry-before.json", "w") as f:
+              json.dump({"registry_exists": bool(exists), "rows": [list(row) for row in rows]}, f, indent=2)
+          print(f"MIGRATION_REGISTRY_BEFORE_COUNT={len(rows)}")
+          PY
+
+      - name: Apply migrations and capture registry after migration
         run: |
           python - <<'PY'
-          import os
+          import json, os
           from pathlib import Path
           import psycopg
           from postgres.migrations import apply_migrations
@@ -74,11 +89,22 @@ jobs:
           dsn = dsn.replace("postgresql+psycopg://", "postgresql://").replace("postgresql+psycopg2://", "postgresql://")
           with psycopg.connect(dsn) as connection:
               apply_migrations(connection, Path("postgres/migrations"))
-              rows = connection.execute("SELECT version, checksum FROM schema_version ORDER BY version").fetchall()
-              print(f"BASELINE_MIGRATION_ROWS={rows!r}")
+              rows = connection.execute("SELECT version, checksum, applied_at::text FROM schema_version ORDER BY version").fetchall()
               assert [row[0] for row in rows] == list(range(1, 14)), rows
               assert all(row[1] for row in rows), rows
+          with open("artifacts/ea35/migration-registry-after.json", "w") as f:
+              json.dump({"rows": [list(row) for row in rows]}, f, indent=2)
+          print(f"MIGRATION_REGISTRY_AFTER_COUNT={len(rows)}")
+          print(f"MIGRATION_REGISTRY_AFTER_SHA256_INPUT={[(row[0], row[1]) for row in rows]!r}")
           PY
+
+      - name: Upload migration registry evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: ea35-migration-registry-${{ github.sha }}
+          path: artifacts/ea35/*.json
+          if-no-files-found: error
+          retention-days: 30
 
       - name: Verify canonical migration runner compatibility and migration contracts
         run: |
