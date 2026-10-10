@@ -296,8 +296,53 @@ def apply_migrations(conn, migration_dir: str | Path) -> None:
             _execute(conn, "LOCK TABLE schema_version IN ACCESS EXCLUSIVE MODE")
             rows = _execute(
                 conn,
-                "SELECT version, checksum FROM schema_version ORDER BY version",
+                "SELECT version, checksum FROM schema_version ORDER BY version, checksum",
             ).fetchall()
+
+            # Never collapse conflicting history through a dict comprehension:
+            # that would silently choose one checksum for the same version.
+            checksums_by_version: dict[int, set[str]] = {}
+            for row in rows:
+                checksums_by_version.setdefault(int(row[0]), set()).add(str(row[1]))
+            conflicts = {
+                version: sorted(digests)
+                for version, digests in checksums_by_version.items()
+                if len(digests) > 1
+            }
+            if conflicts:
+                version = min(conflicts)
+                raise RuntimeError(
+                    "Conflicting schema_version checksums for version "
+                    f"{version}: {conflicts[version]}"
+                )
+
+            # Older installations may lack the unique version constraint and
+            # contain byte-identical duplicate publications. Repair only this
+            # unambiguous case, retaining one row per version. This runs inside
+            # the migration transaction, after conflicting history was rejected.
+            if len(rows) != len(checksums_by_version):
+                _execute(
+                    conn,
+                    """
+                    DELETE FROM schema_version
+                    WHERE ctid IN (
+                        SELECT row_ctid
+                        FROM (
+                            SELECT ctid AS row_ctid,
+                                   row_number() OVER (
+                                       PARTITION BY version ORDER BY ctid
+                                   ) AS row_num
+                            FROM schema_version
+                        ) ranked
+                        WHERE row_num > 1
+                    )
+                    """,
+                )
+                rows = _execute(
+                    conn,
+                    "SELECT version, checksum FROM schema_version ORDER BY version",
+                ).fetchall()
+
             applied = {int(row[0]): row[1] for row in rows}
 
             for version in sorted(preferred):
