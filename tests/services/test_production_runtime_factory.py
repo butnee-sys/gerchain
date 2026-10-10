@@ -174,3 +174,56 @@ def test_configured_escrow_validation_rejects_amount_currency_and_party_mismatch
 
         with pytest.raises(RuntimeError, match=message):
             factory._validate_configured_escrow()
+
+
+def test_schema_gate_rejects_legacy_restrictive_escrow_state_check() -> None:
+    import pytest
+
+    from services.gerchain_runtime_factory import assert_canonical_production_schema
+
+    required = {
+        "schema_version": {"version", "checksum", "applied_at"},
+        "escrows": {
+            "id", "sender_address", "receiver_address", "amount", "state",
+            "condition_desc", "refund_destination", "currency", "version",
+            "created_at", "updated_at",
+        },
+        "gerchain_ledger_accounts": {
+            "account_id", "currency", "balance", "version", "updated_at",
+        },
+        "gerchain_ledger_movements": {
+            "id", "transaction_id", "source", "destination", "amount",
+            "currency", "operation", "escrow_id", "integrity_hash", "created_at",
+        },
+        "gerchain_transaction_witnesses": {
+            "id", "transaction_id", "event_type", "escrow_id", "amount", "created_at",
+        },
+        "gerchain_outbox_events": {
+            "id", "event_id", "event_type", "aggregate_id", "payload_json",
+            "state", "lease_until", "attempts", "created_at", "updated_at",
+        },
+        "gerchain_idempotency_records": {
+            "id", "key", "fingerprint", "result_json", "state", "created_at", "updated_at",
+        },
+    }
+    inspector = Mock()
+    inspector.get_table_names.return_value = list(required)
+    inspector.get_columns.side_effect = lambda table: [
+        {"name": name} for name in required[table]
+    ]
+    inspector.get_check_constraints.return_value = [
+        {
+            "name": "escrows_state_check",
+            "sqltext": "state IN ('CREATED', 'LOCKED', 'RELEASED')",
+        }
+    ]
+
+    connection = Mock()
+    with (
+        patch("services.gerchain_runtime_factory.inspect", return_value=inspector),
+        pytest.raises(RuntimeError, match="state CHECK permitting CREATED, FUNDED"),
+    ):
+        assert_canonical_production_schema(connection)
+
+    # The schema gate must reject this before trusting a migration-version marker.
+    connection.execute.assert_not_called()
