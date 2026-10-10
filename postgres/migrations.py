@@ -1,3 +1,4 @@
+# EA-35.48: exact-SHA PostgreSQL migration race re-performance trigger; prior failed runs are historical only.
 # EA-35.47: exact-branch re-performance after reviewing concurrent schema_version duplicate-publication evidence.
 # EA-35.46: final exact-SHA PostgreSQL concurrency re-performance trigger — one publication per version.
 # EA-35.42: exact-SHA rerun trigger after restoring the conflict-safe migration runner.
