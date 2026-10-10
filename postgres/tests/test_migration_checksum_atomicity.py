@@ -3,6 +3,7 @@ from pathlib import Path
 import uuid
 
 import psycopg
+from psycopg import sql
 import pytest
 from psycopg.conninfo import make_conninfo
 
