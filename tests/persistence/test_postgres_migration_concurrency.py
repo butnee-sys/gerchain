@@ -20,13 +20,19 @@ def test_two_connections_publish_same_migration_version_once() -> None:
     dsn = os.environ["GERCHAIN_MIGRATION_TEST_DATABASE_URL"]
     with tempfile.TemporaryDirectory(prefix="gerchain-migrations-") as raw_dir:
         migration_dir = Path(raw_dir)
-        (migration_dir / "001_concurrency_probe.sql").write_text(
+        migration = migration_dir / "001_concurrency_probe.sql"
+        migration.write_text(
             "CREATE TABLE IF NOT EXISTS gerchain_migration_concurrency_probe "
             "(id INTEGER PRIMARY KEY)",
             encoding="utf-8",
         )
+        with psycopg.connect(dsn) as connection:
+            connection.execute("DROP TABLE IF EXISTS gerchain_migration_concurrency_probe")
+            connection.execute("DELETE FROM schema_version WHERE version = 1")
+            connection.commit()
+
         barrier = threading.Barrier(2)
-        results: list[tuple[str, ...]] = []
+        results: list[tuple[int, ...]] = []
         errors: list[BaseException] = []
 
         def run() -> None:
@@ -49,10 +55,9 @@ def test_two_connections_publish_same_migration_version_once() -> None:
 
         with psycopg.connect(dsn) as connection:
             rows = connection.execute(
-                "SELECT version FROM gerchain_schema_migrations "
-                "WHERE version = '001_concurrency_probe.sql'"
+                "SELECT version FROM schema_version WHERE version = 1"
             ).fetchall()
-            assert rows == [("001_concurrency_probe.sql",)]
+            assert rows == [(1,)]
             assert connection.execute(
                 "SELECT to_regclass('gerchain_migration_concurrency_probe')"
             ).fetchone()[0] is not None
@@ -60,7 +65,54 @@ def test_two_connections_publish_same_migration_version_once() -> None:
 
 @pytest.mark.skipif(
     not os.environ.get("GERCHAIN_MIGRATION_TEST_DATABASE_URL"),
-    reason="requires a dedicated, disposable PostgreSQL database",
+    reason="requires a dedicated, disposable empty PostgreSQL database",
+)
+def test_checksum_mismatch_rolls_back_schema_and_history() -> None:
+    """A changed migration must not execute DDL or mutate the stored history."""
+    dsn = os.environ["GERCHAIN_MIGRATION_TEST_DATABASE_URL"]
+    with tempfile.TemporaryDirectory(prefix="gerchain-checksum-") as raw_dir:
+        migration_dir = Path(raw_dir)
+        migration = migration_dir / "001_checksum_probe.sql"
+        migration.write_text(
+            "CREATE TABLE IF NOT EXISTS gerchain_migration_checksum_probe "
+            "(id INTEGER PRIMARY KEY)",
+            encoding="utf-8",
+        )
+        with psycopg.connect(dsn) as connection:
+            connection.execute("DROP TABLE IF EXISTS gerchain_migration_checksum_probe")
+            connection.execute("DELETE FROM schema_version WHERE version = 1")
+            connection.commit()
+            assert apply_migrations(connection, migration_dir) == (1,)
+
+        with psycopg.connect(dsn) as connection:
+            before = connection.execute(
+                "SELECT version, checksum FROM schema_version WHERE version = 1"
+            ).fetchall()
+            assert connection.execute(
+                "SELECT to_regclass('gerchain_migration_checksum_probe')"
+            ).fetchone()[0] is not None
+            connection.commit()
+
+            migration.write_text(
+                "CREATE TABLE gerchain_migration_checksum_probe_changed "
+                "(id INTEGER PRIMARY KEY)",
+                encoding="utf-8",
+            )
+            with pytest.raises(RuntimeError, match="checksum mismatch"):
+                apply_migrations(connection, migration_dir)
+
+            after = connection.execute(
+                "SELECT version, checksum FROM schema_version WHERE version = 1"
+            ).fetchall()
+            assert after == before
+            assert connection.execute(
+                "SELECT to_regclass('gerchain_migration_checksum_probe_changed')"
+            ).fetchone()[0] is None
+
+
+@pytest.mark.skipif(
+    not os.environ.get("GERCHAIN_MIGRATION_TEST_DATABASE_URL"),
+    reason="requires a dedicated, disposable empty PostgreSQL database",
 )
 def test_production_factory_boots_with_canonical_ledger_authority(monkeypatch) -> None:
     """Real PostgreSQL boot check for the exact production factory path."""
