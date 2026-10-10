@@ -269,6 +269,7 @@ class GerchainRuntime:
         if self.is_canonical_ledger_authoritative:
             balance = self.get_balance(account_id)
         else:
+            self._require_test_memory_fallback("CREATE_HOLD")
             balance = self.money_ledger.get_balance(account_id)
         available = self.holds.available(account_id, balance)
         return self.holds.create(
@@ -294,6 +295,7 @@ class GerchainRuntime:
                 initial_balance=initial_balance,
             )
             return
+        self._require_test_memory_fallback("CREATE_ACCOUNT")
         self.money_ledger.create_account(
             account_id=account_id,
             initial_balance=initial_balance,
@@ -338,6 +340,7 @@ class GerchainRuntime:
                     account_id,
                     currency=self.escrow_engine.currency,
                 )
+        self._require_test_memory_fallback("BALANCE_READ")
         return self.money_ledger.get_balance(account_id)
 
     def get_escrow_state(self) -> Dict[str, Any]:
@@ -348,6 +351,7 @@ class GerchainRuntime:
                 return escrow_to_dict(
                     get_escrow(session, self.escrow_engine.escrow_id)
                 )
+        self._require_test_memory_fallback("ESCROW_READ")
         return self.escrow_service.get_state()
 
     # EA-35.26: keep canonical FUND runtime syntax explicit for fresh merge verification.
