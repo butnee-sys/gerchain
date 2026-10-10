@@ -56,3 +56,26 @@ def test_two_connections_publish_same_migration_version_once() -> None:
             assert connection.execute(
                 "SELECT to_regclass('gerchain_migration_concurrency_probe')"
             ).fetchone()[0] is not None
+
+
+@pytest.mark.skipif(
+    not os.environ.get("GERCHAIN_MIGRATION_TEST_DATABASE_URL"),
+    reason="requires a dedicated, disposable PostgreSQL database",
+)
+def test_production_factory_boots_with_canonical_ledger_authority(monkeypatch) -> None:
+    """Real PostgreSQL boot check for the exact production factory path."""
+    from production_entrypoint import build_production_runtime
+
+    monkeypatch.setenv("GERCHAIN_DATABASE_URL", os.environ["GERCHAIN_MIGRATION_TEST_DATABASE_URL"])
+    monkeypatch.setenv("GERCHAIN_ESCROW_ID", "factory-boot-escrow")
+    monkeypatch.setenv("GERCHAIN_ESCROW_AMOUNT", "1")
+    monkeypatch.setenv("GERCHAIN_CURRENCY", "MNT")
+    monkeypatch.setenv("GERCHAIN_WITNESS_ID", "factory-boot-witness")
+
+    runtime, engine = build_production_runtime()
+    try:
+        assert runtime.is_canonical_ledger_authoritative
+        assert runtime.runtime_mode == "production-postgresql"
+        assert runtime.escrow_engine.escrow_id == "factory-boot-escrow"
+    finally:
+        engine.dispose()
