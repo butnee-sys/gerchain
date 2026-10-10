@@ -12,7 +12,7 @@ from sqlalchemy.orm import sessionmaker
 from persistence.atomic_ledger import AtomicLedgerBase
 from persistence.atomic_value_transaction import WitnessBase, TransactionWitness
 from persistence.durable_idempotency import IdempotencyBase
-from persistence.escrow_aggregate import EscrowBase
+from persistence.escrow_aggregate import CanonicalEscrow, EscrowBase
 from persistence.recovery_outbox import OutboxBase
 from postgres.migrations import apply_migrations
 from services.gerchain_runtime import GerchainRuntime
@@ -144,10 +144,32 @@ class ProductionRuntimeFactory:
         """Apply and validate the authoritative PostgreSQL schema."""
         initialize_canonical_postgres_schema(self.engine)
 
+    def _validate_configured_escrow(self) -> None:
+        """Fail closed unless the configured escrow already exists as canonical truth."""
+        from sqlalchemy import select
+
+        with self.session_factory() as session:
+            escrow = session.execute(
+                select(CanonicalEscrow).where(
+                    CanonicalEscrow.id == self.config.escrow_id
+                )
+            ).scalar_one_or_none()
+            if escrow is None:
+                raise RuntimeError(
+                    f"configured escrow {self.config.escrow_id!r} is absent from canonical PostgreSQL state"
+                )
+            if int(escrow.amount) != self.config.amount:
+                raise RuntimeError("configured escrow amount does not match canonical PostgreSQL state")
+            if escrow.currency != self.config.currency:
+                raise RuntimeError("configured escrow currency does not match canonical PostgreSQL state")
+            if not escrow.sender_address or not escrow.receiver_address or not escrow.refund_destination:
+                raise RuntimeError("configured escrow is missing authoritative party/refund fields")
+
     def create(self) -> GerchainRuntime:
         self.initialize()
         with self.engine.connect() as connection:
             assert_canonical_production_schema(connection)
+        self._validate_configured_escrow()
         runtime = GerchainRuntime(
             escrow_id=self.config.escrow_id,
             amount=self.config.amount,
