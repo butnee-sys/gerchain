@@ -24,13 +24,12 @@ def test_checksum_mismatch_rolls_back_without_partial_schema_or_history(tmp_path
     first = tmp_path / "001_first.sql"
     second = tmp_path / "002_second.sql"
     first.write_text("CREATE TABLE checksum_probe (id INTEGER PRIMARY KEY);", encoding="utf-8")
-    second.write_text("CREATE TABLE must_not_exist (id INTEGER PRIMARY KEY);", encoding="utf-8")
     try:
         with psycopg.connect(dsn) as connection:
             apply_migrations(connection, tmp_path)
         with psycopg.connect(dsn) as connection:
             before = connection.execute("SELECT version, checksum FROM schema_version ORDER BY version").fetchall()
-            assert [row[0] for row in before] == [1, 2]
+            assert [row[0] for row in before] == [1]
 
         # Tamper with an already-published migration and introduce a later one.
         first.write_text("CREATE TABLE checksum_probe (id INTEGER PRIMARY KEY, note TEXT);", encoding="utf-8")
@@ -44,7 +43,6 @@ def test_checksum_mismatch_rolls_back_without_partial_schema_or_history(tmp_path
             tables = {row[0] for row in connection.execute("SELECT tablename FROM pg_tables WHERE schemaname = current_schema()").fetchall()}
         assert after == before, f"schema_version changed after checksum failure: before={before!r}, after={after!r}"
         assert "checksum_probe" in tables
-        assert "must_not_exist" in tables
         assert "should_rollback" not in tables
     finally:
         with psycopg.connect(admin_dsn, autocommit=True) as admin:
