@@ -17,13 +17,15 @@ def _dsn() -> str:
     return value.replace("postgresql+psycopg://", "postgresql://").replace("postgresql+psycopg2://", "postgresql://")
 
 
-def _run_migrations() -> dict[str, object]:
+def _run_migrations(runner_id: str) -> dict[str, object]:
     started = time.monotonic()
+    started_wall = time.time()
     with psycopg.connect(_dsn()) as conn:
         backend_pid = conn.execute("SELECT pg_backend_pid()").fetchone()[0]
         database_name = conn.info.dbname
         print(
-            f"MIGRATION_CONNECTION_START pid={backend_pid} database={database_name}",
+            f"MIGRATION_CONNECTION_START runner={runner_id} pid={backend_pid} "
+            f"database={database_name} started_at={started_wall:.6f}",
             flush=True,
         )
         apply_migrations(
@@ -35,8 +37,10 @@ def _run_migrations() -> dict[str, object]:
         ).fetchall()
         elapsed = time.monotonic() - started
         print(
-            f"MIGRATION_CONNECTION_DONE pid={backend_pid} database={database_name} "
-            f"versions={len(versions)} elapsed_seconds={elapsed:.3f}",
+            f"MIGRATION_CONNECTION_DONE runner={runner_id} pid={backend_pid} "
+            f"database={database_name} versions={len(versions)} "
+            f"ended_at={time.time():.6f} elapsed_seconds={elapsed:.3f} "
+            f"rows={versions!r}",
             flush=True,
         )
         return {"pid": backend_pid, "database": database_name, "rows": versions}
@@ -59,8 +63,42 @@ def test_migrations_are_serialized_and_checksum_is_stable(monkeypatch):
         # The migration runner must serialize publication and leave exactly one
         # authoritative schema_version row per version.
         with ThreadPoolExecutor(max_workers=2) as pool:
-            futures = [pool.submit(_run_migrations) for _ in range(2)]
-            connection_results = [future.result(timeout=90) for future in futures]
+            futures = [
+                pool.submit(_run_migrations, "A"),
+                pool.submit(_run_migrations, "B"),
+            ]
+            connection_results = []
+            migration_errors = []
+            for runner_id, future in zip(("A", "B"), futures):
+                try:
+                    connection_results.append(future.result(timeout=90))
+                except Exception as exc:
+                    migration_errors.append((runner_id, repr(exc)))
+                    print(
+                        f"MIGRATION_CONNECTION_ERROR runner={runner_id} error={exc!r}",
+                        flush=True,
+                    )
+
+        # Inspect the authoritative table even when one runner failed.
+        with psycopg.connect(fresh_dsn) as diagnostic_conn:
+            diagnostic_rows = diagnostic_conn.execute(
+                "SELECT version, checksum FROM schema_version ORDER BY version"
+            ).fetchall()
+        print(
+            f"MIGRATION_SCHEMA_VERSION_ROWS database={database_name} "
+            f"rows={diagnostic_rows!r}",
+            flush=True,
+        )
+        print(
+            f"MIGRATION_RUN_ORDER results={connection_results!r} errors={migration_errors!r}",
+            flush=True,
+        )
+        if migration_errors:
+            raise AssertionError(
+                f"migration runners failed: {migration_errors!r}; "
+                f"successful_results={connection_results!r}; "
+                f"schema_version_rows={diagnostic_rows!r}"
+            )
 
         connection_pids = [result["pid"] for result in connection_results]
         print(
@@ -78,8 +116,11 @@ def test_migrations_are_serialized_and_checksum_is_stable(monkeypatch):
                 "SELECT version, checksum FROM schema_version ORDER BY version"
             ).fetchall()
 
+        print(f"MIGRATION_SCHEMA_VERSION_ASSERT_ROWS rows={rows!r}", flush=True)
         versions = [row[0] for row in rows]
-        assert versions == sorted(set(versions)), "duplicate schema_version publication"
+        assert versions == sorted(set(versions)), (
+            f"duplicate schema_version publication: rows={rows!r}"
+        )
         assert versions
         assert versions == list(range(1, 14)), f"schema_version history has gaps or unexpected versions: {versions}"
         assert max(versions) >= 13
@@ -87,7 +128,8 @@ def test_migrations_are_serialized_and_checksum_is_stable(monkeypatch):
 
         # Re-run the publisher and prove both the version set and each checksum
         # are unchanged after a second complete migration pass.
-        _run_migrations()
+        rerun_result = _run_migrations("RERUN")
+        print(f"MIGRATION_RERUN_RESULT result={rerun_result!r}", flush=True)
         with psycopg.connect(_dsn()) as conn:
             rows_after = conn.execute(
                 "SELECT version, checksum FROM schema_version ORDER BY version"
