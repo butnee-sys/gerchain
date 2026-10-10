@@ -123,6 +123,100 @@ jobs:
           print(f"MIGRATION_REGISTRY_AFTER_SHA256_INPUT={[(row[0], row[1]) for row in rows]!r}")
           PY
 
+      - name: Capture schema snapshot and exact 13-migration manifest
+        env:
+          EVIDENCE_COMMIT_SHA: ${{ github.sha }}
+          EVIDENCE_RUN_ID: ${{ github.run_id }}
+          EVIDENCE_RUN_ATTEMPT: ${{ github.run_attempt }}
+        run: |
+          python - <<'PY'
+          import hashlib, json, os, platform
+          from pathlib import Path
+          import psycopg
+          from sqlalchemy import create_engine, inspect, text
+          from postgres.migrations import _CANONICAL_FILES, checksum
+
+          root = Path.cwd()
+          dsn = os.environ["GERCHAIN_DATABASE_URL"]
+          driver_dsn = dsn.replace("postgresql+psycopg://", "postgresql://").replace("postgresql+psycopg2://", "postgresql://")
+          manifest_rows = []
+          for version, name in enumerate(_CANONICAL_FILES, start=1):
+              path = root / "postgres" / "migrations" / name
+              source = path.read_text(encoding="utf-8")
+              digest = checksum(source)
+              manifest_rows.append({
+                  "version": version,
+                  "path": str(path.relative_to(root)),
+                  "sha256": digest,
+                  "bytes": path.stat().st_size,
+              })
+
+          with psycopg.connect(driver_dsn) as connection:
+              pg_version = connection.execute("SELECT version()").fetchone()[0]
+              applied = connection.execute(
+                  "SELECT version, checksum, applied_at::text FROM schema_version ORDER BY version"
+              ).fetchall()
+          expected = [(item["version"], item["sha256"]) for item in manifest_rows]
+          actual = [(row[0], row[1]) for row in applied]
+          assert actual == expected, {
+              "reason": "database migration registry does not match the canonical 13-file manifest",
+              "expected": expected,
+              "actual": actual,
+          }
+
+          engine = create_engine(dsn, pool_pre_ping=True)
+          inspector = inspect(engine)
+          table_names = sorted(inspector.get_table_names())
+          schema = {
+              "commit_sha": os.environ["EVIDENCE_COMMIT_SHA"],
+              "database": "gerchain_test",
+              "postgres_version": pg_version,
+              "schema_version": [
+                  {"version": row[0], "checksum": row[1], "applied_at": row[2]}
+                  for row in applied
+              ],
+              "tables": {
+                  table: {
+                      "columns": [
+                          {"name": col["name"], "type": str(col["type"]), "nullable": col["nullable"]}
+                          for col in inspector.get_columns(table)
+                      ],
+                      "primary_key": inspector.get_pk_constraint(table),
+                      "foreign_keys": inspector.get_foreign_keys(table),
+                      "indexes": inspector.get_indexes(table),
+                  }
+                  for table in table_names
+              },
+          }
+          engine.dispose()
+
+          out = root / "artifacts/ea35"
+          out.mkdir(parents=True, exist_ok=True)
+          manifest = {
+              "repository": os.environ.get("GITHUB_REPOSITORY"),
+              "commit_sha": os.environ["EVIDENCE_COMMIT_SHA"],
+              "workflow_run_id": os.environ["EVIDENCE_RUN_ID"],
+              "workflow_run_attempt": os.environ["EVIDENCE_RUN_ATTEMPT"],
+              "python": platform.python_version(),
+              "postgres_version": pg_version,
+              "migration_count": len(manifest_rows),
+              "migration_files": manifest_rows,
+              "database_registry_matches_manifest": True,
+              "schema_snapshot_sha256": hashlib.sha256(
+                  json.dumps(schema, sort_keys=True, separators=(",", ":")).encode("utf-8")
+              ).hexdigest(),
+          }
+          assert len(manifest_rows) == 13
+          (out / "migration-manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+          (out / "postgres-schema-snapshot.json").write_text(json.dumps(schema, indent=2) + "\n", encoding="utf-8")
+          (out / "commit-sha.txt").write_text(os.environ["EVIDENCE_COMMIT_SHA"] + "\n", encoding="utf-8")
+          print("MIGRATION_MANIFEST=13/13")
+          print("SCHEMA_VERSION_MATCHES_MANIFEST=PASS")
+          print(f"POSTGRES_VERSION={pg_version}")
+          print(f"SCHEMA_SNAPSHOT_SHA256={manifest['schema_snapshot_sha256']}")
+          print(f"EVIDENCE_COMMIT_SHA={os.environ['EVIDENCE_COMMIT_SHA']}")
+          PY
+
       - name: Upload migration registry evidence
         uses: actions/upload-artifact@v4
         with:
