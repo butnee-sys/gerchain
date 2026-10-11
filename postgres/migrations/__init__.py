@@ -191,7 +191,12 @@ def apply_migrations(connection: Connection, migration_dir: Path) -> tuple[int, 
                 (version,),
             ).fetchone()
             if row is not None:
-                if row[0] != digest:
+                accepted_checksums = (
+                    {digest}
+                    | FROZEN_CHECKSUMS.get(version, set())
+                    | LEGACY_CHECKSUMS.get(version, set())
+                )
+                if row[0] not in accepted_checksums:
                     raise RuntimeError(
                         f"Migration checksum mismatch for version {version}: {path.name}"
                     )
