@@ -46,6 +46,39 @@ def initialize_canonical_postgres_schema(engine: Engine) -> None:
         base.metadata.create_all(engine)
 
 
+
+def assert_canonical_production_schema(connection) -> None:
+    """Fail closed unless all canonical ORM tables/columns and 13 migrations exist."""
+    from sqlalchemy import inspect, text
+
+    inspector = inspect(connection)
+    required_tables = {}
+    for base in (AtomicLedgerBase, EscrowBase, WitnessBase, IdempotencyBase, OutboxBase):
+        for table_name, table in base.metadata.tables.items():
+            required_tables[table_name] = {column.name for column in table.columns}
+
+    missing_tables = sorted(set(required_tables) - set(inspector.get_table_names()))
+    if missing_tables:
+        raise RuntimeError(f"canonical production schema missing tables: {missing_tables}")
+
+    missing_columns = []
+    for table_name, expected_columns in required_tables.items():
+        actual_columns = {column["name"] for column in inspector.get_columns(table_name)}
+        missing = sorted(expected_columns - actual_columns)
+        if missing:
+            missing_columns.append(f"{table_name}: {missing}")
+    if missing_columns:
+        raise RuntimeError(f"canonical production schema missing columns: {'; '.join(missing_columns)}")
+
+    if "schema_version" not in inspector.get_table_names():
+        raise RuntimeError("canonical production schema missing schema_version; required=13 migrations")
+    versions = connection.execute(text("SELECT version FROM schema_version ORDER BY version")).scalars().all()
+    if versions != list(range(1, 14)):
+        raise RuntimeError(
+            f"canonical production schema migration history incomplete; required=13, actual={versions}"
+        )
+
+
 class ProductionRuntimeFactory:
     """Create the production GerChain runtime with PostgreSQL as authority."""
 
