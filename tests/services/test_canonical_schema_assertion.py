@@ -20,9 +20,10 @@ def _create_canonical_test_schema(engine) -> None:
             "version BIGINT PRIMARY KEY, checksum TEXT NOT NULL, "
             "applied_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP)"
         ))
-        connection.execute(text(
-            "INSERT INTO schema_version(version, checksum) VALUES (13, 'test')"
-        ))
+        connection.execute(
+            text("INSERT INTO schema_version(version, checksum) VALUES (:version, :checksum)"),
+            [{"version": version, "checksum": f"test-{version}"} for version in range(1, 14)],
+        )
 
 
 def test_canonical_schema_assertion_accepts_complete_schema() -> None:
