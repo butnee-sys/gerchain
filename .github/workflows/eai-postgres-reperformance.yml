@@ -187,13 +187,18 @@ jobs:
             postgres/migrations/*.sql persistence/deep_value_reconciliation.py \
             tests/persistence/test_deep_value_reconciliation.py \
             > evidence/postgres/source-artifact-sha256.txt
-          find evidence/postgres -type f ! -name SHA256SUMS.txt ! -name SHA256SUMS.sha256 -print0 | sort -z | xargs -0 sha256sum > evidence/postgres/SHA256SUMS.txt
-          sha256sum evidence/postgres/SHA256SUMS.txt > evidence/postgres/SHA256SUMS.sha256
+          (
+            cd evidence/postgres
+            find . -type f ! -name SHA256SUMS.txt ! -name SHA256SUMS.sha256 -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS.txt
+            sha256sum SHA256SUMS.txt > SHA256SUMS.sha256
+            sha256sum -c SHA256SUMS.txt
+            sha256sum -c SHA256SUMS.sha256
+          )
       - name: Upload commit-bound evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: eai-postgres-reperformance-${{ github.sha }}
+          name: eai-postgres-reperformance-${{ github.event.pull_request.head.sha || github.sha }}
           path: evidence/postgres/
           if-no-files-found: error
           retention-days: 90
