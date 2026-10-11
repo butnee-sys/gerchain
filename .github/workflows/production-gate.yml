@@ -37,8 +37,8 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -r requirements.txt
-          python -m pip install pytest psycopg[binary]
+          python -m pip install -r requirements.txt -r postgres/requirements-test.txt
+          python -m pip install fastapi uvicorn httpx python-multipart
       - name: Compile all Python sources (fail closed)
         run: python -m compileall -q .
       - name: Collect the complete test suite (fail closed)
