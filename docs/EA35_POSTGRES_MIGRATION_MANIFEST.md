@@ -13,8 +13,8 @@ The authoritative migration directory is `postgres/migrations/`. The canonical r
 | 3 | `003_canonical_compatibility.sql` |
 | 4 | `004_canonical_value_truth.sql` |
 | 5 | `005_canonical_production.sql` |
-| 6 | `006_canonical_movement_integrity.sql` |
-| 7 | `007_canonical_production_reconciliation.sql` |
+| 6 | `006_canonical_production.sql` |
+| 7 | `007_canonical_production.sql` |
 | 8 | `008_ea35_idempotency_compat.sql` |
 | 9 | `009_canonical_movement_integrity_hardening.sql` |
 | 10 | `010_canonical_evidence_constraints.sql` |
