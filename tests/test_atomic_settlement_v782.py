@@ -1,3 +1,4 @@
+from dee_security.root_of_trust import RootOfTrust
 import pytest
 
 from escrow.engine import EscrowEngine
@@ -89,6 +90,12 @@ def test_atomic_release_moves_money_and_changes_state(
         amount=1000000,
         timestamp="2026-09-03T07:10:00Z",
         evidence={"type": "delivery-confirmed"},
+    
+        root=RootOfTrust("TEST-OWNER", "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8="),
+        owner_id="TEST-OWNER",
+        authorized=True,
+        evidence_verified=True,
+        trinity_proof={"trust": True, "transparency": True, "performance": True},
     )
 
     assert record.amount == 1000000
@@ -114,6 +121,12 @@ def test_atomic_refund_moves_money_and_changes_state(
         amount=1000000,
         timestamp="2026-09-03T07:11:00Z",
         evidence={"type": "refund-approved"},
+    
+        root=RootOfTrust("TEST-OWNER", "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8="),
+        owner_id="TEST-OWNER",
+        authorized=True,
+        evidence_verified=True,
+        trinity_proof={"trust": True, "transparency": True, "performance": True},
     )
 
     assert record.amount == 1000000
@@ -138,6 +151,12 @@ def test_atomic_release_is_witnessed(settlement):
         amount=1000000,
         timestamp="2026-09-03T07:12:00Z",
         evidence={"type": "delivery"},
+    
+        root=RootOfTrust("TEST-OWNER", "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8="),
+        owner_id="TEST-OWNER",
+        authorized=True,
+        evidence_verified=True,
+        trinity_proof={"trust": True, "transparency": True, "performance": True},
     )
 
     assert len(witness_chain.entries) == before + 2
@@ -179,7 +198,13 @@ def test_atomic_settlement_requires_locked(
             amount=1000000,
             timestamp="2026-09-03T07:13:02Z",
             evidence={"type": "invalid"},
-        )
+        
+        root=RootOfTrust("TEST-OWNER", "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8="),
+        owner_id="TEST-OWNER",
+        authorized=True,
+        evidence_verified=True,
+        trinity_proof={"trust": True, "transparency": True, "performance": True},
+    )
 
 
 def test_atomic_settlement_amount_must_match_escrow(
@@ -198,7 +223,13 @@ def test_atomic_settlement_amount_must_match_escrow(
             amount=500000,
             timestamp="2026-09-03T07:14:00Z",
             evidence={"type": "wrong-amount"},
-        )
+        
+        root=RootOfTrust("TEST-OWNER", "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8="),
+        owner_id="TEST-OWNER",
+        authorized=True,
+        evidence_verified=True,
+        trinity_proof={"trust": True, "transparency": True, "performance": True},
+    )
 
 
 def test_atomic_settlement_preserves_total_money(
@@ -221,6 +252,12 @@ def test_atomic_settlement_preserves_total_money(
         amount=1000000,
         timestamp="2026-09-03T07:15:00Z",
         evidence={"type": "delivery"},
+    
+        root=RootOfTrust("TEST-OWNER", "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8="),
+        owner_id="TEST-OWNER",
+        authorized=True,
+        evidence_verified=True,
+        trinity_proof={"trust": True, "transparency": True, "performance": True},
     )
 
     total_after = sum(
@@ -251,7 +288,13 @@ def test_atomic_settlement_failure_preserves_escrow_state(
             amount=2000000,
             timestamp="2026-09-03T07:16:00Z",
             evidence={"type": "failure"},
-        )
+        
+        root=RootOfTrust("TEST-OWNER", "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8="),
+        owner_id="TEST-OWNER",
+        authorized=True,
+        evidence_verified=True,
+        trinity_proof={"trust": True, "transparency": True, "performance": True},
+    )
 
     assert escrow.get_state() == old_state
     assert ledger.balances == old_balances
@@ -273,7 +316,13 @@ def test_atomic_settlement_rejects_invalid_target(
             amount=1000000,
             timestamp="2026-09-03T07:17:00Z",
             evidence={"type": "invalid-target"},
-        )
+        
+        root=RootOfTrust("TEST-OWNER", "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8="),
+        owner_id="TEST-OWNER",
+        authorized=True,
+        evidence_verified=True,
+        trinity_proof={"trust": True, "transparency": True, "performance": True},
+    )
 
 
 def test_atomic_release_record_is_cryptographically_bound(
@@ -291,6 +340,12 @@ def test_atomic_release_record_is_cryptographically_bound(
         amount=1000000,
         timestamp="2026-09-03T07:18:00Z",
         evidence={"type": "delivery"},
+    
+        root=RootOfTrust("TEST-OWNER", "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8="),
+        owner_id="TEST-OWNER",
+        authorized=True,
+        evidence_verified=True,
+        trinity_proof={"trust": True, "transparency": True, "performance": True},
     )
 
     assert len(record.transfer_hash) == 64
