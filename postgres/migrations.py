@@ -277,6 +277,7 @@ def apply_migrations(conn, migration_dir: str | Path) -> None:
 
     # Serialize concurrent migration runners before publishing any migration row.
     migration_context = _migration_transaction(conn)
+    applied_now: list[int] = []
     try:
         with migration_context:
             # Use psycopg-native positional parameters for both SQLAlchemy's
@@ -397,7 +398,9 @@ def apply_migrations(conn, migration_dir: str | Path) -> None:
                     raise RuntimeError(
                         f"Migration checksum mismatch for version {version}"
                     )
+                applied_now.append(version)
     except Exception:
         if hasattr(conn, "rollback"):
             conn.rollback()
         raise
+    return tuple(applied_now)
