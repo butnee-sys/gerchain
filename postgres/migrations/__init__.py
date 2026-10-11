@@ -62,13 +62,29 @@ def _canonical_migration_files(migration_dir: Path) -> list[Path]:
 
 
 def _split_sql_statements(source: str) -> list[str]:
-    """Split PostgreSQL SQL without splitting quoted strings or dollar blocks."""
+    """Split SQL statements while respecting quotes, dollar blocks, and comments."""
     statements: list[str] = []
     buffer: list[str] = []
     single = double = False
+    line_comment = block_comment = False
     dollar_tag: str | None = None
     i = 0
     while i < len(source):
+        if line_comment:
+            if source[i] == "\n":
+                line_comment = False
+                buffer.append("\n")
+            i += 1
+            continue
+        if block_comment:
+            if source.startswith("*/", i):
+                block_comment = False
+                i += 2
+            else:
+                if source[i] == "\n":
+                    buffer.append("\n")
+                i += 1
+            continue
         if dollar_tag is not None:
             if source.startswith(dollar_tag, i):
                 buffer.append(dollar_tag)
@@ -78,13 +94,22 @@ def _split_sql_statements(source: str) -> list[str]:
                 buffer.append(source[i])
                 i += 1
             continue
-        if not single and not double and source[i] == "$":
-            match = re.match(r"\$[A-Za-z_][A-Za-z0-9_]*\$|\$\$", source[i:])
-            if match:
-                dollar_tag = match.group(0)
-                buffer.append(dollar_tag)
-                i += len(dollar_tag)
+        if not single and not double:
+            if source.startswith("--", i):
+                line_comment = True
+                i += 2
                 continue
+            if source.startswith("/*", i):
+                block_comment = True
+                i += 2
+                continue
+            if source[i] == "$":
+                match = re.match(r"\$[A-Za-z_][A-Za-z0-9_]*\$|\$\$", source[i:])
+                if match:
+                    dollar_tag = match.group(0)
+                    buffer.append(dollar_tag)
+                    i += len(dollar_tag)
+                    continue
         char = source[i]
         if char == "'" and not double:
             if single and i + 1 < len(source) and source[i + 1] == "'":
@@ -109,10 +134,9 @@ def _split_sql_statements(source: str) -> list[str]:
     tail = "".join(buffer).strip()
     if tail:
         statements.append(tail)
-    if single or double or dollar_tag is not None:
-        raise ValueError("unterminated quote in migration SQL")
+    if single or double or dollar_tag is not None or block_comment:
+        raise ValueError("unterminated quote or block comment in migration SQL")
     return statements
-
 
 def apply_migrations(connection: Connection, migration_dir: Path) -> tuple[int, ...]:
     if connection.closed:
