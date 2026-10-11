@@ -119,12 +119,28 @@ jobs:
           dsn = dsn.replace("postgresql+psycopg://", "postgresql://").replace("postgresql+psycopg2://", "postgresql://")
           with psycopg.connect(dsn) as connection:
               apply_migrations(connection, Path("postgres/migrations"))
-              rows = connection.execute("SELECT version, checksum, applied_at::text FROM schema_version ORDER BY version").fetchall()
-              assert [row[0] for row in rows] == list(range(1, 14)), rows
-              assert all(row[1] for row in rows), rows
+              rows_first = connection.execute(
+                  "SELECT version, checksum, applied_at::text FROM schema_version ORDER BY version"
+              ).fetchall()
+              assert [row[0] for row in rows_first] == list(range(1, 14)), rows_first
+              assert all(row[1] for row in rows_first), rows_first
+
+              # Idempotency gate: a second run must not add migration rows,
+              # change checksums, or rewrite applied_at timestamps.
+              apply_migrations(connection, Path("postgres/migrations"))
+              rows_second = connection.execute(
+                  "SELECT version, checksum, applied_at::text FROM schema_version ORDER BY version"
+              ).fetchall()
+              assert rows_second == rows_first, {
+                  "reason": "second migration run changed the registry",
+                  "first": rows_first,
+                  "second": rows_second,
+              }
+              rows = rows_second
           with open("artifacts/ea35/migration-registry-after.json", "w") as f:
               json.dump({"rows": [list(row) for row in rows]}, f, indent=2)
           print(f"MIGRATION_REGISTRY_AFTER_COUNT={len(rows)}")
+          print("MIGRATION_RERUN_IDEMPOTENCY=PASS")
           print(f"MIGRATION_REGISTRY_AFTER_SHA256_INPUT={[(row[0], row[1]) for row in rows]!r}")
           PY
 
