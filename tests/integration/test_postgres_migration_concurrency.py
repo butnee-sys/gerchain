@@ -51,14 +51,18 @@ def test_concurrent_first_apply_and_same_checksum_replay(dsn, tmp_path):
     path = make_migration(tmp_path, 9901, f"CREATE TABLE {table} (id integer PRIMARY KEY);")
     # Two independent OS processes contend for the same migration lock.
     gate = tmp_path / "release"
-    worker = (
-        "import os,time; from pathlib import Path; "
-        f"gate=Path({str(gate)!r}); "
-        "deadline=time.time()+20; "
-        "while not gate.exists() and time.time()<deadline: time.sleep(.01); "
-        "assert gate.exists(), 'test gate timeout'; "
-        "from scripts.postgres_migration_runner import apply_migration; "
-        f"print(apply_migration(os.environ['GERCHAIN_DATABASE_URL'], Path({str(path)!r})))"
+    worker = "\\n".join(
+        [
+            "import os, time",
+            "from pathlib import Path",
+            "from scripts.postgres_migration_runner import apply_migration",
+            f"gate = Path({str(gate)!r})",
+            "deadline = time.time() + 20",
+            "while not gate.exists() and time.time() < deadline:",
+            "    time.sleep(0.01)",
+            "assert gate.exists(), 'test gate timeout'",
+            f"print(apply_migration(os.environ['GERCHAIN_DATABASE_URL'], Path({str(path)!r})))",
+        ]
     )
     env = dict(os.environ, GERCHAIN_DATABASE_URL=dsn)
     p1 = subprocess.Popen([sys.executable, "-c", worker], cwd=ROOT, env=env, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
