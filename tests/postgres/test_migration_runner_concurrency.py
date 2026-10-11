@@ -62,6 +62,40 @@ def test_duplicate_identical_schema_version_rows_are_reconciled(postgres_schema)
         conn.commit()
 
 
+
+def test_concurrent_bootstrap_creates_registry_once(postgres_schema):
+    """Two first-time migrators must serialize before schema_version exists."""
+    schema, migrations = postgres_schema
+    migration_sql = "CREATE TABLE migration_bootstrap_probe (id INTEGER PRIMARY KEY);"
+    (migrations / "001_bootstrap.sql").write_text(migration_sql, encoding="utf-8")
+
+    def run_migrator():
+        with _connect_to_schema(schema) as conn:
+            apply_migrations(conn, migrations)
+            conn.commit()
+
+    # The fixture creates an isolated schema but intentionally does not create
+    # schema_version. Both connections race through the first-use bootstrap.
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        futures = [pool.submit(run_migrator) for _ in range(2)]
+        for future in futures:
+            future.result(timeout=30)
+
+    with _connect_to_schema(schema) as conn:
+        rows = conn.execute(
+            "SELECT version, checksum FROM schema_version WHERE version = 1"
+        ).fetchall()
+        assert rows == [(1, checksum(migration_sql))]
+        assert conn.execute(
+            "SELECT COUNT(*) FROM information_schema.tables "
+            "WHERE table_schema = %s AND table_name = 'migration_bootstrap_probe'",
+            (schema,),
+        ).fetchone()[0] == 1
+        assert conn.execute(
+            "SELECT COUNT(*) FROM schema_version WHERE version = 1"
+        ).fetchone()[0] == 1
+
+
 def test_conflicting_checksums_for_same_version_fail_closed(postgres_schema):
     schema, migrations = postgres_schema
     migration_sql = "CREATE TABLE migration_probe (id INTEGER PRIMARY KEY);"
