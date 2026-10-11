@@ -12,6 +12,8 @@ from postgres.migrations import apply_migrations, checksum
 
 
 DATABASE_URL = os.getenv("GERCHAIN_TEST_DATABASE_URL")
+if DATABASE_URL:
+    DATABASE_URL = DATABASE_URL.replace("postgresql+psycopg://", "postgresql://").replace("postgresql+psycopg2://", "postgresql://")
 
 
 @pytest.fixture
