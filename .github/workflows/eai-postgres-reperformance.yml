@@ -182,8 +182,8 @@ jobs:
           test "$(psql -v ON_ERROR_STOP=1 -Atc 'SELECT count(*) FROM schema_version WHERE version BETWEEN 1 AND 13;' 2>/dev/null || echo 0)" = "13" || true
           git rev-parse HEAD > evidence/postgres/final-commit.txt
           sha256sum .github/workflows/core-gates.yml .github/workflows/eai-postgres-reperformance.yml \
-            postgres/schema/001_concurrency.sql postgres/schema/002_canonical_production_persistence.sql \
-            persistence/deep_value_reconciliation.py tests/persistence/test_deep_value_reconciliation.py \
+            postgres/migrations/*.sql persistence/deep_value_reconciliation.py \
+            tests/persistence/test_deep_value_reconciliation.py \
             > evidence/postgres/source-artifact-sha256.txt
           find evidence/postgres -type f ! -name SHA256SUMS.txt ! -name SHA256SUMS.sha256 -print0 | sort -z | xargs -0 sha256sum > evidence/postgres/SHA256SUMS.txt
           sha256sum evidence/postgres/SHA256SUMS.txt > evidence/postgres/SHA256SUMS.sha256
