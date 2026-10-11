@@ -16,6 +16,13 @@ import pytest
 from psycopg import sql
 
 from postgres.migrations import apply_migrations
+from services.gerchain_runtime_factory import assert_canonical_production_schema
+from sqlalchemy import create_engine
+from persistence.atomic_ledger import AtomicLedgerBase
+from persistence.atomic_value_transaction import WitnessBase
+from persistence.durable_idempotency import IdempotencyBase
+from persistence.escrow_aggregate import EscrowBase
+from persistence.recovery_outbox import OutboxBase
 
 ROOT = Path(__file__).resolve().parents[2]
 MIGRATIONS = ROOT / "postgres" / "migrations"
@@ -52,6 +59,15 @@ def test_postgres_clean_apply_rerun_and_history_stability():
                 "SELECT version, checksum, applied_at FROM schema_version ORDER BY version"
             ).fetchall()
             assert [row[0] for row in before] == list(range(1, 14))
+
+        engine = create_engine(DSN, connect_args={"options": f"-c search_path={schema}"})
+        try:
+            for base in (AtomicLedgerBase, EscrowBase, WitnessBase, IdempotencyBase, OutboxBase):
+                base.metadata.create_all(engine)
+            with engine.connect() as connection:
+                assert_canonical_production_schema(connection)
+        finally:
+            engine.dispose()
         with _connect(schema) as conn:
             second = apply_migrations(conn, MIGRATIONS)
             assert second == ()
