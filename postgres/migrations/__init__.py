@@ -186,25 +186,21 @@ def apply_migrations(connection: Connection, migration_dir: Path) -> tuple[int, 
             if not source.strip():
                 raise ValueError(f"empty migration is not allowed: {path.name}")
             digest = checksum(source)
+            historical_checksums = {
+                1: {
+                    "6eea24dae8b3ac9aa9413a32da1617250f14725bdb19f50e5d8300308ad173d4",
+                    "538e0f5132ec775ec8963a2a72072dd00e81afa37383a6c5f6a8f54259716a31",
+                    "ab6838b3e69a9a9faa28bdd82c98fe579921763be8b5dd56e1c686b77c098596",
+                    "494763e210c8a3839972ba21e8705dcf2e6564e5abca9c76161f2f49c6664ec8",
+                    "6766267c9e939a320bf6ac28ee516c4c11fe537ef2b6a7778d94ca6e3cd5b246",
+                }
+            }
+            accepted_checksums = {digest} | historical_checksums.get(version, set())
             row = connection.execute(
                 "SELECT checksum FROM schema_version WHERE version = %s FOR UPDATE",
                 (version,),
             ).fetchone()
             if row is not None:
-                # Explicitly accept only documented historical version-1
-                # digests emitted by the legacy bootstrap path. The package
-                # migration runner is the active import target; constants in
-                # the legacy postgres/migrations.py module are not in scope.
-                historical_checksums = {
-                    1: {
-                        "6eea24dae8b3ac9aa9413a32da1617250f14725bdb19f50e5d8300308ad173d4",
-                        "538e0f5132ec775ec8963a2a72072dd00e81afa37383a6c5f6a8f54259716a31",
-                        "ab6838b3e69a9a9faa28bdd82c98fe579921763be8b5dd56e1c686b77c098596",
-                        "494763e210c8a3839972ba21e8705dcf2e6564e5abca9c76161f2f49c6664ec8",
-                        "6766267c9e939a320bf6ac28ee516c4c11fe537ef2b6a7778d94ca6e3cd5b246",
-                    }
-                }
-                accepted_checksums = {digest} | historical_checksums.get(version, set())
                 if row[0] not in accepted_checksums:
                     raise RuntimeError(
                         f"Migration checksum mismatch for version {version}: {path.name}"
