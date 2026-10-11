@@ -156,3 +156,65 @@ def test_applied_checksum_mismatch_rolls_back_and_preserves_history(isolated_dat
             f"before={schema_before!r}, after={schema_after!r}"
         )
         assert conn.execute("SELECT to_regclass('public.escrows')").fetchone()[0] is None
+
+
+def test_real_thirteen_migration_registry_is_idempotent_and_checksum_failure_is_atomic(
+    isolated_database, tmp_path
+):
+    """Run versions 1..13 twice on one real PostgreSQL DB, then prove v13 tampering rolls back."""
+    import shutil
+
+    migration_copy = tmp_path / "canonical_migrations"
+    migration_copy.mkdir()
+    for source in MIGRATION_DIR.glob("*.sql"):
+        shutil.copy2(source, migration_copy / source.name)
+
+    with psycopg.connect(isolated_database) as conn:
+        apply_migrations(conn, migration_copy)
+        first_rows = conn.execute(
+            "SELECT version, checksum FROM schema_version ORDER BY version"
+        ).fetchall()
+        assert [version for version, _ in first_rows] == list(range(1, 14))
+        assert len({version for version, _ in first_rows}) == 13
+        first_schema = _public_schema_fingerprint(conn)
+        conn.commit()
+
+        apply_migrations(conn, migration_copy)
+        second_rows = conn.execute(
+            "SELECT version, checksum FROM schema_version ORDER BY version"
+        ).fetchall()
+        second_schema = _public_schema_fingerprint(conn)
+        conn.commit()
+
+        assert second_rows == first_rows
+        assert second_schema == first_schema
+
+        v13 = migration_copy / "013_ea35_canonical_schema_hardening.sql"
+        v13.write_text(
+            v13.read_text(encoding="utf-8") + "\\n-- intentional checksum tamper for rollback proof\\n",
+            encoding="utf-8",
+        )
+        (migration_copy / "014_should_never_apply.sql").write_text(
+            "CREATE TABLE ea35_checksum_rollback_probe (id INTEGER PRIMARY KEY);",
+            encoding="utf-8",
+        )
+
+        before_failure_rows = conn.execute(
+            "SELECT version, checksum FROM schema_version ORDER BY version"
+        ).fetchall()
+        before_failure_schema = _public_schema_fingerprint(conn)
+        conn.commit()
+
+        with pytest.raises(RuntimeError, match="Migration checksum mismatch for version 13"):
+            apply_migrations(conn, migration_copy)
+
+        after_failure_rows = conn.execute(
+            "SELECT version, checksum FROM schema_version ORDER BY version"
+        ).fetchall()
+        after_failure_schema = _public_schema_fingerprint(conn)
+        assert after_failure_rows == before_failure_rows == first_rows
+        assert after_failure_schema == before_failure_schema
+        assert conn.execute(
+            "SELECT to_regclass('public.ea35_checksum_rollback_probe')"
+        ).fetchone()[0] is None
+        conn.commit()
