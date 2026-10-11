@@ -139,14 +139,14 @@ jobs:
           from pathlib import Path
           import psycopg
           from sqlalchemy import create_engine, inspect, text
-          from postgres.migrations import _CANONICAL_FILES, checksum
+          from postgres.migrations import _canonical_migration_files, checksum
 
           root = Path.cwd()
           dsn = os.environ["GERCHAIN_DATABASE_URL"]
           driver_dsn = dsn.replace("postgresql+psycopg://", "postgresql://").replace("postgresql+psycopg2://", "postgresql://")
           manifest_rows = []
-          for version, name in enumerate(_CANONICAL_FILES, start=1):
-              path = root / "postgres" / "migrations" / name
+          for version, path in enumerate(_canonical_migration_files(root / "postgres" / "migrations"), start=1):
+              name = path.name
               source = path.read_text(encoding="utf-8")
               digest = checksum(source)
               manifest_rows.append({
