@@ -16,7 +16,7 @@ def test_concurrent_runners_apply_one_version_once(canonical_postgresql_engine):
     migration = Migration(
         987654321,
         "CREATE TABLE IF NOT EXISTS migration_once_probe (id INTEGER PRIMARY KEY); "
-        "INSERT INTO migration_once_probe (id) VALUES (1);",
+        "INSERT INTO migration_once_probe (id) VALUES (1) ON CONFLICT (id) DO NOTHING;",
     )
     with ThreadPoolExecutor(max_workers=2) as pool:
         results = list(pool.map(lambda _: apply_migrations(engine, [migration]), range(2)))
