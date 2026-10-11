@@ -1,6 +1,6 @@
 """Serialized, checksummed PostgreSQL migration runner.
 
-The 13-file canonical chain is explicit because historical aliases coexist in
+The 14-file canonical chain is explicit because historical aliases coexist in
 this directory. Schema DDL, checksum verification, and schema_version publication
 run in one transaction under a transaction-scoped advisory lock.
 """
@@ -27,6 +27,7 @@ _CANONICAL_FILES = (
     "011_ea35_canonical_schema_finalization.sql",
     "012_canonical_production.sql",
     "013_ea35_canonical_schema_hardening.sql",
+    "014_canonical_escrow_state_constraint.sql",
 )
 
 
@@ -149,7 +150,7 @@ def apply_migrations(connection: Connection, migration_dir: Path) -> tuple[int, 
         selected = _canonical_migration_files(directory)
     else:
         # Isolated test/migration bundles may use a generic sequential chain.
-        # Production always uses the explicit 13-file canonical chain above.
+        # Production always uses the explicit canonical chain above.
         candidates = sorted(directory.glob("*.sql"))
         if not candidates:
             raise RuntimeError("no SQL migrations found")
