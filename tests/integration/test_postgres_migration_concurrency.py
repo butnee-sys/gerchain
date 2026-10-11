@@ -14,7 +14,11 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
 RUNNER = ROOT / "scripts" / "postgres_migration_runner.py"
-DSN = os.environ.get("GERCHAIN_MIGRATION_TEST_DSN") or os.environ.get("GERCHAIN_DATABASE_URL")
+DSN = (
+    os.environ.get("GERCHAIN_MIGRATION_TEST_DSN")
+    or os.environ.get("GERCHAIN_POSTGRES_DSN")
+    or os.environ.get("GERCHAIN_DATABASE_URL")
+)
 
 
 @pytest.fixture(scope="module")
