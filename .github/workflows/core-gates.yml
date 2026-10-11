@@ -81,5 +81,5 @@ jobs:
             tests/production/test_runtime_source_compiles.py \
             tests/production/test_postgres_canonical_concurrency.py \
             tests/test_postgres_atomic_ledger.py \
-            tests/test_production_runtime_factory.py
+            tests/test_production_runtime_factory.py \
             tests/production/test_production_entrypoint.py
