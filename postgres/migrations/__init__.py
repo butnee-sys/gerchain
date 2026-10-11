@@ -207,6 +207,30 @@ def apply_migrations(connection: Connection, migration_dir: Path) -> tuple[int, 
               AND duplicate.ctid > keeper.ctid
             """
         )
+        # Legacy installations may have a schema_version table without a
+        # primary key/unique constraint. After collapsing identical duplicate
+        # publications, establish the uniqueness invariant before relying on
+        # ON CONFLICT(version) in the publication path.
+        has_version_unique_index = connection.execute(
+            """
+            SELECT EXISTS (
+                SELECT 1
+                FROM pg_index AS idx
+                JOIN pg_attribute AS attr
+                  ON attr.attrelid = idx.indrelid
+                 AND attr.attnum = idx.indkey[0]
+                WHERE idx.indrelid = 'schema_version'::regclass
+                  AND idx.indisunique
+                  AND idx.indpred IS NULL
+                  AND idx.indnkeyatts = 1
+                  AND attr.attname = 'version'
+            )
+            """
+        ).fetchone()[0]
+        if not has_version_unique_index:
+            connection.execute(
+                "CREATE UNIQUE INDEX schema_version_version_uq ON schema_version (version)"
+            )
         for version, path in enumerate(selected, start=1):
             source = path.read_text(encoding="utf-8")
             if not source.strip():
