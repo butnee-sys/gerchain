@@ -146,3 +146,40 @@ def test_production_factory_boots_with_canonical_ledger_authority(monkeypatch) -
         engine.dispose()
         with psycopg.connect(admin_dsn, autocommit=True) as admin:
             admin.execute(f'DROP DATABASE IF EXISTS "{factory_database}" WITH (FORCE)')
+
+@pytest.mark.skipif(
+    not os.environ.get("GERCHAIN_MIGRATION_TEST_DATABASE_URL"),
+    reason="requires a dedicated, disposable empty PostgreSQL database",
+)
+def test_failed_migration_rolls_back_ddl_and_schema_history() -> None:
+    """DDL and schema_version publication must be one atomic migration unit."""
+    dsn = os.environ["GERCHAIN_MIGRATION_TEST_DATABASE_URL"]
+    with tempfile.TemporaryDirectory(prefix="gerchain-ddl-rollback-") as raw_dir:
+        migration_dir = Path(raw_dir)
+        migration = migration_dir / "001_failed_probe.sql"
+        migration.write_text(
+            "CREATE TABLE gerchain_migration_rollback_probe (id INTEGER PRIMARY KEY);\n"
+            "THIS IS INTENTIONALLY INVALID SQL;\n",
+            encoding="utf-8",
+        )
+        with psycopg.connect(dsn) as connection:
+            connection.execute(
+                "CREATE TABLE IF NOT EXISTS schema_version "
+                "(version INTEGER PRIMARY KEY, checksum TEXT NOT NULL, "
+                "applied_at TIMESTAMPTZ NOT NULL DEFAULT now())"
+            )
+            connection.execute("DROP TABLE IF EXISTS gerchain_migration_rollback_probe")
+            connection.execute("DELETE FROM schema_version WHERE version = 1")
+            connection.commit()
+
+            with pytest.raises(Exception):
+                apply_migrations(connection, migration_dir)
+
+        with psycopg.connect(dsn) as connection:
+            assert connection.execute(
+                "SELECT to_regclass('gerchain_migration_rollback_probe')"
+            ).fetchone()[0] is None
+            assert connection.execute(
+                "SELECT version FROM schema_version WHERE version = 1"
+            ).fetchall() == []
+
