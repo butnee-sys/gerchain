@@ -120,6 +120,15 @@ class ProductionRuntimeFactory:
         runtime.require_canonical_ledger_authority()
         return runtime
 
+    @property
+    def session_factory(self) -> Callable[[], Any]:
+        """Return the factory bound to the canonical production engine.
+
+        Exposed for controlled operational workflows and integration tests;
+        callers must still use the canonical transaction boundaries.
+        """
+        return self._session_factory()
+
     def _session_factory(self) -> Callable[[], Any]:
         if self._provided_session_factory is not None:
             bind = getattr(self._provided_session_factory, "kw", {}).get("bind")
