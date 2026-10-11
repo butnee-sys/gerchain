@@ -1,0 +1,127 @@
+"""Real-PostgreSQL acceptance tests for the canonical migration runner.
+
+Set GERCHAIN_TEST_POSTGRES_URL to a disposable PostgreSQL database to execute.
+Each test uses a dedicated schema and skips (rather than pretending to pass)
+when no PostgreSQL endpoint is configured.
+"""
+from __future__ import annotations
+
+import os
+from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
+from uuid import uuid4
+
+import psycopg
+import pytest
+from psycopg import sql
+
+from postgres.migrations import apply_migrations, checksum
+
+ROOT = Path(__file__).resolve().parents[2]
+MIGRATIONS = ROOT / "postgres" / "migrations"
+DSN = os.environ.get("GERCHAIN_TEST_POSTGRES_URL")
+pytestmark = pytest.mark.skipif(not DSN, reason="GERCHAIN_TEST_POSTGRES_URL is not configured")
+
+
+def _schema():
+    name = "gc_mig_" + uuid4().hex[:20]
+    with psycopg.connect(DSN) as conn:
+        conn.execute(sql.SQL("CREATE SCHEMA {}").format(sql.Identifier(name)))
+    return name
+
+
+def _connect(schema):
+    # Server startup option sets search_path without opening a transaction;
+    # apply_migrations intentionally requires a clean connection.
+    return psycopg.connect(DSN, options=f"-c search_path={schema}")
+
+
+def _drop_schema(name):
+    with psycopg.connect(DSN) as conn:
+        conn.execute(sql.SQL("DROP SCHEMA IF EXISTS {} CASCADE").format(sql.Identifier(name)))
+
+
+def test_postgres_clean_apply_rerun_and_history_stability():
+    schema = _schema()
+    try:
+        with _connect(schema) as conn:
+            first = apply_migrations(conn, MIGRATIONS)
+            assert first == tuple(range(1, 14))
+        with _connect(schema) as conn:
+            before = conn.execute(
+                "SELECT version, checksum, applied_at FROM schema_version ORDER BY version"
+            ).fetchall()
+            assert [row[0] for row in before] == list(range(1, 14))
+        with _connect(schema) as conn:
+            second = apply_migrations(conn, MIGRATIONS)
+            assert second == ()
+        with _connect(schema) as conn:
+            after = conn.execute(
+                "SELECT version, checksum, applied_at FROM schema_version ORDER BY version"
+            ).fetchall()
+            assert after == before
+    finally:
+        _drop_schema(schema)
+
+
+def test_postgres_two_concurrent_runners_publish_each_version_once():
+    schema = _schema()
+    try:
+        def run_once():
+            with _connect(schema) as conn:
+                return apply_migrations(conn, MIGRATIONS)
+
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            results = list(pool.map(lambda _: run_once(), range(2)))
+        with _connect(schema) as conn:
+            rows = conn.execute(
+                "SELECT version, COUNT(*) FROM schema_version GROUP BY version ORDER BY version"
+            ).fetchall()
+        assert [row[0] for row in rows] == list(range(1, 14))
+        assert all(row[1] == 1 for row in rows)
+        assert sorted(len(result) for result in results) == [0, 13]
+    finally:
+        _drop_schema(schema)
+
+
+def test_postgres_checksum_mismatch_rolls_back_prior_ddl_and_history(tmp_path: Path):
+    # A generic two-file chain lets the test force a checksum mismatch at v2
+    # after v1 DDL has executed, proving the enclosing transaction rolls back.
+    (tmp_path / "001_first.sql").write_text(
+        "CREATE TABLE rollback_probe (id INTEGER PRIMARY KEY);", encoding="utf-8"
+    )
+    (tmp_path / "002_second.sql").write_text(
+        "CREATE TABLE second_probe (id INTEGER PRIMARY KEY);", encoding="utf-8"
+    )
+    schema = _schema()
+    try:
+        with _connect(schema) as conn:
+            conn.execute(
+                """
+                CREATE TABLE schema_version (
+                    version INTEGER PRIMARY KEY,
+                    checksum TEXT NOT NULL,
+                    applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
+                )
+                """
+            )
+            conn.execute(
+                "INSERT INTO schema_version(version, checksum) VALUES (2, %s)",
+                ("0" * 64,),
+            )
+        with pytest.raises(RuntimeError, match="Migration checksum mismatch for version 2"):
+            with _connect(schema) as conn:
+                apply_migrations(conn, tmp_path)
+        with _connect(schema) as conn:
+            tables = set(conn.execute(
+                "SELECT table_name FROM information_schema.tables WHERE table_schema = %s",
+                (schema,),
+            ).fetchall())
+            versions = conn.execute(
+                "SELECT version, checksum FROM schema_version ORDER BY version"
+            ).fetchall()
+        assert ("rollback_probe",) not in tables
+        assert ("second_probe",) not in tables
+        assert versions == [(2, "0" * 64)]
+    finally:
+        _drop_schema(schema)
