@@ -18,7 +18,7 @@ from pathlib import Path
 
 import psycopg
 
-from postgres.migrations import apply_migrations, checksum
+from postgres.migrations import apply_migrations, checksum, _split_sql_statements
 
 MIGRATION_DIR = Path(__file__).resolve().parents[1] / "postgres" / "migrations"
 EXPECTED = tuple(range(1, 14))
@@ -83,6 +83,11 @@ def _run() -> dict:
         source = (MIGRATION_DIR / "001_canonical_production.sql").read_text(encoding="utf-8")
         digest = checksum(source)
         with _connect(base_url, legacy) as conn:
+            # Materialize version-1 DDL first, then emulate a legacy registry
+            # whose duplicate publication rows predate its unique constraint.
+            for statement in _split_sql_statements(source):
+                conn.execute(statement)
+            conn.execute("DROP TABLE schema_version")
             conn.execute("CREATE TABLE schema_version (version INTEGER, checksum TEXT, applied_at TIMESTAMPTZ DEFAULT now())")
             conn.execute("INSERT INTO schema_version(version, checksum) VALUES (1, %s), (1, %s)", (digest, digest))
             conn.commit()
