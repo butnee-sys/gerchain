@@ -33,6 +33,12 @@ ALTER TABLE gerchain_idempotency_records
     DROP CONSTRAINT IF EXISTS gerchain_idempotency_fingerprint_check,
     ADD CONSTRAINT gerchain_idempotency_fingerprint_check CHECK (length(fingerprint) = 64);
 
+-- Remove the legacy state restriction; it rejects FUNDED/REFUNDED/CANCELLED and
+-- conflicts with the canonical six-state lifecycle. This is safe before the
+-- production lock because the canonical check is enforced by the migration chain.
+ALTER TABLE escrows
+    DROP CONSTRAINT IF EXISTS legacy_escrow_state_check;
+
 ALTER TABLE escrows
     DROP CONSTRAINT IF EXISTS escrows_amount_positive_check,
     ADD CONSTRAINT escrows_amount_positive_check CHECK (amount > 0);
