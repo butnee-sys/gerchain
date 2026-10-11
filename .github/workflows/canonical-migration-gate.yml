@@ -43,6 +43,7 @@ jobs:
           --health-timeout 5s
           --health-retries 20
     env:
+      PYTHONPATH: .
       GERCHAIN_MIGRATION_TEST_DATABASE_URL: postgresql://gerchain:gerchain@localhost:5432/migration_gate
       MIGRATION_GATE_REPORT: migration-gate-report.json
     steps:
