@@ -83,7 +83,7 @@ jobs:
               apply_migrations(connection, Path("postgres/migrations"))
               rows = connection.execute("SELECT version, checksum FROM schema_version ORDER BY version").fetchall()
               print(f"MIGRATION_ROWS={rows!r}")
-              assert [row[0] for row in rows] == list(range(1, 14)), rows
+              assert [row[0] for row in rows] == list(range(1, 15)), rows
               assert all(row[1] for row in rows), rows
           print("MIGRATION_BASELINE=PASS")
           PY
