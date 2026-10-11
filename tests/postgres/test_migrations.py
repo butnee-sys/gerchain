@@ -21,13 +21,14 @@ EXPECTED_CANONICAL_CHAIN = [
     "011_ea35_canonical_schema_finalization.sql",
     "012_canonical_production.sql",
     "013_ea35_canonical_schema_hardening.sql",
+    "014_canonical_escrow_state_constraint.sql",
 ]
 
 
 def test_repository_migration_versions_resolve_to_exact_canonical_chain():
     selected = _canonical_migration_files(MIGRATION_DIR)
     assert [path.name for path in selected] == EXPECTED_CANONICAL_CHAIN
-    assert [int(path.name.split("_", 1)[0]) for path in selected] == list(range(1, 14))
+    assert [int(path.name.split("_", 1)[0]) for path in selected] == list(range(1, 15))
 
 
 def test_physical_historical_aliases_are_not_extra_active_migrations():
@@ -35,7 +36,7 @@ def test_physical_historical_aliases_are_not_extra_active_migrations():
     versions = [int(path.name.split("_", 1)[0]) for path in physical]
     duplicates = {version for version in versions if versions.count(version) > 1}
     assert duplicates == {1, 2, 3, 4, 5}
-    assert len(_canonical_migration_files(MIGRATION_DIR)) == 13
+    assert len(_canonical_migration_files(MIGRATION_DIR)) == 14
 
 
 def test_selected_migration_checksum_is_sha256_of_exact_utf8_source():
