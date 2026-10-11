@@ -78,19 +78,19 @@ jobs:
           import tempfile
           from pathlib import Path
           import psycopg
-          from postgres.migrations import apply_migrations, checksum
+          from postgres.migrations import _canonical_migration_files, apply_migrations, checksum
           migration_dir = Path("postgres/migrations")
           dsn = os.environ["GERCHAIN_DATABASE_URL"].replace("postgresql+psycopg://", "postgresql://")
           with tempfile.TemporaryDirectory(prefix="gerchain-migrations-001-013-") as tmp:
               baseline_dir = Path(tmp)
-              for version in range(1, 14):
-                  source = next(migration_dir.glob(f"{version:03d}_*.sql"))
+              canonical_files = _canonical_migration_files(migration_dir)
+              for source in canonical_files[:13]:
                   (baseline_dir / source.name).write_text(source.read_text(encoding="utf-8"), encoding="utf-8")
               with psycopg.connect(dsn) as connection:
                   apply_migrations(connection, baseline_dir)
                   before = connection.execute("SELECT version, checksum FROM schema_version ORDER BY version").fetchall()
                   assert [row[0] for row in before] == list(range(1, 14)), before
-                  expected = {version: checksum((baseline_dir / next(p.name for p in baseline_dir.glob(f"{version:03d}_*.sql")).name).read_text(encoding="utf-8")) for version in range(1, 14)}
+                  expected = {version: checksum((baseline_dir / canonical_files[version - 1].name).read_text(encoding="utf-8")) for version in range(1, 14)}
                   assert dict(before) == expected, (before, expected)
                   apply_migrations(connection, migration_dir)
                   after = connection.execute("SELECT version, checksum FROM schema_version ORDER BY version").fetchall()
