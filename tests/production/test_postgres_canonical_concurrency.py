@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+import json
 import os
 from concurrent.futures import ThreadPoolExecutor
 
@@ -31,6 +33,21 @@ def test_canonical_ledger_concurrent_same_transaction_replays_once():
         ledger.create_account_in_transaction(session, "CONC-DEST", "MNT", 0)
         session.commit()
 
+    integrity_material = json.dumps(
+        {
+            "transaction_id": "CONC-SAME-TX",
+            "operation": "FUND",
+            "escrow_id": "CONC-ESCROW",
+            "source": "CONC-SOURCE",
+            "destination": "CONC-DEST",
+            "amount": 100,
+            "currency": "MNT",
+        },
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    integrity_hash = hashlib.sha256(integrity_material.encode("utf-8")).hexdigest()
+
     def worker(index: int):
         with Session() as session:
             try:
@@ -43,7 +60,7 @@ def test_canonical_ledger_concurrent_same_transaction_replays_once():
                     currency="MNT",
                     operation="FUND",
                     escrow_id="CONC-ESCROW",
-                    integrity_hash="concurrency-proof",
+                    integrity_hash=integrity_hash,
                 )
                 session.commit()
                 return result["replayed"]
