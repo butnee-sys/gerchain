@@ -108,6 +108,19 @@ def test_sql_splitter_preserves_single_quoted_semicolons():
     assert statements == ["INSERT INTO t VALUES ('a;b')", "SELECT 1"]
 
 
+def test_sql_splitter_ignores_semicolons_inside_line_and_block_comments():
+    from postgres.migrations import _split_sql_statements
+
+    source = """-- semicolon in comment; must not split
+    CREATE TABLE example (id INTEGER); /* another ; comment */
+    INSERT INTO example VALUES (1); -- trailing ; comment
+    """
+    statements = _split_sql_statements(source)
+    assert len(statements) == 2
+    assert statements[0].endswith("CREATE TABLE example (id INTEGER)")
+    assert statements[1].startswith("INSERT INTO example VALUES (1)")
+
+
 def test_compatibility_runner_reexports_the_single_canonical_runner():
     from postgres import migration_runner, migrations
 
