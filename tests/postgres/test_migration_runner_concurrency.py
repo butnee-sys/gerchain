@@ -6,7 +6,6 @@ from pathlib import Path
 from uuid import uuid4
 
 import pytest
-import psycopg
 from sqlalchemy import create_engine, text
 
 from postgres.migration_runner import apply_migrations, checksum
@@ -33,9 +32,9 @@ def postgres_schema(tmp_path: Path):
 
 
 def _connect_to_schema(engine, schema):
-    dsn = engine.url.set(drivername="postgresql").render_as_string(hide_password=False)
-    conn = psycopg.connect(dsn)
-    conn.execute(f'SET search_path TO "{schema}"')
+    """Return a SQLAlchemy Connection, matching the migration runner contract."""
+    conn = engine.connect()
+    conn.exec_driver_sql(f'SET search_path TO "{schema}"')
     conn.commit()
     return conn
 
