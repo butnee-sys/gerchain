@@ -28,6 +28,7 @@ jobs:
       GERCHAIN_TEST_DATABASE_URL: postgresql+psycopg://gerchain:gerchain@localhost:5432/gerchain_test
       GERCHAIN_DATABASE_URL: postgresql+psycopg://gerchain:gerchain@localhost:5432/gerchain_test
       GERCHAIN_POSTGRES_DSN: postgresql://gerchain:gerchain@localhost:5432/gerchain_test
+      GERCHAIN_MIGRATION_TEST_DSN: postgresql://gerchain:gerchain@localhost:5432/gerchain_migration_test
     steps:
       - name: Checkout exact source commit
         uses: actions/checkout@v4
@@ -43,6 +44,10 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt -r postgres/requirements-test.txt
           python -m pip install fastapi uvicorn httpx python-multipart
+      - name: Create isolated PostgreSQL migration-test database
+        env:
+          PGPASSWORD: gerchain
+        run: createdb -h localhost -U gerchain gerchain_migration_test
       - name: Compile all Python sources (fail closed)
         run: python -m compileall -q .
       - name: Collect the complete test suite (fail closed)
