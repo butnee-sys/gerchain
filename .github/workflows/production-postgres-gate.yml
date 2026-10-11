@@ -49,6 +49,58 @@ jobs:
           python -m pip install -r requirements-dee-security.txt -r postgres/requirements-test.txt pytest
       - name: Compile all Python modules
         run: python -m compileall -q .
+      - name: Run settlement trust-contract tests
+        run: |
+          PYTHONFAULTHANDLER=1 python -X faulthandler -m pytest -vv -s \
+            tests/persistence/test_settlement_coordinator.py \
+            tests/services/test_gerchain_runtime_settlement_canonical.py
+      - name: Run full regression suite in isolated segments and diagnose native crashes
+        shell: bash
+        run: |
+          set +e
+          mkdir -p artifacts/segmented-tests
+          failures=0
+          segfaults=0
+          run_segment() {
+            name="$1"
+            shift
+            log="artifacts/segmented-tests/$name.log"
+            echo "=== SEGMENT $name ==="
+            PYTHONFAULTHANDLER=1 python -X faulthandler -m pytest -vv -s "$@" >"$log" 2>&1
+            rc=$?
+            cat "$log"
+            echo "SEGMENT_RESULT=$name EXIT_CODE=$rc"
+            if [ "$rc" -ne 0 ]; then
+              failures=$((failures + 1))
+            fi
+            if [ "$rc" -eq 139 ] || grep -Eqi "Segmentation fault|Fatal Python error: Segmentation fault" "$log"; then
+              segfaults=$((segfaults + 1))
+              echo "SEGMENTATION_FAULT_CONFIRMED_IN=$name"
+            fi
+          }
+          run_segment persistence tests/persistence
+          run_segment services tests/services
+          run_segment postgres-tests tests/postgres
+          run_segment production-tests tests/production
+          run_segment postgres-migration-tests postgres/tests
+          root_tests=(tests/test_*.py)
+          if [ -e "${root_tests[0]}" ]; then
+            run_segment root-tests "${root_tests[@]}"
+          fi
+          echo "SEGMENTED_FAILURE_COUNT=$failures"
+          echo "SEGMENTATION_FAULT_SEGMENT_COUNT=$segfaults"
+          if [ "$segfaults" -gt 0 ]; then
+            echo "DIAGNOSIS: native crash isolated to one or more named test segments; inspect matching logs."
+          fi
+          if [ "$failures" -gt 0 ]; then exit 1; fi
+      - name: Upload segmented test and crash-diagnostic logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: segmented-test-diagnostics-${{ github.sha }}
+          path: artifacts/segmented-tests/
+          if-no-files-found: warn
+          retention-days: 90
       - name: Apply all 13 canonical migrations to a fresh PostgreSQL database
         run: |
           python - <<'PY'
