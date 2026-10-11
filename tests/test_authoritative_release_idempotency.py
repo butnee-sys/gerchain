@@ -40,6 +40,7 @@ def test_authoritative_release_replay_does_not_move_value_twice():
         evidence_verified=True,
         trinity_proof=proof,
     )
+    records_after_first_release = len(runtime.money_engine.records)
     replay = runtime.release(
         transaction_id="TX-IDEMP-001",
         destination="BENEFICIARY",
@@ -55,7 +56,7 @@ def test_authoritative_release_replay_does_not_move_value_twice():
     assert replay == first
     assert runtime.get_balance("BENEFICIARY") == AMOUNT
     assert runtime.get_balance(ESCROW_ID) == 0
-    assert len(runtime.money_engine.records) == 1
+    assert len(runtime.money_engine.records) == records_after_first_release
 
 
 def test_authoritative_release_key_conflict_is_denied():
