@@ -12,6 +12,7 @@ Purpose:
   боломжтой хэвээр байх.
 """
 
+from dee_security.root_of_trust import RootOfTrust
 import pytest
 
 from escrow.engine import EscrowEngine
@@ -91,7 +92,13 @@ def test_failed_settlement_does_not_add_witness_entry():
             amount=2000000,
             timestamp="2026-09-03T13:01:00Z",
             evidence={"type": "failed"},
-        )
+        
+        root=RootOfTrust("TEST-OWNER", "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8="),
+        owner_id="TEST-OWNER",
+        authorized=True,
+        evidence_verified=True,
+        trinity_proof={"trust": True, "transparency": True, "performance": True},
+    )
 
     assert len(witness_chain.entries) == before_count
 
@@ -112,7 +119,13 @@ def test_failed_settlement_does_not_change_witness_state():
             amount=2000000,
             timestamp="2026-09-03T13:02:00Z",
             evidence={"type": "failed"},
-        )
+        
+        root=RootOfTrust("TEST-OWNER", "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8="),
+        owner_id="TEST-OWNER",
+        authorized=True,
+        evidence_verified=True,
+        trinity_proof={"trust": True, "transparency": True, "performance": True},
+    )
 
     assert (
         witness_chain.current_state
@@ -136,7 +149,13 @@ def test_failed_settlement_does_not_change_witness_state_hash():
             amount=2000000,
             timestamp="2026-09-03T13:03:00Z",
             evidence={"type": "failed"},
-        )
+        
+        root=RootOfTrust("TEST-OWNER", "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8="),
+        owner_id="TEST-OWNER",
+        authorized=True,
+        evidence_verified=True,
+        trinity_proof={"trust": True, "transparency": True, "performance": True},
+    )
 
     assert (
         witness_chain.current_state_hash
@@ -160,7 +179,13 @@ def test_failed_settlement_does_not_change_escrow_state():
             amount=2000000,
             timestamp="2026-09-03T13:04:00Z",
             evidence={"type": "failed"},
-        )
+        
+        root=RootOfTrust("TEST-OWNER", "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8="),
+        owner_id="TEST-OWNER",
+        authorized=True,
+        evidence_verified=True,
+        trinity_proof={"trust": True, "transparency": True, "performance": True},
+    )
 
     assert escrow.get_state() == before_state
 
@@ -181,7 +206,13 @@ def test_failed_settlement_does_not_change_balances():
             amount=2000000,
             timestamp="2026-09-03T13:05:00Z",
             evidence={"type": "failed"},
-        )
+        
+        root=RootOfTrust("TEST-OWNER", "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8="),
+        owner_id="TEST-OWNER",
+        authorized=True,
+        evidence_verified=True,
+        trinity_proof={"trust": True, "transparency": True, "performance": True},
+    )
 
     assert ledger.balances == before_balances
 
@@ -202,7 +233,13 @@ def test_failed_settlement_does_not_create_money_record():
             amount=2000000,
             timestamp="2026-09-03T13:06:00Z",
             evidence={"type": "failed"},
-        )
+        
+        root=RootOfTrust("TEST-OWNER", "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8="),
+        owner_id="TEST-OWNER",
+        authorized=True,
+        evidence_verified=True,
+        trinity_proof={"trust": True, "transparency": True, "performance": True},
+    )
 
     assert len(money.records) == before_records
 
@@ -224,7 +261,13 @@ def test_invalid_target_does_not_change_witness_history():
             amount=1000000,
             timestamp="2026-09-03T13:07:00Z",
             evidence={"type": "invalid-target"},
-        )
+        
+        root=RootOfTrust("TEST-OWNER", "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8="),
+        owner_id="TEST-OWNER",
+        authorized=True,
+        evidence_verified=True,
+        trinity_proof={"trust": True, "transparency": True, "performance": True},
+    )
 
     assert len(witness_chain.entries) == before_count
     assert (
@@ -250,7 +293,13 @@ def test_wrong_amount_does_not_change_witness_history():
             amount=999999,
             timestamp="2026-09-03T13:08:00Z",
             evidence={"type": "wrong-amount"},
-        )
+        
+        root=RootOfTrust("TEST-OWNER", "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8="),
+        owner_id="TEST-OWNER",
+        authorized=True,
+        evidence_verified=True,
+        trinity_proof={"trust": True, "transparency": True, "performance": True},
+    )
 
     assert len(witness_chain.entries) == before_count
     assert (
@@ -275,7 +324,13 @@ def test_success_after_failure_creates_clean_witness_history():
             amount=2000000,
             timestamp="2026-09-03T13:09:00Z",
             evidence={"type": "failed"},
-        )
+        
+        root=RootOfTrust("TEST-OWNER", "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8="),
+        owner_id="TEST-OWNER",
+        authorized=True,
+        evidence_verified=True,
+        trinity_proof={"trust": True, "transparency": True, "performance": True},
+    )
 
     assert len(witness_chain.entries) == before_count
 
@@ -287,6 +342,12 @@ def test_success_after_failure_creates_clean_witness_history():
         amount=1000000,
         timestamp="2026-09-03T13:10:00Z",
         evidence={"type": "delivery-confirmed"},
+    
+        root=RootOfTrust("TEST-OWNER", "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8="),
+        owner_id="TEST-OWNER",
+        authorized=True,
+        evidence_verified=True,
+        trinity_proof={"trust": True, "transparency": True, "performance": True},
     )
 
     assert (
