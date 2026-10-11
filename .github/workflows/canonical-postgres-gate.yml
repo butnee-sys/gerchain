@@ -59,7 +59,9 @@ jobs:
           python - <<'PY'
           import os
           import psycopg
-          with psycopg.connect(os.environ["GERCHAIN_TEST_DATABASE_URL"]) as connection:
+          dsn = os.environ["GERCHAIN_TEST_DATABASE_URL"]
+          dsn = dsn.replace("postgresql+psycopg://", "postgresql://").replace("postgresql+psycopg2://", "postgresql://")
+          with psycopg.connect(dsn) as connection:
               with connection.cursor() as cursor:
                   cursor.execute("SELECT current_database(), version()")
                   database, version = cursor.fetchone()
