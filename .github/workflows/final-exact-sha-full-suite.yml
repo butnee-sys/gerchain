@@ -213,8 +213,11 @@ jobs:
           PY
       - name: Create isolated value-truth database
         run: |
-          PGPASSWORD=gerchain createdb -h 127.0.0.1 -U gerchain gerchain_reperformance
+          PGPASSWORD=gerchain createdb -h 127.0.0.1 -U gerchain gerchain_value_truth
       - name: Re-perform deep value-truth graph on real PostgreSQL
+        env:
+          GERCHAIN_DATABASE_URL: postgresql+psycopg://gerchain:gerchain@127.0.0.1:5432/gerchain_value_truth
+          GERCHAIN_TEST_DATABASE_URL: postgresql+psycopg://gerchain:gerchain@127.0.0.1:5432/gerchain_value_truth
         run: pytest -q tests/persistence/test_deep_value_reconciliation_postgres.py
       - name: Build exact-SHA evidence manifest
         if: always()
