@@ -74,6 +74,22 @@ jobs:
               assert all(len(row[1]) == 64 for row in rows), "invalid SHA-256 checksum"
           print("CANONICAL_MIGRATIONS=13/13; SECOND_RUN=NOOP; CHECKSUMS=SHA256")
           PY
+      - name: Create isolated database for migration-runner mutation tests
+        run: |
+          python - <<'PY'
+          import os
+          import psycopg
+
+          dsn = os.environ["GERCHAIN_MIGRATION_TEST_DATABASE_URL"]
+          admin_dsn = dsn.rsplit("/", 1)[0] + "/postgres"
+          with psycopg.connect(admin_dsn, autocommit=True) as admin:
+              admin.execute('DROP DATABASE IF EXISTS "gerchain_migration_tests" WITH (FORCE)')
+              admin.execute('CREATE DATABASE "gerchain_migration_tests"')
+          isolated_dsn = dsn.rsplit("/", 1)[0] + "/gerchain_migration_tests"
+          with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as env:
+              env.write(f"GERCHAIN_MIGRATION_TEST_DATABASE_URL={isolated_dsn}\\n")
+          print("MIGRATION_MUTATION_TEST_DATABASE=gerchain_migration_tests")
+          PY
       - name: Verify PostgreSQL migration concurrency, checksum rollback, and production factory
         run: python -m pytest -q tests/persistence/test_postgres_migration_concurrency.py
 
