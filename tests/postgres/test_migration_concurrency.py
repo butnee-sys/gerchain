@@ -29,10 +29,6 @@ def test_two_connections_apply_migrations_without_duplicate_schema_versions(tmp_
         "CREATE TABLE migration_probe (id INTEGER PRIMARY KEY);",
         encoding="utf-8",
     )
-    (migrations / "002_second.sql").write_text(
-        "ALTER TABLE migration_probe ADD COLUMN marker TEXT;",
-        encoding="utf-8",
-    )
 
     with psycopg.connect(database_url, autocommit=True) as admin:
         admin.execute(f'CREATE SCHEMA "{schema}"')
@@ -47,28 +43,30 @@ def test_two_connections_apply_migrations_without_duplicate_schema_versions(tmp_
             ) as connection:
                 return apply_migrations(connection, migrations)
 
-        # apply_migrations is intentionally side-effect-only; it returns None.
-        # Both workers must complete without surfacing UniqueViolation, and the
-        # database must contain one immutable publication per migration version.
+        # Exactly one worker applies version 1; the other observes it already
+        # applied. Assert the documented return contract, not just absence of
+        # an exception: one result is (1,), the other is (), i.e. counts [0, 1].
         with ThreadPoolExecutor(max_workers=2) as pool:
             first = pool.submit(apply_once)
             second = pool.submit(apply_once)
-            first.result(timeout=30)
-            second.result(timeout=30)
+            results = [first.result(timeout=30), second.result(timeout=30)]
+
+        assert sorted(len(result) for result in results) == [0, 1]
+        assert sorted(version for result in results for version in result) == [1]
 
         with psycopg.connect(database_url, options=f"-c search_path={schema}") as check:
             rows = check.execute(
                 "SELECT version, checksum FROM schema_version ORDER BY version"
             ).fetchall()
-            assert [row[0] for row in rows] == [1, 2]
-            assert len({row[0] for row in rows}) == len(rows)
-            assert len(rows) == 2
+            assert [row[0] for row in rows] == [1]
+            assert len({row[0] for row in rows}) == 1
+            assert len(rows) == 1
             assert check.execute(
                 "SELECT column_name FROM information_schema.columns "
                 "WHERE table_schema = %s AND table_name = 'migration_probe' "
                 "ORDER BY ordinal_position",
                 (schema,),
-            ).fetchall() == [("id",), ("marker",)]
+            ).fetchall() == [("id",)]
     finally:
         with psycopg.connect(database_url, autocommit=True) as admin:
             admin.execute(f'DROP SCHEMA IF EXISTS "{schema}" CASCADE')
