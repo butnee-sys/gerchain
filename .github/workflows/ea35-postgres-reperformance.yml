@@ -52,11 +52,16 @@ jobs:
       - name: Compile all production, persistence, migration, and CORE modules first
         run: python -m compileall -q services production_entrypoint.py persistence postgres
 
+      - name: Create isolated PostgreSQL test database
+        run: |
+          PGPASSWORD=gerchain createdb -h localhost -U gerchain gerchain_reperformance
+          PGPASSWORD=gerchain psql -h localhost -U gerchain -d gerchain_reperformance -c "SELECT current_database();"
+
       - name: Run exact CORE fundamental-architecture gates (only after compileall passes)
         env:
-          GERCHAIN_DATABASE_URL: postgresql+psycopg://gerchain:gerchain@localhost:5432/gerchain_test
-          GERCHAIN_TEST_DATABASE_URL: postgresql+psycopg://gerchain:gerchain@localhost:5432/gerchain_test
-          GERCHAIN_POSTGRES_DSN: postgresql+psycopg://gerchain:gerchain@localhost:5432/gerchain_test
+          GERCHAIN_DATABASE_URL: postgresql+psycopg://gerchain:gerchain@localhost:5432/gerchain_reperformance
+          GERCHAIN_TEST_DATABASE_URL: postgresql+psycopg://gerchain:gerchain@localhost:5432/gerchain_reperformance
+          GERCHAIN_POSTGRES_DSN: postgresql+psycopg://gerchain:gerchain@localhost:5432/gerchain_reperformance
         run: |
           pytest -q \
             tests/test_core_structure.py \
@@ -240,10 +245,8 @@ jobs:
           set -o pipefail
           pytest -vv -s postgres/tests/test_concurrency.py 2>&1 | tee artifacts/ea35/concurrency-runner.log
 
-      - name: Create isolated PostgreSQL database for value-truth tests
-        run: |
-          PGPASSWORD=gerchain createdb -h localhost -U gerchain gerchain_reperformance
-          PGPASSWORD=gerchain psql -h localhost -U gerchain -d gerchain_reperformance -c "SELECT current_database();"
+      - name: Confirm isolated PostgreSQL test database remains available
+        run: PGPASSWORD=gerchain psql -h localhost -U gerchain -d gerchain_reperformance -c "SELECT current_database();"
 
       - name: Re-perform durable value-truth test suite on PostgreSQL
         run: |
