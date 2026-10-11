@@ -79,18 +79,32 @@ jobs:
                   "gerchain_ledger_accounts",
                   "gerchain_ledger_movements",
                   "escrows",
-                  "transaction_witnesses",
-                  "outbox_events",
-                  "durable_idempotency",
+                  "gerchain_transaction_witnesses",
+                  "gerchain_outbox_events",
+                  "gerchain_idempotency_records",
               }
               actual = set(inspector.get_table_names())
               missing = sorted(required - actual)
+              required_columns = {
+                  "escrows": {"id", "sender_address", "receiver_address", "amount", "state",
+                              "condition_desc", "refund_destination", "currency", "version",
+                              "created_at", "updated_at"},
+                  "gerchain_ledger_accounts": {"account_id", "currency", "balance", "version", "updated_at"},
+                  "gerchain_ledger_movements": {"transaction_id", "source", "destination", "amount",
+                                                "currency", "operation", "escrow_id", "integrity_hash"},
+              }
+              missing_columns = {
+                  table: sorted(columns - {col["name"] for col in inspector.get_columns(table)})
+                  for table, columns in required_columns.items()
+                  if table in actual and columns - {col["name"] for col in inspector.get_columns(table)}
+              }
               print({"runtime_authoritative": runtime.is_canonical_ledger_authoritative,
                      "required_tables": sorted(required),
                      "missing_tables": missing,
+                     "missing_columns": missing_columns,
                      "actual_tables": sorted(actual)})
-              if missing:
-                  raise SystemExit(f"canonical production tables missing: {missing}")
+              if missing or missing_columns:
+                  raise SystemExit(f"canonical schema incomplete: missing_tables={missing}; missing_columns={missing_columns}")
           finally:
               engine.dispose()
           PY
