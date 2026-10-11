@@ -515,7 +515,8 @@ def test_production_runtime_factory_boots_against_postgresql_when_configured() -
             amount=100,
             currency="USD",
             witness_id="ea35-proof-witness",
-        )
+        ),
+        engine=create_engine(database_url, pool_pre_ping=True),
     )
     runtime = factory.create()
     assert runtime.is_canonical_ledger_authoritative
