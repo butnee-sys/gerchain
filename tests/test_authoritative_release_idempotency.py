@@ -77,6 +77,7 @@ def test_authoritative_release_key_conflict_is_denied():
         trinity_proof=proof,
     )
 
+    records_after_first_release = len(runtime.money_engine.records)
     try:
         runtime.release(
             transaction_id="TX-IDEMP-002",
@@ -96,4 +97,4 @@ def test_authoritative_release_key_conflict_is_denied():
 
     assert runtime.get_balance("BENEFICIARY") == AMOUNT
     assert runtime.get_balance("OTHER") == 0
-    assert len(runtime.money_engine.records) == 1
+    assert len(runtime.money_engine.records) == records_after_first_release
