@@ -68,7 +68,7 @@ def test_known_canonical_alias_versions_have_deterministic_preferred_files():
     expected = {
         2: "002_canonical_production.sql",
         5: "005_canonical_production.sql",
-        6: "006_canonical_movement_integrity.sql",
+        6: "006_canonical_production.sql",
     }
     for version, name in expected.items():
         candidates = [path for path in legacy_dir.glob(f"{version:03d}_*.sql")]
