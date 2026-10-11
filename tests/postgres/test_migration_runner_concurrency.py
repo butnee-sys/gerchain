@@ -23,7 +23,7 @@ def postgres_schema(tmp_path: Path):
     engine = create_engine(DATABASE_URL, pool_pre_ping=True)
     schema = "migration_test_" + uuid4().hex
     with engine.begin() as conn:
-        conn.execute(f'CREATE SCHEMA "{schema}"')
+        conn.exec_driver_sql(f'CREATE SCHEMA "{schema}"')
     try:
         yield engine, schema, tmp_path
     finally:
