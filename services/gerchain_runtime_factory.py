@@ -80,9 +80,9 @@ def assert_canonical_production_schema(connection) -> None:
         item for item in inspector.get_check_constraints("escrows")
         if "state" in (item.get("sqltext") or "").lower()
     ]
-    if len(escrow_checks) != 1 or escrow_checks[0].get("name") != "escrows_state_check":
+    if len(escrow_checks) != 1 or escrow_checks[0].get("name") != "escrows_state_canonical_check":
         raise RuntimeError(
-            "canonical production schema requires exactly one escrows_state_check; "
+            "canonical production schema requires exactly one escrows_state_canonical_check; "
             f"actual={escrow_checks!r}"
         )
 
@@ -91,7 +91,7 @@ def assert_canonical_production_schema(connection) -> None:
     # final canonical migration chain (001..013).
     required_checks = {
         "escrows": {
-            "escrows_state_check",
+            "escrows_state_canonical_check",
             "escrows_amount_positive_check",
         },
         "gerchain_ledger_accounts": {
