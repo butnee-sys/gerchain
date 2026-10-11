@@ -1,33 +1,36 @@
 from pathlib import Path
 
+from postgres.migrations import _canonical_migration_files
+
 
 def _migration_dir() -> Path:
-    return Path(__file__).resolve().parents[2] / "postgres" / "schema"
+    return Path(__file__).resolve().parents[2] / "postgres" / "migrations"
 
 
-def test_postgresql_migration_versions_are_resolvable():
-    migrations = sorted(_migration_dir().glob("*.sql"))
-    versions = [int(path.name.split("_", 1)[0]) for path in migrations]
+def test_postgresql_migration_versions_resolve_to_exact_canonical_chain():
+    selected = _canonical_migration_files(_migration_dir())
+    versions = [int(path.name.split("_", 1)[0]) for path in selected]
 
-    assert migrations, "PostgreSQL migration set must not be empty"
-    assert versions == sorted(versions)
-
-    duplicates = {v for v in versions if versions.count(v) > 1}
-    assert duplicates == {2, 5, 6}
+    assert len(selected) == 13
+    assert versions == list(range(1, 14))
 
 
 def test_canonical_migration_chain_contains_required_stages():
-    names = {path.name for path in _migration_dir().glob("*.sql")}
+    names = {path.name for path in _canonical_migration_files(_migration_dir())}
 
     required = {
-        "001_concurrency.sql",
+        "001_canonical_production.sql",
         "002_canonical_production.sql",
-        "003_canonical_integrity_constraints.sql",
-        "004_ea26_value_flow_persistence.sql",
+        "003_canonical_compatibility.sql",
+        "004_canonical_value_truth.sql",
         "005_canonical_production.sql",
-        "006_canonical_escrow_lifecycle_hardening.sql",
+        "006_canonical_movement_integrity.sql",
+        "007_canonical_production_reconciliation.sql",
         "008_ea35_idempotency_compat.sql",
         "009_canonical_movement_integrity_hardening.sql",
-        "010_ea35_settlement_binding_fix.sql",
+        "010_canonical_evidence_constraints.sql",
+        "011_ea35_canonical_schema_finalization.sql",
+        "012_canonical_production.sql",
+        "013_ea35_canonical_schema_hardening.sql",
     }
-    assert required <= names
+    assert names == required
