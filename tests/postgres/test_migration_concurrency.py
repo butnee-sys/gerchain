@@ -10,10 +10,13 @@ import pytest
 
 from postgres.migrations import apply_migrations
 
+MIGRATION_DIR = Path(__file__).resolve().parents[2] / "postgres" / "migrations"
+EXPECTED_VERSIONS = list(range(1, 14))
+
 
 @pytest.mark.postgres
-def test_two_connections_apply_migrations_without_duplicate_schema_versions(tmp_path: Path):
-    """Integration test for serialized migration/version publication.
+def test_two_connections_apply_canonical_migrations_without_duplicate_schema_versions():
+    """Exercise the full canonical 13-migration chain on concurrent connections.
 
     Requires a disposable PostgreSQL database in GERCHAIN_TEST_POSTGRES_URL.
     The test creates and drops a uniquely named schema; it never touches public.
@@ -23,50 +26,55 @@ def test_two_connections_apply_migrations_without_duplicate_schema_versions(tmp_
         pytest.skip("GERCHAIN_TEST_POSTGRES_URL is not configured")
 
     schema = "migration_race_" + uuid4().hex
-    migrations = tmp_path / "migrations"
-    migrations.mkdir()
-    (migrations / "001_first.sql").write_text(
-        "CREATE TABLE migration_probe (id INTEGER PRIMARY KEY);",
-        encoding="utf-8",
-    )
-
     with psycopg.connect(database_url, autocommit=True) as admin:
         admin.execute(f'CREATE SCHEMA "{schema}"')
 
     try:
         def apply_once() -> tuple[int, ...]:
-            # Each worker gets a separate physical connection and isolated
-            # search_path, exercising PostgreSQL's cross-connection lock.
             with psycopg.connect(
                 database_url,
                 options=f"-c search_path={schema}",
             ) as connection:
-                return apply_migrations(connection, migrations)
+                return apply_migrations(connection, MIGRATION_DIR)
 
-        # Exactly one worker applies version 1; the other observes it already
-        # applied. Assert the documented return contract, not just absence of
-        # an exception: one result is (1,), the other is (), i.e. counts [0, 1].
         with ThreadPoolExecutor(max_workers=2) as pool:
             first = pool.submit(apply_once)
             second = pool.submit(apply_once)
-            results = [first.result(timeout=30), second.result(timeout=30)]
+            results = [first.result(timeout=180), second.result(timeout=180)]
 
-        assert sorted(len(result) for result in results) == [0, 1]
-        assert sorted(version for result in results for version in result) == [1]
+        # The transaction-scoped advisory lock must allow exactly one runner to
+        # apply the chain while the other sees it as already applied.
+        assert sorted(len(result) for result in results) == [0, 13]
+        assert sorted(version for result in results for version in result) == EXPECTED_VERSIONS
 
         with psycopg.connect(database_url, options=f"-c search_path={schema}") as check:
             rows = check.execute(
                 "SELECT version, checksum FROM schema_version ORDER BY version"
             ).fetchall()
-            assert [row[0] for row in rows] == [1]
-            assert len({row[0] for row in rows}) == 1
-            assert len(rows) == 1
-            assert check.execute(
-                "SELECT column_name FROM information_schema.columns "
-                "WHERE table_schema = %s AND table_name = 'migration_probe' "
-                "ORDER BY ordinal_position",
+            assert [row[0] for row in rows] == EXPECTED_VERSIONS
+            assert len(rows) == 13
+            assert len({row[0] for row in rows}) == 13
+            assert all(row[1] for row in rows)
+
+            unique_version = check.execute(
+                """
+                SELECT EXISTS (
+                    SELECT 1
+                    FROM pg_index i
+                    JOIN pg_class t ON t.oid = i.indrelid
+                    JOIN pg_namespace n ON n.oid = t.relnamespace
+                    JOIN pg_attribute a ON a.attrelid = t.oid AND a.attnum = i.indkey[0]
+                    WHERE n.nspname = %s
+                      AND t.relname = 'schema_version'
+                      AND i.indisunique
+                      AND i.indpred IS NULL
+                      AND i.indnkeyatts = 1
+                      AND a.attname = 'version'
+                )
+                """,
                 (schema,),
-            ).fetchall() == [("id",)]
+            ).fetchone()[0]
+            assert unique_version is True
     finally:
         with psycopg.connect(database_url, autocommit=True) as admin:
             admin.execute(f'DROP SCHEMA IF EXISTS "{schema}" CASCADE')
