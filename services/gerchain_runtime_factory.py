@@ -44,6 +44,8 @@ def initialize_canonical_postgres_schema(engine: Engine) -> None:
         apply_migrations(connection, migration_dir)
     for base in (AtomicLedgerBase, EscrowBase, WitnessBase, IdempotencyBase, OutboxBase):
         base.metadata.create_all(engine)
+    with engine.connect() as connection:
+        assert_canonical_production_schema(connection)
 
 
 
