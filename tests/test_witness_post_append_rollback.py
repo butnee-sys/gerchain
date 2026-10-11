@@ -1,3 +1,4 @@
+from dee_security.root_of_trust import RootOfTrust
 import copy
 
 import pytest
@@ -85,7 +86,13 @@ def test_failure_after_witness_append_rolls_back_everything():
             transaction_id="SETTLE-FAIL-001",
             timestamp="2026-01-01T00:00:03Z",
             evidence={"test": "forced-failure"},
-        )
+        
+        root=RootOfTrust("TEST-OWNER", "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8="),
+        owner_id="TEST-OWNER",
+        authorized=True,
+        evidence_verified=True,
+        trinity_proof={"trust": True, "transparency": True, "performance": True},
+    )
 
     escrow.transition = original_transition
 
@@ -116,7 +123,13 @@ def test_success_after_post_witness_failure_is_clean():
             transaction_id="SETTLE-FAIL-002",
             timestamp="2026-01-01T00:00:03Z",
             evidence={"test": "forced-failure"},
-        )
+        
+        root=RootOfTrust("TEST-OWNER", "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8="),
+        owner_id="TEST-OWNER",
+        authorized=True,
+        evidence_verified=True,
+        trinity_proof={"trust": True, "transparency": True, "performance": True},
+    )
 
     escrow.transition = original_transition
 
@@ -130,6 +143,12 @@ def test_success_after_post_witness_failure_is_clean():
         transaction_id="SETTLE-SUCCESS-001",
         timestamp="2026-01-01T00:00:04Z",
         evidence={"test": "success"},
+    
+        root=RootOfTrust("TEST-OWNER", "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8="),
+        owner_id="TEST-OWNER",
+        authorized=True,
+        evidence_verified=True,
+        trinity_proof={"trust": True, "transparency": True, "performance": True},
     )
 
     assert len(witness.entries) == witness_count_before_success + 2
