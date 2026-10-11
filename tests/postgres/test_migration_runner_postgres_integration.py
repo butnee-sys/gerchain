@@ -15,7 +15,7 @@ import psycopg
 import pytest
 from psycopg import sql
 
-from postgres.migrations import apply_migrations, checksum
+from postgres.migrations import apply_migrations
 
 ROOT = Path(__file__).resolve().parents[2]
 MIGRATIONS = ROOT / "postgres" / "migrations"
