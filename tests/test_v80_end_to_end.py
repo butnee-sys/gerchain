@@ -17,6 +17,7 @@ RELEASED
 Independent Verification
 """
 
+from dee_security.root_of_trust import RootOfTrust
 from escrow.engine import EscrowEngine
 from money.engine import MoneyEngine
 from money.ledger import MoneyLedger
@@ -146,6 +147,12 @@ def test_v80_end_to_end_released_settlement():
             "type": "SETTLEMENT",
             "reference": "SETTLE-001",
         },
+    
+        root=RootOfTrust("TEST-OWNER", "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8="),
+        owner_id="TEST-OWNER",
+        authorized=True,
+        evidence_verified=True,
+        trinity_proof={"trust": True, "transparency": True, "performance": True},
     )
 
     # Escrow final state
@@ -240,6 +247,12 @@ def test_v80_end_to_end_released_report():
             "type": "SETTLEMENT",
             "reference": "SETTLE-002",
         },
+    
+        root=RootOfTrust("TEST-OWNER", "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8="),
+        owner_id="TEST-OWNER",
+        authorized=True,
+        evidence_verified=True,
+        trinity_proof={"trust": True, "transparency": True, "performance": True},
     )
 
     serialized = serialize_chain(
