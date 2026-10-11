@@ -75,6 +75,22 @@ def test_two_connections_apply_canonical_migrations_without_duplicate_schema_ver
                 (schema,),
             ).fetchone()[0]
             assert unique_version is True
+
+            state_constraints = check.execute(
+                """
+                SELECT conname
+                FROM pg_constraint
+                WHERE conrelid = 'escrows'::regclass
+                  AND contype = 'c'
+                  AND pg_get_constraintdef(oid) ILIKE '%state%'
+                ORDER BY conname
+                """
+            ).fetchall()
+            assert len(state_constraints) == 1, (
+                "canonical schema must have exactly one escrow state CHECK; "
+                f"found={state_constraints!r}"
+            )
+            assert state_constraints[0][0] == "escrows_state_check"
     finally:
         with psycopg.connect(database_url, autocommit=True) as admin:
             admin.execute(f'DROP SCHEMA IF EXISTS "{schema}" CASCADE')
