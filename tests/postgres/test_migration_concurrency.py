@@ -11,12 +11,12 @@ import pytest
 from postgres.migrations import apply_migrations
 
 MIGRATION_DIR = Path(__file__).resolve().parents[2] / "postgres" / "migrations"
-EXPECTED_VERSIONS = list(range(1, 14))
+EXPECTED_VERSIONS = list(range(1, 15))
 
 
 @pytest.mark.postgres
 def test_two_connections_apply_canonical_migrations_without_duplicate_schema_versions():
-    """Exercise the full canonical 13-migration chain on concurrent connections.
+    """Exercise the full canonical 14-migration chain on concurrent connections.
 
     Requires a disposable PostgreSQL database in GERCHAIN_TEST_POSTGRES_URL.
     The test creates and drops a uniquely named schema; it never touches public.
@@ -44,7 +44,7 @@ def test_two_connections_apply_canonical_migrations_without_duplicate_schema_ver
 
         # The transaction-scoped advisory lock must allow exactly one runner to
         # apply the chain while the other sees it as already applied.
-        assert sorted(len(result) for result in results) == [0, 13]
+        assert sorted(len(result) for result in results) == [0, 14]
         assert sorted(version for result in results for version in result) == EXPECTED_VERSIONS
 
         with psycopg.connect(database_url, options=f"-c search_path={schema}") as check:
@@ -52,8 +52,8 @@ def test_two_connections_apply_canonical_migrations_without_duplicate_schema_ver
                 "SELECT version, checksum FROM schema_version ORDER BY version"
             ).fetchall()
             assert [row[0] for row in rows] == EXPECTED_VERSIONS
-            assert len(rows) == 13
-            assert len({row[0] for row in rows}) == 13
+            assert len(rows) == 14
+            assert len({row[0] for row in rows}) == 14
             assert all(row[1] for row in rows)
 
             unique_version = check.execute(
