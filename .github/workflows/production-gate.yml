@@ -29,6 +29,7 @@ jobs:
       GERCHAIN_DATABASE_URL: postgresql+psycopg://gerchain:gerchain@localhost:5432/gerchain_test
       GERCHAIN_POSTGRES_DSN: postgresql://gerchain:gerchain@localhost:5432/gerchain_test
       GERCHAIN_MIGRATION_TEST_DSN: postgresql://gerchain:gerchain@localhost:5432/gerchain_migration_test
+      GERCHAIN_TEST_POSTGRES_URL: postgresql://gerchain:gerchain@localhost:5432/gerchain_test
     steps:
       - name: Checkout exact source commit
         uses: actions/checkout@v4
