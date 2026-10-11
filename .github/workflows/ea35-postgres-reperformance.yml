@@ -252,6 +252,12 @@ jobs:
         run: |
           pytest -q tests/persistence/test_deep_value_reconciliation_postgres.py
 
+      - name: Re-perform CREATE/FUND/LOCK/RELEASE/REFUND/CANCEL/SETTLEMENT on PostgreSQL
+        env:
+          GERCHAIN_TEST_DATABASE_URL: postgresql+psycopg://gerchain:gerchain@localhost:5432/gerchain_reperformance
+        run: |
+          pytest -q -s tests/persistence/test_canonical_lifecycle_postgres.py
+
       - name: Re-perform canonical atomic lifecycle, rollback, and replay tests on PostgreSQL
         run: |
           pytest -q -s tests/persistence/test_deep_value_reconciliation.py
