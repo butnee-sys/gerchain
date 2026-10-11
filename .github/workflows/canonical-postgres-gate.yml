@@ -148,24 +148,58 @@ jobs:
           import hashlib, json, os, platform, subprocess
           from pathlib import Path
           root = Path.cwd()
-          migrations = sorted((root / 'postgres/migrations').glob('*.sql'))
+          from postgres.migrations import _canonical_migration_files, checksum
+          import psycopg
+          migration_dir = root / 'postgres/migrations'
+          selected = _canonical_migration_files(migration_dir)
+          canonical = [
+              {'version': int(p.name.split('_', 1)[0]),
+               'path': str(p.relative_to(root)),
+               'sha256': hashlib.sha256(p.read_bytes()).hexdigest(),
+               'runner_checksum': checksum(p.read_text(encoding='utf-8')),
+               'bytes': p.stat().st_size}
+              for p in selected
+          ]
+          if [item['version'] for item in canonical] != list(range(1, 14)):
+              raise SystemExit('canonical migration chain is not exactly versions 1..13')
+          database_rows = []
+          database_error = None
+          dsn = (os.environ.get('GERCHAIN_TEST_DATABASE_URL') or os.environ.get('GERCHAIN_DATABASE_URL') or '').replace('postgresql+psycopg://', 'postgresql://').replace('postgresql+psycopg2://', 'postgresql://')
+          if dsn:
+              try:
+                  with psycopg.connect(dsn) as conn:
+                      exists = conn.execute("SELECT to_regclass('public.schema_version')").fetchone()[0]
+                      if exists:
+                          database_rows = [
+                              {'version': row[0], 'checksum': row[1], 'applied_at': row[2].isoformat() if row[2] else None}
+                              for row in conn.execute("SELECT version, checksum, applied_at FROM schema_version ORDER BY version").fetchall()
+                          ]
+              except Exception as exc:
+                  database_error = f'{type(exc).__name__}: {exc}'
+          db_by_version = {row['version']: row['checksum'] for row in database_rows}
+          for item in canonical:
+              item['database_checksum'] = db_by_version.get(item['version'])
+              item['database_checksum_matches_runner'] = (
+                  item['database_checksum'] == item['runner_checksum']
+                  if item['database_checksum'] is not None else None
+              )
           manifest = {
               'repository': os.environ.get('GITHUB_REPOSITORY'),
               'commit_sha': os.environ['EVIDENCE_COMMIT_SHA'],
               'workflow_run_id': os.environ['EVIDENCE_RUN_ID'],
               'workflow_run_attempt': os.environ['EVIDENCE_RUN_ATTEMPT'],
               'python': platform.python_version(),
-              'migration_files': [
-                  {'path': str(p.relative_to(root)), 'sha256': hashlib.sha256(p.read_bytes()).hexdigest(), 'bytes': p.stat().st_size}
-                  for p in migrations
-              ],
+              'canonical_migration_count': len(canonical),
+              'canonical_migrations': canonical,
+              'schema_version_rows': database_rows,
+              'database_manifest_error': database_error,
           }
           manifest['git_status_porcelain'] = subprocess.run(['git', 'status', '--porcelain'], capture_output=True, text=True, check=False).stdout.splitlines()
           out = root / 'artifacts/canonical-postgres-evidence'
           out.mkdir(parents=True, exist_ok=True)
-          (out / 'manifest.json').write_text(json.dumps(manifest, indent=2) + '\n', encoding='utf-8')
-          (out / 'commit-sha.txt').write_text(manifest['commit_sha'] + '\n', encoding='utf-8')
-          print(json.dumps({'commit_sha': manifest['commit_sha'], 'migration_count': len(migrations), 'manifest': str(out / 'manifest.json')}, indent=2))
+          (out / 'manifest.json').write_text(json.dumps(manifest, indent=2) + '\\n', encoding='utf-8')
+          (out / 'commit-sha.txt').write_text(manifest['commit_sha'] + '\\n', encoding='utf-8')
+          print(json.dumps({'commit_sha': manifest['commit_sha'], 'canonical_migration_count': len(canonical), 'schema_version_rows': len(database_rows), 'manifest': str(out / 'manifest.json')}, indent=2))
           PY
       - name: Upload canonical PostgreSQL evidence bundle
         if: always()
