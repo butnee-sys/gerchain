@@ -5,6 +5,9 @@ on:
   push:
     paths:
       - "postgres/migrations/**"
+      - "postgres/migrations.py"
+      - "postgres/migration_runner.py"
+      - "scripts/postgres_migration_runner.py"
       - "scripts/verify_canonical_migrations.py"
       - ".github/workflows/canonical-migration-gate.yml"
       - "services/gerchain_runtime_factory.py"
