@@ -159,8 +159,17 @@ def test_migrations_are_serialized_and_checksum_is_stable(monkeypatch):
 
 
 def test_checksum_failure_rolls_back_prior_migration_ddl_and_history(monkeypatch, tmp_path):
-    """A later checksum mismatch must roll back earlier DDL in the same pass."""
-    dsn = _dsn()
+    """A later checksum mismatch must roll back earlier DDL and history atomically.
+
+    Use a dedicated PostgreSQL database so other tests' canonical migration
+    history cannot cause an earlier, unrelated checksum mismatch.
+    """
+    admin_dsn = _dsn()
+    database_name = f"gerchain_checksum_rollback_{uuid.uuid4().hex[:12]}"
+    with psycopg.connect(admin_dsn, autocommit=True) as admin:
+        admin.execute(sql.SQL("CREATE DATABASE {}").format(sql.Identifier(database_name)))
+
+    fresh_dsn = make_conninfo(admin_dsn, dbname=database_name)
     migration_dir = tmp_path / "migration_bundle"
     migration_dir.mkdir()
     (migration_dir / "001_create_probe.sql").write_text(
@@ -170,31 +179,41 @@ def test_checksum_failure_rolls_back_prior_migration_ddl_and_history(monkeypatch
         "CREATE TABLE migration_second_probe (id INTEGER);", encoding="utf-8"
     )
 
-    with psycopg.connect(dsn) as conn:
-        conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS schema_version (
-                version INTEGER PRIMARY KEY,
-                checksum TEXT NOT NULL,
-                applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    try:
+        with psycopg.connect(fresh_dsn) as conn:
+            conn.execute(
+                """
+                CREATE TABLE schema_version (
+                    version INTEGER PRIMARY KEY,
+                    checksum TEXT NOT NULL,
+                    applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
+                )
+                """
             )
-            """
-        )
-        conn.execute(
-            "INSERT INTO schema_version(version, checksum) VALUES (2, 'deliberately-wrong-checksum') "
-            "ON CONFLICT (version) DO UPDATE SET checksum = EXCLUDED.checksum"
-        )
-        conn.commit()
+            conn.execute(
+                "INSERT INTO schema_version(version, checksum) VALUES (2, 'deliberately-wrong-checksum')"
+            )
+            conn.commit()
 
-        with pytest.raises(RuntimeError, match="Migration checksum mismatch for version 2"):
-            apply_migrations(conn, migration_dir)
+            with pytest.raises(RuntimeError, match="Migration checksum mismatch for version 2"):
+                apply_migrations(conn, migration_dir)
 
-        # The v1 DDL and its schema_version row must be rolled back atomically.
-        probe_exists = conn.execute(
-            "SELECT to_regclass('public.migration_rollback_probe')"
-        ).fetchone()[0]
-        versions = conn.execute(
-            "SELECT version, checksum FROM schema_version ORDER BY version"
-        ).fetchall()
-        assert probe_exists is None
-        assert versions == [(2, "deliberately-wrong-checksum")]
+            probe_exists = conn.execute(
+                "SELECT to_regclass('public.migration_rollback_probe')"
+            ).fetchone()[0]
+            second_probe_exists = conn.execute(
+                "SELECT to_regclass('public.migration_second_probe')"
+            ).fetchone()[0]
+            versions = conn.execute(
+                "SELECT version, checksum FROM schema_version ORDER BY version"
+            ).fetchall()
+            assert probe_exists is None
+            assert second_probe_exists is None
+            assert versions == [(2, "deliberately-wrong-checksum")]
+    finally:
+        with psycopg.connect(admin_dsn, autocommit=True) as admin:
+            admin.execute(
+                sql.SQL("DROP DATABASE IF EXISTS {} WITH (FORCE)").format(
+                    sql.Identifier(database_name)
+                )
+            )
