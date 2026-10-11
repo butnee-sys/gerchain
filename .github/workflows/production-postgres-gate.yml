@@ -67,7 +67,7 @@ jobs:
             shift
             log="artifacts/segmented-tests/$name.log"
             echo "=== SEGMENT $name ==="
-            PYTHONFAULTHANDLER=1 python -X faulthandler -m pytest -vv -s "$@" >"$log" 2>&1
+            env -u GERCHAIN_MIGRATION_TEST_DATABASE_URL -u GERCHAIN_TEST_DATABASE_URL -u GERCHAIN_DATABASE_URL -u GERCHAIN_POSTGRES_DSN PYTHONFAULTHANDLER=1 python -X faulthandler -m pytest -vv -s "$@" >"$log" 2>&1
             rc=$?
             cat "$log"
             echo "SEGMENT_RESULT=$name EXIT_CODE=$rc"
