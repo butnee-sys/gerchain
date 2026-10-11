@@ -82,18 +82,35 @@ jobs:
             tests/test_postgres_atomic_ledger.py \
             postgres/tests/test_concurrency.py \
             tests/test_production_runtime_factory.py 2>&1 | tee evidence/postgres/core-gates.log
-      - name: Apply and record canonical SQL migration history
+      - name: Apply the authoritative 13-step canonical migration chain
         run: |
           set -euo pipefail
-          mkdir -p evidence/postgres
-          sha256sum postgres/schema/001_concurrency.sql postgres/schema/002_canonical_production_persistence.sql \
-            > evidence/postgres/migration-file-sha256.txt
-          psql -v ON_ERROR_STOP=1 -f postgres/schema/001_concurrency.sql 2>&1 | tee evidence/postgres/migration-001.log
-          psql -v ON_ERROR_STOP=1 -c "INSERT INTO schema_version(version, checksum) VALUES (1, 'postgres/schema/001_concurrency.sql') ON CONFLICT (version) DO NOTHING;"
-          psql -v ON_ERROR_STOP=1 -f postgres/schema/002_canonical_production_persistence.sql 2>&1 | tee evidence/postgres/migration-002-canonical-production.log
-          psql -v ON_ERROR_STOP=1 -c 'SELECT version, checksum, applied_at FROM schema_version ORDER BY version;' 2>&1 | tee evidence/postgres/migration-history.txt
-          psql -v ON_ERROR_STOP=1 -c "SELECT CASE WHEN count(*) >= 2 THEN 'MIGRATION_HISTORY=PASS' ELSE 'MIGRATION_HISTORY=FAIL' END FROM schema_version WHERE version IN (1,2);" | tee evidence/postgres/migration-history-check.txt
-          grep -q 'MIGRATION_HISTORY=PASS' evidence/postgres/migration-history-check.txt
+          sha256sum postgres/migrations/*.sql > evidence/postgres/migration-file-sha256.txt
+          python - <<'PY' 2>&1 | tee evidence/postgres/migration-apply.log
+          import os
+          from sqlalchemy import create_engine, text
+          from services.gerchain_runtime_factory import initialize_canonical_postgres_schema
+
+          engine = create_engine(os.environ["GERCHAIN_DATABASE_URL"], pool_pre_ping=True)
+          try:
+              initialize_canonical_postgres_schema(engine)
+              with engine.connect() as connection:
+                  rows = connection.execute(
+                      text("SELECT version, checksum, applied_at FROM schema_version ORDER BY version")
+                  ).all()
+                  versions = [row.version for row in rows]
+                  print({"migration_versions": versions, "migration_rows": len(rows)})
+                  if versions != list(range(1, 14)):
+                      raise SystemExit(f"migration history mismatch: {versions}")
+                  with open("evidence/postgres/migration-history.txt", "w", encoding="utf-8") as handle:
+                      handle.write("version\\tchecksum\\tapplied_at\\n")
+                      for row in rows:
+                          handle.write(f"{row.version}\\t{row.checksum}\\t{row.applied_at.isoformat()}\\n")
+                  print("MIGRATION_HISTORY=PASS")
+          finally:
+              engine.dispose()
+          PY
+          grep -q 'MIGRATION_HISTORY=PASS' evidence/postgres/migration-apply.log
       - name: Verify canonical production runtime construction against PostgreSQL
         run: |
           set -euo pipefail
@@ -162,6 +179,7 @@ jobs:
           set -euo pipefail
           psql -v ON_ERROR_STOP=1 -c "SELECT table_schema, table_name FROM information_schema.tables WHERE table_schema='public' ORDER BY table_name;" > evidence/postgres/final-schema.txt 2>&1 || true
           psql -v ON_ERROR_STOP=1 -c 'SELECT version, checksum, applied_at FROM schema_version ORDER BY version;' > evidence/postgres/final-migration-history.txt 2>&1 || true
+          test "$(psql -v ON_ERROR_STOP=1 -Atc 'SELECT count(*) FROM schema_version WHERE version BETWEEN 1 AND 13;' 2>/dev/null || echo 0)" = "13" || true
           git rev-parse HEAD > evidence/postgres/final-commit.txt
           sha256sum .github/workflows/core-gates.yml .github/workflows/eai-postgres-reperformance.yml \
             postgres/schema/001_concurrency.sql postgres/schema/002_canonical_production_persistence.sql \
