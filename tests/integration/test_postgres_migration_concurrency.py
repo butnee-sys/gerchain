@@ -51,7 +51,7 @@ def test_concurrent_first_apply_and_same_checksum_replay(dsn, tmp_path):
     path = make_migration(tmp_path, 9901, f"CREATE TABLE {table} (id integer PRIMARY KEY);")
     # Two independent OS processes contend for the same migration lock.
     gate = tmp_path / "release"
-    worker = "\\n".join(
+    worker = "\n".join(
         [
             "import os, time",
             "from pathlib import Path",
