@@ -53,11 +53,47 @@ jobs:
           git rev-parse HEAD | tee evidence/postgres/commit.txt
           python --version 2>&1 | tee evidence/postgres/python-version.txt
           psql -v ON_ERROR_STOP=1 -c 'SELECT version();' | tee evidence/postgres/postgres-version.txt
-      - name: Apply checked-in SQL migration
+      - name: Compile all Python sources (fail closed)
         run: |
           set -euo pipefail
-          psql -v ON_ERROR_STOP=1 -f postgres/schema/001_concurrency.sql 2>&1 | tee evidence/postgres/migration.log
+          python -m compileall -q .
+          echo "COMPILEALL=PASS" | tee evidence/postgres/compileall.txt
+      - name: Run canonical core gates (fail closed)
+        env:
+          GERCHAIN_DATABASE_URL: postgresql+psycopg://gerchain:gerchain_ci_password@localhost:5432/gerchain_ci
+          GERCHAIN_TEST_DATABASE_URL: postgresql+psycopg://gerchain:gerchain_ci_password@localhost:5432/gerchain_ci
+          GERCHAIN_POSTGRES_DSN: postgresql+psycopg://gerchain:gerchain_ci_password@localhost:5432/gerchain_ci
+        run: |
+          set -euo pipefail
+          pytest -q \
+            tests/test_core_structure.py \
+            tests/test_core_final_lock_contract.py \
+            tests/test_boundary_adapters.py \
+            tests/test_composition_root.py \
+            tests/test_governed_flow_adapters.py \
+            tests/test_g3_core_boundary.py \
+            tests/test_g3_core_runtime_e2e.py \
+            tests/test_g3_dee_authorized_handler.py \
+            tests/test_dee_security.py \
+            tests/test_nef_gerchain_boundary.py \
+            tests/test_nef_gerchain_port.py \
+            tests/production/test_runtime_source_compiles.py \
+            tests/production/test_postgres_canonical_concurrency.py \
+            tests/test_postgres_atomic_ledger.py \
+            postgres/tests/test_concurrency.py \
+            tests/test_production_runtime_factory.py 2>&1 | tee evidence/postgres/core-gates.log
+      - name: Apply and record canonical SQL migration history
+        run: |
+          set -euo pipefail
+          mkdir -p evidence/postgres
+          sha256sum postgres/schema/001_concurrency.sql postgres/schema/002_canonical_production_persistence.sql \
+            > evidence/postgres/migration-file-sha256.txt
+          psql -v ON_ERROR_STOP=1 -f postgres/schema/001_concurrency.sql 2>&1 | tee evidence/postgres/migration-001.log
+          psql -v ON_ERROR_STOP=1 -c "INSERT INTO schema_version(version, checksum) VALUES (1, 'postgres/schema/001_concurrency.sql') ON CONFLICT (version) DO NOTHING;"
+          psql -v ON_ERROR_STOP=1 -f postgres/schema/002_canonical_production_persistence.sql 2>&1 | tee evidence/postgres/migration-002-canonical-production.log
           psql -v ON_ERROR_STOP=1 -c 'SELECT version, checksum, applied_at FROM schema_version ORDER BY version;' 2>&1 | tee evidence/postgres/migration-history.txt
+          psql -v ON_ERROR_STOP=1 -c "SELECT CASE WHEN count(*) >= 2 THEN 'MIGRATION_HISTORY=PASS' ELSE 'MIGRATION_HISTORY=FAIL' END FROM schema_version WHERE version IN (1,2);" | tee evidence/postgres/migration-history-check.txt
+          grep -q 'MIGRATION_HISTORY=PASS' evidence/postgres/migration-history-check.txt
       - name: Verify canonical production runtime construction against PostgreSQL
         run: |
           set -euo pipefail
@@ -127,6 +163,12 @@ jobs:
           psql -v ON_ERROR_STOP=1 -c "SELECT table_schema, table_name FROM information_schema.tables WHERE table_schema='public' ORDER BY table_name;" > evidence/postgres/final-schema.txt 2>&1 || true
           psql -v ON_ERROR_STOP=1 -c 'SELECT version, checksum, applied_at FROM schema_version ORDER BY version;' > evidence/postgres/final-migration-history.txt 2>&1 || true
           git rev-parse HEAD > evidence/postgres/final-commit.txt
+          sha256sum .github/workflows/core-gates.yml .github/workflows/eai-postgres-reperformance.yml \
+            postgres/schema/001_concurrency.sql postgres/schema/002_canonical_production_persistence.sql \
+            persistence/deep_value_reconciliation.py tests/persistence/test_deep_value_reconciliation.py \
+            > evidence/postgres/source-artifact-sha256.txt
+          find evidence/postgres -type f ! -name SHA256SUMS.txt ! -name SHA256SUMS.sha256 -print0 | sort -z | xargs -0 sha256sum > evidence/postgres/SHA256SUMS.txt
+          sha256sum evidence/postgres/SHA256SUMS.txt > evidence/postgres/SHA256SUMS.sha256
       - name: Upload commit-bound evidence
         if: always()
         uses: actions/upload-artifact@v4
