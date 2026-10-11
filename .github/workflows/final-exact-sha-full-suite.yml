@@ -172,6 +172,10 @@ jobs:
                      "currency": os.environ["GERCHAIN_CURRENCY"]})
           engine.dispose()
           PY
+      - name: Create isolated database for production-entrypoint contract tests
+        run: |
+          PGPASSWORD=gerchain createdb -h 127.0.0.1 -U gerchain gerchain_reperformance
+          PGPASSWORD=gerchain psql -h 127.0.0.1 -U gerchain -d gerchain_reperformance -c "SELECT current_database();"
       - name: Verify production entrypoint contract
         run: pytest -q tests/services/test_production_entrypoint.py
       - name: Boot real PostgreSQL runtime and prove canonical authority
