@@ -35,7 +35,7 @@ def initialize_canonical_postgres_schema(engine: Engine) -> None:
     """
     if engine.dialect.name != "postgresql":
         raise ValueError("canonical production schema requires PostgreSQL")
-    url = make_url(str(engine.url))
+    url = make_url(engine.url)
     driver_url = url.set(drivername="postgresql").render_as_string(hide_password=False)
     migration_dir = Path(__file__).resolve().parents[1] / "postgres" / "migrations"
     from postgres.migrations import apply_migrations
