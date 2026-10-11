@@ -35,8 +35,9 @@ def test_production_runtime_factory_establishes_canonical_authority():
     }.issubset(tables)
 
     with engine.connect() as connection:
-        assert connection.execute(
-            text("SELECT count(*) FROM schema_version")
-        ).scalar_one() >= 12
+        versions = connection.execute(
+            text("SELECT version FROM schema_version ORDER BY version")
+        ).scalars().all()
+        assert versions == list(range(1, 14))
 
     engine.dispose()
