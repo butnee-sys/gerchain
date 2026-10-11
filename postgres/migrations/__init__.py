@@ -213,10 +213,28 @@ def apply_migrations(connection: Connection, migration_dir: Path) -> tuple[int, 
             for statement in _split_sql_statements(source):
                 connection.execute(statement)
             connection.execute(
-                "INSERT INTO schema_version(version, checksum) VALUES (%s, %s)",
+                """
+                INSERT INTO schema_version(version, checksum)
+                VALUES (%s, %s)
+                ON CONFLICT (version) DO NOTHING
+                """,
                 (version, digest),
             )
-            applied_now.append(version)
+            # Concurrent or legacy bootstrap paths may publish a version row
+            # while this runner is applying the same chain. Treat only an
+            # identical checksum as idempotent; never mask schema drift.
+            published = connection.execute(
+                "SELECT checksum FROM schema_version WHERE version = %s FOR UPDATE",
+                (version,),
+            ).fetchone()
+            if published is None or published[0] != digest:
+                accepted = published is not None and published[0] in accepted_checksums
+                if not accepted:
+                    raise RuntimeError(
+                        f"Migration publication conflict for version {version}: {path.name}"
+                    )
+            else:
+                applied_now.append(version)
     return tuple(applied_now)
 
 
