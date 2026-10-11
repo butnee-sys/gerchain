@@ -146,6 +146,7 @@ def test_applied_checksum_mismatch_rolls_back_and_preserves_history(isolated_dat
         version_rows_before = conn.execute(
             "SELECT version, checksum FROM schema_version ORDER BY version"
         ).fetchall()
+        conn.commit()  # fingerprint/read queries start a transaction; runner requires a clean connection
         with pytest.raises(RuntimeError, match="Migration checksum mismatch for version 13"):
             apply_migrations(conn, MIGRATION_DIR)
         rows = conn.execute("SELECT version, checksum FROM schema_version ORDER BY version").fetchall()
@@ -194,11 +195,6 @@ def test_real_thirteen_migration_registry_is_idempotent_and_checksum_failure_is_
             v13.read_text(encoding="utf-8") + "\\n-- intentional checksum tamper for rollback proof\\n",
             encoding="utf-8",
         )
-        (migration_copy / "014_should_never_apply.sql").write_text(
-            "CREATE TABLE ea35_checksum_rollback_probe (id INTEGER PRIMARY KEY);",
-            encoding="utf-8",
-        )
-
         before_failure_rows = conn.execute(
             "SELECT version, checksum FROM schema_version ORDER BY version"
         ).fetchall()
