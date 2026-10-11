@@ -87,7 +87,7 @@ jobs:
               admin.execute('CREATE DATABASE "gerchain_migration_tests"')
           isolated_dsn = dsn.rsplit("/", 1)[0] + "/gerchain_migration_tests"
           with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as env:
-              env.write(f"GERCHAIN_MIGRATION_TEST_DATABASE_URL={isolated_dsn}\\n")
+              env.write(f"GERCHAIN_MIGRATION_TEST_DATABASE_URL={isolated_dsn}\n")
           print("MIGRATION_MUTATION_TEST_DATABASE=gerchain_migration_tests")
           PY
       - name: Verify PostgreSQL migration concurrency, checksum rollback, and production factory
