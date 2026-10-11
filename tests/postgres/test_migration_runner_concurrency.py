@@ -6,6 +6,7 @@ from pathlib import Path
 from uuid import uuid4
 
 import pytest
+import psycopg
 from sqlalchemy import create_engine, text
 
 from postgres.migration_runner import apply_migrations, checksum
@@ -22,7 +23,7 @@ def postgres_schema(tmp_path: Path):
     engine = create_engine(DATABASE_URL, pool_pre_ping=True)
     schema = "migration_test_" + uuid4().hex
     with engine.begin() as conn:
-        conn.exec_driver_sql(f'CREATE SCHEMA "{schema}"')
+        conn.execute(f'CREATE SCHEMA "{schema}"')
     try:
         yield engine, schema, tmp_path
     finally:
@@ -32,8 +33,9 @@ def postgres_schema(tmp_path: Path):
 
 
 def _connect_to_schema(engine, schema):
-    conn = engine.connect()
-    conn.exec_driver_sql(f'SET search_path TO "{schema}"')
+    dsn = engine.url.set(drivername="postgresql").render_as_string(hide_password=False)
+    conn = psycopg.connect(dsn)
+    conn.execute(f'SET search_path TO "{schema}"')
     conn.commit()
     return conn
 
@@ -62,7 +64,7 @@ def test_duplicate_identical_schema_version_rows_are_reconciled(postgres_schema)
         assert rows == [(1, digest)]
         assert conn.exec_driver_sql(
             "SELECT COUNT(*) FROM migration_probe"
-        ).scalar_one() == 0
+        ).fetchone()[0] == 0
         conn.commit()
 
 
