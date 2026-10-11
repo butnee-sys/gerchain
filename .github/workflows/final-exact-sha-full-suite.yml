@@ -71,21 +71,47 @@ jobs:
         run: |
           PGPASSWORD=gerchain createdb -h 127.0.0.1 -U gerchain gerchain_migration_proof
           PGPASSWORD=gerchain psql -h 127.0.0.1 -U gerchain -d gerchain_migration_proof -c "SELECT current_database();"
-      - name: Apply and verify canonical migration baseline
+      - name: Verify migration 014, preserve checksums 001-013, and inspect pg_constraint
         run: |
           python - <<'PY'
           import os
+          import tempfile
           from pathlib import Path
           import psycopg
-          from postgres.migrations import apply_migrations
+          from postgres.migrations import apply_migrations, checksum
+          migration_dir = Path("postgres/migrations")
           dsn = os.environ["GERCHAIN_DATABASE_URL"].replace("postgresql+psycopg://", "postgresql://")
-          with psycopg.connect(dsn) as connection:
-              apply_migrations(connection, Path("postgres/migrations"))
-              rows = connection.execute("SELECT version, checksum FROM schema_version ORDER BY version").fetchall()
-              print(f"MIGRATION_ROWS={rows!r}")
-              assert [row[0] for row in rows] == list(range(1, 15)), rows
-              assert all(row[1] for row in rows), rows
-          print("MIGRATION_BASELINE=PASS")
+          with tempfile.TemporaryDirectory(prefix="gerchain-migrations-001-013-") as tmp:
+              baseline_dir = Path(tmp)
+              for version in range(1, 14):
+                  source = next(migration_dir.glob(f"{version:03d}_*.sql"))
+                  (baseline_dir / source.name).write_text(source.read_text(encoding="utf-8"), encoding="utf-8")
+              with psycopg.connect(dsn) as connection:
+                  apply_migrations(connection, baseline_dir)
+                  before = connection.execute("SELECT version, checksum FROM schema_version ORDER BY version").fetchall()
+                  assert [row[0] for row in before] == list(range(1, 14)), before
+                  expected = {version: checksum((baseline_dir / next(p.name for p in baseline_dir.glob(f"{version:03d}_*.sql")).name).read_text(encoding="utf-8")) for version in range(1, 14)}
+                  assert dict(before) == expected, (before, expected)
+                  apply_migrations(connection, migration_dir)
+                  after = connection.execute("SELECT version, checksum FROM schema_version ORDER BY version").fetchall()
+                  assert [row[0] for row in after] == list(range(1, 15)), after
+                  assert after[:13] == before, {"before": before, "after": after}
+                  assert after[13][1] == checksum((migration_dir / "014_canonical_escrow_state_constraint.sql").read_text(encoding="utf-8"))
+                  constraints = connection.execute("""
+                    SELECT conname, pg_get_constraintdef(oid)
+                    FROM pg_constraint
+                    WHERE conrelid = 'escrows'::regclass
+                      AND conname IN ('legacy_escrow_state_check', 'escrows_state_canonical_check')
+                    ORDER BY conname
+                  """).fetchall()
+                  print(f"PG_CONSTRAINT_ESCROWS={constraints!r}")
+                  assert not any(name == "legacy_escrow_state_check" for name, _ in constraints), constraints
+                  canonical = [definition for name, definition in constraints if name == "escrows_state_canonical_check"]
+                  assert len(canonical) == 1 and all(state in canonical[0] for state in ("CREATED", "FUNDED", "LOCKED", "RELEASED", "REFUNDED", "CANCELLED")), canonical
+                  print(f"MIGRATION_CHECKSUMS_001_013_PRESERVED={after[:13] == before}")
+                  print(f"MIGRATION_014_CHECKSUM={after[13][1]}")
+                  print("MIGRATION_014_PG_CONSTRAINT=PASS")
+          print("MIGRATION_BASELINE_AND_014=PASS")
           PY
       - name: Verify canonical fundamental architecture gates (SHUUD excluded)
         run: |
