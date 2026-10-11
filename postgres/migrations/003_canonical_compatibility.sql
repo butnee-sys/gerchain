@@ -1,10 +1,8 @@
 -- GerChain canonical production corrective migration 003
--- Adds only compatibility-safe constraints after canonical columns/tables exist.
--- No existing value row is rejected by this migration.
-
-ALTER TABLE escrows DROP CONSTRAINT IF EXISTS gerchain_escrow_state_check;
-ALTER TABLE escrows ADD CONSTRAINT gerchain_escrow_state_check
-    CHECK (state IN ('CREATED','FUNDED','LOCKED','RELEASED','REFUNDED','CANCELLED'));
+-- Adds compatibility-safe indexes after canonical columns/tables exist.
+-- The escrow state invariant is owned by migration 005, which removes legacy
+-- state CHECK constraints and installs exactly one canonical escrows_state_check.
+-- Do not introduce a parallel state constraint here.
 
 CREATE INDEX IF NOT EXISTS ix_gerchain_ledger_movements_escrow
     ON gerchain_ledger_movements (escrow_id);
