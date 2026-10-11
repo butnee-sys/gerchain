@@ -10,6 +10,7 @@ Purpose:
   хоорондын уялдааг шалгах.
 """
 
+from dee_security.root_of_trust import RootOfTrust
 import json
 
 from core.canonical import canonical_bytes
@@ -84,6 +85,12 @@ def build_settlement():
         amount=1000000,
         timestamp="2026-09-03T12:01:00Z",
         evidence={"type": "delivery-confirmed"},
+    
+        root=RootOfTrust("TEST-OWNER", "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8="),
+        owner_id="TEST-OWNER",
+        authorized=True,
+        evidence_verified=True,
+        trinity_proof={"trust": True, "transparency": True, "performance": True},
     )
 
     return witness_chain
