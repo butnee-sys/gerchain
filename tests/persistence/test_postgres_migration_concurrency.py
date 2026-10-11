@@ -123,7 +123,15 @@ def test_production_factory_boots_with_canonical_ledger_authority(monkeypatch) -
     """Real PostgreSQL boot check for the exact production factory path."""
     from production_entrypoint import build_production_runtime
 
-    monkeypatch.setenv("GERCHAIN_DATABASE_URL", os.environ["GERCHAIN_MIGRATION_TEST_DATABASE_URL"])
+    base_dsn = os.environ["GERCHAIN_MIGRATION_TEST_DATABASE_URL"].rsplit("/", 1)[0]
+    admin_dsn = f"{base_dsn}/postgres"
+    factory_database = "gerchain_factory_boot"
+    with psycopg.connect(admin_dsn, autocommit=True) as admin:
+        admin.execute(f'DROP DATABASE IF EXISTS "{factory_database}" WITH (FORCE)')
+        admin.execute(f'CREATE DATABASE "{factory_database}"')
+    factory_dsn = f"{base_dsn}/{factory_database}"
+
+    monkeypatch.setenv("GERCHAIN_DATABASE_URL", factory_dsn)
     monkeypatch.setenv("GERCHAIN_ESCROW_ID", "factory-boot-escrow")
     monkeypatch.setenv("GERCHAIN_ESCROW_AMOUNT", "1")
     monkeypatch.setenv("GERCHAIN_CURRENCY", "MNT")
@@ -136,3 +144,5 @@ def test_production_factory_boots_with_canonical_ledger_authority(monkeypatch) -
         assert runtime.escrow_engine.escrow_id == "factory-boot-escrow"
     finally:
         engine.dispose()
+        with psycopg.connect(admin_dsn, autocommit=True) as admin:
+            admin.execute(f'DROP DATABASE IF EXISTS "{factory_database}" WITH (FORCE)')
