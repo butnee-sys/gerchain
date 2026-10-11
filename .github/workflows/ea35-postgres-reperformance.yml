@@ -125,6 +125,11 @@ jobs:
               assert [row[0] for row in rows_first] == list(range(1, 14)), rows_first
               assert all(row[1] for row in rows_first), rows_first
 
+              # A SELECT opens an implicit psycopg transaction. The migration
+              # runner deliberately requires an idle connection, so close the
+              # read transaction before the second invocation.
+              connection.commit()
+
               # Idempotency gate: a second run must not add migration rows,
               # change checksums, or rewrite applied_at timestamps.
               apply_migrations(connection, Path("postgres/migrations"))
