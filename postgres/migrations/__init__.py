@@ -181,6 +181,32 @@ def apply_migrations(connection: Connection, migration_dir: Path) -> tuple[int, 
             )
             """
         )
+        # Reconcile legacy schema_version tables that predate the canonical
+        # primary key. Identical duplicate publications are safe to collapse;
+        # conflicting checksums for one version must fail closed.
+        conflicts = connection.execute(
+            """
+            SELECT version
+            FROM schema_version
+            GROUP BY version
+            HAVING COUNT(DISTINCT checksum) > 1
+            ORDER BY version
+            """
+        ).fetchall()
+        if conflicts:
+            version = conflicts[0][0]
+            raise RuntimeError(
+                f"Conflicting schema_version checksums for version {version}"
+            )
+        connection.execute(
+            """
+            DELETE FROM schema_version AS duplicate
+            USING schema_version AS keeper
+            WHERE duplicate.version = keeper.version
+              AND duplicate.checksum = keeper.checksum
+              AND duplicate.ctid > keeper.ctid
+            """
+        )
         for version, path in enumerate(selected, start=1):
             source = path.read_text(encoding="utf-8")
             if not source.strip():
