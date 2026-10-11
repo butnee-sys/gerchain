@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 import psycopg
-from sqlalchemy import Engine
+from sqlalchemy import Engine, create_engine
 from sqlalchemy.engine import make_url
 
 from persistence.atomic_ledger import AtomicLedgerBase
@@ -84,13 +84,26 @@ def assert_canonical_production_schema(connection) -> None:
 class ProductionRuntimeFactory:
     """Create the production GerChain runtime with PostgreSQL as authority."""
 
-    def __init__(self, config: ProductionRuntimeConfig, *, engine: Engine) -> None:
+    def __init__(
+        self,
+        config: ProductionRuntimeConfig,
+        *,
+        engine: Engine | None = None,
+        session_factory: Callable[[], Any] | None = None,
+    ) -> None:
         if not config.database_url.startswith(("postgresql://", "postgresql+psycopg://", "postgresql+psycopg2://")):
             raise ValueError("ProductionRuntimeFactory requires a PostgreSQL database URL")
-        if engine is None or engine.dialect.name != "postgresql":
+        if engine is None and session_factory is not None:
+            bind = getattr(session_factory, "kw", {}).get("bind")
+            if bind is None:
+                bind = getattr(session_factory, "bind", None)
+            if bind is not None and getattr(bind, "dialect", None) is not None:
+                engine = bind
+        self.engine = engine or create_engine(config.database_url, pool_pre_ping=True)
+        if self.engine.dialect.name != "postgresql":
             raise ValueError("ProductionRuntimeFactory requires a PostgreSQL engine")
         self.config = config
-        self.engine = engine
+        self._provided_session_factory = session_factory
 
     def initialize(self) -> None:
         initialize_canonical_postgres_schema(self.engine)
@@ -108,6 +121,11 @@ class ProductionRuntimeFactory:
         return runtime
 
     def _session_factory(self) -> Callable[[], Any]:
+        if self._provided_session_factory is not None:
+            bind = getattr(self._provided_session_factory, "kw", {}).get("bind")
+            if bind is not None and bind is not self.engine:
+                raise ValueError("provided session_factory must be bound to the production engine")
+            return self._provided_session_factory
         from sqlalchemy.orm import sessionmaker
         return sessionmaker(bind=self.engine, expire_on_commit=False)
 
