@@ -86,6 +86,79 @@ def assert_canonical_production_schema(connection) -> None:
             f"actual={escrow_checks!r}"
         )
 
+    # Production boot must verify database-enforced invariants, not merely that
+    # tables and columns happen to exist. Keep this registry aligned with the
+    # final canonical migration chain (001..013).
+    required_checks = {
+        "escrows": {
+            "escrows_state_check",
+            "escrows_amount_positive_check",
+        },
+        "gerchain_ledger_accounts": {
+            "gerchain_ledger_balance_nonnegative",
+            "gerchain_ledger_version_check",
+        },
+        "gerchain_ledger_movements": {
+            "gerchain_movement_amount_check",
+            "gerchain_movement_operation_check",
+            "gerchain_movement_integrity_hash_check",
+            "gerchain_movement_escrow_binding_check",
+            "gerchain_movement_distinct_accounts",
+        },
+        "gerchain_transaction_witnesses": {
+            "gerchain_witness_amount_check",
+            "gerchain_witness_event_type_check",
+        },
+        "gerchain_outbox_events": {
+            "gerchain_outbox_state_check",
+        },
+        "gerchain_idempotency_records": {
+            "gerchain_idempotency_state_check",
+            "gerchain_idempotency_fingerprint_check",
+        },
+    }
+    missing_checks = []
+    for table_name, expected_names in required_checks.items():
+        actual_names = {
+            item.get("name")
+            for item in inspector.get_check_constraints(table_name)
+            if item.get("name")
+        }
+        missing = sorted(expected_names - actual_names)
+        if missing:
+            missing_checks.append(f"{table_name}: {missing}")
+    if missing_checks:
+        raise RuntimeError(
+            "canonical production schema missing required CHECK constraints: "
+            + "; ".join(missing_checks)
+        )
+
+    # A named but NOT VALID constraint does not prove legacy rows satisfy the
+    # invariant. Reject boot until every required constraint has been validated.
+    from sqlalchemy import text as sql_text
+    required_constraint_names = sorted(
+        name for names in required_checks.values() for name in names
+    )
+    validated_rows = connection.execute(
+        sql_text(
+            """
+            SELECT conname, convalidated
+            FROM pg_constraint
+            WHERE conname = ANY(:constraint_names)
+            """
+        ),
+        {"constraint_names": required_constraint_names},
+    ).all()
+    validated = {name: is_validated for name, is_validated in validated_rows}
+    unvalidated = sorted(
+        name for name in required_constraint_names if validated.get(name) is not True
+    )
+    if unvalidated:
+        raise RuntimeError(
+            "canonical production schema has missing or NOT VALID CHECK constraints: "
+            f"{unvalidated}"
+        )
+
     if "schema_version" not in inspector.get_table_names():
         raise RuntimeError("canonical production schema missing schema_version; required=13 migrations")
     version_constraints = inspector.get_pk_constraint("schema_version")
