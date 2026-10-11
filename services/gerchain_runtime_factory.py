@@ -72,8 +72,30 @@ def assert_canonical_production_schema(connection) -> None:
     if missing_columns:
         raise RuntimeError(f"canonical production schema missing columns: {'; '.join(missing_columns)}")
 
+    # Validate critical database-enforced invariants, not just ORM column presence.
+    # These checks prevent a structurally incomplete schema from passing boot.
+    if "escrows" not in inspector.get_table_names():
+        raise RuntimeError("canonical production schema missing escrows table")
+    escrow_checks = [
+        item for item in inspector.get_check_constraints("escrows")
+        if "state" in (item.get("sqltext") or "").lower()
+    ]
+    if len(escrow_checks) != 1 or escrow_checks[0].get("name") != "escrows_state_check":
+        raise RuntimeError(
+            "canonical production schema requires exactly one escrows_state_check; "
+            f"actual={escrow_checks!r}"
+        )
+
     if "schema_version" not in inspector.get_table_names():
         raise RuntimeError("canonical production schema missing schema_version; required=13 migrations")
+    version_constraints = inspector.get_pk_constraint("schema_version")
+    version_indexes = inspector.get_indexes("schema_version")
+    has_unique_version = (
+        version_constraints.get("constrained_columns") == ["version"]
+        or any(index.get("unique") and index.get("column_names") == ["version"] for index in version_indexes)
+    )
+    if not has_unique_version:
+        raise RuntimeError("canonical production schema requires unique schema_version.version")
     versions = connection.execute(text("SELECT version FROM schema_version ORDER BY version")).scalars().all()
     if versions != list(range(1, 14)):
         raise RuntimeError(
