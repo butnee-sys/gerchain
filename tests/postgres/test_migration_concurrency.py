@@ -179,3 +179,40 @@ def test_migration_checksum_mismatch_fails_closed():
     finally:
         with psycopg.connect(database_url, autocommit=True) as admin:
             admin.execute(f'DROP SCHEMA IF EXISTS "{schema}" CASCADE')
+
+
+
+@pytest.mark.postgres
+def test_invalid_escrow_state_is_rejected_by_named_database_constraint():
+    """The production schema, not just Python validation, rejects unknown states."""
+    database_url = os.environ.get("GERCHAIN_TEST_POSTGRES_URL")
+    if not database_url:
+        pytest.skip("GERCHAIN_TEST_POSTGRES_URL is not configured")
+
+    schema = "migration_state_check_" + uuid4().hex
+    with psycopg.connect(database_url, autocommit=True) as admin:
+        admin.execute(f'CREATE SCHEMA "{schema}"')
+
+    try:
+        with psycopg.connect(
+            database_url, options=f"-c search_path={schema}"
+        ) as connection:
+            apply_migrations(connection, MIGRATION_DIR)
+            with pytest.raises(psycopg.errors.CheckViolation) as exc:
+                connection.execute(
+                    """
+                    INSERT INTO escrows (
+                        id, sender_address, receiver_address, amount, state,
+                        condition_desc, refund_destination, currency, version,
+                        created_at, updated_at
+                    ) VALUES (
+                        'invalid-state-test', 'sender', 'receiver', 1,
+                        'NOT_A_STATE', 'test', 'sender', 'MNT', 0, now(), now()
+                    )
+                    """
+                )
+            assert exc.value.diag.constraint_name == "escrows_state_canonical_check"
+            connection.rollback()
+    finally:
+        with psycopg.connect(database_url, autocommit=True) as admin:
+            admin.execute(f'DROP SCHEMA IF EXISTS "{schema}" CASCADE')
