@@ -105,13 +105,13 @@ jobs:
           path: artifacts/segmented-tests/
           if-no-files-found: warn
           retention-days: 90
-      - name: Apply all 13 canonical migrations to a fresh PostgreSQL database
+      - name: Apply all canonical migrations to a fresh PostgreSQL database
         run: |
           python - <<'PY'
           import os
           import psycopg
           from pathlib import Path
-          from postgres.migrations import apply_migrations
+          from postgres.migrations import apply_migrations, _canonical_migration_files
 
           dsn = os.environ["GERCHAIN_MIGRATION_TEST_DATABASE_URL"]
           admin_dsn = dsn.rsplit("/", 1)[0] + "/postgres"
@@ -120,15 +120,18 @@ jobs:
               admin.execute("CREATE DATABASE gerchain_migration_chain")
           chain_dsn = dsn.rsplit("/", 1)[0] + "/gerchain_migration_chain"
           with psycopg.connect(chain_dsn) as conn:
-              first = apply_migrations(conn, Path("postgres/migrations"))
-              assert first == tuple(range(1, 14)), f"expected 13 migrations, got {first!r}"
+              migration_dir = Path("postgres/migrations")
+              expected = tuple(range(1, len(_canonical_migration_files(migration_dir)) + 1))
+              first = apply_migrations(conn, migration_dir)
+              assert first == expected, f"expected canonical migrations {expected!r}, got {first!r}"
           with psycopg.connect(chain_dsn) as conn:
               second = apply_migrations(conn, Path("postgres/migrations"))
               assert second == (), f"rerun was not idempotent: {second!r}"
               rows = conn.execute("SELECT version, checksum FROM schema_version ORDER BY version").fetchall()
-              assert [row[0] for row in rows] == list(range(1, 14)), rows
+              expected_versions = list(range(1, len(_canonical_migration_files(Path("postgres/migrations"))) + 1))
+              assert [row[0] for row in rows] == expected_versions, rows
               assert all(len(row[1]) == 64 for row in rows), "invalid SHA-256 checksum"
-          print("CANONICAL_MIGRATIONS=13/13; SECOND_RUN=NOOP; CHECKSUMS=SHA256")
+          print(f"CANONICAL_MIGRATIONS={len(expected)}/{len(expected)}; SECOND_RUN=NOOP; CHECKSUMS=SHA256")
           PY
       - name: Create isolated database for migration-runner mutation tests
         run: |
