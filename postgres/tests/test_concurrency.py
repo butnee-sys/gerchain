@@ -433,7 +433,7 @@ def test_postgres_rejects_invalid_escrow_state_via_named_check_constraint(monkey
                     )
                     """
                 )
-            assert exc_info.value.diag.constraint_name == "escrows_state_check"
+            assert exc_info.value.diag.constraint_name == "escrows_state_canonical_check"
             conn.rollback()
     finally:
         with psycopg.connect(admin_dsn, autocommit=True) as admin:
