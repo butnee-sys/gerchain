@@ -183,3 +183,77 @@ def test_failed_migration_rolls_back_ddl_and_schema_history() -> None:
                 "SELECT version FROM schema_version WHERE version = 1"
             ).fetchall() == []
 
+@pytest.mark.skipif(
+    not os.environ.get("GERCHAIN_MIGRATION_TEST_DATABASE_URL"),
+    reason="requires a dedicated, disposable PostgreSQL database",
+)
+def test_canonical_migration_rerun_preserves_preexisting_value_rows() -> None:
+    """Snapshot real value rows before/after a canonical migration rerun."""
+    from psycopg import sql
+    from psycopg.conninfo import make_conninfo
+
+    base_dsn = os.environ["GERCHAIN_MIGRATION_TEST_DATABASE_URL"]
+    database_name = f"gerchain_snapshot_{os.getpid()}"
+    admin_dsn = make_conninfo(base_dsn, dbname="postgres")
+    snapshot_dsn = make_conninfo(base_dsn, dbname=database_name)
+    migration_dir = Path(__file__).resolve().parents[2] / "postgres" / "migrations"
+
+    with psycopg.connect(admin_dsn, autocommit=True) as admin:
+        admin.execute(sql.SQL("DROP DATABASE IF EXISTS {} WITH (FORCE)").format(sql.Identifier(database_name)))
+        admin.execute(sql.SQL("CREATE DATABASE {}").format(sql.Identifier(database_name)))
+
+    try:
+        with psycopg.connect(snapshot_dsn) as connection:
+            apply_migrations(connection, migration_dir)
+            connection.execute(
+                """
+                INSERT INTO gerchain_ledger_accounts(account_id, currency, balance, version, updated_at)
+                VALUES ('snapshot-source', 'MNT', 250, 1, now()),
+                       ('snapshot-destination', 'MNT', 5, 1, now())
+                """
+            )
+            connection.execute(
+                """
+                INSERT INTO gerchain_ledger_movements
+                    (transaction_id, source, destination, amount, currency,
+                     operation, escrow_id, integrity_hash, created_at)
+                VALUES ('snapshot-tx', 'snapshot-source', 'snapshot-destination',
+                        25, 'MNT', 'SETTLEMENT', NULL, repeat('c', 64), now())
+                """
+            )
+            connection.commit()
+
+        def snapshot() -> tuple[tuple[tuple[object, ...], ...], tuple[tuple[object, ...], ...]]:
+            with psycopg.connect(snapshot_dsn) as connection:
+                accounts = tuple(connection.execute(
+                    """
+                    SELECT account_id, currency, balance, version
+                    FROM gerchain_ledger_accounts ORDER BY account_id
+                    """
+                ).fetchall())
+                movements = tuple(connection.execute(
+                    """
+                    SELECT transaction_id, source, destination, amount, currency,
+                           operation, escrow_id, integrity_hash
+                    FROM gerchain_ledger_movements ORDER BY transaction_id
+                    """
+                ).fetchall())
+                return accounts, movements
+
+        before = snapshot()
+        with psycopg.connect(snapshot_dsn) as connection:
+            applied_again = apply_migrations(connection, migration_dir)
+            assert applied_again == ()
+        after = snapshot()
+
+        assert after == before, (
+            "canonical migration rerun changed existing value rows: "
+            f"before={before!r}; after={after!r}"
+        )
+        assert len(after[0]) == 2
+        assert len(after[1]) == 1
+        assert sum(int(row[2]) for row in after[0]) == 255
+    finally:
+        with psycopg.connect(admin_dsn, autocommit=True) as admin:
+            admin.execute(sql.SQL("DROP DATABASE IF EXISTS {} WITH (FORCE)").format(sql.Identifier(database_name)))
+
