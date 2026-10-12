@@ -28,6 +28,7 @@ jobs:
     env:
       GERCHAIN_TEST_DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/gerchain_test
       GERCHAIN_TEST_POSTGRES_URL: postgresql://postgres:postgres@localhost:5432/gerchain_test
+      GERCHAIN_MIGRATION_TEST_DSN: postgresql://postgres:postgres@localhost:5432/gerchain_test
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -42,4 +43,4 @@ jobs:
           pip install -r requirements-dee-security.txt
           pip install pytest "psycopg[binary]"
       - name: Run real PostgreSQL migration and production factory tests
-        run: pytest -q tests/integration/test_postgres_migration_gate.py tests/postgres/test_migration_runner_postgres_integration.py
+        run: pytest -q tests/integration/test_postgres_migration_gate.py tests/postgres/test_migration_runner_postgres_integration.py tests/postgres/test_migration_014_catalog_invariants.py
