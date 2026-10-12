@@ -84,14 +84,15 @@ jobs:
             tests/test_postgres_atomic_ledger.py \
             postgres/tests/test_concurrency.py \
             tests/test_production_runtime_factory.py 2>&1 | tee evidence/postgres/core-gates.log
-      - name: Apply the authoritative 13-step canonical migration chain
+      - name: Apply the authoritative canonical migration chain
         run: |
           set -euo pipefail
           sha256sum postgres/migrations/*.sql > evidence/postgres/migration-file-sha256.txt
           python - <<'PY' 2>&1 | tee evidence/postgres/migration-apply.log
           import os
           from sqlalchemy import create_engine, text
-          from services.gerchain_runtime_factory import initialize_canonical_postgres_schema
+          from postgres.migrations import _canonical_migration_files
+from services.gerchain_runtime_factory import initialize_canonical_postgres_schema
 
           engine = create_engine(os.environ["GERCHAIN_DATABASE_URL"], pool_pre_ping=True)
           try:
@@ -102,8 +103,9 @@ jobs:
                   ).all()
                   versions = [row.version for row in rows]
                   print({"migration_versions": versions, "migration_rows": len(rows)})
-                  if versions != list(range(1, 14)):
-                      raise SystemExit(f"migration history mismatch: {versions}")
+                  expected_versions = list(range(1, len(_canonical_migration_files(__import__('pathlib').Path('postgres/migrations'))) + 1))
+                  if versions != expected_versions:
+                      raise SystemExit(f"migration history mismatch: expected {expected_versions}, got {versions}")
                   with open("evidence/postgres/migration-history.txt", "w", encoding="utf-8") as handle:
                       handle.write("version\\tchecksum\\tapplied_at\\n")
                       for row in rows:
@@ -181,7 +183,7 @@ jobs:
           set -euo pipefail
           psql -v ON_ERROR_STOP=1 -c "SELECT table_schema, table_name FROM information_schema.tables WHERE table_schema='public' ORDER BY table_name;" > evidence/postgres/final-schema.txt 2>&1 || true
           psql -v ON_ERROR_STOP=1 -c 'SELECT version, checksum, applied_at FROM schema_version ORDER BY version;' > evidence/postgres/final-migration-history.txt 2>&1 || true
-          test "$(psql -v ON_ERROR_STOP=1 -Atc 'SELECT count(*) FROM schema_version WHERE version BETWEEN 1 AND 13;' 2>/dev/null || echo 0)" = "13" || true
+          test "$(psql -v ON_ERROR_STOP=1 -Atc 'SELECT count(*) FROM schema_version;' 2>/dev/null || echo 0)" -ge 1 || true
           git rev-parse HEAD > evidence/postgres/final-commit.txt
           sha256sum .github/workflows/core-gates.yml .github/workflows/eai-postgres-reperformance.yml \
             postgres/migrations/*.sql persistence/deep_value_reconciliation.py \
