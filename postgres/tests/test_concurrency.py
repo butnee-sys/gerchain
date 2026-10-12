@@ -407,3 +407,34 @@ def test_migration_rerun_preserves_canonical_value_snapshot(monkeypatch):
                 )
             )
 
+
+
+def test_postgres_rejects_invalid_escrow_state_via_named_check_constraint(monkeypatch):
+    """The database error for NOT_A_STATE is expected, not a migration failure."""
+    admin_dsn = _dsn()
+    database_name = f"gerchain_invalid_state_{uuid.uuid4().hex[:12]}"
+    with psycopg.connect(admin_dsn, autocommit=True) as admin:
+        admin.execute(sql.SQL("CREATE DATABASE {}").format(sql.Identifier(database_name)))
+
+    fresh_dsn = make_conninfo(admin_dsn, dbname=database_name)
+    monkeypatch.setenv("GERCHAIN_POSTGRES_DSN", fresh_dsn)
+    try:
+        with psycopg.connect(fresh_dsn) as conn:
+            apply_migrations(conn, Path(__file__).resolve().parents[1] / "migrations")
+            with pytest.raises(psycopg.errors.CheckViolation) as exc_info:
+                conn.execute(
+                    """
+                    INSERT INTO escrows (
+                        id, sender_address, receiver_address, amount, state,
+                        refund_destination, currency, version, created_at, updated_at
+                    ) VALUES (
+                        'invalid-state-test', 'sender', 'receiver', 100,
+                        'NOT_A_STATE', 'sender', 'MNT', 0, now(), now()
+                    )
+                    """
+                )
+            assert exc_info.value.diag.constraint_name == "escrows_state_check"
+            conn.rollback()
+    finally:
+        with psycopg.connect(admin_dsn, autocommit=True) as admin:
+            admin.execute(sql.SQL("DROP DATABASE IF EXISTS {} WITH (FORCE)").format(sql.Identifier(database_name)))
