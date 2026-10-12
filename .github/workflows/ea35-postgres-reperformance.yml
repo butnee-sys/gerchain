@@ -327,7 +327,7 @@ jobs:
                   json.dumps(schema, sort_keys=True, separators=(",", ":")).encode("utf-8")
               ).hexdigest(),
           }
-          assert len(manifest_rows) == 15
+          assert len(manifest_rows) == 16
           (out / "migration-manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
           (out / "postgres-schema-snapshot.json").write_text(json.dumps(schema, indent=2) + "\n", encoding="utf-8")
           (out / "commit-sha.txt").write_text(os.environ["EVIDENCE_COMMIT_SHA"] + "\n", encoding="utf-8")
