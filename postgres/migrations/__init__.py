@@ -215,7 +215,8 @@ def apply_migrations(connection: Connection, migration_dir: Path) -> tuple[int, 
         raise RuntimeError("migration runner requires a clean connection with no active transaction")
     directory = Path(migration_dir)
     canonical_first = directory / _CANONICAL_FILES[0]
-    if canonical_first.is_file():
+    is_canonical_chain = canonical_first.is_file()
+    if is_canonical_chain:
         selected = _canonical_migration_files(directory)
     else:
         # Isolated test/migration bundles may use a generic sequential chain.
@@ -323,7 +324,7 @@ def apply_migrations(connection: Connection, migration_dir: Path) -> tuple[int, 
                 # before the first NOT NULL DDL, not only before v11/v13. Run this
                 # before checksum/skip handling too, so drifted databases that
                 # already published a version are repaired deterministically.
-                if version in (2, 7, 11, 13):
+                if is_canonical_chain and version in (2, 7, 11, 13):
                     _backfill_legacy_escrow_metadata_before_v11(connection)
                 row = connection.execute(
                     "SELECT checksum FROM schema_version WHERE version = %s FOR UPDATE",
