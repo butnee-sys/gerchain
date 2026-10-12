@@ -120,7 +120,7 @@ def test_identical_legacy_duplicate_publication_is_collapsed(isolated_database):
         conn.commit()
         apply_migrations(conn, MIGRATION_DIR)
         rows = conn.execute("SELECT version, checksum FROM schema_version ORDER BY version").fetchall()
-        assert [row[0] for row in rows] == list(range(1, 15))
+        assert [row[0] for row in rows] == list(range(1, 16))
         assert len({row[0] for row in rows}) == 14
         assert len({row[0]: row[1] for row in rows}) == 14
 
@@ -175,7 +175,7 @@ def test_real_fourteen_migration_registry_is_idempotent_and_checksum_failure_is_
         first_rows = conn.execute(
             "SELECT version, checksum FROM schema_version ORDER BY version"
         ).fetchall()
-        assert [version for version, _ in first_rows] == list(range(1, 15))
+        assert [version for version, _ in first_rows] == list(range(1, 16))
         assert len({version for version, _ in first_rows}) == 14
         first_schema = _public_schema_fingerprint(conn)
         conn.commit()
