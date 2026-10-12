@@ -31,11 +31,10 @@ def test_production_runtime_factory_boots_against_postgresql():
         versions = connection.execute(
             text("SELECT version FROM schema_version ORDER BY version")
         ).scalars().all()
-        migration_versions = sorted({
-            int(path.name.split("_", 1)[0])
-            for path in (Path(__file__).resolve().parents[2] / "postgres" / "schema").glob("*.sql")
-        })
-        assert versions == migration_versions
+        # ProductionRuntimeFactory applies the canonical numbered migration
+        # registry under postgres/migrations (001..015). The older postgres/schema
+        # directory is a compatibility bundle and is not the production registry.
+        assert versions == list(range(1, 16))
 
         tables = {
             row[0]
