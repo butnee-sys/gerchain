@@ -149,6 +149,65 @@ def _split_sql_statements(source: str) -> list[str]:
         raise ValueError("unterminated quote or block comment in migration SQL")
     return statements
 
+def _backfill_legacy_escrow_metadata_before_v11(connection: Connection) -> None:
+    """Safely derive escrow metadata needed by migration 011 from legacy rows.
+
+    This compatibility step runs inside the migration transaction immediately
+    before v11. A legacy refund destination is deterministically the original
+    sender. A missing currency value may be filled only when the existing
+    legacy column declares MNT as its default; unknown currency is never guessed.
+    The published SQL migration files and their checksums remain unchanged.
+    """
+    table_exists = connection.execute(
+        "SELECT to_regclass('public.escrows') IS NOT NULL"
+    ).fetchone()[0]
+    if not table_exists:
+        return
+
+    columns = connection.execute(
+        """
+        SELECT column_name, column_default
+        FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'escrows'
+        """
+    ).fetchall()
+    column_defaults = {name: default for name, default in columns}
+
+    if "refund_destination" not in column_defaults:
+        connection.execute("ALTER TABLE escrows ADD COLUMN refund_destination TEXT")
+    connection.execute(
+        """
+        UPDATE escrows
+        SET refund_destination = sender_address
+        WHERE refund_destination IS NULL AND sender_address IS NOT NULL
+        """
+    )
+    missing_refunds = connection.execute(
+        "SELECT COUNT(*) FROM escrows WHERE refund_destination IS NULL"
+    ).fetchone()[0]
+    if missing_refunds:
+        raise RuntimeError(
+            "cannot derive refund_destination for legacy escrow rows without sender_address"
+        )
+
+    if "currency" in column_defaults:
+        missing_currency = connection.execute(
+            "SELECT COUNT(*) FROM escrows WHERE currency IS NULL"
+        ).fetchone()[0]
+        default = column_defaults["currency"]
+        if missing_currency and default and "'MNT'" in default.upper():
+            connection.execute(
+                "UPDATE escrows SET currency = 'MNT' WHERE currency IS NULL"
+            )
+        remaining = connection.execute(
+            "SELECT COUNT(*) FROM escrows WHERE currency IS NULL"
+        ).fetchone()[0]
+        if remaining:
+            raise RuntimeError(
+                "cannot derive currency for legacy escrow rows; refusing to invent currency"
+            )
+
+
 def apply_migrations(connection: Connection, migration_dir: Path) -> tuple[int, ...]:
     if connection.closed:
         raise ValueError("migration connection must be open")
@@ -267,6 +326,8 @@ def apply_migrations(connection: Connection, migration_dir: Path) -> tuple[int, 
                         f"Migration checksum mismatch for version {version}: {path.name}"
                     )
                 continue
+            if version == 11:
+                _backfill_legacy_escrow_metadata_before_v11(connection)
             for statement in _split_sql_statements(source):
                 connection.execute(statement)
             connection.execute(
