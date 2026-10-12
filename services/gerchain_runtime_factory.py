@@ -50,7 +50,7 @@ def initialize_canonical_postgres_schema(engine: Engine) -> None:
 
 
 def assert_canonical_production_schema(connection) -> None:
-    """Fail closed unless all canonical ORM tables/columns and 15 migrations exist."""
+    """Fail closed unless all canonical ORM tables/columns and 16 migrations exist."""
     from sqlalchemy import inspect, text
 
     inspector = inspect(connection)
@@ -88,7 +88,7 @@ def assert_canonical_production_schema(connection) -> None:
 
     # Production boot must verify database-enforced invariants, not merely that
     # tables and columns happen to exist. Keep this registry aligned with the
-    # final canonical migration chain (001..015).
+    # final canonical migration chain (001..016).
     required_checks = {
         "escrows": {
             "escrows_state_canonical_check",
@@ -160,7 +160,7 @@ def assert_canonical_production_schema(connection) -> None:
         )
 
     if "schema_version" not in inspector.get_table_names():
-        raise RuntimeError("canonical production schema missing schema_version; required=15 migrations")
+        raise RuntimeError("canonical production schema missing schema_version; required=16 migrations")
     version_constraints = inspector.get_pk_constraint("schema_version")
     version_indexes = inspector.get_indexes("schema_version")
     has_unique_version = (
@@ -170,9 +170,9 @@ def assert_canonical_production_schema(connection) -> None:
     if not has_unique_version:
         raise RuntimeError("canonical production schema requires unique schema_version.version")
     versions = connection.execute(text("SELECT version FROM schema_version ORDER BY version")).scalars().all()
-    if versions != list(range(1, 16)):
+    if versions != list(range(1, 17)):
         raise RuntimeError(
-            f"canonical production schema migration history incomplete; required=15, actual={versions}"
+            f"canonical production schema migration history incomplete; required=16, actual={versions}"
         )
 
 
