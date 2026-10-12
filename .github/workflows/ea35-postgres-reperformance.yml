@@ -125,7 +125,7 @@ jobs:
               rows_first = connection.execute(
                   "SELECT version, checksum, applied_at::text FROM schema_version ORDER BY version"
               ).fetchall()
-              assert [row[0] for row in rows_first] == list(range(1, 16)), rows_first
+              assert [row[0] for row in rows_first] == list(range(1, 17)), rows_first
               assert all(row[1] for row in rows_first), rows_first
               constraints_first = connection.execute("""
                   SELECT conname, contype, convalidated, pg_get_constraintdef(oid)
@@ -205,7 +205,7 @@ jobs:
                   applied_015 = apply_migrations(connection, Path('postgres/migrations'))
                   assert applied_015 == (15,), applied_015
                   after = connection.execute('SELECT version, checksum, applied_at FROM schema_version ORDER BY version').fetchall()
-                  assert [row[0] for row in after] == list(range(1, 16)), after
+                  assert [row[0] for row in after] == list(range(1, 17)), after
                   assert [(row[0], row[1]) for row in after[:14]] == before_checksums
                   state_constraints = connection.execute("""
                       SELECT conname, convalidated, pg_get_constraintdef(oid)
