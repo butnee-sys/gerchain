@@ -117,7 +117,7 @@ def _run() -> dict:
 
         # 4. Reproduce legacy state-constraint drift at the boundary before migration 015.
         # Apply exactly versions 001-014, add a stale generated-style state CHECK as if
-        # a legacy bootstrap had reintroduced it, then prove 015 removes it and validates
+        # a legacy bootstrap had reintroduced it, then prove the 015/016 repair chain removes it and validates
         # the canonical lifecycle CHECK. Reapplying the full chain must be a NOOP.
         drift_schema = new_schema("state_drift")
         with tempfile.TemporaryDirectory(prefix="gerchain-migrations-001-014-") as temp_dir:
@@ -149,8 +149,8 @@ def _run() -> dict:
         with _connect(base_url, drift_schema) as conn:
             conn.commit()
             repaired = apply_migrations(conn, MIGRATION_DIR)
-        if repaired != (15,):
-            raise AssertionError(f"state drift repair expected migration 015 only, got {repaired}")
+        if repaired != (15, 16):
+            raise AssertionError(f"state drift repair expected migrations 015 and 016, got {repaired}")
         with _connect(base_url, drift_schema) as conn:
             checks = conn.execute("""
                 SELECT conname, convalidated, pg_get_constraintdef(oid)
