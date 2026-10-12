@@ -43,4 +43,4 @@ jobs:
           pip install -r requirements-dee-security.txt
           pip install pytest "psycopg[binary]"
       - name: Run real PostgreSQL migration and production factory tests
-        run: pytest -q tests/integration/test_postgres_migration_gate.py tests/postgres/test_migration_runner_postgres_integration.py tests/postgres/test_migration_014_catalog_invariants.py
+        run: pytest -q tests/integration/test_postgres_migration_gate.py tests/postgres/test_migration_runner_postgres_integration.py tests/postgres/test_migration_014_catalog_invariants.py tests/postgres/test_migration_reperformance.py
