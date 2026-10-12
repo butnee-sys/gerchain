@@ -1,11 +1,16 @@
 from __future__ import annotations
 
 import os
+from pathlib import Path
+from uuid import uuid4
+
+import pytest
 
 from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.orm import sessionmaker
 
 from services.gerchain_runtime_factory import ProductionRuntimeFactory
+from postgres.migrations import apply_migrations
 
 
 def test_production_runtime_bootstraps_canonical_persistence():
@@ -73,3 +78,42 @@ def test_production_runtime_bootstraps_canonical_persistence():
     } <= tables
 
     engine.dispose()
+
+def test_failed_migration_rolls_back_schema_and_version_record(tmp_path: Path):
+    database_url = os.environ["GERCHAIN_POSTGRES_DSN"]
+    admin_engine = create_engine(database_url, future=True)
+    schema = "migration_rollback_" + uuid4().hex[:12]
+    with admin_engine.begin() as connection:
+        connection.execute(text(f'CREATE SCHEMA "{schema}"'))
+
+    isolated_engine = create_engine(
+        database_url,
+        future=True,
+        connect_args={"options": f"-csearch_path={schema}"},
+    )
+    try:
+        (tmp_path / "001_probe.sql").write_text(
+            "CREATE TABLE gerchain_idempotency_records ("
+            "key TEXT PRIMARY KEY, fingerprint VARCHAR(64) NOT NULL, "
+            "state VARCHAR(32) NOT NULL, operation VARCHAR(64) NOT NULL);",
+            encoding="utf-8",
+        )
+        (tmp_path / "002_intentional_failure.sql").write_text(
+            "THIS IS INTENTIONALLY INVALID SQL;",
+            encoding="utf-8",
+        )
+
+        with isolated_engine.connect() as connection:
+            with pytest.raises(Exception):
+                apply_migrations(connection, tmp_path)
+            connection.rollback()
+
+        with isolated_engine.connect() as connection:
+            tables = set(inspect(connection).get_table_names(schema=schema))
+            assert "schema_version" not in tables
+            assert "gerchain_idempotency_records" not in tables
+    finally:
+        isolated_engine.dispose()
+        with admin_engine.begin() as connection:
+            connection.execute(text(f'DROP SCHEMA "{schema}" CASCADE'))
+        admin_engine.dispose()
