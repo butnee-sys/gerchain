@@ -309,6 +309,7 @@ jobs:
       - name: Verify canonical migration runner compatibility and migration contracts
         run: |
           pytest -q tests/postgres/test_migrations.py
+          pytest -q postgres/tests/test_schema_version_bootstrap_contract.py
 
       - name: Verify checksum mismatch fails without partial schema or history changes
         run: |
