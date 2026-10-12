@@ -227,6 +227,15 @@ jobs:
               applied = connection.execute(
                   "SELECT version, checksum, applied_at::text FROM schema_version ORDER BY version"
               ).fetchall()
+              constraint = connection.execute("""
+                  SELECT conname, convalidated, pg_get_constraintdef(oid)
+                  FROM pg_constraint
+                  WHERE conrelid = 'escrows'::regclass
+                    AND conname = 'escrows_state_canonical_check'
+              """).fetchone()
+              assert constraint is not None, "canonical escrow state constraint missing"
+              assert constraint[1] is True, f"canonical escrow state constraint not validated: {constraint}"
+              assert all(value in constraint[2] for value in ("CREATED", "FUNDED", "LOCKED", "RELEASED", "REFUNDED", "CANCELLED")), constraint
           expected = [(item["version"], item["sha256"]) for item in manifest_rows]
           actual = [(row[0], row[1]) for row in applied]
           assert actual == expected, {
