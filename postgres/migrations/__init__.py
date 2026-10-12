@@ -319,7 +319,7 @@ def apply_migrations(connection: Connection, migration_dir: Path) -> tuple[int, 
             # Run the deterministic legacy-data compatibility check before
             # the v11 checksum/skip branch as well: a database may claim v11
             # was applied while retaining nullable legacy metadata after drift.
-            if version == 11:
+            if version in (11, 13):
                 _backfill_legacy_escrow_metadata_before_v11(connection)
             row = connection.execute(
                 "SELECT checksum FROM schema_version WHERE version = %s FOR UPDATE",
