@@ -88,7 +88,7 @@ def assert_canonical_production_schema(connection) -> None:
 
     # Production boot must verify database-enforced invariants, not merely that
     # tables and columns happen to exist. Keep this registry aligned with the
-    # final canonical migration chain (001..014).
+    # final canonical migration chain (001..015).
     required_checks = {
         "escrows": {
             "escrows_state_canonical_check",
