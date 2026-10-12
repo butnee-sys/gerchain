@@ -66,6 +66,15 @@ END $$;
 
 INSERT INTO schema_version(version, checksum)
 VALUES (3, 'EA-35.14-single-canonical-escrow-state-constraint')
-ON CONFLICT (version) DO UPDATE
-SET checksum = EXCLUDED.checksum
-WHERE schema_version.checksum = EXCLUDED.checksum;
+ON CONFLICT (version) DO NOTHING;
+
+DO $
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM schema_version
+        WHERE version = 3
+          AND checksum = 'EA-35.14-single-canonical-escrow-state-constraint'
+    ) THEN
+        RAISE EXCEPTION 'EA-35.14 blocked: schema_version 3 is already recorded with a different checksum';
+    END IF;
+END $;
