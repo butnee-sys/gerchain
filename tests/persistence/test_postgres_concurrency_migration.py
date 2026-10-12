@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import uuid
+from datetime import datetime, timezone
 from concurrent.futures import ThreadPoolExecutor
 
 import pytest
@@ -25,12 +26,13 @@ def test_canonical_migrations_and_concurrent_ledger_contention():
         token = uuid.uuid4().hex
         source, dest_a, dest_b = (f"ea35-{token}-{name}" for name in ("source", "a", "b"))
 
+        now = datetime.now(timezone.utc)
         with sessions() as session:
             session.add_all(
                 [
-                    LedgerAccountModel(account_id=source, currency="TST", balance=100, version=0),
-                    LedgerAccountModel(account_id=dest_a, currency="TST", balance=0, version=0),
-                    LedgerAccountModel(account_id=dest_b, currency="TST", balance=0, version=0),
+                    LedgerAccountModel(account_id=source, currency="TST", balance=100, version=0, updated_at=now),
+                    LedgerAccountModel(account_id=dest_a, currency="TST", balance=0, version=0, updated_at=now),
+                    LedgerAccountModel(account_id=dest_b, currency="TST", balance=0, version=0, updated_at=now),
                 ]
             )
             session.commit()
