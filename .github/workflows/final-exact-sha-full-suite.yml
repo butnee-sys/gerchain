@@ -92,6 +92,8 @@ jobs:
                   assert [row[0] for row in before] == list(range(1, 14)), before
                   expected = {version: checksum((baseline_dir / canonical_files[version - 1].name).read_text(encoding="utf-8")) for version in range(1, 14)}
                   assert dict(before) == expected, (before, expected)
+                  # psycopg starts a transaction for the SELECTs above. The migration runner requires a clean connection.
+                  connection.commit()
                   apply_migrations(connection, migration_dir)
                   after = connection.execute("SELECT version, checksum FROM schema_version ORDER BY version").fetchall()
                   assert [row[0] for row in after] == list(range(1, 15)), after
