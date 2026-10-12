@@ -93,6 +93,23 @@ jobs:
                   expected = {version: checksum((baseline_dir / canonical_files[version - 1].name).read_text(encoding="utf-8")) for version in range(1, 15)}
                   assert [row[0] for row in before] == list(range(1, 15)), before
                   assert dict(before) == expected, (before, expected)
+                  connection.execute("""
+                    INSERT INTO escrows
+                      (id, sender_address, receiver_address, amount, state,
+                       condition_desc, updated_at, refund_destination, currency,
+                       version, created_at)
+                    VALUES
+                      ('migration-proof-preserve-001', 'sender-proof', 'receiver-proof',
+                       17, 'CREATED', 'migration preservation proof', now(),
+                       'sender-proof', 'MNT', 0, now())
+                  """)
+                  preservation_before = connection.execute("""
+                    SELECT id, sender_address, receiver_address, amount, state,
+                           condition_desc, refund_destination, currency, version,
+                           created_at, updated_at
+                    FROM escrows WHERE id = 'migration-proof-preserve-001'
+                  """).fetchone()
+                  assert preservation_before is not None
                   connection.commit()
                   # Reproduce the exact class of drift: a stale state CHECK appears
                   # alongside the canonical one before the next production boot.
@@ -104,9 +121,20 @@ jobs:
                   connection.commit()
                   apply_migrations(connection, migration_dir)
                   after = connection.execute("SELECT version, checksum FROM schema_version ORDER BY version").fetchall()
-                  assert [row[0] for row in after] == list(range(1, 16)), after
+                  assert [row[0] for row in after] == list(range(1, 17)), after
                   assert after[:14] == before, {"before": before, "after": after}
                   assert after[14][1] == checksum((migration_dir / "015_repair_escrow_state_constraint_drift.sql").read_text(encoding="utf-8"))
+                  assert after[15][1] == checksum((migration_dir / "016_reconcile_escrow_state_constraint.sql").read_text(encoding="utf-8"))
+                  preservation_after = connection.execute("""
+                    SELECT id, sender_address, receiver_address, amount, state,
+                           condition_desc, refund_destination, currency, version,
+                           created_at, updated_at
+                    FROM escrows WHERE id = 'migration-proof-preserve-001'
+                  """).fetchone()
+                  assert preservation_after == preservation_before, {
+                      "before": preservation_before,
+                      "after": preservation_after,
+                  }
                   constraints = connection.execute("""
                     SELECT conname, convalidated, pg_get_constraintdef(oid)
                     FROM pg_constraint
@@ -124,10 +152,12 @@ jobs:
                   second = apply_migrations(connection, migration_dir)
                   assert second == (), second
                   print(f"MIGRATION_CHECKSUMS_001_014_PRESERVED={after[:14] == before}")
+                  print("MIGRATION_ESCROW_ROW_PRESERVED=PASS")
+                  print("MIGRATION_REGISTRY_001_016=PASS")
                   print(f"MIGRATION_015_CHECKSUM={after[14][1]}")
-                  print("MIGRATION_015_STATE_CONSTRAINT_VALIDATED=PASS")
+                  print("MIGRATION_015_016_STATE_CONSTRAINT_VALIDATED=PASS")
                   print("MIGRATION_SECOND_RUN_NOOP=PASS")
-          print("MIGRATION_BASELINE_001_014_AND_REPAIR_015=PASS")
+          print("MIGRATION_BASELINE_001_014_AND_REPAIR_015_016=PASS")
           PY
       - name: Verify canonical fundamental architecture gates (SHUUD excluded)
         run: |
