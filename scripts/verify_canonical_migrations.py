@@ -12,6 +12,8 @@ import json
 import os
 import subprocess
 import sys
+import shutil
+import tempfile
 import time
 import uuid
 from pathlib import Path
@@ -113,7 +115,67 @@ def _run() -> dict:
             "unique_version_index": unique, "applied_versions": list(applied)
         }
 
-        # 4. A conflicting checksum for an already-published version must fail closed
+        # 4. Reproduce legacy state-constraint drift at the boundary before migration 015.
+        # Apply exactly versions 001-014, add a stale generated-style state CHECK as if
+        # a legacy bootstrap had reintroduced it, then prove 015 removes it and validates
+        # the canonical lifecycle CHECK. Reapplying the full chain must be a NOOP.
+        drift_schema = new_schema("state_drift")
+        with tempfile.TemporaryDirectory(prefix="gerchain-migrations-001-014-") as temp_dir:
+            legacy_dir = Path(temp_dir)
+            for path in _canonical_migration_files(MIGRATION_DIR):
+                if int(path.name.split("_", 1)[0]) <= 14:
+                    shutil.copy2(path, legacy_dir / path.name)
+            with _connect(base_url, drift_schema) as conn:
+                applied_legacy = apply_migrations(conn, legacy_dir)
+            if applied_legacy != tuple(range(1, 15)):
+                raise AssertionError(f"legacy baseline expected versions 1..14, got {applied_legacy}")
+        with _connect(base_url, drift_schema) as conn:
+            conn.execute("""
+                ALTER TABLE escrows
+                ADD CONSTRAINT legacy_reintroduced_state_check
+                CHECK (state IN ('CREATED', 'LOCKED', 'RELEASED'))
+            """)
+            conn.commit()
+            stale_before = conn.execute("""
+                SELECT conname, convalidated
+                FROM pg_constraint
+                WHERE conrelid = 'escrows'::regclass
+                  AND contype = 'c'
+                  AND lower(pg_get_constraintdef(oid)) LIKE '%state%'
+                ORDER BY conname
+            """).fetchall()
+        if not any(row[0] == "legacy_reintroduced_state_check" for row in stale_before):
+            raise AssertionError(f"stale legacy constraint was not reproduced: {stale_before}")
+        with _connect(base_url, drift_schema) as conn:
+            repaired = apply_migrations(conn, MIGRATION_DIR)
+        if repaired != (15,):
+            raise AssertionError(f"state drift repair expected migration 015 only, got {repaired}")
+        with _connect(base_url, drift_schema) as conn:
+            checks = conn.execute("""
+                SELECT conname, convalidated, pg_get_constraintdef(oid)
+                FROM pg_constraint
+                WHERE conrelid = 'escrows'::regclass
+                  AND contype = 'c'
+                  AND lower(pg_get_constraintdef(oid)) LIKE '%state%'
+                ORDER BY conname
+            """).fetchall()
+            second = apply_migrations(conn, MIGRATION_DIR)
+        if len(checks) != 1 or checks[0][0] != "escrows_state_canonical_check" or checks[0][1] is not True:
+            raise AssertionError(f"state constraint repair did not leave exactly one validated canonical CHECK: {checks}")
+        if second != ():
+            raise AssertionError(f"state drift repair second migration run must be NOOP, got {second}")
+        report["scenarios"]["legacy_state_constraint_drift"] = {
+            "status": "PASS",
+            "baseline_versions": list(applied_legacy),
+            "stale_constraint_before": [row[0] for row in stale_before],
+            "repair_applied_versions": list(repaired),
+            "state_constraints_after": [
+                {"name": row[0], "validated": row[1], "definition": row[2]} for row in checks
+            ],
+            "second_run": "NOOP",
+        }
+
+        # 5. A conflicting checksum for an already-published version must fail closed
         # and preserve the conflicting registry as evidence (no silent repair).
         drift = new_schema("checksum")
         with _connect(base_url, drift) as conn:
@@ -137,7 +199,7 @@ def _run() -> dict:
             "stored_conflicting_checksum_preserved": True
         }
 
-        # 5. Two independent runners against the same fresh schema: advisory lock
+        # 6. Two independent runners against the same fresh schema: advisory lock
         # serializes execution; one applies all versions and the other observes NOOP.
         concurrent_schema = new_schema("concurrent")
         def runner():
