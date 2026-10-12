@@ -95,6 +95,19 @@ def test_full_16_migration_chain_repairs_legacy_constraint_without_losing_escrow
                 "CREATED", "FUNDED", "LOCKED", "RELEASED", "REFUNDED", "CANCELLED"
             )), definition
 
+            # Simulate an upgraded installation whose migration ledger is at v15
+            # but whose schema drifted after v15 was applied: drop v16's record,
+            # replace the canonical state CHECK with a stale legacy CHECK, then
+            # prove the new additive migration repairs that already-upgraded DB.
+            conn.execute("DELETE FROM schema_version WHERE version = 16")
+            conn.execute("ALTER TABLE escrows DROP CONSTRAINT escrows_state_canonical_check")
+            conn.execute("""
+                ALTER TABLE escrows ADD CONSTRAINT legacy_escrow_state_check
+                CHECK (state IN ('CREATED', 'LOCKED', 'RELEASED'))
+            """)
+            conn.commit()
+            apply_migrations(conn, migration_dir)
+
             # Re-running the entire chain must preserve both data and schema truth.
             apply_migrations(conn, migration_dir)
             rerun_rows = conn.execute("""
@@ -106,7 +119,7 @@ def test_full_16_migration_chain_repairs_legacy_constraint_without_losing_escrow
                 "SELECT version FROM schema_version ORDER BY version"
             ).fetchall()
             assert rerun_rows == actual_rows
-            assert [row[0] for row in rerun_versions] == list(range(1, 16))
+            assert [row[0] for row in rerun_versions] == list(range(1, 17))
             assert conn.execute(
                 "SELECT COUNT(*) FROM pg_constraint WHERE conrelid='escrows'::regclass "
                 "AND conname='legacy_escrow_state_check'"
