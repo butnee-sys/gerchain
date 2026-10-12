@@ -237,125 +237,133 @@ def apply_migrations(connection: Connection, migration_dir: Path) -> tuple[int, 
             raise RuntimeError(f"migration versions contain gaps: {sorted(versions)}")
         selected = [versions[version][0] for version in expected]
     applied_now: list[int] = []
-    # The advisory transaction lock, version/checksum checks, migration DDL,
-    # and schema_version writes must be committed or rolled back together.
-    # Never acquire a session lock and commit it separately from the migration.
-    with connection.transaction():
-        connection.execute("SELECT pg_advisory_xact_lock(%s)", (_MIGRATION_LOCK_KEY,))
-        connection.execute(
-            """
-            CREATE TABLE IF NOT EXISTS schema_version (
-                version INTEGER PRIMARY KEY,
-                checksum TEXT NOT NULL,
-                applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
-            )
-            """
-        )
-        # Reconcile legacy schema_version tables that predate the canonical
-        # primary key. Identical duplicate publications are safe to collapse;
-        # conflicting checksums for one version must fail closed.
-        conflicts = connection.execute(
-            """
-            SELECT version
-            FROM schema_version
-            GROUP BY version
-            HAVING COUNT(DISTINCT checksum) > 1
-            ORDER BY version
-            """
-        ).fetchall()
-        if conflicts:
-            version = conflicts[0][0]
-            raise RuntimeError(
-                f"Conflicting schema_version checksums for version {version}"
-            )
-        connection.execute(
-            """
-            DELETE FROM schema_version AS duplicate
-            USING schema_version AS keeper
-            WHERE duplicate.version = keeper.version
-              AND duplicate.checksum = keeper.checksum
-              AND duplicate.ctid > keeper.ctid
-            """
-        )
-        # Legacy installations may have a schema_version table without a
-        # primary key/unique constraint. After collapsing identical duplicate
-        # publications, establish the uniqueness invariant before relying on
-        # ON CONFLICT(version) in the publication path.
-        has_version_unique_index = connection.execute(
-            """
-            SELECT EXISTS (
-                SELECT 1
-                FROM pg_index AS idx
-                JOIN pg_attribute AS attr
-                  ON attr.attrelid = idx.indrelid
-                 AND attr.attnum = idx.indkey[0]
-                WHERE idx.indrelid = 'schema_version'::regclass
-                  AND idx.indisunique
-                  AND idx.indpred IS NULL
-                  AND idx.indnkeyatts = 1
-                  AND attr.attname = 'version'
-            )
-            """
-        ).fetchone()[0]
-        if not has_version_unique_index:
-            connection.execute(
-                "CREATE UNIQUE INDEX schema_version_version_uq ON schema_version (version)"
-            )
-        for version, path in enumerate(selected, start=1):
-            source = path.read_text(encoding="utf-8")
-            if not source.strip():
-                raise ValueError(f"empty migration is not allowed: {path.name}")
-            digest = checksum(source)
-            historical_checksums = {
-                1: {
-                    "6eea24dae8b3ac9aa9413a32da1617250f14725bdb19f50e5d8300308ad173d4",
-                    "538e0f5132ec775ec8963a2a72072dd00e81afa37383a6c5f6a8f54259716a31",
-                    "ab6838b3e69a9a9faa28bdd82c98fe579921763be8b5dd56e1c686b77c098596",
-                    "494763e210c8a3839972ba21e8705dcf2e6564e5abca9c76161f2f49c6664ec8",
-                    "6766267c9e939a320bf6ac28ee516c4c11fe537ef2b6a7778d94ca6e3cd5b246",
-                }
-            }
-            accepted_checksums = {digest} | historical_checksums.get(version, set())
-            # Run the deterministic legacy-data compatibility check before
-            # the v11 checksum/skip branch as well: a database may claim v11
-            # was applied while retaining nullable legacy metadata after drift.
-            if version in (11, 13):
-                _backfill_legacy_escrow_metadata_before_v11(connection)
-            row = connection.execute(
-                "SELECT checksum FROM schema_version WHERE version = %s FOR UPDATE",
-                (version,),
-            ).fetchone()
-            if row is not None:
-                if row[0] not in accepted_checksums:
-                    raise RuntimeError(
-                        f"Migration checksum mismatch for version {version}: {path.name}"
-                    )
-                continue
-            for statement in _split_sql_statements(source):
-                connection.execute(statement)
+    # Use a session-scoped advisory lock so migration serialization survives
+    # any transaction-boundary drift in historical SQL files. Release it on
+    # both success and failure; schema publication remains transaction-scoped.
+    connection.execute("SELECT pg_advisory_lock(%s)", (_MIGRATION_LOCK_KEY,))
+    connection.commit()
+    try:
+        with connection.transaction():
             connection.execute(
                 """
-                INSERT INTO schema_version(version, checksum)
-                VALUES (%s, %s)
-                ON CONFLICT (version) DO NOTHING
-                """,
-                (version, digest),
+                CREATE TABLE IF NOT EXISTS schema_version (
+                    version INTEGER PRIMARY KEY,
+                    checksum TEXT NOT NULL,
+                    applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
+                )
+                """
             )
-            # Concurrent or legacy bootstrap paths may publish a version row
-            # while this runner is applying the same chain. Treat only an
-            # identical checksum as idempotent; never mask schema drift.
-            published = connection.execute(
-                "SELECT checksum FROM schema_version WHERE version = %s FOR UPDATE",
-                (version,),
-            ).fetchone()
-            if published is None or published[0] != digest:
-                accepted = published is not None and published[0] in accepted_checksums
-                if not accepted:
-                    raise RuntimeError(
-                        f"Migration publication conflict for version {version}: {path.name}"
-                    )
-            else:
-                applied_now.append(version)
+            # Reconcile legacy schema_version tables that predate the canonical
+            # primary key. Identical duplicate publications are safe to collapse;
+            # conflicting checksums for one version must fail closed.
+            conflicts = connection.execute(
+                """
+                SELECT version
+                FROM schema_version
+                GROUP BY version
+                HAVING COUNT(DISTINCT checksum) > 1
+                ORDER BY version
+                """
+            ).fetchall()
+            if conflicts:
+                version = conflicts[0][0]
+                raise RuntimeError(
+                    f"Conflicting schema_version checksums for version {version}"
+                )
+            connection.execute(
+                """
+                DELETE FROM schema_version AS duplicate
+                USING schema_version AS keeper
+                WHERE duplicate.version = keeper.version
+                  AND duplicate.checksum = keeper.checksum
+                  AND duplicate.ctid > keeper.ctid
+                """
+            )
+            # Legacy installations may have a schema_version table without a
+            # primary key/unique constraint. After collapsing identical duplicate
+            # publications, establish the uniqueness invariant before relying on
+            # ON CONFLICT(version) in the publication path.
+            has_version_unique_index = connection.execute(
+                """
+                SELECT EXISTS (
+                    SELECT 1
+                    FROM pg_index AS idx
+                    JOIN pg_attribute AS attr
+                      ON attr.attrelid = idx.indrelid
+                     AND attr.attnum = idx.indkey[0]
+                    WHERE idx.indrelid = 'schema_version'::regclass
+                      AND idx.indisunique
+                      AND idx.indpred IS NULL
+                      AND idx.indnkeyatts = 1
+                      AND attr.attname = 'version'
+                )
+                """
+            ).fetchone()[0]
+            if not has_version_unique_index:
+                connection.execute(
+                    "CREATE UNIQUE INDEX schema_version_version_uq ON schema_version (version)"
+                )
+            for version, path in enumerate(selected, start=1):
+                source = path.read_text(encoding="utf-8")
+                if not source.strip():
+                    raise ValueError(f"empty migration is not allowed: {path.name}")
+                digest = checksum(source)
+                historical_checksums = {
+                    1: {
+                        "6eea24dae8b3ac9aa9413a32da1617250f14725bdb19f50e5d8300308ad173d4",
+                        "538e0f5132ec775ec8963a2a72072dd00e81afa37383a6c5f6a8f54259716a31",
+                        "ab6838b3e69a9a9faa28bdd82c98fe579921763be8b5dd56e1c686b77c098596",
+                        "494763e210c8a3839972ba21e8705dcf2e6564e5abca9c76161f2f49c6664ec8",
+                        "6766267c9e939a320bf6ac28ee516c4c11fe537ef2b6a7778d94ca6e3cd5b246",
+                    }
+                }
+                accepted_checksums = {digest} | historical_checksums.get(version, set())
+                # Run the deterministic legacy-data compatibility check before
+                # the v11 checksum/skip branch as well: a database may claim v11
+                # was applied while retaining nullable legacy metadata after drift.
+                if version in (11, 13):
+                    _backfill_legacy_escrow_metadata_before_v11(connection)
+                row = connection.execute(
+                    "SELECT checksum FROM schema_version WHERE version = %s FOR UPDATE",
+                    (version,),
+                ).fetchone()
+                if row is not None:
+                    if row[0] not in accepted_checksums:
+                        raise RuntimeError(
+                            f"Migration checksum mismatch for version {version}: {path.name}"
+                        )
+                    continue
+                for statement in _split_sql_statements(source):
+                    connection.execute(statement)
+                connection.execute(
+                    """
+                    INSERT INTO schema_version(version, checksum)
+                    VALUES (%s, %s)
+                    ON CONFLICT (version) DO NOTHING
+                    """,
+                    (version, digest),
+                )
+                # Concurrent or legacy bootstrap paths may publish a version row
+                # while this runner is applying the same chain. Treat only an
+                # identical checksum as idempotent; never mask schema drift.
+                published = connection.execute(
+                    "SELECT checksum FROM schema_version WHERE version = %s FOR UPDATE",
+                    (version,),
+                ).fetchone()
+                if published is None or published[0] != digest:
+                    accepted = published is not None and published[0] in accepted_checksums
+                    if not accepted:
+                        raise RuntimeError(
+                            f"Migration publication conflict for version {version}: {path.name}"
+                        )
+                else:
+                    applied_now.append(version)
+    finally:
+        if not connection.closed:
+            if connection.info.transaction_status != 0:
+                connection.rollback()
+            connection.execute("SELECT pg_advisory_unlock(%s)", (_MIGRATION_LOCK_KEY,))
+            connection.commit()
     return tuple(applied_now)
 
 
