@@ -48,6 +48,7 @@ def test_full_15_migration_chain_repairs_legacy_constraint_without_losing_escrow
                     sender_address TEXT NOT NULL,
                     receiver_address TEXT NOT NULL,
                     amount NUMERIC(38, 8) NOT NULL CHECK (amount >= 0),
+                    currency TEXT NOT NULL DEFAULT 'MNT',
                     state TEXT NOT NULL,
                     condition_desc TEXT,
                     updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
