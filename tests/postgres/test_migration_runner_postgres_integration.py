@@ -61,6 +61,7 @@ def _assert_migration_015_constraints(conn):
     ).fetchall()
     by_name = {name: definition for name, definition in rows}
     assert "legacy_escrow_state_check" not in by_name
+    assert "legacy_reintroduced_state_check" not in by_name
     assert "escrows_state_canonical_check" in by_name
     definition = by_name["escrows_state_canonical_check"]
     for state in ("CREATED", "FUNDED", "LOCKED", "RELEASED", "REFUNDED", "CANCELLED"):
@@ -123,7 +124,7 @@ def test_postgres_clean_apply_rerun_and_history_stability():
             before = conn.execute(
                 "SELECT version, checksum, applied_at FROM schema_version ORDER BY version"
             ).fetchall()
-            assert [row[0] for row in before] == list(range(1, 15))
+            assert [row[0] for row in before] == list(range(1, 16))
             _assert_migration_015_constraints(conn)
 
         engine = create_engine(DSN, connect_args={"options": f"-c search_path={schema}"})
