@@ -188,7 +188,7 @@ jobs:
           with tempfile.TemporaryDirectory(prefix='gerchain-migrations-001-014-') as tmp:
               stage = Path(tmp)
               for version, source in enumerate(canonical[:14], start=1):
-                  (stage / f'{version:03d}_upgrade.sql').write_text(source.read_text(encoding='utf-8'), encoding='utf-8')
+                  (stage / source.name).write_text(source.read_text(encoding='utf-8'), encoding='utf-8')
               with psycopg.connect(dsn) as connection:
                   applied = apply_migrations(connection, stage)
                   assert applied == tuple(range(1, 15)), applied
