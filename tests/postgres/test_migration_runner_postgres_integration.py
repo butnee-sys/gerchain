@@ -49,7 +49,7 @@ def _drop_schema(name):
         conn.execute(sql.SQL("DROP SCHEMA IF EXISTS {} CASCADE").format(sql.Identifier(name)))
 
 
-def _assert_migration_014_constraints(conn):
+def _assert_migration_015_constraints(conn):
     rows = conn.execute(
         """
         SELECT conname, pg_get_constraintdef(oid)
@@ -67,36 +67,39 @@ def _assert_migration_014_constraints(conn):
         assert state in definition
 
 
-def test_postgres_upgrade_from_013_preserves_frozen_history_and_applies_014(tmp_path: Path):
+def test_postgres_upgrade_from_014_preserves_frozen_history_and_repairs_state_constraint_in_015(tmp_path: Path):
     schema = _schema()
     try:
         selected = _canonical_migration_files(MIGRATIONS)
-        legacy_dir = tmp_path / "migrations_001_to_013"
+        legacy_dir = tmp_path / "migrations_001_to_014"
         legacy_dir.mkdir()
         for migration in selected:
             version = int(migration.name.split("_", 1)[0])
-            if version <= 13:
+            if version <= 14:
                 shutil.copyfile(migration, legacy_dir / migration.name)
 
         with _connect(schema) as conn:
             first = apply_migrations(conn, legacy_dir)
-            assert first == tuple(range(1, 14))
+            assert first == tuple(range(1, 16))
         with _connect(schema) as conn:
             before = conn.execute(
                 "SELECT version, checksum, applied_at FROM schema_version ORDER BY version"
             ).fetchall()
-            assert [row[0] for row in before] == list(range(1, 14))
+            assert [row[0] for row in before] == list(range(1, 16))
 
         with _connect(schema) as conn:
+            conn.execute("ALTER TABLE escrows ADD CONSTRAINT legacy_reintroduced_state_check CHECK (state IN ('CREATED', 'LOCKED', 'RELEASED'))")
+            conn.commit()
+        with _connect(schema) as conn:
             applied = apply_migrations(conn, MIGRATIONS)
-            assert applied == (14,)
+            assert applied == (15,)
         with _connect(schema) as conn:
             after = conn.execute(
                 "SELECT version, checksum, applied_at FROM schema_version ORDER BY version"
             ).fetchall()
-            assert after[:13] == before
-            assert after[13][0] == 14
-            _assert_migration_014_constraints(conn)
+            assert after[:14] == before
+            assert after[14][0] == 15
+            _assert_migration_015_constraints(conn)
 
         with _connect(schema) as conn:
             assert apply_migrations(conn, MIGRATIONS) == ()
@@ -105,7 +108,7 @@ def test_postgres_upgrade_from_013_preserves_frozen_history_and_applies_014(tmp_
                 "SELECT version, checksum, applied_at FROM schema_version ORDER BY version"
             ).fetchall()
             assert final == after
-            _assert_migration_014_constraints(conn)
+            _assert_migration_015_constraints(conn)
     finally:
         _drop_schema(schema)
 
@@ -121,7 +124,7 @@ def test_postgres_clean_apply_rerun_and_history_stability():
                 "SELECT version, checksum, applied_at FROM schema_version ORDER BY version"
             ).fetchall()
             assert [row[0] for row in before] == list(range(1, 15))
-            _assert_migration_014_constraints(conn)
+            _assert_migration_015_constraints(conn)
 
         engine = create_engine(DSN, connect_args={"options": f"-c search_path={schema}"})
         try:
@@ -139,7 +142,7 @@ def test_postgres_clean_apply_rerun_and_history_stability():
                 "SELECT version, checksum, applied_at FROM schema_version ORDER BY version"
             ).fetchall()
             assert after == before
-            _assert_migration_014_constraints(conn)
+            _assert_migration_015_constraints(conn)
     finally:
         _drop_schema(schema)
 
@@ -157,11 +160,11 @@ def test_postgres_two_concurrent_runners_publish_each_version_once():
             rows = conn.execute(
                 "SELECT version, COUNT(*) FROM schema_version GROUP BY version ORDER BY version"
             ).fetchall()
-        assert [row[0] for row in rows] == list(range(1, 15))
+        assert [row[0] for row in rows] == list(range(1, 16))
         assert all(row[1] == 1 for row in rows)
-        assert sorted(len(result) for result in results) == [0, 14]
+        assert sorted(len(result) for result in results) == [0, 15]
         with _connect(schema) as conn:
-            _assert_migration_014_constraints(conn)
+            _assert_migration_015_constraints(conn)
     finally:
         _drop_schema(schema)
 
