@@ -134,3 +134,48 @@ def test_concurrent_bootstrap_creates_registry_once():
     finally:
         with psycopg.connect(database_url, autocommit=True) as admin:
             admin.execute(f'DROP SCHEMA IF EXISTS "{schema}" CASCADE')
+
+
+@pytest.mark.postgres
+def test_migration_checksum_mismatch_fails_closed():
+    """A changed historical checksum must block migration reuse, not be overwritten."""
+    database_url = os.environ.get("GERCHAIN_TEST_POSTGRES_URL")
+    if not database_url:
+        pytest.skip("GERCHAIN_TEST_POSTGRES_URL is not configured")
+
+    schema = "migration_checksum_" + uuid4().hex
+    with psycopg.connect(database_url, autocommit=True) as admin:
+        admin.execute(f'CREATE SCHEMA "{schema}"')
+
+    try:
+        with psycopg.connect(
+            database_url, options=f"-c search_path={schema}"
+        ) as connection:
+            applied = apply_migrations(connection, MIGRATION_DIR)
+        assert sorted(applied) == EXPECTED_VERSIONS
+
+        with psycopg.connect(
+            database_url, options=f"-c search_path={schema}"
+        ) as tamper:
+            tamper.execute(
+                "UPDATE schema_version SET checksum = %s WHERE version = %s",
+                ("0" * 64, 3),
+            )
+            tamper.commit()
+
+        with psycopg.connect(
+            database_url, options=f"-c search_path={schema}"
+        ) as connection:
+            with pytest.raises(RuntimeError, match=r"Migration checksum mismatch for version 3"):
+                apply_migrations(connection, MIGRATION_DIR)
+
+        with psycopg.connect(
+            database_url, options=f"-c search_path={schema}"
+        ) as verify:
+            checksum_after = verify.execute(
+                "SELECT checksum FROM schema_version WHERE version = 3"
+            ).fetchone()[0]
+        assert checksum_after == "0" * 64, "runner must not silently repair tampered history"
+    finally:
+        with psycopg.connect(database_url, autocommit=True) as admin:
+            admin.execute(f'DROP SCHEMA IF EXISTS "{schema}" CASCADE')
