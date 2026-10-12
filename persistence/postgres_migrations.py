@@ -91,6 +91,7 @@ _CANONICAL_BASELINE = (
     "009_canonical_production.sql",
     "010_canonical_evidence_constraints.sql",
     "011_ea35_canonical_schema_finalization.sql",
+    "012_remove_legacy_escrow_state_constraint.sql",
 )
 
 
