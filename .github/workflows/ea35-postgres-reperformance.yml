@@ -179,8 +179,17 @@ jobs:
                   after = connection.execute('SELECT version, checksum, applied_at FROM schema_version ORDER BY version').fetchall()
                   assert [row[0] for row in after] == list(range(1, 15)), after
                   assert [(row[0], row[1]) for row in after[:13]] == before_checksums
-                  constraint = connection.execute("SELECT conname, convalidated, pg_get_constraintdef(oid) FROM pg_constraint WHERE conrelid = 'escrows'::regclass AND conname = 'escrows_state_canonical_check'").fetchone()
-                  assert constraint is not None, 'canonical escrow state constraint missing'
+                  state_constraints = connection.execute("""
+                      SELECT conname, convalidated, pg_get_constraintdef(oid)
+                      FROM pg_constraint
+                      WHERE conrelid = 'escrows'::regclass
+                        AND contype = 'c'
+                        AND pg_get_constraintdef(oid) ILIKE '%state%'
+                      ORDER BY conname
+                  """).fetchall()
+                  assert len(state_constraints) == 1, f'expected exactly one escrow state CHECK constraint, found: {state_constraints}'
+                  constraint = state_constraints[0]
+                  assert constraint[0] == 'escrows_state_canonical_check', constraint
                   assert constraint[1] is True, f'constraint is not validated: {constraint}'
                   assert all(value in constraint[2] for value in ('CREATED', 'REFUNDED', 'CANCELLED')), constraint
                   connection.commit()
@@ -227,13 +236,17 @@ jobs:
               applied = connection.execute(
                   "SELECT version, checksum, applied_at::text FROM schema_version ORDER BY version"
               ).fetchall()
-              constraint = connection.execute("""
+              state_constraints = connection.execute("""
                   SELECT conname, convalidated, pg_get_constraintdef(oid)
                   FROM pg_constraint
                   WHERE conrelid = 'escrows'::regclass
-                    AND conname = 'escrows_state_canonical_check'
-              """).fetchone()
-              assert constraint is not None, "canonical escrow state constraint missing"
+                    AND contype = 'c'
+                    AND pg_get_constraintdef(oid) ILIKE '%state%'
+                  ORDER BY conname
+              """).fetchall()
+              assert len(state_constraints) == 1, f"expected exactly one escrow state CHECK constraint, found: {state_constraints}"
+              constraint = state_constraints[0]
+              assert constraint[0] == "escrows_state_canonical_check", constraint
               assert constraint[1] is True, f"canonical escrow state constraint not validated: {constraint}"
               assert all(value in constraint[2] for value in ("CREATED", "FUNDED", "LOCKED", "RELEASED", "REFUNDED", "CANCELLED")), constraint
           expected = [(item["version"], item["sha256"]) for item in manifest_rows]
