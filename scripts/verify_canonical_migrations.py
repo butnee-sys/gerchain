@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-"""Focused PostgreSQL-only verification for the canonical 1..13 migration chain.
+"""Focused PostgreSQL-only verification for the canonical migration chain.
 
 Run with GERCHAIN_MIGRATION_TEST_DATABASE_URL pointing to a disposable PostgreSQL
 database. This intentionally does not invoke the general test suite, so unrelated
@@ -18,10 +18,10 @@ from pathlib import Path
 
 import psycopg
 
-from postgres.migrations import apply_migrations, checksum, _split_sql_statements
+from postgres.migrations import apply_migrations, checksum, _split_sql_statements, _canonical_migration_files
 
 MIGRATION_DIR = Path(__file__).resolve().parents[1] / "postgres" / "migrations"
-EXPECTED = tuple(range(1, 14))
+EXPECTED = tuple(range(1, len(_canonical_migration_files(MIGRATION_DIR)) + 1))
 REPORT_PATH = Path(os.environ.get("MIGRATION_GATE_REPORT", "migration-gate-report.json"))
 
 
@@ -68,7 +68,7 @@ def _run() -> dict:
             "status": "PASS", "applied_versions": list(first)
         }
 
-        # 2. Idempotency: the same 13-file chain must produce an exact NOOP.
+        # 2. Idempotency: the same canonical migration chain must produce an exact NOOP.
         with _connect(base_url, clean) as conn:
             second = apply_migrations(conn, MIGRATION_DIR)
         if second != ():
@@ -93,8 +93,8 @@ def _run() -> dict:
             conn.commit()
         with _connect(base_url, legacy) as conn:
             applied = apply_migrations(conn, MIGRATION_DIR)
-        if applied != tuple(range(2, 14)):
-            raise AssertionError(f"legacy duplicate registry expected versions 2..13, got {applied}")
+        if applied != tuple(range(2, len(EXPECTED) + 1)):
+            raise AssertionError(f"legacy duplicate registry expected versions 2..{len(EXPECTED)}, got {applied}")
         with _connect(base_url, legacy) as conn:
             rows = conn.execute("SELECT version, checksum FROM schema_version ORDER BY version").fetchall()
             duplicate_count = conn.execute("SELECT COUNT(*) FROM (SELECT version FROM schema_version GROUP BY version HAVING COUNT(*) > 1) d").fetchone()[0]
@@ -106,8 +106,8 @@ def _run() -> dict:
                     AND i.indpred IS NULL AND i.indnkeyatts=1 AND a.attname='version'
                 )
             """).fetchone()[0]
-        if len(rows) != 13 or duplicate_count or not unique:
-            raise AssertionError("legacy registry was not normalized to 13 unique version rows")
+        if len(rows) != len(EXPECTED) or duplicate_count or not unique:
+            raise AssertionError(f"legacy registry was not normalized to {len(EXPECTED)} unique version rows")
         report["scenarios"]["legacy_registry_duplicates"] = {
             "status": "PASS", "rows_after": len(rows), "duplicate_versions": duplicate_count,
             "unique_version_index": unique, "applied_versions": list(applied)
