@@ -46,6 +46,39 @@ def apply_migrations(database_url: str) -> list[str]:
                 )
             """))
 
+            # Fail closed before migration 001 can backfill legacy escrow rows.
+            connection.exec_driver_sql("""
+                DO $preflight$
+                DECLARE
+                    has_escrows BOOLEAN;
+                    has_refund_destination BOOLEAN;
+                    has_created_at BOOLEAN;
+                    unsafe_rows BIGINT;
+                BEGIN
+                    SELECT to_regclass('public.escrows') IS NOT NULL INTO has_escrows;
+                    IF has_escrows THEN
+                        SELECT EXISTS (SELECT 1 FROM information_schema.columns
+                            WHERE table_schema = 'public' AND table_name = 'escrows'
+                              AND column_name = 'refund_destination') INTO has_refund_destination;
+                        SELECT EXISTS (SELECT 1 FROM information_schema.columns
+                            WHERE table_schema = 'public' AND table_name = 'escrows'
+                              AND column_name = 'created_at') INTO has_created_at;
+                        IF NOT has_refund_destination OR NOT has_created_at THEN
+                            SELECT count(*) INTO unsafe_rows FROM escrows;
+                            IF unsafe_rows > 0 THEN
+                                RAISE EXCEPTION 'migration blocked: legacy escrow rows need reviewed refund_destination/created_at backfill';
+                            END IF;
+                        ELSE
+                            SELECT count(*) INTO unsafe_rows FROM escrows
+                             WHERE refund_destination IS NULL OR created_at IS NULL;
+                            IF unsafe_rows > 0 THEN
+                                RAISE EXCEPTION 'migration blocked: % escrow row(s) need reviewed backfill', unsafe_rows;
+                            END IF;
+                        END IF;
+                    END IF;
+                END
+                $preflight$;
+            """)
             for path in files:
                 match = MIGRATION_NAME.match(path.name)
                 assert match is not None
