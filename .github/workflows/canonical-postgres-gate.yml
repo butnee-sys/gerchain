@@ -70,6 +70,8 @@ jobs:
           PY
       - name: Validate checksum atomicity and duplicate migration publication
         run: set -o pipefail; pytest -vv -s postgres/tests/test_migration_checksum_atomicity.py tests/postgres/test_migration_runner_concurrency.py 2>&1 | tee artifacts/canonical-postgres-evidence/logs/checksum-atomicity-concurrency.log
+      - name: Re-perform legacy escrow constraint upgrade and data preservation
+        run: set -o pipefail; pytest -vv -s tests/postgres/test_legacy_escrow_constraint_upgrade.py 2>&1 | tee artifacts/canonical-postgres-evidence/logs/legacy-escrow-upgrade.log
       - name: Re-perform canonical PostgreSQL escrow lifecycle
         run: set -o pipefail; pytest -vv -s tests/postgres/test_production_postgres_reperformance.py 2>&1 | tee artifacts/canonical-postgres-evidence/logs/production-lifecycle.log
       - name: Re-perform PostgreSQL migration concurrency and checksum gate
