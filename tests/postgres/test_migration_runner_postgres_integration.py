@@ -85,7 +85,7 @@ def test_postgres_upgrade_from_014_preserves_frozen_history_and_repairs_state_co
             before = conn.execute(
                 "SELECT version, checksum, applied_at FROM schema_version ORDER BY version"
             ).fetchall()
-            assert [row[0] for row in before] == list(range(1, 16))
+            assert [row[0] for row in before] == list(range(1, 15))
 
         with _connect(schema) as conn:
             conn.execute("ALTER TABLE escrows ADD CONSTRAINT legacy_reintroduced_state_check CHECK (state IN ('CREATED', 'LOCKED', 'RELEASED'))")
