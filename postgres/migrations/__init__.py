@@ -1,6 +1,6 @@
 """Serialized, checksummed PostgreSQL migration runner.
 
-The 15-file canonical chain is explicit because historical aliases coexist in
+The 16-file canonical chain is explicit because historical aliases coexist in
 this directory. Schema DDL, checksum verification, and schema_version publication
 run in one transaction under a transaction-scoped advisory lock.
 """
