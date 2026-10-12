@@ -375,6 +375,47 @@ def apply_migrations(conn, migration_dir: str | Path) -> None:
                         )
                     continue
 
+                # Migration 013 hardens refund_destination/currency to NOT NULL.
+                # On legacy escrows, 012 adds those columns but existing rows
+                # retain NULL values. Repair only missing metadata from existing
+                # authoritative fields/default semantics, inside the same migration
+                # transaction, before 013 validates the canonical constraints.
+                # Existing non-NULL values are never overwritten.
+                if version == 13:
+                    escrow_exists = _execute(
+                        conn, "SELECT to_regclass('escrows') IS NOT NULL"
+                    ).fetchone()[0]
+                    if escrow_exists:
+                        columns = {
+                            row[0] for row in _execute(
+                                conn,
+                                """
+                                SELECT column_name
+                                FROM information_schema.columns
+                                WHERE table_schema = current_schema()
+                                  AND table_name = 'escrows'
+                                """,
+                            ).fetchall()
+                        }
+                        if {"refund_destination", "sender_address"} <= columns:
+                            _execute(
+                                conn,
+                                """
+                                UPDATE escrows
+                                SET refund_destination = sender_address
+                                WHERE refund_destination IS NULL
+                                """,
+                            )
+                        if "currency" in columns:
+                            _execute(
+                                conn,
+                                """
+                                UPDATE escrows
+                                SET currency = 'MNT'
+                                WHERE currency IS NULL
+                                """,
+                            )
+
                 migration_sql = sql.replace("BEGIN;", "").replace("COMMIT;", "")
                 _execute(conn, migration_sql)
                 # Concurrent runners must never publish duplicate schema history.
