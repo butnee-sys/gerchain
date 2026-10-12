@@ -59,6 +59,8 @@ def test_production_postgres_factory_and_canonical_value_flow():
         session.commit()
 
         fund_escrow_in_transaction(session, transaction_id="pg-fund-tx", escrow_id="pg-release-escrow", source="pg-fund-source", amount=100, currency="MNT")
+        # Same operation/key/payload replay must be a no-op: no second ledger movement.
+        fund_escrow_in_transaction(session, transaction_id="pg-fund-tx", escrow_id="pg-release-escrow", source="pg-fund-source", amount=100, currency="MNT")
         lock_escrow_in_transaction(session, transaction_id="pg-lock-tx", escrow_id="pg-release-escrow")
         release_escrow_in_transaction(session, transaction_id="pg-release-tx", escrow_id="pg-release-escrow", beneficiary="pg-release-beneficiary", amount=100, currency="MNT", decision_status="APPROVE", authorization_status="AUTHORIZED", trust=True, transparency=True, performance=True, evidence_verified=True)
 
