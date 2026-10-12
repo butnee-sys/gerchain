@@ -23,13 +23,14 @@ EXPECTED_CANONICAL_CHAIN = [
     "013_ea35_canonical_schema_hardening.sql",
     "014_canonical_escrow_state_constraint.sql",
     "015_repair_escrow_state_constraint_drift.sql",
+    "016_reconcile_escrow_state_constraint.sql",
 ]
 
 
 def test_repository_migration_versions_resolve_to_exact_canonical_chain():
     selected = _canonical_migration_files(MIGRATION_DIR)
     assert [path.name for path in selected] == EXPECTED_CANONICAL_CHAIN
-    assert [int(path.name.split("_", 1)[0]) for path in selected] == list(range(1, 16))
+    assert [int(path.name.split("_", 1)[0]) for path in selected] == list(range(1, 17))
 
 
 def test_physical_historical_aliases_are_not_extra_active_migrations():
