@@ -22,7 +22,7 @@ def test_schema_version_bootstrap_is_guarded_in_historical_migrations():
 
     assert declarations, "expected historical schema_version declarations to be audited"
     assert all(
-        "CREATE TABLE IF NOT EXISTS schema_version" in line.lower()
+        "create table if not exists schema_version" in line.lower()
         for _, _, line in declarations
     ), declarations
     assert {name for name, _, _ in declarations} == {
