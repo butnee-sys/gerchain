@@ -38,7 +38,7 @@ def test_physical_historical_aliases_are_not_extra_active_migrations():
     versions = [int(path.name.split("_", 1)[0]) for path in physical]
     duplicates = {version for version in versions if versions.count(version) > 1}
     assert duplicates == {1, 2, 3, 4, 5}
-    assert len(_canonical_migration_files(MIGRATION_DIR)) == 15
+    assert len(_canonical_migration_files(MIGRATION_DIR)) == 16
 
 
 def test_selected_migration_checksum_is_sha256_of_exact_utf8_source():
