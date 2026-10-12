@@ -1,8 +1,10 @@
 import os
+from pathlib import Path
 
 from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.orm import sessionmaker
 
+from postgres.migrations import _canonical_migration_files
 from services.gerchain_runtime_factory import ProductionRuntimeConfig, ProductionRuntimeFactory
 
 
@@ -38,6 +40,7 @@ def test_production_runtime_factory_establishes_canonical_authority():
         versions = connection.execute(
             text("SELECT version FROM schema_version ORDER BY version")
         ).scalars().all()
-        assert versions == list(range(1, 14))
+        expected_versions = list(range(1, len(_canonical_migration_files(Path("postgres/migrations"))) + 1))
+        assert versions == expected_versions
 
     engine.dispose()
