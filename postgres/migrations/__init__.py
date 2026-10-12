@@ -316,6 +316,11 @@ def apply_migrations(connection: Connection, migration_dir: Path) -> tuple[int, 
                 }
             }
             accepted_checksums = {digest} | historical_checksums.get(version, set())
+            # Run the deterministic legacy-data compatibility check before
+            # the v11 checksum/skip branch as well: a database may claim v11
+            # was applied while retaining nullable legacy metadata after drift.
+            if version == 11:
+                _backfill_legacy_escrow_metadata_before_v11(connection)
             row = connection.execute(
                 "SELECT checksum FROM schema_version WHERE version = %s FOR UPDATE",
                 (version,),
@@ -326,8 +331,6 @@ def apply_migrations(connection: Connection, migration_dir: Path) -> tuple[int, 
                         f"Migration checksum mismatch for version {version}: {path.name}"
                     )
                 continue
-            if version == 11:
-                _backfill_legacy_escrow_metadata_before_v11(connection)
             for statement in _split_sql_statements(source):
                 connection.execute(statement)
             connection.execute(
