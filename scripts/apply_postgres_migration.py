@@ -60,7 +60,8 @@ def apply_migration(database_url: str, migration_path: Path = MIGRATION_PATH) ->
                     # as one unit inside this transaction, not split on semicolons
                     # (which would break on function bodies or quoted literals).
                     raw = connection.connection.driver_connection
-                    raw.cursor().execute(sql)
+                    with raw.cursor() as cursor:
+                        cursor.execute(sql)
                     connection.execute(
                         text("""
                             INSERT INTO schema_version(version, checksum)
