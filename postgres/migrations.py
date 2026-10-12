@@ -20,7 +20,7 @@
 # EA-35.25: force a fresh branch verification after the conflict-safe publication path.
 # EA-35.27: fresh PostgreSQL verification after canonical runtime factory correction.
 # EA-35.28: trigger fresh concurrency evidence against the current conflict-safe publisher.
-# The serialization contract is exercised by the PostgreSQL concurrency gate before production lock.
+# Session-scoped advisory serialization plus single-statement checksum-conditional publication are exercised by PostgreSQL gates before production lock.
 # The concurrency regression test is the release evidence for duplicate schema publication.
 from __future__ import annotations
 
@@ -382,19 +382,22 @@ def apply_migrations(conn, migration_dir: str | Path) -> None:
                 # The transaction-scoped advisory lock serializes compliant runners;
                 # ON CONFLICT remains a second-line idempotency barrier for legacy
                 # or differently-versioned bootstrap callers.
-                _execute(
+                # Publish the version/checksum as one conflict-safe statement.
+                # A matching concurrent publication is an idempotent no-op that
+                # returns the existing checksum; a conflicting checksum returns no
+                # row and fails closed. The unique index is the final arbiter even
+                # if a writer bypasses this runner's advisory lock.
+                recorded = _execute(
                     conn,
                     """
                     INSERT INTO schema_version(version, checksum)
                     VALUES (%s, %s)
-                    ON CONFLICT (version) DO NOTHING
+                    ON CONFLICT (version) DO UPDATE
+                    SET checksum = schema_version.checksum
+                    WHERE schema_version.checksum = EXCLUDED.checksum
+                    RETURNING checksum
                     """,
                     (version, digest),
-                )
-                recorded = _execute(
-                    conn,
-                    "SELECT checksum FROM schema_version WHERE version = %s",
-                    (version,),
                 ).fetchone()
                 if recorded is None or recorded[0] != digest:
                     raise RuntimeError(
