@@ -335,6 +335,15 @@ def apply_migrations(connection: Connection, migration_dir: Path) -> tuple[int, 
                         raise RuntimeError(
                             f"Migration checksum mismatch for version {version}: {path.name}"
                         )
+                    # Version 016 is a deliberate drift-reconciliation migration:
+                    # its repair must also run when the version is already recorded,
+                    # because an out-of-band schema mutation can reintroduce the
+                    # legacy escrow state CHECK after migration publication. Check
+                    # the stored checksum first so checksum drift still fails closed
+                    # without applying any repair SQL.
+                    if is_canonical_chain and version == 16:
+                        for statement in _split_sql_statements(source):
+                            connection.execute(statement)
                     continue
                 for statement in _split_sql_statements(source):
                     connection.execute(statement)
