@@ -44,6 +44,13 @@ def test_014_escrow_state_constraint_is_idempotent_and_preserves_definition():
         / "014_canonical_escrow_state_constraint.sql"
     )
     migration_sql = migration_path.read_text(encoding="utf-8")
+    historical_path = (
+        Path(__file__).resolve().parents[2]
+        / "postgres"
+        / "migrations"
+        / "001_concurrency.sql"
+    )
+    historical_sql = historical_path.read_text(encoding="utf-8")
     suffix = uuid.uuid4().hex[:12]
     once_schema = f"ea35_once_{suffix}"
     twice_schema = f"ea35_twice_{suffix}"
@@ -53,18 +60,10 @@ def test_014_escrow_state_constraint_is_idempotent_and_preserves_definition():
             for schema in (once_schema, twice_schema):
                 connection.execute(f'CREATE SCHEMA "{schema}"')
                 connection.execute(f'SET search_path TO "{schema}"')
-                connection.execute(
-                    """
-                    CREATE TABLE escrows (
-                        id TEXT PRIMARY KEY,
-                        state TEXT NOT NULL,
-                        CONSTRAINT legacy_escrow_state_check
-                            CHECK (state IN ('CREATED', 'LOCKED', 'RELEASED'))
-                    )
-                    """
-                )
-                # Capture the exact pre-migration constraint definition from the
-                # schema fixture before running the migration.
+                # Build the pre-migration schema from the actual historical migration,
+                # not a hand-written approximation of its state constraint.
+                connection.execute(historical_sql)
+                # Capture the exact pre-migration state constraint from PostgreSQL.
                 old = connection.execute(
                     """
                     SELECT c.conname, pg_get_constraintdef(c.oid, true), c.convalidated
@@ -76,12 +75,14 @@ def test_014_escrow_state_constraint_is_idempotent_and_preserves_definition():
                     """,
                     (schema,),
                 ).fetchall()
-                assert len(old) == 1
-                assert old[0][0] == "legacy_escrow_state_check"
-                assert old[0][1].startswith("CHECK")
-                assert all(state in old[0][1] for state in ("CREATED", "LOCKED", "RELEASED"))
-                assert "FUNDED" not in old[0][1]
-                assert old[0][2] is True
+                state_constraints = [row for row in old if row[0] == "escrows_state_check"]
+                assert len(state_constraints) == 1, old
+                old_name, old_definition, old_validated = state_constraints[0]
+                assert old_name == "escrows_state_check"
+                assert old_definition.startswith("CHECK")
+                assert all(state in old_definition for state in ("CREATED", "LOCKED", "RELEASED"))
+                assert "FUNDED" not in old_definition
+                assert old_validated is True
 
             _apply_migration(connection, once_schema, migration_sql)
             once_snapshot = _constraint_snapshot(connection, once_schema)
@@ -91,9 +92,11 @@ def test_014_escrow_state_constraint_is_idempotent_and_preserves_definition():
             twice_snapshot = _constraint_snapshot(connection, twice_schema)
 
             assert once_snapshot == twice_snapshot
-            assert len(once_snapshot) == 1
-            name, definition, validated = once_snapshot[0]
-            assert name == "escrows_state_canonical_check"
+            canonical = [row for row in once_snapshot if row[0] == "escrows_state_canonical_check"]
+            assert len(canonical) == 1, once_snapshot
+            assert not any(row[0] == "escrows_state_check" for row in once_snapshot)
+            assert not any(row[0] == "legacy_escrow_state_check" for row in once_snapshot)
+            name, definition, validated = canonical[0]
             assert all(
                 state in definition
                 for state in ("CREATED", "FUNDED", "LOCKED", "RELEASED", "REFUNDED", "CANCELLED")
