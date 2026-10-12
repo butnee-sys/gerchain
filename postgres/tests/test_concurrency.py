@@ -325,3 +325,77 @@ def test_postgres_interruption_and_retry_moves_value_exactly_once(monkeypatch):
                 )
             )
 
+def test_migration_rerun_preserves_canonical_value_snapshot(monkeypatch):
+    """Re-applying the canonical migration chain must preserve balances and movements."""
+    admin_dsn = _dsn()
+    database_name = f"gerchain_migration_snapshot_{uuid.uuid4().hex[:12]}"
+    with psycopg.connect(admin_dsn, autocommit=True) as admin:
+        admin.execute(sql.SQL("CREATE DATABASE {}").format(sql.Identifier(database_name)))
+
+    fresh_dsn = make_conninfo(admin_dsn, dbname=database_name)
+    monkeypatch.setenv("GERCHAIN_POSTGRES_DSN", fresh_dsn)
+    conninfo = conninfo_to_dict(fresh_dsn)
+    sqlalchemy_url = URL.create(
+        "postgresql+psycopg",
+        username=conninfo.get("user"),
+        password=conninfo.get("password"),
+        host=conninfo.get("host"),
+        port=int(conninfo["port"]) if conninfo.get("port") else None,
+        database=conninfo.get("dbname"),
+    )
+    engine = create_engine(sqlalchemy_url, pool_pre_ping=True)
+    factory = sessionmaker(bind=engine, expire_on_commit=False)
+    source = f"snapshot-source-{uuid.uuid4().hex[:8]}"
+    destination = f"snapshot-dest-{uuid.uuid4().hex[:8]}"
+    tx_id = f"snapshot-tx-{uuid.uuid4().hex}"
+    migration_dir = Path(__file__).resolve().parents[1] / "migrations"
+
+    try:
+        with psycopg.connect(fresh_dsn) as conn:
+            apply_migrations(conn, migration_dir)
+        with factory() as session:
+            PostgreSQLAtomicLedger.create_account_in_transaction(session, source, "MNT", 250)
+            PostgreSQLAtomicLedger.create_account_in_transaction(session, destination, "MNT", 5)
+            PostgreSQLAtomicLedger.transfer_in_transaction(
+                session, tx_id, source, destination, 25, "MNT",
+                operation="SETTLEMENT", escrow_id=None, integrity_hash="b" * 64,
+            )
+            session.commit()
+
+        def snapshot():
+            with factory() as session:
+                accounts = tuple(
+                    (r.account_id, r.currency, int(r.balance), int(r.version))
+                    for r in session.execute(
+                        select(LedgerAccountModel).order_by(LedgerAccountModel.account_id)
+                    ).scalars()
+                )
+                movements = tuple(
+                    (r.transaction_id, r.source, r.destination, int(r.amount),
+                     r.currency, r.operation, r.escrow_id, r.integrity_hash)
+                    for r in session.execute(
+                        select(LedgerMovementModel).order_by(LedgerMovementModel.transaction_id)
+                    ).scalars()
+                )
+                return accounts, movements
+
+        before = snapshot()
+        with psycopg.connect(fresh_dsn) as conn:
+            apply_migrations(conn, migration_dir)
+        after = snapshot()
+
+        assert after == before, (
+            "canonical migration rerun changed value truth: "
+            f"before={before!r}, after={after!r}"
+        )
+        assert len(after[1]) == 1
+        assert sum(row[2] for row in after[0]) == 255
+    finally:
+        engine.dispose()
+        with psycopg.connect(admin_dsn, autocommit=True) as admin:
+            admin.execute(
+                sql.SQL("DROP DATABASE IF EXISTS {} WITH (FORCE)").format(
+                    sql.Identifier(database_name)
+                )
+            )
+
