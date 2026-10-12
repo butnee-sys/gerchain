@@ -106,6 +106,17 @@ def test_migrations_are_serialized_and_checksum_is_stable(monkeypatch):
                 f"schema_version_rows={diagnostic_rows!r}"
             )
 
+        # Both independent runners must observe the exact same published
+        # migration history, not merely succeed without raising an exception.
+        assert connection_results[0]["rows"] == diagnostic_rows, (
+            f"runner A observed a different schema history: {connection_results[0]['rows']!r} "
+            f"versus final rows {diagnostic_rows!r}"
+        )
+        assert connection_results[1]["rows"] == diagnostic_rows, (
+            f"runner B observed a different schema history: {connection_results[1]['rows']!r} "
+            f"versus final rows {diagnostic_rows!r}"
+        )
+
         connection_pids = [result["pid"] for result in connection_results]
         print(
             "MIGRATION_CONCURRENCY_CONNECTIONS "
