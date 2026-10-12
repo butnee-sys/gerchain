@@ -136,8 +136,8 @@ def test_migrations_are_serialized_and_checksum_is_stable(monkeypatch):
             f"duplicate schema_version publication: rows={rows!r}"
         )
         assert versions
-        assert versions == list(range(1, 16)), f"schema_version history has gaps or unexpected versions: {versions}"
-        assert max(versions) >= 15
+        assert versions == list(range(1, 17)), f"schema_version history has gaps or unexpected versions: {versions}"
+        assert max(versions) >= 16
         assert all(checksum for _, checksum in rows)
 
         # Re-run the publisher and prove both the version set and each checksum
