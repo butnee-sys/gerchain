@@ -41,7 +41,7 @@ def _snapshot_escrow(conn):
     rows = conn.execute(
         """
         SELECT id, sender_address, refund_destination, currency, state,
-               receiver_address, amount, condition_desc
+               receiver_address, amount, condition_desc, updated_at
         FROM escrows ORDER BY id
         """
     ).fetchall()
@@ -112,8 +112,8 @@ def test_sixteen_migrations_preserve_existing_escrow_truth_and_fill_only_missing
                 "SELECT id, created_at, version FROM escrows ORDER BY id"
             ).fetchall()
             assert created == [
-                ("keep-001", before[0][7], 0),
-                ("keep-002", before[1][7], 0),
+                ("keep-001", before[0][8], 0),
+                ("keep-002", before[1][8], 0),
             ]
             versions = conn.execute(
                 "SELECT version, checksum, applied_at FROM schema_version ORDER BY version"
