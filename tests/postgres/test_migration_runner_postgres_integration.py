@@ -80,7 +80,7 @@ def test_postgres_upgrade_from_014_preserves_frozen_history_and_repairs_state_co
 
         with _connect(schema) as conn:
             first = apply_migrations(conn, legacy_dir)
-            assert first == tuple(range(1, 16))
+            assert first == tuple(range(1, 15))
         with _connect(schema) as conn:
             before = conn.execute(
                 "SELECT version, checksum, applied_at FROM schema_version ORDER BY version"
@@ -118,7 +118,7 @@ def test_postgres_clean_apply_rerun_and_history_stability():
     try:
         with _connect(schema) as conn:
             first = apply_migrations(conn, MIGRATIONS)
-            assert first == tuple(range(1, 15))
+            assert first == tuple(range(1, 16))
         with _connect(schema) as conn:
             before = conn.execute(
                 "SELECT version, checksum, applied_at FROM schema_version ORDER BY version"
