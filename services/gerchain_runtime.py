@@ -1,4 +1,9 @@
-"""GerChain authoritative runtime boundary."""
+"""GerChain authoritative runtime boundary.
+
+    The default construction is a test-memory harness. Production construction
+    must explicitly attach the durable Canonical Ledger boundary; memory-backed
+    value movement is not a production fallback.
+    """
 from __future__ import annotations
 
 from typing import Any, Dict, Mapping, Optional, Callable
