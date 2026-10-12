@@ -18,6 +18,9 @@ from persistence.cancel_escrow import cancel_escrow_in_transaction
 from persistence.refund_escrow import refund_escrow_in_transaction
 from persistence.settlement_coordinator import SettlementCoordinator
 from persistence.deep_value_reconciliation import deep_reconcile_value_truth
+from postgres.migrations import _canonical_migration_files, checksum
+from pathlib import Path
+from sqlalchemy import text
 
 
 @pytest.mark.postgres
@@ -36,6 +39,27 @@ def test_production_postgres_factory_and_canonical_value_flow():
     )
     runtime = factory.create()
     assert runtime.is_canonical_ledger_authoritative
+
+    # Prove the runtime boot used the actual canonical migration runner and the
+    # repository's exact 16-file migration chain, rather than metadata.create_all
+    # alone. This assertion runs against the real PostgreSQL service in CI.
+    migration_dir = Path(__file__).resolve().parents[2] / "postgres" / "migrations"
+    canonical_files = _canonical_migration_files(migration_dir)
+    assert [int(path.name.split("_", 1)[0]) for path in canonical_files] == list(range(1, 17))
+    expected_checksums = {
+        int(path.name.split("_", 1)[0]): checksum(path.read_text(encoding="utf-8"))
+        for path in canonical_files
+    }
+    with engine.connect() as connection:
+        applied_rows = connection.execute(
+            text("SELECT version, checksum FROM schema_version ORDER BY version")
+        ).all()
+    applied_checksums = {int(version): digest for version, digest in applied_rows}
+    assert list(applied_checksums) == list(range(1, 17)), applied_checksums
+    assert applied_checksums == expected_checksums, {
+        "expected": expected_checksums,
+        "applied": applied_checksums,
+    }
 
     for base in (AtomicLedgerBase, EscrowBase, OutboxBase, IdempotencyBase, WitnessBase):
         base.metadata.create_all(engine)
