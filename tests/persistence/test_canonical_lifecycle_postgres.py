@@ -1,7 +1,7 @@
 """PostgreSQL end-to-end proof for canonical escrow/value-flow operations.
 
 Requires GERCHAIN_TEST_DATABASE_URL pointing at a disposable PostgreSQL database.
-The test applies the exact canonical 13-migration chain, executes all required
+The test applies the exact canonical 14-migration chain, executes all required
 operations using the real SQLAlchemy/PostgreSQL boundary, then reconciles the
 persisted movement/evidence graph. It intentionally never truncates shared data.
 """
@@ -44,7 +44,7 @@ def pg_factory():
         rows = connection.execute(
             "SELECT version, checksum FROM schema_version ORDER BY version"
         ).fetchall()
-        assert [row[0] for row in rows] == list(range(1, 14)), rows
+        assert [row[0] for row in rows] == list(range(1, 15)), rows
         assert all(row[1] for row in rows), rows
 
     engine = create_engine(url, pool_pre_ping=True)
@@ -59,7 +59,7 @@ def pg_factory():
         engine.dispose()
 
 
-def test_postgres_13_migrations_and_full_value_flow_reconcile(pg_factory):
+def test_postgres_14_migrations_and_full_value_flow_reconcile(pg_factory):
     suffix = uuid.uuid4().hex[:12]
     currency = "MNT"
     amount = 100
