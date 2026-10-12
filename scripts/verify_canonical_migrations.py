@@ -147,6 +147,7 @@ def _run() -> dict:
         if not any(row[0] == "legacy_reintroduced_state_check" for row in stale_before):
             raise AssertionError(f"stale legacy constraint was not reproduced: {stale_before}")
         with _connect(base_url, drift_schema) as conn:
+            conn.commit()
             repaired = apply_migrations(conn, MIGRATION_DIR)
         if repaired != (15,):
             raise AssertionError(f"state drift repair expected migration 015 only, got {repaired}")
@@ -159,6 +160,7 @@ def _run() -> dict:
                   AND lower(pg_get_constraintdef(oid)) LIKE '%state%'
                 ORDER BY conname
             """).fetchall()
+            conn.commit()
             second = apply_migrations(conn, MIGRATION_DIR)
         if len(checks) != 1 or checks[0][0] != "escrows_state_canonical_check" or checks[0][1] is not True:
             raise AssertionError(f"state constraint repair did not leave exactly one validated canonical CHECK: {checks}")
