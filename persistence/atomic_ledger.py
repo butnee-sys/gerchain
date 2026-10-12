@@ -33,7 +33,7 @@ class LedgerMovementModel(AtomicLedgerBase):
     destination: Mapped[str] = mapped_column(String(128), nullable=False)
     amount: Mapped[int] = mapped_column(BigInteger, nullable=False)
     currency: Mapped[str] = mapped_column(String(16), nullable=False)
-    operation: Mapped[str] = mapped_column(String(32), nullable=False, default="TRANSFER")
+    operation: Mapped[str] = mapped_column(String(32), nullable=False, default="SETTLEMENT")
     escrow_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
     integrity_hash: Mapped[str | None] = mapped_column(String(128), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
@@ -93,7 +93,7 @@ class PostgreSQLAtomicLedger:
         destination: str,
         amount: int,
         currency: str,
-        operation: str = "TRANSFER",
+        operation: str = "SETTLEMENT",
         escrow_id: str | None = None,
         integrity_hash: str | None = None,
     ) -> dict[str, Any]:
