@@ -125,7 +125,7 @@ jobs:
               rows_first = connection.execute(
                   "SELECT version, checksum, applied_at::text FROM schema_version ORDER BY version"
               ).fetchall()
-              assert [row[0] for row in rows_first] == list(range(1, 15)), rows_first
+              assert [row[0] for row in rows_first] == list(range(1, 16)), rows_first
               assert all(row[1] for row in rows_first), rows_first
               constraints_first = connection.execute("""
                   SELECT conname, contype, convalidated, pg_get_constraintdef(oid)
@@ -174,7 +174,7 @@ jobs:
           print(f"MIGRATION_REGISTRY_AFTER_SHA256_INPUT={[(row[0], row[1]) for row in rows]!r}")
           PY
 
-      - name: Re-perform upgrade from canonical migrations 001-013 to 014
+      - name: Re-perform upgrade from canonical migrations 001-014 to 015
         run: |
           python - <<'PY'
           import os, tempfile
@@ -185,22 +185,28 @@ jobs:
           raw = os.environ['GERCHAIN_UPGRADE_DATABASE_URL']
           dsn = raw.replace('postgresql+psycopg://', 'postgresql://').replace('postgresql+psycopg2://', 'postgresql://')
           canonical = _canonical_migration_files(Path('postgres/migrations'))
-          with tempfile.TemporaryDirectory(prefix='gerchain-migrations-001-013-') as tmp:
+          with tempfile.TemporaryDirectory(prefix='gerchain-migrations-001-014-') as tmp:
               stage = Path(tmp)
-              for version, source in enumerate(canonical[:13], start=1):
+              for version, source in enumerate(canonical[:14], start=1):
                   (stage / f'{version:03d}_upgrade.sql').write_text(source.read_text(encoding='utf-8'), encoding='utf-8')
               with psycopg.connect(dsn) as connection:
                   applied = apply_migrations(connection, stage)
-                  assert applied == tuple(range(1, 14)), applied
+                  assert applied == tuple(range(1, 15)), applied
                   before = connection.execute('SELECT version, checksum, applied_at FROM schema_version ORDER BY version').fetchall()
-                  assert [row[0] for row in before] == list(range(1, 14)), before
+                  assert [row[0] for row in before] == list(range(1, 15)), before
                   before_checksums = [(row[0], row[1]) for row in before]
                   connection.commit()
-                  applied_014 = apply_migrations(connection, Path('postgres/migrations'))
-                  assert applied_014 == (14,), applied_014
+                  connection.execute("""
+                      ALTER TABLE escrows
+                      ADD CONSTRAINT legacy_reintroduced_state_check
+                      CHECK (state IN ('CREATED', 'LOCKED', 'RELEASED'))
+                  """)
+                  connection.commit()
+                  applied_015 = apply_migrations(connection, Path('postgres/migrations'))
+                  assert applied_015 == (15,), applied_015
                   after = connection.execute('SELECT version, checksum, applied_at FROM schema_version ORDER BY version').fetchall()
-                  assert [row[0] for row in after] == list(range(1, 15)), after
-                  assert [(row[0], row[1]) for row in after[:13]] == before_checksums
+                  assert [row[0] for row in after] == list(range(1, 16)), after
+                  assert [(row[0], row[1]) for row in after[:14]] == before_checksums
                   state_constraints = connection.execute("""
                       SELECT conname, convalidated, pg_get_constraintdef(oid)
                       FROM pg_constraint
@@ -213,15 +219,15 @@ jobs:
                   constraint = state_constraints[0]
                   assert constraint[0] == 'escrows_state_canonical_check', constraint
                   assert constraint[1] is True, f'constraint is not validated: {constraint}'
-                  assert all(value in constraint[2] for value in ('CREATED', 'REFUNDED', 'CANCELLED')), constraint
+                  assert all(value in constraint[2] for value in ('CREATED', 'FUNDED', 'LOCKED', 'RELEASED', 'REFUNDED', 'CANCELLED')), constraint
                   connection.commit()
                   rerun = apply_migrations(connection, Path('postgres/migrations'))
                   assert rerun == (), rerun
                   final = connection.execute('SELECT version, checksum, applied_at FROM schema_version ORDER BY version').fetchall()
                   assert final == after, 'rerun changed schema_version rows/checksums/timestamps'
-                  print('UPGRADE_001_013_TO_014=PASS')
-                  print('PREVIOUS_001_013_CHECKSUMS_PRESERVED=PASS')
-                  print('ESCROW_STATE_CONSTRAINT_VALIDATED=PASS')
+                  print('UPGRADE_001_014_TO_015=PASS')
+                  print('PREVIOUS_001_014_CHECKSUMS_PRESERVED=PASS')
+                  print('ESCROW_STATE_CONSTRAINT_REPAIR_AND_VALIDATION=PASS')
                   print('UPGRADE_RERUN_IDEMPOTENCY=PASS')
           PY
 
