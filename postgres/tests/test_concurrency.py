@@ -11,6 +11,7 @@ from psycopg.conninfo import conninfo_to_dict, make_conninfo
 from psycopg import sql
 from sqlalchemy import create_engine, func, select
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.engine import URL
 
 from persistence.atomic_ledger import (
     LedgerAccountModel,
@@ -246,7 +247,16 @@ def test_postgres_interruption_and_retry_moves_value_exactly_once(monkeypatch):
 
     fresh_dsn = make_conninfo(admin_dsn, dbname=database_name)
     monkeypatch.setenv("GERCHAIN_POSTGRES_DSN", fresh_dsn)
-    engine = create_engine(fresh_dsn, pool_pre_ping=True)
+    conninfo = conninfo_to_dict(fresh_dsn)
+    sqlalchemy_url = URL.create(
+        "postgresql+psycopg",
+        username=conninfo.get("user"),
+        password=conninfo.get("password"),
+        host=conninfo.get("host"),
+        port=int(conninfo["port"]) if conninfo.get("port") else None,
+        database=conninfo.get("dbname"),
+    )
+    engine = create_engine(sqlalchemy_url, pool_pre_ping=True)
     factory = sessionmaker(bind=engine, expire_on_commit=False)
     tx_id = f"interruption-{uuid.uuid4().hex}"
     source = f"source-{uuid.uuid4().hex[:12]}"
