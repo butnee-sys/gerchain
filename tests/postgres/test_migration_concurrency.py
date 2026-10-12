@@ -49,7 +49,7 @@ def test_two_connections_apply_canonical_migrations_without_duplicate_schema_ver
 
         with psycopg.connect(database_url, options=f"-c search_path={schema}") as check:
             rows = check.execute(
-                "SELECT version, checksum FROM schema_version ORDER BY version"
+                "SELECT version, checksum, applied_at FROM schema_version ORDER BY version"
             ).fetchall()
             assert [row[0] for row in rows] == EXPECTED_VERSIONS
             assert len(rows) == 14
@@ -115,10 +115,10 @@ def test_concurrent_bootstrap_creates_registry_once():
 
         with psycopg.connect(database_url, options=f"-c search_path={schema}") as check:
             before = check.execute(
-                "SELECT version, checksum FROM schema_version ORDER BY version"
+                "SELECT version, checksum, applied_at FROM schema_version ORDER BY version"
             ).fetchall()
-        assert [version for version, _ in before] == EXPECTED_VERSIONS
-        assert all(checksum for _, checksum in before)
+        assert [version for version, _, _ in before] == EXPECTED_VERSIONS
+        assert all(checksum for _, checksum, _ in before)
 
         with psycopg.connect(
             database_url, options=f"-c search_path={schema}"
@@ -128,9 +128,9 @@ def test_concurrent_bootstrap_creates_registry_once():
 
         with psycopg.connect(database_url, options=f"-c search_path={schema}") as check:
             after = check.execute(
-                "SELECT version, checksum FROM schema_version ORDER BY version"
+                "SELECT version, checksum, applied_at FROM schema_version ORDER BY version"
             ).fetchall()
-        assert after == before
+        assert after == before, "repeat migration changed version, checksum, or applied_at"
     finally:
         with psycopg.connect(database_url, autocommit=True) as admin:
             admin.execute(f'DROP SCHEMA IF EXISTS "{schema}" CASCADE')
