@@ -162,8 +162,8 @@ jobs:
                'bytes': p.stat().st_size}
               for p in selected
           ]
-          if [item['version'] for item in canonical] != list(range(1, 16)):
-              raise SystemExit('canonical migration chain is not exactly versions 1..15')
+          if [item['version'] for item in canonical] != list(range(1, 17)):
+              raise SystemExit('canonical migration chain is not exactly versions 1..16')
           database_rows = []
           database_error = None
           dsn = (os.environ.get('GERCHAIN_TEST_DATABASE_URL') or os.environ.get('GERCHAIN_DATABASE_URL') or '').replace('postgresql+psycopg://', 'postgresql://').replace('postgresql+psycopg2://', 'postgresql://')
