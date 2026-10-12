@@ -5,8 +5,10 @@ from datetime import datetime, timezone
 
 from sqlalchemy import select
 
-from persistence.atomic_ledger import LedgerAccountModel
+from persistence.atomic_ledger import LedgerAccountModel, LedgerMovementModel
+from persistence.atomic_value_transaction import TransactionWitness
 from persistence.deep_value_reconciliation import deep_reconcile_value_truth
+from persistence.durable_idempotency import DurableIdempotencyRecord
 from persistence.escrow_aggregate import CanonicalEscrow, EscrowState
 from services.gerchain_runtime_factory import ProductionRuntimeConfig, ProductionRuntimeFactory
 
@@ -140,5 +142,28 @@ def test_production_postgresql_runtime_full_value_flow():
     assert _account_balance(factory, "settlement-destination") == 10
 
     with factory.session_factory() as session:
+        # Exact value-movement graph: FUND x3, RELEASE, REFUND, CANCEL reversal, SETTLEMENT.
+        expected_ids = {
+            'e2e-release-fund', 'e2e-release-value', 'e2e-refund-fund',
+            'e2e-refund-value', 'e2e-cancel-fund', 'e2e-cancel-value',
+            'e2e-settlement',
+        }
+        movements = session.execute(
+            select(LedgerMovementModel).where(LedgerMovementModel.transaction_id.in_(expected_ids))
+        ).scalars().all()
+        assert len(movements) == 7
+        assert {row.transaction_id for row in movements} == expected_ids
+        assert {row.operation for row in movements} == {'FUND', 'RELEASE', 'REFUND', 'CANCEL', 'SETTLEMENT'}
+        assert all(row.integrity_hash for row in movements)
+        assert all(row.escrow_id for row in movements if row.operation != 'SETTLEMENT')
+        witnesses = session.execute(
+            select(TransactionWitness).where(TransactionWitness.transaction_id.in_(expected_ids))
+        ).scalars().all()
+        assert {row.transaction_id for row in witnesses} == expected_ids
+        idempotency = session.execute(
+            select(DurableIdempotencyRecord).where(DurableIdempotencyRecord.key.in_(expected_ids))
+        ).scalars().all()
+        assert {row.key for row in idempotency} == expected_ids
+        assert all(row.state == 'COMPLETED' and row.result_json for row in idempotency)
         report = deep_reconcile_value_truth(session)
         assert report.matched, report.issues
