@@ -23,8 +23,16 @@ from postgres.migrations import apply_migrations
 
 
 def _dsn() -> str:
+    # These tests are real-PostgreSQL integration tests. Skip cleanly in generic
+    # unit-test jobs rather than failing because no disposable database is set.
+    value = (
+        os.environ.get("GERCHAIN_POSTGRES_DSN")
+        or os.environ.get("GERCHAIN_DATABASE_URL")
+        or os.environ.get("GERCHAIN_TEST_DATABASE_URL")
+    )
+    if not value:
+        pytest.skip("requires a dedicated, disposable PostgreSQL test database")
     # psycopg accepts PostgreSQL DSNs, not SQLAlchemy driver-qualified URLs.
-    value = os.environ.get("GERCHAIN_POSTGRES_DSN") or os.environ.get("GERCHAIN_DATABASE_URL") or os.environ["GERCHAIN_TEST_DATABASE_URL"]
     return value.replace("postgresql+psycopg://", "postgresql://").replace("postgresql+psycopg2://", "postgresql://")
 
 
