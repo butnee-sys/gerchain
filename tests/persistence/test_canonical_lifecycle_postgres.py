@@ -44,7 +44,7 @@ def pg_factory():
         rows = connection.execute(
             "SELECT version, checksum FROM schema_version ORDER BY version"
         ).fetchall()
-        assert [row[0] for row in rows] == list(range(1, 15)), rows
+        assert [row[0] for row in rows] == list(range(1, 16)), rows
         assert all(row[1] for row in rows), rows
 
     engine = create_engine(url, pool_pre_ping=True)
