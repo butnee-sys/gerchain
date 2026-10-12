@@ -11,7 +11,7 @@ def test_postgresql_migration_versions_resolve_to_exact_canonical_chain():
     selected = _canonical_migration_files(_migration_dir())
     versions = [int(path.name.split("_", 1)[0]) for path in selected]
 
-    assert len(selected) == 15
+    assert len(selected) == 16
     assert versions == list(range(1, 17))
 
 
