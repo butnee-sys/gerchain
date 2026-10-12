@@ -71,7 +71,7 @@ jobs:
         run: |
           PGPASSWORD=gerchain createdb -h 127.0.0.1 -U gerchain gerchain_migration_proof
           PGPASSWORD=gerchain psql -h 127.0.0.1 -U gerchain -d gerchain_migration_proof -c "SELECT current_database();"
-      - name: Verify migration 014, preserve checksums 001-013, and inspect pg_constraint
+      - name: Reproduce stale escrow state constraint, apply migration 015, and inspect pg_constraint
         run: |
           python - <<'PY'
           import os
@@ -81,39 +81,53 @@ jobs:
           from postgres.migrations import _canonical_migration_files, apply_migrations, checksum
           migration_dir = Path("postgres/migrations")
           dsn = os.environ["GERCHAIN_DATABASE_URL"].replace("postgresql+psycopg://", "postgresql://")
-          with tempfile.TemporaryDirectory(prefix="gerchain-migrations-001-013-") as tmp:
+          with tempfile.TemporaryDirectory(prefix="gerchain-migrations-001-014-") as tmp:
               baseline_dir = Path(tmp)
               canonical_files = _canonical_migration_files(migration_dir)
-              for source in canonical_files[:13]:
+              for source in canonical_files[:14]:
                   (baseline_dir / source.name).write_text(source.read_text(encoding="utf-8"), encoding="utf-8")
               with psycopg.connect(dsn) as connection:
-                  apply_migrations(connection, baseline_dir)
+                  applied = apply_migrations(connection, baseline_dir)
+                  assert applied == tuple(range(1, 15)), applied
                   before = connection.execute("SELECT version, checksum FROM schema_version ORDER BY version").fetchall()
-                  assert [row[0] for row in before] == list(range(1, 14)), before
-                  expected = {version: checksum((baseline_dir / canonical_files[version - 1].name).read_text(encoding="utf-8")) for version in range(1, 14)}
+                  expected = {version: checksum((baseline_dir / canonical_files[version - 1].name).read_text(encoding="utf-8")) for version in range(1, 15)}
+                  assert [row[0] for row in before] == list(range(1, 15)), before
                   assert dict(before) == expected, (before, expected)
-                  # psycopg starts a transaction for the SELECTs above. The migration runner requires a clean connection.
+                  connection.commit()
+                  # Reproduce the exact class of drift: a stale state CHECK appears
+                  # alongside the canonical one before the next production boot.
+                  connection.execute("""
+                    ALTER TABLE escrows
+                    ADD CONSTRAINT legacy_reintroduced_state_check
+                    CHECK (state IN ('CREATED', 'LOCKED', 'RELEASED'))
+                  """)
                   connection.commit()
                   apply_migrations(connection, migration_dir)
                   after = connection.execute("SELECT version, checksum FROM schema_version ORDER BY version").fetchall()
-                  assert [row[0] for row in after] == list(range(1, 15)), after
-                  assert after[:13] == before, {"before": before, "after": after}
-                  assert after[13][1] == checksum((migration_dir / "014_canonical_escrow_state_constraint.sql").read_text(encoding="utf-8"))
+                  assert [row[0] for row in after] == list(range(1, 16)), after
+                  assert after[:14] == before, {"before": before, "after": after}
+                  assert after[14][1] == checksum((migration_dir / "015_repair_escrow_state_constraint_drift.sql").read_text(encoding="utf-8"))
                   constraints = connection.execute("""
-                    SELECT conname, pg_get_constraintdef(oid)
+                    SELECT conname, convalidated, pg_get_constraintdef(oid)
                     FROM pg_constraint
                     WHERE conrelid = 'escrows'::regclass
-                      AND conname IN ('legacy_escrow_state_check', 'escrows_state_canonical_check')
+                      AND contype = 'c'
+                      AND lower(pg_get_constraintdef(oid)) LIKE '%state%'
                     ORDER BY conname
                   """).fetchall()
                   print(f"PG_CONSTRAINT_ESCROWS={constraints!r}")
-                  assert not any(name == "legacy_escrow_state_check" for name, _ in constraints), constraints
-                  canonical = [definition for name, definition in constraints if name == "escrows_state_canonical_check"]
-                  assert len(canonical) == 1 and all(state in canonical[0] for state in ("CREATED", "FUNDED", "LOCKED", "RELEASED", "REFUNDED", "CANCELLED")), canonical
-                  print(f"MIGRATION_CHECKSUMS_001_013_PRESERVED={after[:13] == before}")
-                  print(f"MIGRATION_014_CHECKSUM={after[13][1]}")
-                  print("MIGRATION_014_PG_CONSTRAINT=PASS")
-          print("MIGRATION_BASELINE_AND_014=PASS")
+                  assert len(constraints) == 1, constraints
+                  assert constraints[0][0] == "escrows_state_canonical_check", constraints
+                  assert constraints[0][1] is True, constraints
+                  assert all(state in constraints[0][2] for state in ("CREATED", "FUNDED", "LOCKED", "RELEASED", "REFUNDED", "CANCELLED")), constraints
+                  connection.commit()
+                  second = apply_migrations(connection, migration_dir)
+                  assert second == (), second
+                  print(f"MIGRATION_CHECKSUMS_001_014_PRESERVED={after[:14] == before}")
+                  print(f"MIGRATION_015_CHECKSUM={after[14][1]}")
+                  print("MIGRATION_015_STATE_CONSTRAINT_VALIDATED=PASS")
+                  print("MIGRATION_SECOND_RUN_NOOP=PASS")
+          print("MIGRATION_BASELINE_001_014_AND_REPAIR_015=PASS")
           PY
       - name: Verify canonical fundamental architecture gates (SHUUD excluded)
         run: |
