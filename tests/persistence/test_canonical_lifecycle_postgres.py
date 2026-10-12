@@ -1,7 +1,7 @@
 """PostgreSQL end-to-end proof for canonical escrow/value-flow operations.
 
 Requires GERCHAIN_TEST_DATABASE_URL pointing at a disposable PostgreSQL database.
-The test applies the exact canonical 14-migration chain, executes all required
+The test applies the exact canonical 15-migration chain, executes all required
 operations using the real SQLAlchemy/PostgreSQL boundary, then reconciles the
 persisted movement/evidence graph. It intentionally never truncates shared data.
 """
