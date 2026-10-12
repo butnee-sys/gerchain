@@ -3,8 +3,18 @@ name: SHUUD Sandbox Smoke
 on:
   push:
     branches: ["main"]
+    paths:
+      - "sandbox/**"
+      - "shuud/**"
+      - "tests/test_shuud_*.py"
+      - "tests/shuud/**"
   pull_request:
     branches: ["main"]
+    paths:
+      - "sandbox/**"
+      - "shuud/**"
+      - "tests/test_shuud_*.py"
+      - "tests/shuud/**"
   workflow_dispatch:
 
 jobs:
