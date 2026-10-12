@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import hashlib
+import json
 from typing import Any
 
 from sqlalchemy import BigInteger, DateTime, Integer, String, UniqueConstraint, select
@@ -99,6 +101,21 @@ class PostgreSQLAtomicLedger:
             raise ValueError("transaction_id is required")
         if not operation:
             raise ValueError("operation is required")
+        if integrity_hash is None:
+            integrity_material = json.dumps(
+                {
+                    "transaction_id": transaction_id,
+                    "operation": operation,
+                    "escrow_id": escrow_id,
+                    "source": source,
+                    "destination": destination,
+                    "amount": amount,
+                    "currency": currency,
+                },
+                sort_keys=True,
+                separators=(",", ":"),
+            )
+            integrity_hash = hashlib.sha256(integrity_material.encode("utf-8")).hexdigest()
         if amount <= 0:
             raise ValueError("Transfer amount must be positive")
         if source == destination:
