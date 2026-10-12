@@ -74,6 +74,17 @@ def test_full_16_migration_chain_repairs_legacy_constraint_without_losing_escrow
             """).fetchall()
             assert actual_rows == sorted(expected_rows)
 
+            # Legacy rows without the newly introduced metadata must be
+            # backfilled deterministically before NOT NULL hardening.
+            metadata_rows = conn.execute(
+                "SELECT id, refund_destination, currency FROM escrows ORDER BY id"
+            ).fetchall()
+            assert metadata_rows == [
+                ("legacy-created", "sender-a", "MNT"),
+                ("legacy-locked", "sender-b", "MNT"),
+                ("legacy-released", "sender-c", "MNT"),
+            ]
+
             versions = conn.execute(
                 "SELECT version FROM schema_version ORDER BY version"
             ).fetchall()
