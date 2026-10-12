@@ -64,7 +64,7 @@ def test_canonical_migrations_apply_idempotently_on_real_postgres():
             versions = conn.execute(
                 text("SELECT version FROM schema_version ORDER BY version")
             ).scalars().all()
-            assert versions == list(range(1, 14))
+            assert versions == list(range(1, 15))
 
             constraints = conn.execute(
                 text(
