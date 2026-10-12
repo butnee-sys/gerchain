@@ -55,12 +55,13 @@ def test_full_15_migration_chain_repairs_legacy_constraint_without_losing_escrow
                         CHECK (state IN ('CREATED', 'LOCKED', 'RELEASED'))
                 )
             """)
-            conn.executemany(
-                """INSERT INTO escrows
-                   (id, sender_address, receiver_address, amount, state, condition_desc)
-                   VALUES (%s, %s, %s, %s, %s, %s)""",
-                expected_rows,
-            )
+            with conn.cursor() as cursor:
+                cursor.executemany(
+                    """INSERT INTO escrows
+                       (id, sender_address, receiver_address, amount, state, condition_desc)
+                       VALUES (%s, %s, %s, %s, %s, %s)""",
+                    expected_rows,
+                )
             conn.commit()
 
             apply_migrations(conn, migration_dir)
