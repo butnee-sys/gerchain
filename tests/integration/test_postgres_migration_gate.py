@@ -40,7 +40,7 @@ def test_canonical_migrations_apply_idempotently_on_real_postgres():
 
     with psycopg.connect(_driver_url(DATABASE_URL)) as conn:
         first = apply_migrations(conn, migration_dir)
-    assert first == tuple(range(1, 16))
+    assert first == tuple(range(1, 17))
 
     with psycopg.connect(_driver_url(DATABASE_URL)) as conn:
         second = apply_migrations(conn, migration_dir)
@@ -64,7 +64,7 @@ def test_canonical_migrations_apply_idempotently_on_real_postgres():
             versions = conn.execute(
                 text("SELECT version FROM schema_version ORDER BY version")
             ).scalars().all()
-            assert versions == list(range(1, 16))
+            assert versions == list(range(1, 17))
 
             constraints = conn.execute(
                 text(
