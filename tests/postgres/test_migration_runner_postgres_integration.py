@@ -212,3 +212,65 @@ def test_postgres_checksum_mismatch_rolls_back_prior_ddl_and_history(tmp_path: P
         assert versions == [(2, "0" * 64)]
     finally:
         _drop_schema(schema)
+
+
+@pytest.mark.parametrize(
+    "drift_constraint",
+    [
+        "legacy_reintroduced_state_check",
+        "escrows_state_canonical_check",
+    ],
+)
+def test_v016_repairs_escrow_state_constraint_drift_after_v015_is_recorded(drift_constraint: str, tmp_path: Path):
+    """Version 016 must repair out-of-band drift even when version 015 is already recorded."""
+    schema = _schema()
+    try:
+        selected = _canonical_migration_files(MIGRATIONS)
+        through_v15 = tmp_path / "migrations_001_to_015"
+        through_v15.mkdir()
+        for migration in selected:
+            version = int(migration.name.split("_", 1)[0])
+            if version <= 15:
+                shutil.copyfile(migration, through_v15 / migration.name)
+
+        with _connect(schema) as conn:
+            assert apply_migrations(conn, through_v15) == tuple(range(1, 16))
+
+        with _connect(schema) as conn:
+            # Simulate out-of-band drift after v015 has been recorded. Cover both
+            # an additional stale CHECK and a same-named canonical CHECK with a
+            # stale definition; v016 must normalize either case.
+            conn.execute(
+                sql.SQL("ALTER TABLE escrows DROP CONSTRAINT IF EXISTS {}").format(
+                    sql.Identifier("escrows_state_canonical_check")
+                )
+            )
+            conn.execute(
+                sql.SQL("ALTER TABLE escrows ADD CONSTRAINT {} CHECK (state IN ('CREATED', 'LOCKED', 'RELEASED'))").format(
+                    sql.Identifier(drift_constraint)
+                )
+            )
+            conn.commit()
+
+        with _connect(schema) as conn:
+            assert apply_migrations(conn, MIGRATIONS) == (16,)
+
+        with _connect(schema) as conn:
+            _assert_migration_015_constraints(conn)
+            constraints = conn.execute(
+                """
+                SELECT conname, convalidated
+                FROM pg_constraint
+                WHERE conrelid = 'escrows'::regclass
+                  AND contype = 'c'
+                  AND lower(pg_get_constraintdef(oid)) LIKE '%state%'
+                """
+            ).fetchall()
+            assert constraints == [("escrows_state_canonical_check", True)]
+            versions = conn.execute(
+                "SELECT version FROM schema_version ORDER BY version"
+            ).fetchall()
+            assert [row[0] for row in versions] == list(range(1, 17))
+            assert apply_migrations(conn, MIGRATIONS) == ()
+    finally:
+        _drop_schema(schema)
