@@ -271,6 +271,9 @@ def test_v016_repairs_escrow_state_constraint_drift_after_v015_is_recorded(drift
                 "SELECT version FROM schema_version ORDER BY version"
             ).fetchall()
             assert [row[0] for row in versions] == list(range(1, 17))
+            # The SELECT above opens a transaction in psycopg; the migration
+            # runner deliberately requires a clean connection on entry.
+            conn.commit()
             assert apply_migrations(conn, MIGRATIONS) == ()
     finally:
         _drop_schema(schema)
