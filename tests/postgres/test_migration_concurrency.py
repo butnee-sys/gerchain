@@ -42,7 +42,7 @@ def test_two_connections_apply_canonical_migrations_without_duplicate_schema_ver
             second = pool.submit(apply_once)
             results = [first.result(timeout=180), second.result(timeout=180)]
 
-        # The transaction-scoped advisory lock must allow exactly one runner to
+        # The session-scoped advisory lock must allow exactly one runner to
         # apply the chain while the other sees it as already applied.
         assert sorted(len(result) for result in results) == [0, 15]
         assert sorted(version for result in results for version in result) == EXPECTED_VERSIONS
@@ -53,7 +53,7 @@ def test_two_connections_apply_canonical_migrations_without_duplicate_schema_ver
             ).fetchall()
             assert [row[0] for row in rows] == EXPECTED_VERSIONS
             assert len(rows) == 15
-            assert len({row[0] for row in rows}) == 14
+            assert len({row[0] for row in rows}) == 15
             assert all(row[1] for row in rows)
 
             unique_version = check.execute(
