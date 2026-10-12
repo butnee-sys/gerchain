@@ -45,10 +45,18 @@ def _canonical_migration_files(migration_dir: Path) -> list[Path]:
         match = re.match(r"^(\d+)_", path.name)
         if match:
             by_version.setdefault(int(match.group(1)), []).append(path)
-    # Reject unknown ambiguous versions. Historical aliases for known canonical
-    # versions are permitted only when the canonical filename is present.
+    # Support both the current full chain and historical prefix directories
+    # used to reproduce upgrades from an older schema version. In either case,
+    # the supplied directory must be a contiguous canonical prefix; it may not
+    # silently skip a version or introduce a version beyond the known chain.
     selected: list[Path] = []
-    for version, canonical_name in enumerate(_CANONICAL_FILES, start=1):
+    if not by_version:
+        raise RuntimeError("no numbered canonical migrations found")
+    max_version = max(by_version)
+    if max_version > len(_CANONICAL_FILES):
+        raise RuntimeError(f"unexpected migration versions: {sorted(set(by_version) - set(range(1, len(_CANONICAL_FILES) + 1)))}")
+    for version in range(1, max_version + 1):
+        canonical_name = _CANONICAL_FILES[version - 1]
         candidates = by_version.get(version, [])
         canonical = directory / canonical_name
         if not canonical.is_file():
