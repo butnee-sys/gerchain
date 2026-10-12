@@ -127,6 +127,12 @@ jobs:
               ).fetchall()
               assert [row[0] for row in rows_first] == list(range(1, 15)), rows_first
               assert all(row[1] for row in rows_first), rows_first
+              constraints_first = connection.execute("""
+                  SELECT conname, contype, convalidated, pg_get_constraintdef(oid)
+                  FROM pg_constraint
+                  WHERE connamespace = 'public'::regnamespace
+                  ORDER BY conrelid::regclass::text, conname
+              """).fetchall()
 
               # A SELECT opens an implicit psycopg transaction. The migration
               # runner deliberately requires an idle connection, so close the
@@ -134,21 +140,37 @@ jobs:
               connection.commit()
 
               # Idempotency gate: a second run must not add migration rows,
-              # change checksums, or rewrite applied_at timestamps.
+              # change checksums, rewrite applied_at timestamps, or alter constraints.
               apply_migrations(connection, Path("postgres/migrations"))
               rows_second = connection.execute(
                   "SELECT version, checksum, applied_at::text FROM schema_version ORDER BY version"
               ).fetchall()
+              constraints_second = connection.execute("""
+                  SELECT conname, contype, convalidated, pg_get_constraintdef(oid)
+                  FROM pg_constraint
+                  WHERE connamespace = 'public'::regnamespace
+                  ORDER BY conrelid::regclass::text, conname
+              """).fetchall()
               assert rows_second == rows_first, {
                   "reason": "second migration run changed the registry",
                   "first": rows_first,
                   "second": rows_second,
               }
+              assert constraints_second == constraints_first, {
+                  "reason": "second migration run changed PostgreSQL constraints",
+                  "first": constraints_first,
+                  "second": constraints_second,
+              }
               rows = rows_second
           with open("artifacts/ea35/migration-registry-after.json", "w") as f:
               json.dump({"rows": [list(row) for row in rows]}, f, indent=2)
+          with open("artifacts/ea35/pg-constraints-after-first-run.json", "w") as f:
+              json.dump({"rows": [list(row) for row in constraints_first]}, f, indent=2)
+          with open("artifacts/ea35/pg-constraints-after-second-run.json", "w") as f:
+              json.dump({"rows": [list(row) for row in constraints_second]}, f, indent=2)
           print(f"MIGRATION_REGISTRY_AFTER_COUNT={len(rows)}")
           print("MIGRATION_RERUN_IDEMPOTENCY=PASS")
+          print("PG_CONSTRAINTS_STABLE_AFTER_RERUN=PASS")
           print(f"MIGRATION_REGISTRY_AFTER_SHA256_INPUT={[(row[0], row[1]) for row in rows]!r}")
           PY
 
