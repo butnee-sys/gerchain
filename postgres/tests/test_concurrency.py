@@ -9,6 +9,14 @@ import pytest
 import psycopg
 from psycopg.conninfo import conninfo_to_dict, make_conninfo
 from psycopg import sql
+from sqlalchemy import create_engine, func, select
+from sqlalchemy.orm import sessionmaker
+
+from persistence.atomic_ledger import (
+    LedgerAccountModel,
+    LedgerMovementModel,
+    PostgreSQLAtomicLedger,
+)
 
 from postgres.migrations import apply_migrations
 
@@ -228,3 +236,82 @@ def test_checksum_failure_rolls_back_prior_migration_ddl_and_history(monkeypatch
                     sql.Identifier(database_name)
                 )
             )
+
+def test_postgres_interruption_and_retry_moves_value_exactly_once(monkeypatch):
+    """A rolled-back attempt moves no value; a retry and replay move it once."""
+    admin_dsn = _dsn()
+    database_name = f"gerchain_value_retry_{uuid.uuid4().hex[:12]}"
+    with psycopg.connect(admin_dsn, autocommit=True) as admin:
+        admin.execute(sql.SQL("CREATE DATABASE {}").format(sql.Identifier(database_name)))
+
+    fresh_dsn = make_conninfo(admin_dsn, dbname=database_name)
+    monkeypatch.setenv("GERCHAIN_POSTGRES_DSN", fresh_dsn)
+    engine = create_engine(fresh_dsn, pool_pre_ping=True)
+    factory = sessionmaker(bind=engine, expire_on_commit=False)
+    tx_id = f"interruption-{uuid.uuid4().hex}"
+    source = f"source-{uuid.uuid4().hex[:12]}"
+    destination = f"destination-{uuid.uuid4().hex[:12]}"
+
+    try:
+        with psycopg.connect(fresh_dsn) as conn:
+            apply_migrations(conn, Path(__file__).resolve().parents[1] / "migrations")
+
+        with factory() as session:
+            PostgreSQLAtomicLedger.create_account_in_transaction(session, source, "MNT", 100)
+            PostgreSQLAtomicLedger.create_account_in_transaction(session, destination, "MNT", 0)
+            session.commit()
+
+        # Simulate process interruption after the in-transaction mutation but
+        # before durable COMMIT: closing/rolling back must leave no partial move.
+        with factory() as session:
+            PostgreSQLAtomicLedger.transfer_in_transaction(
+                session, tx_id, source, destination, 10, "MNT",
+                operation="SETTLEMENT", escrow_id=None, integrity_hash="a" * 64,
+            )
+            session.rollback()
+
+        with factory() as session:
+            assert session.get(LedgerAccountModel, source).balance == 100
+            assert session.get(LedgerAccountModel, destination).balance == 0
+            assert session.execute(
+                select(func.count()).select_from(LedgerMovementModel)
+                .where(LedgerMovementModel.transaction_id == tx_id)
+            ).scalar_one() == 0
+
+        # Retry after the simulated interruption: exactly one committed move.
+        with factory() as session:
+            first = PostgreSQLAtomicLedger.transfer_in_transaction(
+                session, tx_id, source, destination, 10, "MNT",
+                operation="SETTLEMENT", escrow_id=None, integrity_hash="a" * 64,
+            )
+            session.commit()
+            assert first["replayed"] is False
+
+        # Simulate lost acknowledgement after commit: retry same request.
+        with factory() as session:
+            replay = PostgreSQLAtomicLedger.transfer_in_transaction(
+                session, tx_id, source, destination, 10, "MNT",
+                operation="SETTLEMENT", escrow_id=None, integrity_hash="a" * 64,
+            )
+            session.commit()
+            assert replay["replayed"] is True
+
+        with factory() as session:
+            source_balance = session.get(LedgerAccountModel, source).balance
+            destination_balance = session.get(LedgerAccountModel, destination).balance
+            movement_count = session.execute(
+                select(func.count()).select_from(LedgerMovementModel)
+                .where(LedgerMovementModel.transaction_id == tx_id)
+            ).scalar_one()
+            assert (source_balance, destination_balance) == (90, 10)
+            assert source_balance + destination_balance == 100
+            assert movement_count == 1
+    finally:
+        engine.dispose()
+        with psycopg.connect(admin_dsn, autocommit=True) as admin:
+            admin.execute(
+                sql.SQL("DROP DATABASE IF EXISTS {} WITH (FORCE)").format(
+                    sql.Identifier(database_name)
+                )
+            )
+
