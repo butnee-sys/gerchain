@@ -10,11 +10,11 @@
 
 The identifiers below are GitHub content blob IDs (Git SHA-1), **not SHA-256 file digests**. They provide exact content identity for the selected files. A future SHA-256 column must be populated from the raw file bytes by a reproducible hashing step; it must not be inferred from a Git blob ID.
 
-| Selector | Authoritative source file | Reference A blob ID | Reference B blob ID | Exact content comparison | Verified difference |
+| Selector | Authoritative source file | Ref A Git blob (SHA-1) | Ref A SHA-256 | Ref B Git blob (SHA-1) | Ref B SHA-256 | UTF-8 bytes A → B | Lines A → B | Exact content comparison | Verified difference |
 |---|---|---|---|---|---|
-| NEF — asset truth adapter | `nef_gerchain_port/nef_adapter.py` | `432eae1f843c3648f676e5db9664f0eba71cc8fe` | `432eae1f843c3648f676e5db9664f0eba71cc8fe` | IDENTICAL | 0 content difference in this file |
-| G-3 Escrow — condition/policy foundation | `architecture/g3_core.py` | `2ca081a440ff56e461c67e7bf4ecc2a9c55c95be` | `2ca081a440ff56e461c67e7bf4ecc2a9c55c95be` | IDENTICAL | 0 content difference in this file |
-| GerChain CORE — runtime/value-flow boundary | `services/gerchain_runtime.py` | `e6d57e235dd4cc7ab273fb5c65a59c8d9de62d57` | `655670944a78db7af4bc60d8c2a758d7ad507a53` | DIFFERENT | Reference A: 193 lines; Reference B: 563 lines; net +370 lines in the selected file |
+| NEF — asset truth adapter | `nef_gerchain_port/nef_adapter.py` | `432eae1f843c3648f676e5db9664f0eba71cc8fe` | `e2e15558493feed3870aee4a43f008210591497f6ef20c0f5cc8c813430d9953` | `432eae1f843c3648f676e5db9664f0eba71cc8fe` | `e2e15558493feed3870aee4a43f008210591497f6ef20c0f5cc8c813430d9953` | 309 → 309 | 11 → 11 | IDENTICAL | 0 content difference in this file |
+| G-3 Escrow — condition/policy foundation | `architecture/g3_core.py` | `2ca081a440ff56e461c67e7bf4ecc2a9c55c95be` | `c3241922220def03e755e2166093fba4d5e50d67ac3c9270a4052634e751cc8b` | `2ca081a440ff56e461c67e7bf4ecc2a9c55c95be` | `c3241922220def03e755e2166093fba4d5e50d67ac3c9270a4052634e751cc8b` | 2,984 → 2,984 | 78 → 78 | IDENTICAL | 0 content difference in this file |
+| GerChain CORE — runtime/value-flow boundary | `services/gerchain_runtime.py` | `e6d57e235dd4cc7ab273fb5c65a59c8d9de62d57` | `bf02a8418f540e2bdd045f4b1eac7ac3748c1b1c561a2139039b6e57260b3994` | `655670944a78db7af4bc60d8c2a758d7ad507a53` | `51e479028dd474b9390ae4f329fc8bf080721e06f986d6b4c11908986f986533` | 11,711 → 22,811 | 193 → 563 | DIFFERENT | net +370 lines in the selected file |
 
 ## 2. Interpretation of the exact result
 
@@ -27,12 +27,12 @@ The identifiers below are GitHub content blob IDs (Git SHA-1), **not SHA-256 fil
 
 ## 3. Checksum contract and next verification gate
 
-To make the register cryptographically reproducible, the next pass must record, for each exact ref and each selected file:
+The next pass must retain, for each exact ref and each selected file:
 
 - repository + branch/commit SHA;
 - path;
 - Git blob ID (SHA-1, as above);
-- SHA-256 of the raw file bytes;
+- SHA-256 of the raw UTF-8 file content;
 - byte length and line count;
 - comparison result and, for changed files, a complete unified diff;
 - execution/test evidence pinned to the exact commit.
