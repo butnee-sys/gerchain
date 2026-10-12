@@ -26,6 +26,7 @@ jobs:
     env:
       GERCHAIN_DATABASE_URL: postgresql+psycopg://gerchain:gerchain@localhost:5432/gerchain_test
       GERCHAIN_TEST_DATABASE_URL: postgresql+psycopg://gerchain:gerchain@localhost:5432/gerchain_reperformance
+      GERCHAIN_UPGRADE_DATABASE_URL: postgresql+psycopg://gerchain:gerchain@localhost:5432/gerchain_upgrade
       GERCHAIN_ESCROW_ID: ea35-reperformance-escrow
       GERCHAIN_ESCROW_AMOUNT: "100"
       GERCHAIN_CURRENCY: MNT
@@ -55,7 +56,9 @@ jobs:
       - name: Create isolated PostgreSQL test database
         run: |
           PGPASSWORD=gerchain createdb -h localhost -U gerchain gerchain_reperformance
+          PGPASSWORD=gerchain createdb -h localhost -U gerchain gerchain_upgrade
           PGPASSWORD=gerchain psql -h localhost -U gerchain -d gerchain_reperformance -c "SELECT current_database();"
+          PGPASSWORD=gerchain psql -h localhost -U gerchain -d gerchain_upgrade -c "SELECT current_database();"
 
       - name: Run exact CORE fundamental-architecture gates (only after compileall passes)
         env:
@@ -147,6 +150,48 @@ jobs:
           print(f"MIGRATION_REGISTRY_AFTER_COUNT={len(rows)}")
           print("MIGRATION_RERUN_IDEMPOTENCY=PASS")
           print(f"MIGRATION_REGISTRY_AFTER_SHA256_INPUT={[(row[0], row[1]) for row in rows]!r}")
+          PY
+
+      - name: Re-perform upgrade from canonical migrations 001-013 to 014
+        run: |
+          python - <<'PY'
+          import os, tempfile
+          from pathlib import Path
+          import psycopg
+          from postgres.migrations import _canonical_migration_files, apply_migrations
+
+          raw = os.environ['GERCHAIN_UPGRADE_DATABASE_URL']
+          dsn = raw.replace('postgresql+psycopg://', 'postgresql://').replace('postgresql+psycopg2://', 'postgresql://')
+          canonical = _canonical_migration_files(Path('postgres/migrations'))
+          with tempfile.TemporaryDirectory(prefix='gerchain-migrations-001-013-') as tmp:
+              stage = Path(tmp)
+              for version, source in enumerate(canonical[:13], start=1):
+                  (stage / f'{version:03d}_upgrade.sql').write_text(source.read_text(encoding='utf-8'), encoding='utf-8')
+              with psycopg.connect(dsn) as connection:
+                  applied = apply_migrations(connection, stage)
+                  assert applied == tuple(range(1, 14)), applied
+                  before = connection.execute('SELECT version, checksum, applied_at FROM schema_version ORDER BY version').fetchall()
+                  assert [row[0] for row in before] == list(range(1, 14)), before
+                  before_checksums = [(row[0], row[1]) for row in before]
+                  connection.commit()
+                  applied_014 = apply_migrations(connection, Path('postgres/migrations'))
+                  assert applied_014 == (14,), applied_014
+                  after = connection.execute('SELECT version, checksum, applied_at FROM schema_version ORDER BY version').fetchall()
+                  assert [row[0] for row in after] == list(range(1, 15)), after
+                  assert [(row[0], row[1]) for row in after[:13]] == before_checksums
+                  constraint = connection.execute("SELECT conname, convalidated, pg_get_constraintdef(oid) FROM pg_constraint WHERE conrelid = 'escrows'::regclass AND conname = 'escrows_state_canonical_check'").fetchone()
+                  assert constraint is not None, 'canonical escrow state constraint missing'
+                  assert constraint[1] is True, f'constraint is not validated: {constraint}'
+                  assert all(value in constraint[2] for value in ('CREATED', 'REFUNDED', 'CANCELLED')), constraint
+                  connection.commit()
+                  rerun = apply_migrations(connection, Path('postgres/migrations'))
+                  assert rerun == (), rerun
+                  final = connection.execute('SELECT version, checksum, applied_at FROM schema_version ORDER BY version').fetchall()
+                  assert final == after, 'rerun changed schema_version rows/checksums/timestamps'
+                  print('UPGRADE_001_013_TO_014=PASS')
+                  print('PREVIOUS_001_013_CHECKSUMS_PRESERVED=PASS')
+                  print('ESCROW_STATE_CONSTRAINT_VALIDATED=PASS')
+                  print('UPGRADE_RERUN_IDEMPOTENCY=PASS')
           PY
 
       - name: Capture schema snapshot and exact 14-migration manifest
