@@ -174,7 +174,7 @@ jobs:
           print(f"MIGRATION_REGISTRY_AFTER_SHA256_INPUT={[(row[0], row[1]) for row in rows]!r}")
           PY
 
-      - name: Re-perform upgrade from canonical migrations 001-014 to 015
+      - name: Re-perform upgrade from canonical migrations 001-014 through 016
         run: |
           python - <<'PY'
           import os, tempfile
@@ -203,7 +203,7 @@ jobs:
                   """)
                   connection.commit()
                   applied_015 = apply_migrations(connection, Path('postgres/migrations'))
-                  assert applied_015 == (15,), applied_015
+                  assert applied_015 == (15, 16), applied_015
                   after = connection.execute('SELECT version, checksum, applied_at FROM schema_version ORDER BY version').fetchall()
                   assert [row[0] for row in after] == list(range(1, 17)), after
                   assert [(row[0], row[1]) for row in after[:14]] == before_checksums
@@ -225,13 +225,13 @@ jobs:
                   assert rerun == (), rerun
                   final = connection.execute('SELECT version, checksum, applied_at FROM schema_version ORDER BY version').fetchall()
                   assert final == after, 'rerun changed schema_version rows/checksums/timestamps'
-                  print('UPGRADE_001_014_TO_015=PASS')
+                  print('UPGRADE_001_014_TO_016=PASS')
                   print('PREVIOUS_001_014_CHECKSUMS_PRESERVED=PASS')
                   print('ESCROW_STATE_CONSTRAINT_REPAIR_AND_VALIDATION=PASS')
                   print('UPGRADE_RERUN_IDEMPOTENCY=PASS')
           PY
 
-      - name: Capture schema snapshot and exact 15-migration manifest
+      - name: Capture schema snapshot and exact 16-migration manifest
         env:
           EVIDENCE_COMMIT_SHA: ${{ github.sha }}
           EVIDENCE_RUN_ID: ${{ github.run_id }}
