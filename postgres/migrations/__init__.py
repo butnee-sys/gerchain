@@ -318,10 +318,12 @@ def apply_migrations(connection: Connection, migration_dir: Path) -> tuple[int, 
                     }
                 }
                 accepted_checksums = {digest} | historical_checksums.get(version, set())
-                # Run the deterministic legacy-data compatibility check before
-                # the v11 checksum/skip branch as well: a database may claim v11
-                # was applied while retaining nullable legacy metadata after drift.
-                if version in (11, 13):
+                # Version 002 hardens refund_destination before later EA-35
+                # finalization migrations. Existing legacy rows must be backfilled
+                # before the first NOT NULL DDL, not only before v11/v13. Run this
+                # before checksum/skip handling too, so drifted databases that
+                # already published a version are repaired deterministically.
+                if version in (2, 7, 11, 13):
                     _backfill_legacy_escrow_metadata_before_v11(connection)
                 row = connection.execute(
                     "SELECT checksum FROM schema_version WHERE version = %s FOR UPDATE",
