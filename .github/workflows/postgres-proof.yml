@@ -48,3 +48,5 @@ jobs:
         run: pytest -q tests/postgres/test_migration_rollback.py
       - name: Prove production runtime boot and canonical schema
         run: pytest -q tests/services/test_production_runtime_factory_postgres.py
+      - name: Prove deep value-truth reconciliation, rollback, and replay
+        run: pytest -q tests/persistence/test_deep_value_reconciliation.py
