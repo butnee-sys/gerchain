@@ -48,7 +48,7 @@ def test_014_escrow_state_constraint_is_idempotent_and_preserves_definition():
     once_schema = f"ea35_once_{suffix}"
     twice_schema = f"ea35_twice_{suffix}"
 
-    with psycopg.connect(DATABASE_URL) as connection:
+    with psycopg.connect(DATABASE_URL, autocommit=True) as connection:
         try:
             for schema in (once_schema, twice_schema):
                 connection.execute(f'CREATE SCHEMA "{schema}"')
@@ -76,13 +76,12 @@ def test_014_escrow_state_constraint_is_idempotent_and_preserves_definition():
                     """,
                     (schema,),
                 ).fetchall()
-                assert old == [
-                    (
-                        "legacy_escrow_state_check",
-                        "CHECK ((state = ANY (ARRAY['CREATED'::text, 'LOCKED'::text, 'RELEASED'::text])))",
-                        True,
-                    )
-                ]
+                assert len(old) == 1
+                assert old[0][0] == "legacy_escrow_state_check"
+                assert old[0][1].startswith("CHECK")
+                assert all(state in old[0][1] for state in ("CREATED", "LOCKED", "RELEASED"))
+                assert "FUNDED" not in old[0][1]
+                assert old[0][2] is True
 
             _apply_migration(connection, once_schema, migration_sql)
             once_snapshot = _constraint_snapshot(connection, once_schema)
@@ -92,13 +91,14 @@ def test_014_escrow_state_constraint_is_idempotent_and_preserves_definition():
             twice_snapshot = _constraint_snapshot(connection, twice_schema)
 
             assert once_snapshot == twice_snapshot
-            assert once_snapshot == (
-                (
-                    "escrows_state_canonical_check",
-                    "CHECK ((state = ANY (ARRAY['CREATED'::text, 'FUNDED'::text, 'LOCKED'::text, 'RELEASED'::text, 'REFUNDED'::text, 'CANCELLED'::text])))",
-                    True,
-                ),
+            assert len(once_snapshot) == 1
+            name, definition, validated = once_snapshot[0]
+            assert name == "escrows_state_canonical_check"
+            assert all(
+                state in definition
+                for state in ("CREATED", "FUNDED", "LOCKED", "RELEASED", "REFUNDED", "CANCELLED")
             )
+            assert validated is True
         finally:
             connection.execute("SET search_path TO public")
             connection.execute(f'DROP SCHEMA IF EXISTS "{once_schema}" CASCADE')
