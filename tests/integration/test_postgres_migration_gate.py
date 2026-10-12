@@ -40,7 +40,7 @@ def test_canonical_migrations_apply_idempotently_on_real_postgres():
 
     with psycopg.connect(_driver_url(DATABASE_URL)) as conn:
         first = apply_migrations(conn, migration_dir)
-    assert first == tuple(range(1, 14))
+    assert first == tuple(range(1, 15))
 
     with psycopg.connect(_driver_url(DATABASE_URL)) as conn:
         second = apply_migrations(conn, migration_dir)
