@@ -71,7 +71,7 @@ jobs:
         run: |
           PGPASSWORD=gerchain createdb -h 127.0.0.1 -U gerchain gerchain_migration_proof
           PGPASSWORD=gerchain psql -h 127.0.0.1 -U gerchain -d gerchain_migration_proof -c "SELECT current_database();"
-      - name: Reproduce stale escrow state constraint, apply migration 015, and inspect pg_constraint
+      - name: Reproduce stale escrow state constraint, apply migrations 015–016, and verify row preservation
         run: |
           python - <<'PY'
           import os
