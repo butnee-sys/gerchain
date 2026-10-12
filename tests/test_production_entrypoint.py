@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from services import production_entrypoint as entrypoint
+import production_entrypoint as entrypoint
 
 
 class _FakeEngine:
