@@ -98,3 +98,18 @@ def test_migration_014_standalone_is_repeatable_and_preserves_canonical_constrai
           AND c.conname = 'legacy_escrow_state_check'
         """
     ).fetchone()[0] == 0
+
+
+def test_escrow_orm_metadata_does_not_own_state_constraint():
+    from sqlalchemy import CheckConstraint
+    from persistence.escrow_aggregate import CanonicalEscrow
+
+    checks = [
+        constraint
+        for constraint in CanonicalEscrow.__table__.constraints
+        if isinstance(constraint, CheckConstraint)
+    ]
+    assert checks == [], (
+        "escrow lifecycle state constraints are migration-owned DDL; "
+        "ORM metadata must not create a competing constraint authority"
+    )
