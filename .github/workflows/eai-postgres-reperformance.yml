@@ -91,8 +91,9 @@ jobs:
           python - <<'PY' 2>&1 | tee evidence/postgres/migration-apply.log
           import os
           from sqlalchemy import create_engine, text
+          from pathlib import Path
           from postgres.migrations import _canonical_migration_files
-from services.gerchain_runtime_factory import initialize_canonical_postgres_schema
+          from services.gerchain_runtime_factory import initialize_canonical_postgres_schema
 
           engine = create_engine(os.environ["GERCHAIN_DATABASE_URL"], pool_pre_ping=True)
           try:
@@ -103,7 +104,7 @@ from services.gerchain_runtime_factory import initialize_canonical_postgres_sche
                   ).all()
                   versions = [row.version for row in rows]
                   print({"migration_versions": versions, "migration_rows": len(rows)})
-                  expected_versions = list(range(1, len(_canonical_migration_files(__import__('pathlib').Path('postgres/migrations'))) + 1))
+                  expected_versions = list(range(1, len(_canonical_migration_files(Path('postgres/migrations'))) + 1))
                   if versions != expected_versions:
                       raise SystemExit(f"migration history mismatch: expected {expected_versions}, got {versions}")
                   with open("evidence/postgres/migration-history.txt", "w", encoding="utf-8") as handle:
