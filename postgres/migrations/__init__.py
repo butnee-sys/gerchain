@@ -29,6 +29,7 @@ _CANONICAL_FILES = (
     "013_ea35_canonical_schema_hardening.sql",
     "014_canonical_escrow_state_constraint.sql",
     "015_repair_escrow_state_constraint_drift.sql",
+    "016_reconcile_escrow_state_constraint.sql",
 )
 
 
