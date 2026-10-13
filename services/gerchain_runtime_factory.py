@@ -49,6 +49,18 @@ def initialize_canonical_postgres_schema(engine: Engine) -> None:
 
 
 
+def _has_unique_key(inspector, table_name: str, columns: tuple[str, ...]) -> bool:
+    """Return true only when PostgreSQL enforces uniqueness for this exact key."""
+    for constraint in inspector.get_unique_constraints(table_name):
+        if tuple(constraint.get("column_names") or ()) == columns:
+            return True
+    for index in inspector.get_indexes(table_name):
+        if index.get("unique") and tuple(index.get("column_names") or ()) == columns:
+            return True
+    primary_key = inspector.get_pk_constraint(table_name)
+    return tuple(primary_key.get("constrained_columns") or ()) == columns
+
+
 def assert_canonical_production_schema(connection) -> None:
     """Fail closed unless all canonical ORM tables/columns and 16 migrations exist."""
     from sqlalchemy import inspect, text
@@ -71,6 +83,24 @@ def assert_canonical_production_schema(connection) -> None:
             missing_columns.append(f"{table_name}: {missing}")
     if missing_columns:
         raise RuntimeError(f"canonical production schema missing columns: {'; '.join(missing_columns)}")
+
+    # Concurrent requests can race past application-level existence checks.
+    # Require DB-enforced uniqueness for every value/evidence idempotency boundary.
+    required_unique_keys = {
+        "gerchain_ledger_movements": ("transaction_id",),
+        "gerchain_outbox_events": ("event_id",),
+        "gerchain_idempotency_records": ("key",),
+    }
+    missing_unique_keys = [
+        f"{table_name}{columns}"
+        for table_name, columns in required_unique_keys.items()
+        if not _has_unique_key(inspector, table_name, columns)
+    ]
+    if missing_unique_keys:
+        raise RuntimeError(
+            "canonical production schema missing required unique keys: "
+            + ", ".join(missing_unique_keys)
+        )
 
     # Validate critical database-enforced invariants, not just ORM column presence.
     # These checks prevent a structurally incomplete schema from passing boot.
