@@ -463,7 +463,9 @@ jobs:
               assert "GerChain production runtime initialized:" in output, output
               print("PRODUCTION_ENTRYPOINT_BOOT=PASS")
               print("PRODUCTION_ENTRYPOINT_EXITED_CLEANLY=PASS")
-          PY\n\n      - name: Finalize exact-SHA evidence report
+          PY
+
+      - name: Finalize exact-SHA evidence report
         if: always()
         env:
           EVIDENCE_COMMIT_SHA: ${{ github.sha }}
@@ -502,7 +504,7 @@ jobs:
               "evidence_complete": not missing,
           }
           (root / "final-evidence-report.json").write_text(
-              json.dumps(report, indent=2) + "\\n", encoding="utf-8"
+              json.dumps(report, indent=2) + "\n", encoding="utf-8"
           )
           print("FINAL_EVIDENCE_REPORT=" + json.dumps(report, sort_keys=True))
           if os.environ["EVIDENCE_JOB_STATUS"] != "success":
