@@ -55,3 +55,42 @@ jobs:
         run: python -m pytest --import-mode=importlib --collect-only -q
       - name: Run complete test suite
         run: python -m pytest --import-mode=importlib -q
+
+      - name: Finalize production evidence manifest
+        if: always()
+        env:
+          JOB_STATUS: ${{ job.status }}
+          SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+          EVENT_NAME: ${{ github.event_name }}
+          WORKFLOW_NAME: ${{ github.workflow }}
+        run: |
+          mkdir -p production-evidence
+          python - <<'PY'
+          import json, os
+          from datetime import datetime, timezone
+          report = {
+              "commit_sha": os.environ["SOURCE_SHA"],
+              "workflow_run_id": int(os.environ["RUN_ID"]),
+              "workflow_run_attempt": int(os.environ["RUN_ATTEMPT"]),
+              "workflow_name": os.environ["WORKFLOW_NAME"],
+              "event_name": os.environ["EVENT_NAME"],
+              "job_name": "production-gate",
+              "job_status": os.environ["JOB_STATUS"],
+              "evidence_generated_at_utc": datetime.now(timezone.utc).isoformat(),
+              "scope": "GitHub Actions job metadata only; workflow conclusion and artifact integrity must be independently checked via GitHub API after run completion."
+          }
+          with open("production-evidence/production-gate-report.json", "w", encoding="utf-8") as f:
+              json.dump(report, f, indent=2, sort_keys=True)
+              f.write("\\n")
+          print(json.dumps(report, indent=2, sort_keys=True))
+          PY
+      - name: Upload production evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-gate-evidence
+          path: production-evidence/production-gate-report.json
+          if-no-files-found: error
+          retention-days: 30
