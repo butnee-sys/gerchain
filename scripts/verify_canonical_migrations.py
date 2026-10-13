@@ -300,8 +300,8 @@ def _run() -> dict:
         if normalized != [EXPECTED, ()]:
             raise AssertionError(f"concurrent runners expected one full apply and one NOOP, got {results}")
         labeled_results = [
-            {"runner": "runner-1", "result": "applied", "versions": list(EXPECTED)},
-            {"runner": "runner-2", "result": "already-applied", "versions": []},
+            {"result": "applied", "versions": list(normalized[0])},
+            {"result": "already-applied", "versions": list(normalized[1])},
         ]
         report["scenarios"]["concurrent_runners"] = {
             "status": "PASS",
