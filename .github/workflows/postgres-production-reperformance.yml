@@ -29,6 +29,11 @@ jobs:
           --health-retries 20
     env:
       GERCHAIN_TEST_DATABASE_URL: postgresql+psycopg://gerchain:gerchain_test@localhost:5432/gerchain_test
+      GERCHAIN_DATABASE_URL: postgresql+psycopg://gerchain:gerchain_test@localhost:5432/gerchain_test
+      GERCHAIN_ESCROW_ID: production-gate-smoke-escrow
+      GERCHAIN_ESCROW_AMOUNT: "100"
+      GERCHAIN_CURRENCY: TST
+      GERCHAIN_WITNESS_ID: production-gate-smoke-witness
     steps:
       - name: Checkout exact tested commit
         uses: actions/checkout@v4
@@ -42,10 +47,98 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements-dee-security.txt
           pip install pytest "psycopg[binary]"
-      - name: Record tested revision
+      - name: Record tested revision and PostgreSQL version
         run: |
-          git rev-parse HEAD
-          python --version
-          psql "postgresql://gerchain:gerchain_test@localhost:5432/gerchain_test" -c 'SELECT version();'
-      - name: Apply canonical migrations and test concurrent PostgreSQL ledger contention
-        run: pytest -q -vv tests/persistence/test_postgres_concurrency_migration.py
+          mkdir -p production-gate-evidence
+          git rev-parse HEAD | tee production-gate-evidence/tested-commit.txt
+          python --version | tee production-gate-evidence/python-version.txt
+          psql "postgresql://gerchain:gerchain_test@localhost:5432/gerchain_test" -Atc 'SELECT version();' | tee production-gate-evidence/postgres-version.txt
+      - name: Boot the real production entrypoint against PostgreSQL
+        run: |
+          set +e
+          timeout 15s python production_entrypoint.py > production-gate-evidence/production-boot.log 2>&1
+          rc=$?
+          set -e
+          cat production-gate-evidence/production-boot.log
+          if [ "$rc" -ne 124 ]; then
+            echo "Expected production entrypoint to initialize then remain alive until timeout; exit=$rc"
+            exit 1
+          fi
+          grep -F "GerChain production runtime initialized:" production-gate-evidence/production-boot.log
+          echo "PASS: PostgreSQL migrations, schema assertions, and canonical runtime boot" > production-gate-evidence/production-boot-status.txt
+      - name: Write standalone production database reconciliation report
+        run: |
+          python - <<'PY'
+          import json, os
+          from sqlalchemy import create_engine, text
+          from sqlalchemy.orm import sessionmaker
+          from persistence.deep_value_reconciliation import deep_reconcile_value_truth
+
+          engine = create_engine(os.environ["GERCHAIN_DATABASE_URL"], pool_pre_ping=True)
+          Session = sessionmaker(bind=engine, expire_on_commit=False)
+          with Session() as session:
+              report = deep_reconcile_value_truth(session)
+              versions = session.execute(text("SELECT version FROM schema_version ORDER BY version")).scalars().all()
+              result = {
+                  "scope": "fresh production-gate PostgreSQL database immediately after boot, before concurrency test",
+                  "tested_commit": os.popen("git rev-parse HEAD").read().strip(),
+                  "migration_versions": versions,
+                  "canonical_movement_count": report.canonical_movement_count,
+                  "witness_count": report.witness_count,
+                  "outbox_count": report.outbox_count,
+                  "idempotency_count": report.idempotency_count,
+                  "escrow_count": report.escrow_count,
+                  "matched": report.matched,
+                  "issues": [
+                      {"code": issue.code, "transaction_id": issue.transaction_id, "detail": issue.detail}
+                      for issue in report.issues
+                  ],
+                  "limitation": "This is an empty-baseline reconciliation; lifecycle evidence is supplied by automated tests and is not represented as a non-empty production transaction graph."
+              }
+              with open("production-gate-evidence/reconciliation-report.json", "w", encoding="utf-8") as output:
+                  json.dump(result, output, indent=2)
+              print(json.dumps(result, indent=2))
+              if not report.matched:
+                  raise SystemExit("production database deep reconciliation reported issues")
+          engine.dispose()
+          PY
+      - name: Test deep reconciliation and concurrent PostgreSQL ledger contention
+        run: |
+          pytest -q -vv \
+            tests/persistence/test_deep_value_reconciliation.py \
+            tests/persistence/test_postgres_concurrency_migration.py
+      - name: Write gate evidence manifest
+        if: always()
+        env:
+          JOB_STATUS: ${{ job.status }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+          HEAD_SHA: ${{ github.sha }}
+        run: |
+          mkdir -p production-gate-evidence
+          python - <<'PY'
+          import json, os, pathlib, subprocess
+          root = pathlib.Path("production-gate-evidence")
+          manifest = {
+              "artifact": "production-gate-evidence",
+              "workflow": "PostgreSQL Production Re-performance",
+              "run_id": os.environ["RUN_ID"],
+              "run_attempt": os.environ["RUN_ATTEMPT"],
+              "github_sha": os.environ["HEAD_SHA"],
+              "checked_out_sha": subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip(),
+              "job_status_at_manifest_step": os.environ["JOB_STATUS"],
+              "production_boot_evidence_present": (root / "production-boot-status.txt").exists(),
+              "reconciliation_report_present": (root / "reconciliation-report.json").exists(),
+              "note": "Artifact presence does not itself mean the gate passed; inspect workflow conclusion and each report."
+          }
+          (root / "production-gate-evidence.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
+          print(json.dumps(manifest, indent=2))
+          PY
+      - name: Upload production gate evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-gate-evidence
+          path: production-gate-evidence/
+          if-no-files-found: error
+          retention-days: 30
