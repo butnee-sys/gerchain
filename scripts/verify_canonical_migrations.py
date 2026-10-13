@@ -60,6 +60,93 @@ def _run() -> dict:
         return name
 
     try:
+        # 0. Failed migration rollback, then corrected SQL at the SAME version.
+        # The failed statement follows successful DDL in the same migration so
+        # PostgreSQL must roll back both the DDL and schema_version publication.
+        rollback_schema = new_schema("rollback_retry")
+        with tempfile.TemporaryDirectory(prefix="gerchain-migration-rollback-") as temp_dir:
+            retry_dir = Path(temp_dir)
+            retry_file = retry_dir / "900_retry_probe.sql"
+            retry_file.write_text(
+                "CREATE TABLE migration_rollback_probe (id INTEGER PRIMARY KEY);\\n"
+                "THIS IS INTENTIONALLY INVALID SQL;\\n",
+                encoding="utf-8",
+            )
+            failed_error = None
+            try:
+                with _connect(base_url, rollback_schema) as conn:
+                    apply_migrations(conn, retry_dir)
+            except Exception as exc:
+                failed_error = f"{type(exc).__name__}: {exc}"
+            if not failed_error:
+                raise AssertionError("intentionally invalid migration unexpectedly succeeded")
+            with _connect(base_url, rollback_schema) as conn:
+                table_after_failure = conn.execute(
+                    "SELECT to_regclass('migration_rollback_probe')"
+                ).fetchone()[0]
+                registry_after_failure = conn.execute(
+                    "SELECT to_regclass('schema_version')"
+                ).fetchone()[0]
+                conn.commit()
+            if table_after_failure is not None or registry_after_failure is not None:
+                raise AssertionError(
+                    "failed migration left DDL or registry behind: "
+                    f"table={table_after_failure}, registry={registry_after_failure}"
+                )
+
+            # Correct the SQL without changing the migration version/filename.
+            retry_file.write_text(
+                "CREATE TABLE migration_rollback_probe (id INTEGER PRIMARY KEY);\\n"
+                "INSERT INTO migration_rollback_probe(id) VALUES (1);\\n",
+                encoding="utf-8",
+            )
+            with _connect(base_url, rollback_schema) as conn:
+                applied_retry = apply_migrations(conn, retry_dir)
+            if applied_retry != (900,):
+                raise AssertionError(
+                    f"corrected same-version migration expected applied=(900,), got {applied_retry}"
+                )
+            with _connect(base_url, rollback_schema) as conn:
+                probe_rows = conn.execute(
+                    "SELECT id FROM migration_rollback_probe ORDER BY id"
+                ).fetchall()
+                registry_rows = conn.execute(
+                    "SELECT version, checksum FROM schema_version ORDER BY version"
+                ).fetchall()
+                conn.commit()
+            corrected_digest = checksum(retry_file.read_text(encoding="utf-8"))
+            if probe_rows != [(1,)] or registry_rows != [(900, corrected_digest)]:
+                raise AssertionError(
+                    "corrected migration state mismatch: "
+                    f"probe_rows={probe_rows}, registry_rows={registry_rows}"
+                )
+            with _connect(base_url, rollback_schema) as conn:
+                already_applied = apply_migrations(conn, retry_dir)
+            if already_applied != ():
+                raise AssertionError(
+                    f"same-version retry expected already-applied=(), got {already_applied}"
+                )
+            report["scenarios"]["failed_migration_rollback_and_same_version_retry"] = {
+                "status": "PASS",
+                "migration_version": 900,
+                "failure": {
+                    "result": "rolled-back",
+                    "error": failed_error,
+                    "ddl_absent_after_failure": table_after_failure is None,
+                    "schema_version_absent_after_failure": registry_after_failure is None,
+                },
+                "corrected_retry": {
+                    "result": "applied",
+                    "applied_versions": list(applied_retry),
+                    "checksum_matches_corrected_sql": registry_rows == [(900, corrected_digest)],
+                    "probe_rows": [row[0] for row in probe_rows],
+                },
+                "repeat_retry": {
+                    "result": "already-applied",
+                    "applied_versions": list(already_applied),
+                },
+            }
+
         # 1. Empty PostgreSQL schema: all canonical migrations apply in order.
         clean = new_schema("clean")
         with _connect(base_url, clean) as conn:
