@@ -1,8 +1,9 @@
 """Serialized, checksummed PostgreSQL migration runner.
 
 The 16-file canonical chain is explicit because historical aliases coexist in
-this directory. Schema DDL, checksum verification, and schema_version publication
-run in one transaction under a transaction-scoped advisory lock.
+this directory. Schema DDL, checksum verification, and schema_version publication run in one
+transaction while a session-level advisory lock serializes competing migration
+processes. The lock is explicitly released after commit or rollback.
 """
 from __future__ import annotations
 
