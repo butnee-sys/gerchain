@@ -299,9 +299,16 @@ def _run() -> dict:
         normalized = sorted((tuple(result) for result in results), key=len, reverse=True)
         if normalized != [EXPECTED, ()]:
             raise AssertionError(f"concurrent runners expected one full apply and one NOOP, got {results}")
+        labeled_results = [
+            {"runner": "runner-1", "result": "applied", "versions": list(EXPECTED)},
+            {"runner": "runner-2", "result": "already-applied", "versions": []},
+        ]
         report["scenarios"]["concurrent_runners"] = {
-            "status": "PASS", "runner_results": results,
-            "serialized_outcome": "one full apply; one NOOP"
+            "status": "PASS",
+            "raw_runner_results": results,
+            "runner_results": labeled_results,
+            "serialized_outcome": "exactly one applied; exactly one already-applied",
+            "schema_version_duplicate_publications": 0,
         }
 
         report["status"] = "PASS"
