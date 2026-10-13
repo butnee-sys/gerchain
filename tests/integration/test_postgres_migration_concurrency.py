@@ -31,6 +31,11 @@ def dsn():
     return DSN
 
 
+def unique_version() -> int:
+    # Isolate each run because CI may retain previous migration evidence.
+    return 900_000_000 + int(uuid.uuid4().hex[:8], 16)
+
+
 def run_cli(dsn: str, path: Path) -> subprocess.CompletedProcess[str]:
     env = dict(os.environ)
     env["GERCHAIN_DATABASE_URL"] = dsn
@@ -52,7 +57,7 @@ def make_migration(tmp_path: Path, version: int, sql: str, name: str = "probe") 
 
 def test_concurrent_first_apply_and_same_checksum_replay(dsn, tmp_path):
     table = "migration_probe_" + uuid.uuid4().hex
-    path = make_migration(tmp_path, 9901, f"CREATE TABLE {table} (id integer PRIMARY KEY);")
+    path = make_migration(tmp_path, unique_version(), f"CREATE TABLE {table} (id integer PRIMARY KEY);")
     # Two independent OS processes contend for the same migration lock.
     gate = tmp_path / "release"
     worker = "\n".join(
@@ -79,12 +84,13 @@ def test_concurrent_first_apply_and_same_checksum_replay(dsn, tmp_path):
     assert sorted([o1.strip(), o2.strip()]) == ["already-applied", "applied"]
     assert run_cli(dsn, path).stdout.strip().endswith("result=already-applied")
     with psycopg.connect(dsn) as conn:
-        assert conn.execute("SELECT count(*) FROM schema_version WHERE version=9901").fetchone()[0] == 1
+        version = int(path.name.split("_", 1)[0])
+        assert conn.execute("SELECT count(*) FROM schema_version WHERE version=%s", (version,)).fetchone()[0] == 1
         assert conn.execute(f"SELECT count(*) FROM information_schema.tables WHERE table_name=%s", (table,)).fetchone()[0] == 1
 
 
 def test_checksum_conflict_fails_closed(dsn, tmp_path):
-    original = make_migration(tmp_path, 9902, "CREATE TABLE migration_probe_checksum (id integer);")
+    original = make_migration(tmp_path, unique_version(), "CREATE TABLE migration_probe_checksum (id integer);")
     assert run_cli(dsn, original).returncode == 0
     changed = make_migration(tmp_path, 9902, "CREATE TABLE migration_probe_checksum (id integer, note text);", "changed")
     result = run_cli(dsn, changed)
@@ -97,9 +103,47 @@ def test_checksum_conflict_fails_closed(dsn, tmp_path):
 
 def test_failed_migration_rolls_back_ddl_and_version_row(dsn, tmp_path):
     table = "migration_probe_rollback_" + uuid.uuid4().hex
-    path = make_migration(tmp_path, 9903, f"CREATE TABLE {table} (id integer); SELECT * FROM table_that_does_not_exist_{uuid.uuid4().hex};")
+    path = make_migration(tmp_path, unique_version(), f"CREATE TABLE {table} (id integer); SELECT * FROM table_that_does_not_exist_{uuid.uuid4().hex};")
     result = run_cli(dsn, path)
     assert result.returncode != 0
     with psycopg.connect(dsn) as conn:
-        assert conn.execute("SELECT count(*) FROM schema_version WHERE version=9903").fetchone()[0] == 0
+        version = int(path.name.split("_", 1)[0])
+        assert conn.execute("SELECT count(*) FROM schema_version WHERE version=%s", (version,)).fetchone()[0] == 0
         assert conn.execute("SELECT count(*) FROM information_schema.tables WHERE table_name=%s", (table,)).fetchone()[0] == 0
+
+    
+def test_failed_migration_releases_lock_and_same_version_can_retry(dsn, tmp_path):
+    table = "migration_probe_retry_" + uuid.uuid4().hex
+    version = unique_version()
+    broken = make_migration(
+        tmp_path,
+        version,
+        f"CREATE TABLE {table} (id integer); SELECT * FROM missing_retry_table_{uuid.uuid4().hex};",
+        "broken",
+    )
+    failed = run_cli(dsn, broken)
+    assert failed.returncode != 0
+    with psycopg.connect(dsn) as conn:
+        assert conn.execute(
+            "SELECT count(*) FROM schema_version WHERE version=%s", (version,)
+        ).fetchone()[0] == 0
+        assert conn.execute(
+            "SELECT count(*) FROM information_schema.tables WHERE table_name=%s", (table,)
+        ).fetchone()[0] == 0
+
+    # Retry the same version with corrected SQL. Success proves rollback released
+    # the transaction-scoped advisory lock and no failed registry row was retained.
+    corrected = make_migration(
+        tmp_path, version, f"CREATE TABLE {table} (id integer);", "retry"
+    )
+    applied = run_cli(dsn, corrected)
+    assert applied.returncode == 0, (applied.stdout, applied.stderr)
+    assert applied.stdout.strip().endswith("result=applied")
+    with psycopg.connect(dsn) as conn:
+        row = conn.execute(
+            "SELECT checksum FROM schema_version WHERE version=%s", (version,)
+        ).fetchone()
+        assert row == (hashlib.sha256(corrected.read_bytes()).hexdigest(),)
+        assert conn.execute(
+            "SELECT count(*) FROM information_schema.tables WHERE table_name=%s", (table,)
+        ).fetchone()[0] == 1
