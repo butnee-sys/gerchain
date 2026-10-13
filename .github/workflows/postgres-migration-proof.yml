@@ -2,6 +2,13 @@ name: PostgreSQL migration concurrency proof
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - feat/ea21-transaction-aware-ledger
+    paths:
+      - "tests/integration/test_postgres_migration_concurrency.py"
+      - "scripts/postgres_migration_runner.py"
+      - ".github/workflows/postgres-migration-proof.yml"
 
 jobs:
   postgres-migration-proof:
