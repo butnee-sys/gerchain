@@ -165,6 +165,20 @@ def test_migration_checksum_mismatch_fails_closed():
 
         with psycopg.connect(
             database_url, options=f"-c search_path={schema}"
+        ) as before_conn:
+            versions_before = before_conn.execute(
+                "SELECT version, checksum, applied_at FROM schema_version ORDER BY version"
+            ).fetchall()
+            tables_before = before_conn.execute(
+                """
+                SELECT table_name FROM information_schema.tables
+                WHERE table_schema = %s ORDER BY table_name
+                """,
+                (schema,),
+            ).fetchall()
+
+        with psycopg.connect(
+            database_url, options=f"-c search_path={schema}"
         ) as connection:
             with pytest.raises(RuntimeError, match=r"Migration checksum mismatch for version 3"):
                 apply_migrations(connection, MIGRATION_DIR)
@@ -172,10 +186,26 @@ def test_migration_checksum_mismatch_fails_closed():
         with psycopg.connect(
             database_url, options=f"-c search_path={schema}"
         ) as verify:
-            checksum_after = verify.execute(
-                "SELECT checksum FROM schema_version WHERE version = 3"
-            ).fetchone()[0]
-        assert checksum_after == "0" * 64, "runner must not silently repair tampered history"
+            versions_after = verify.execute(
+                "SELECT version, checksum, applied_at FROM schema_version ORDER BY version"
+            ).fetchall()
+            tables_after = verify.execute(
+                """
+                SELECT table_name FROM information_schema.tables
+                WHERE table_schema = %s ORDER BY table_name
+                """,
+                (schema,),
+            ).fetchall()
+
+        assert versions_after == versions_before, (
+            "checksum mismatch must leave every migration version, checksum, and timestamp unchanged"
+        )
+        assert tables_after == tables_before, (
+            "checksum mismatch must leave the applied schema object inventory unchanged"
+        )
+        assert versions_after[2][1] == "0" * 64, (
+            "runner must fail closed rather than silently repair tampered history"
+        )
     finally:
         with psycopg.connect(database_url, autocommit=True) as admin:
             admin.execute(f'DROP SCHEMA IF EXISTS "{schema}" CASCADE')
