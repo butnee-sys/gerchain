@@ -88,6 +88,7 @@ def assert_canonical_production_schema(connection) -> None:
     # Require DB-enforced uniqueness for every value/evidence idempotency boundary.
     required_unique_keys = {
         "gerchain_ledger_movements": ("transaction_id",),
+        "gerchain_transaction_witnesses": ("transaction_id",),
         "gerchain_outbox_events": ("event_id",),
         "gerchain_idempotency_records": ("key",),
     }
