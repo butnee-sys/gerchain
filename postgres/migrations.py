@@ -99,13 +99,14 @@ def checksum(sql: str) -> str:
 
 @contextmanager
 def _migration_transaction(conn):
-    """Serialize migration publication across commits using a session lock.
+    """Serialize the complete migration batch in one PostgreSQL transaction.
 
-    Migration files and legacy callers may commit internally. A transaction-
-    scoped advisory lock would then be released before schema_version publication,
-    allowing two runners to insert the same version concurrently. The session lock
-    remains held across those transaction boundaries and is always explicitly
-    released, including after rollback.
+    The runner strips historical BEGIN/COMMIT wrappers from migration files,
+    so no migration is permitted to commit independently. A transaction-scoped
+    advisory lock therefore protects the full read/DDL/publication sequence and
+    is released atomically by commit or rollback. This avoids the session-lock
+    acquire/unlock lifecycle, which can leave a connection holding a lock after
+    an interrupted or partially failed migration runner.
     """
     if _connection_in_transaction(conn):
         raise RuntimeError("migration runner requires a clean transaction")
@@ -117,27 +118,13 @@ def _migration_transaction(conn):
             return conn.exec_driver_sql(sql, params)
         return conn.execute(sql, params)
 
-    acquired = False
     try:
-        execute("SELECT pg_advisory_lock(%s)", (MIGRATION_LOCK_KEY,))
-        acquired = True
+        execute("SELECT pg_advisory_xact_lock(%s)", (MIGRATION_LOCK_KEY,))
         yield
         conn.commit()
     except Exception:
         conn.rollback()
         raise
-    finally:
-        if acquired:
-            try:
-                # A failed migration may leave the connection in an aborted
-                # transaction; clear it before issuing the session unlock.
-                if _connection_in_transaction(conn):
-                    conn.rollback()
-                execute("SELECT pg_advisory_unlock(%s)", (MIGRATION_LOCK_KEY,))
-                conn.commit()
-            except Exception:
-                conn.rollback()
-                raise
 
 
 def _connection_in_transaction(conn) -> bool:
@@ -279,7 +266,7 @@ def apply_migrations(conn, migration_dir: str | Path) -> None:
                 + ", ".join(p.name for p in candidates)
             )
 
-    # Serialize concurrent migration runners before publishing any migration row.
+    # EA-35.51: one transaction-scoped lock serializes migration DDL and version publication.
     migration_context = _migration_transaction(conn)
     applied_now: list[int] = []
     try:
