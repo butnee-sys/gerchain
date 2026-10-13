@@ -8,6 +8,7 @@ from services.gerchain_runtime_factory import (
     ProductionRuntimeConfig,
     ProductionRuntimeFactory,
     initialize_canonical_postgres_schema,
+    _has_unique_key,
 )
 
 
@@ -78,3 +79,36 @@ def test_factory_rejects_non_postgresql_url() -> None:
     )
     with pytest.raises(ValueError, match="requires a PostgreSQL database URL"):
         _NoopFactory(config, engine=engine)
+
+
+
+def test_unique_key_gate_rejects_application_only_idempotency():
+    inspector = Mock()
+    inspector.get_unique_constraints.return_value = []
+    inspector.get_indexes.return_value = []
+    inspector.get_pk_constraint.return_value = {"constrained_columns": ["id"]}
+
+    assert not _has_unique_key(inspector, "gerchain_ledger_movements", ("transaction_id",))
+
+
+def test_unique_key_gate_accepts_unique_index_on_exact_key():
+    inspector = Mock()
+    inspector.get_unique_constraints.return_value = []
+    inspector.get_indexes.return_value = [
+        {"unique": True, "column_names": ["transaction_id"]},
+    ]
+    inspector.get_pk_constraint.return_value = {"constrained_columns": ["id"]}
+
+    assert _has_unique_key(inspector, "gerchain_ledger_movements", ("transaction_id",))
+    assert not _has_unique_key(inspector, "gerchain_ledger_movements", ("source", "destination"))
+
+
+def test_unique_key_gate_does_not_accept_non_unique_index():
+    inspector = Mock()
+    inspector.get_unique_constraints.return_value = []
+    inspector.get_indexes.return_value = [
+        {"unique": False, "column_names": ["event_id"]},
+    ]
+    inspector.get_pk_constraint.return_value = {"constrained_columns": ["id"]}
+
+    assert not _has_unique_key(inspector, "gerchain_outbox_events", ("event_id",))
