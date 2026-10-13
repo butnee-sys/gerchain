@@ -18,10 +18,7 @@ def _stop(*_args) -> None:
 
 
 def build_production_runtime():
-    """Build the production runtime from validated environment configuration.
-
-    Returns (runtime, engine); caller owns engine disposal.
-    """
+    """Build and verify the canonical PostgreSQL runtime; dispose on any failure."""
     database_url = os.environ.get("GERCHAIN_DATABASE_URL")
     if not database_url or not database_url.startswith(
         ("postgresql://", "postgresql+psycopg://", "postgresql+psycopg2://")
@@ -32,6 +29,7 @@ def build_production_runtime():
     currency = os.environ.get("GERCHAIN_CURRENCY")
     witness_id = os.environ.get("GERCHAIN_WITNESS_ID")
     amount_raw = os.environ.get("GERCHAIN_ESCROW_AMOUNT")
+
     if not all((escrow_id, currency, witness_id, amount_raw)):
         raise RuntimeError(
             "production entrypoint requires GERCHAIN_ESCROW_ID, "
@@ -61,13 +59,12 @@ def build_production_runtime():
         if not runtime.is_canonical_ledger_authoritative:
             raise RuntimeError("canonical ledger authority was not established")
         return runtime, engine
-    except BaseException:
+    except Exception:
         engine.dispose()
         raise
 
 
 def main() -> None:
-    global _running
     runtime, engine = build_production_runtime()
     print(
         "GerChain production runtime initialized: "
