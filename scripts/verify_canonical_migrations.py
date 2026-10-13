@@ -68,8 +68,8 @@ def _run() -> dict:
             retry_dir = Path(temp_dir)
             retry_file = retry_dir / "900_retry_probe.sql"
             retry_file.write_text(
-                "CREATE TABLE migration_rollback_probe (id INTEGER PRIMARY KEY);\\n"
-                "THIS IS INTENTIONALLY INVALID SQL;\\n",
+                "CREATE TABLE migration_rollback_probe (id INTEGER PRIMARY KEY);\n"
+                "THIS IS INTENTIONALLY INVALID SQL;\n",
                 encoding="utf-8",
             )
             failed_error = None
@@ -96,8 +96,8 @@ def _run() -> dict:
 
             # Correct the SQL without changing the migration version/filename.
             retry_file.write_text(
-                "CREATE TABLE migration_rollback_probe (id INTEGER PRIMARY KEY);\\n"
-                "INSERT INTO migration_rollback_probe(id) VALUES (1);\\n",
+                "CREATE TABLE migration_rollback_probe (id INTEGER PRIMARY KEY);\n"
+                "INSERT INTO migration_rollback_probe(id) VALUES (1);\n",
                 encoding="utf-8",
             )
             with _connect(base_url, rollback_schema) as conn:
