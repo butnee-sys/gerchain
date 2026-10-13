@@ -66,6 +66,79 @@ jobs:
           fi
           grep -F "GerChain production runtime initialized:" production-gate-evidence/production-boot.log
           echo "PASS: PostgreSQL migrations, schema assertions, and canonical runtime boot" > production-gate-evidence/production-boot-status.txt
+      - name: Capture migration history, 16 source hashes, and validated constraints
+        env:
+          RUN_ID: ${{ github.run_id }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+          HEAD_SHA: ${{ github.sha }}
+        run: |
+          python - <<'PY'
+          import hashlib, json, os, pathlib, subprocess
+          from sqlalchemy import create_engine, text
+          root = pathlib.Path("postgres/migrations")
+          expected = [
+              "001_canonical_production.sql",
+              "002_canonical_production.sql",
+              "003_canonical_compatibility.sql",
+              "004_canonical_value_truth.sql",
+              "005_canonical_production.sql",
+              "006_canonical_movement_integrity.sql",
+              "007_canonical_production_reconciliation.sql",
+              "008_ea35_idempotency_compat.sql",
+              "009_canonical_movement_integrity_hardening.sql",
+              "010_canonical_evidence_constraints.sql",
+              "011_ea35_canonical_schema_finalization.sql",
+              "012_canonical_production.sql",
+              "013_ea35_canonical_schema_hardening.sql",
+              "014_canonical_escrow_state_constraint.sql",
+              "015_repair_escrow_state_constraint_drift.sql",
+              "016_reconcile_escrow_state_constraint.sql",
+          ]
+          hashes = []
+          for name in expected:
+              path = root / name
+              if not path.is_file():
+                  raise SystemExit(f"missing canonical migration: {name}")
+              hashes.append({"file": name, "sha256": hashlib.sha256(path.read_bytes()).hexdigest()})
+          engine = create_engine(os.environ["GERCHAIN_DATABASE_URL"], pool_pre_ping=True)
+          with engine.connect() as conn:
+              history = [dict(row._mapping) for row in conn.execute(text(
+                  "SELECT version, checksum, applied_at FROM schema_version ORDER BY version"
+              ))]
+              constraints = [dict(row._mapping) for row in conn.execute(text("""
+                  SELECT n.nspname AS schema_name, t.relname AS table_name,
+                         c.conname AS constraint_name, c.contype AS constraint_type,
+                         c.convalidated AS validated,
+                         pg_get_constraintdef(c.oid, true) AS definition
+                  FROM pg_constraint c
+                  JOIN pg_class t ON t.oid = c.conrelid
+                  JOIN pg_namespace n ON n.oid = t.relnamespace
+                  WHERE n.nspname = current_schema()
+                    AND t.relname = 'escrows'
+                  ORDER BY c.conname
+              """))]
+          engine.dispose()
+          payload = {
+              "workflow": "PostgreSQL Production Re-performance",
+              "run_id": os.environ["RUN_ID"],
+              "run_attempt": os.environ["RUN_ATTEMPT"],
+              "github_sha": os.environ["HEAD_SHA"],
+              "checked_out_sha": subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip(),
+              "canonical_migration_count": len(hashes),
+              "migration_files": hashes,
+              "migration_history": history,
+              "escrow_constraints": constraints,
+          }
+          if len(hashes) != 16:
+              raise SystemExit(f"expected 16 migration hashes, got {len(hashes)}")
+          if [row["version"] for row in history] != list(range(1, 17)):
+              raise SystemExit("migration history is not exactly versions 1..16")
+          if not constraints or any(not row["validated"] for row in constraints if row["constraint_type"] == "c"):
+              raise SystemExit("missing escrow constraints or an unvalidated CHECK constraint")
+          out = pathlib.Path("production-gate-evidence/migration-catalog-proof.json")
+          out.write_text(json.dumps(payload, indent=2, default=str), encoding="utf-8")
+          print(json.dumps(payload, indent=2, default=str))
+          PY
       - name: Write standalone production database reconciliation report
         run: |
           python - <<'PY'
@@ -104,9 +177,10 @@ jobs:
           PY
       - name: Test deep reconciliation and concurrent PostgreSQL ledger contention
         run: |
+          set -o pipefail
           pytest -q -vv \
             tests/persistence/test_deep_value_reconciliation.py \
-            tests/persistence/test_postgres_concurrency_migration.py
+            tests/persistence/test_postgres_concurrency_migration.py 2>&1 | tee production-gate-evidence/postgres-test.log
       - name: Write gate evidence manifest
         if: always()
         env:
