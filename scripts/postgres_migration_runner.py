@@ -44,11 +44,12 @@ def apply_migration(dsn: str, migration_path: Path) -> str:
                 "SELECT version FROM schema_version ORDER BY version"
             ).fetchall()
         } if _schema_version_exists(conn) else set()
+        conn.commit()  # canonical runner requires a clean transaction
         applied = apply_migrations(conn, canonical_dir)
         version = int(selected.name.split("_", 1)[0])
-        if version in before and not applied:
-            return "already-applied"
-        return "applied" if applied else "already-applied"
+        if version in applied:
+            return "applied"
+        return "already-applied"
 
 
 def _schema_version_exists(conn) -> bool:
