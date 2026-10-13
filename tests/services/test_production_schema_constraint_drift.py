@@ -39,7 +39,7 @@ def test_schema_gate_detects_weakened_constraint_definition():
     )
     assert "escrows_state_canonical_check" in drift
     assert "created" in drift["escrows_state_canonical_check"]["missing_fragments"]
-    assert ">=" in drift["gerchain_ledger_balance_nonnegative"]["missing_fragments"]
+    assert ">=0" in drift["gerchain_ledger_balance_nonnegative"]["missing_fragments"]
 
 
 def test_schema_gate_accepts_expected_constraint_semantics_with_postgres_parentheses():
