@@ -39,6 +39,7 @@ def apply_migrations(database_url: str) -> list[str]:
             # Session-level lock serializes runners even across transaction boundaries.
             # It is acquired and released on this exact physical connection.
             connection.execute(text("SELECT pg_advisory_lock(741923, 20261012)"))
+            connection.commit()  # Keep the session lock while ending lock-acquisition transaction.
             try:
                 with connection.begin():
                     # Serialize all migration runners for this database.
@@ -131,6 +132,7 @@ def apply_migrations(database_url: str) -> list[str]:
                 # pooled connection. If unlock itself fails, invalidate the connection.
                 try:
                     connection.execute(text("SELECT pg_advisory_unlock(741923, 20261012)"))
+                    connection.commit()
                 except Exception:
                     connection.invalidate()
                     raise
