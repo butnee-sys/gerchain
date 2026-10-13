@@ -49,6 +49,24 @@ def initialize_canonical_postgres_schema(engine: Engine) -> None:
 
 
 
+def _constraint_definition_drift(expected_fragments: dict[str, tuple[str, ...]], actual_definitions: dict[str, str]) -> dict[str, dict[str, object]]:
+    """Return missing/weakened/misbound CHECK definitions by canonical name.
+
+    This deliberately checks semantic anchor fragments rather than relying on
+    PostgreSQL's pretty-printer formatting, which varies across server versions.
+    """
+    def compact(value: str) -> str:
+        return "".join(ch for ch in value.lower().replace('"', "") if not ch.isspace())
+
+    drift = {}
+    for name, fragments in expected_fragments.items():
+        definition = compact(actual_definitions.get(name, ""))
+        missing = [fragment for fragment in fragments if compact(fragment) not in definition]
+        if missing:
+            drift[name] = {"missing_fragments": missing, "actual": definition or None}
+    return drift
+
+
 def _has_unique_key(inspector, table_name: str, columns: tuple[str, ...]) -> bool:
     """Return true only when PostgreSQL enforces uniqueness for this exact key."""
     for constraint in inspector.get_unique_constraints(table_name):
@@ -184,9 +202,6 @@ def assert_canonical_production_schema(connection) -> None:
         "gerchain_idempotency_fingerprint_check": ("fingerprint", "64"),
     }
 
-    def _compact_definition(value: str) -> str:
-        return "".join(ch for ch in value.lower().replace('"', "") if not ch.isspace())
-
     actual_constraint_definitions = connection.execute(
         sql_text(
             """
@@ -198,13 +213,8 @@ def assert_canonical_production_schema(connection) -> None:
         ),
         {"constraint_names": sorted(expected_check_fragments)},
     ).all()
-    actual_definitions = {name: _compact_definition(definition) for name, definition in actual_constraint_definitions}
-    drifted_definitions = {}
-    for name, fragments in expected_check_fragments.items():
-        definition = actual_definitions.get(name, "")
-        missing_fragments = [fragment for fragment in fragments if _compact_definition(fragment) not in definition]
-        if missing_fragments:
-            drifted_definitions[name] = {"missing_fragments": missing_fragments, "actual": definition or None}
+    actual_definitions = {name: definition for name, definition in actual_constraint_definitions}
+    drifted_definitions = _constraint_definition_drift(expected_check_fragments, actual_definitions)
     if drifted_definitions:
         raise RuntimeError(
             "canonical production schema CHECK constraint definition drift: "
