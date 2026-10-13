@@ -6,7 +6,6 @@ import subprocess
 import sys
 import time
 import uuid
-from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import psycopg
@@ -93,7 +92,8 @@ def test_checksum_conflict_fails_closed(dsn, tmp_path):
     table = "migration_probe_checksum_" + uuid.uuid4().hex
     original = make_migration(tmp_path, unique_version(), f"CREATE TABLE {table} (id integer);")
     assert run_cli(dsn, original).returncode == 0
-    changed = make_migration(tmp_path, 9902, "CREATE TABLE migration_probe_checksum (id integer, note text);", "changed")
+    version = int(original.name.split("_", 1)[0])
+    changed = make_migration(tmp_path, version, f"CREATE TABLE {table} (id integer, note text);", "changed")
     result = run_cli(dsn, changed)
     assert result.returncode != 0
     assert "checksum conflict" in result.stderr
