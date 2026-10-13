@@ -280,7 +280,7 @@ jobs:
           expected = [(item["version"], item["sha256"]) for item in manifest_rows]
           actual = [(row[0], row[1]) for row in applied]
           assert actual == expected, {
-              "reason": "database migration registry does not match the canonical 14-file manifest",
+              "reason": "database migration registry does not match the canonical 16-file manifest",
               "expected": expected,
               "actual": actual,
           }
@@ -331,21 +331,12 @@ jobs:
           (out / "migration-manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
           (out / "postgres-schema-snapshot.json").write_text(json.dumps(schema, indent=2) + "\n", encoding="utf-8")
           (out / "commit-sha.txt").write_text(os.environ["EVIDENCE_COMMIT_SHA"] + "\n", encoding="utf-8")
-          print("MIGRATION_MANIFEST=14/14")
+          print("MIGRATION_MANIFEST=16/16")
           print("SCHEMA_VERSION_MATCHES_MANIFEST=PASS")
           print(f"POSTGRES_VERSION={pg_version}")
           print(f"SCHEMA_SNAPSHOT_SHA256={manifest['schema_snapshot_sha256']}")
           print(f"EVIDENCE_COMMIT_SHA={os.environ['EVIDENCE_COMMIT_SHA']}")
           PY
-
-      - name: Upload exact-SHA PostgreSQL evidence bundle
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: ea35-postgres-evidence-${{ github.sha }}
-          path: artifacts/ea35/
-          if-no-files-found: warn
-          retention-days: 90
 
       - name: Verify canonical migration runner compatibility and migration contracts
         run: |
@@ -472,4 +463,61 @@ jobs:
               assert "GerChain production runtime initialized:" in output, output
               print("PRODUCTION_ENTRYPOINT_BOOT=PASS")
               print("PRODUCTION_ENTRYPOINT_EXITED_CLEANLY=PASS")
+          PY\n\n      - name: Finalize exact-SHA evidence report
+        if: always()
+        env:
+          EVIDENCE_COMMIT_SHA: ${{ github.sha }}
+          EVIDENCE_RUN_ID: ${{ github.run_id }}
+          EVIDENCE_RUN_ATTEMPT: ${{ github.run_attempt }}
+          EVIDENCE_JOB_STATUS: ${{ job.status }}
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          root = Path("artifacts/ea35")
+          root.mkdir(parents=True, exist_ok=True)
+          expected = [
+              "commit-sha.txt",
+              "migration-manifest.json",
+              "postgres-schema-snapshot.json",
+              "migration-registry-before.json",
+              "migration-registry-after.json",
+              "pg-constraints-after-first-run.json",
+              "pg-constraints-after-second-run.json",
+              "checksum-runner.log",
+              "concurrency-runner.log",
+          ]
+          present = sorted(path.name for path in root.iterdir() if path.is_file())
+          missing = [name for name in expected if name not in present]
+          report = {
+              "repository": os.environ.get("GITHUB_REPOSITORY"),
+              "commit_sha": os.environ["EVIDENCE_COMMIT_SHA"],
+              "workflow": os.environ.get("GITHUB_WORKFLOW"),
+              "workflow_run_id": os.environ["EVIDENCE_RUN_ID"],
+              "workflow_run_attempt": int(os.environ["EVIDENCE_RUN_ATTEMPT"]),
+              "job_status_at_finalization": os.environ["EVIDENCE_JOB_STATUS"],
+              "expected_evidence_files": expected,
+              "present_evidence_files": present,
+              "missing_evidence_files": missing,
+              "evidence_complete": not missing,
+          }
+          (root / "final-evidence-report.json").write_text(
+              json.dumps(report, indent=2) + "\\n", encoding="utf-8"
+          )
+          print("FINAL_EVIDENCE_REPORT=" + json.dumps(report, sort_keys=True))
+          if os.environ["EVIDENCE_JOB_STATUS"] != "success":
+              print("EVIDENCE_CLOSEOUT=BLOCKED_JOB_NOT_SUCCESS")
+          elif missing:
+              print("EVIDENCE_CLOSEOUT=BLOCKED_MISSING_FILES")
+          else:
+              print("EVIDENCE_CLOSEOUT=EVIDENCE_COMPLETE_JOB_SUCCESS")
           PY
+
+      - name: Upload exact-SHA PostgreSQL evidence bundle
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ea35-postgres-evidence-${{ github.sha }}
+          path: artifacts/ea35/
+          if-no-files-found: warn
+          retention-days: 90
