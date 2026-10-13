@@ -35,91 +35,105 @@ def apply_migrations(database_url: str) -> list[str]:
     engine = create_engine(database_url, pool_pre_ping=True)
     applied_now: list[str] = []
     try:
-        with engine.begin() as connection:
-            # Serialize all migration runners for this database.
-            connection.execute(text("SELECT pg_advisory_xact_lock(741923, 20261012)"))
-            connection.execute(text("""
-                CREATE TABLE IF NOT EXISTS schema_version (
-                    version BIGINT PRIMARY KEY,
-                    checksum TEXT NOT NULL,
-                    applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
-                )
-            """))
+        with engine.connect() as connection:
+            # Session-level lock serializes runners even across transaction boundaries.
+            # It is acquired and released on this exact physical connection.
+            connection.execute(text("SELECT pg_advisory_lock(741923, 20261012)"))
+            try:
+                with connection.begin():
+                # Serialize all migration runners for this database.
+                connection.execute(text("SELECT pg_advisory_xact_lock(741923, 20261012)"))
+                connection.execute(text("""
+                    CREATE TABLE IF NOT EXISTS schema_version (
+                        version BIGINT PRIMARY KEY,
+                        checksum TEXT NOT NULL,
+                        applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
+                    )
+                """))
 
-            # Fail closed before migration 001 can backfill legacy escrow rows.
-            connection.exec_driver_sql("""
-                DO $preflight$
-                DECLARE
-                    has_escrows BOOLEAN;
-                    has_refund_destination BOOLEAN;
-                    has_created_at BOOLEAN;
-                    unsafe_rows BIGINT;
-                BEGIN
-                    SELECT to_regclass('public.escrows') IS NOT NULL INTO has_escrows;
-                    IF has_escrows THEN
-                        SELECT EXISTS (SELECT 1 FROM information_schema.columns
-                            WHERE table_schema = 'public' AND table_name = 'escrows'
-                              AND column_name = 'refund_destination') INTO has_refund_destination;
-                        SELECT EXISTS (SELECT 1 FROM information_schema.columns
-                            WHERE table_schema = 'public' AND table_name = 'escrows'
-                              AND column_name = 'created_at') INTO has_created_at;
-                        IF NOT has_refund_destination OR NOT has_created_at THEN
-                            SELECT count(*) INTO unsafe_rows FROM escrows;
-                            IF unsafe_rows > 0 THEN
-                                RAISE EXCEPTION 'migration blocked: legacy escrow rows need reviewed refund_destination/created_at backfill';
-                            END IF;
-                        ELSE
-                            SELECT count(*) INTO unsafe_rows FROM escrows
-                             WHERE refund_destination IS NULL OR created_at IS NULL;
-                            IF unsafe_rows > 0 THEN
-                                RAISE EXCEPTION 'migration blocked: % escrow row(s) need reviewed backfill', unsafe_rows;
+                # Fail closed before migration 001 can backfill legacy escrow rows.
+                connection.exec_driver_sql("""
+                    DO $preflight$
+                    DECLARE
+                        has_escrows BOOLEAN;
+                        has_refund_destination BOOLEAN;
+                        has_created_at BOOLEAN;
+                        unsafe_rows BIGINT;
+                    BEGIN
+                        SELECT to_regclass('public.escrows') IS NOT NULL INTO has_escrows;
+                        IF has_escrows THEN
+                            SELECT EXISTS (SELECT 1 FROM information_schema.columns
+                                WHERE table_schema = 'public' AND table_name = 'escrows'
+                                  AND column_name = 'refund_destination') INTO has_refund_destination;
+                            SELECT EXISTS (SELECT 1 FROM information_schema.columns
+                                WHERE table_schema = 'public' AND table_name = 'escrows'
+                                  AND column_name = 'created_at') INTO has_created_at;
+                            IF NOT has_refund_destination OR NOT has_created_at THEN
+                                SELECT count(*) INTO unsafe_rows FROM escrows;
+                                IF unsafe_rows > 0 THEN
+                                    RAISE EXCEPTION 'migration blocked: legacy escrow rows need reviewed refund_destination/created_at backfill';
+                                END IF;
+                            ELSE
+                                SELECT count(*) INTO unsafe_rows FROM escrows
+                                 WHERE refund_destination IS NULL OR created_at IS NULL;
+                                IF unsafe_rows > 0 THEN
+                                    RAISE EXCEPTION 'migration blocked: % escrow row(s) need reviewed backfill', unsafe_rows;
+                                END IF;
                             END IF;
                         END IF;
-                    END IF;
-                END
-                $preflight$;
-            """)
-            for path in files:
-                match = MIGRATION_NAME.match(path.name)
-                assert match is not None
-                version = int(match.group(1))
-                raw = path.read_bytes()
-                checksum = _checksum(raw)
-                recorded = connection.execute(
-                    text("SELECT checksum FROM schema_version WHERE version = :version"),
-                    {"version": version},
-                ).scalar_one_or_none()
+                    END
+                    $preflight$;
+                """)
+                for path in files:
+                    match = MIGRATION_NAME.match(path.name)
+                    assert match is not None
+                    version = int(match.group(1))
+                    raw = path.read_bytes()
+                    checksum = _checksum(raw)
+                    recorded = connection.execute(
+                        text("SELECT checksum FROM schema_version WHERE version = :version"),
+                        {"version": version},
+                    ).scalar_one_or_none()
 
-                if recorded is not None:
-                    if recorded != checksum:
+                    if recorded is not None:
+                        if recorded != checksum:
+                            raise RuntimeError(
+                                f"migration checksum mismatch for {path.name}; "
+                                "applied migration files are immutable"
+                            )
+                        continue
+
+                    # A version must never be silently skipped.
+                    lower_unapplied = connection.execute(
+                        text("SELECT version FROM schema_version WHERE version > :version LIMIT 1"),
+                        {"version": version},
+                    ).scalar_one_or_none()
+                    if lower_unapplied is not None:
                         raise RuntimeError(
-                            f"migration checksum mismatch for {path.name}; "
-                            "applied migration files are immutable"
+                            f"out-of-order migration {path.name}; higher version "
+                            f"{lower_unapplied} is already recorded"
                         )
-                    continue
 
-                # A version must never be silently skipped.
-                lower_unapplied = connection.execute(
-                    text("SELECT version FROM schema_version WHERE version > :version LIMIT 1"),
-                    {"version": version},
-                ).scalar_one_or_none()
-                if lower_unapplied is not None:
-                    raise RuntimeError(
-                        f"out-of-order migration {path.name}; higher version "
-                        f"{lower_unapplied} is already recorded"
+                    # Execute as a single transaction. SQL files must not contain
+                    # transaction-control statements of their own.
+                    connection.exec_driver_sql(raw.decode("utf-8"))
+                    connection.execute(
+                        text("""
+                            INSERT INTO schema_version (version, checksum)
+                            VALUES (:version, :checksum)
+                        """),
+                        {"version": version, "checksum": checksum},
                     )
+                    applied_now.append(path.name)
 
-                # Execute as a single transaction. SQL files must not contain
-                # transaction-control statements of their own.
-                connection.exec_driver_sql(raw.decode("utf-8"))
-                connection.execute(
-                    text("""
-                        INSERT INTO schema_version (version, checksum)
-                        VALUES (:version, :checksum)
-                    """),
-                    {"version": version, "checksum": checksum},
-                )
-                applied_now.append(path.name)
+            finally:
+                # Explicitly release on success and failure before returning the
+                # pooled connection. If unlock itself fails, invalidate the connection.
+                try:
+                    connection.execute(text("SELECT pg_advisory_unlock(741923, 20261012)"))
+                except Exception:
+                    connection.invalidate()
+                    raise
         return applied_now
     finally:
         engine.dispose()
