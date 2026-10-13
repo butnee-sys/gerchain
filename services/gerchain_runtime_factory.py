@@ -187,9 +187,9 @@ def assert_canonical_production_schema(connection) -> None:
     # wrong column or weaken the predicate while migration history stays intact.
     expected_check_fragments = {
         "escrows_state_canonical_check": ("state", "created", "funded", "locked", "released", "refunded", "cancelled"),
-        "escrows_amount_positive_check": ("amount", ">", "0"),
-        "gerchain_ledger_balance_nonnegative": ("balance", ">=", "0"),
-        "gerchain_ledger_version_check": ("version", ">=", "0"),
+        "escrows_amount_positive_check": ("amount", ">0"),
+        "gerchain_ledger_balance_nonnegative": ("balance", ">=0"),
+        "gerchain_ledger_version_check": ("version", ">=0"),
         "gerchain_movement_amount_check": ("amount", ">", "0"),
         "gerchain_movement_operation_check": ("operation", "fund", "release", "refund", "cancel", "settlement"),
         "gerchain_movement_integrity_hash_check": ("integrity_hash", "64", "is not null"),
