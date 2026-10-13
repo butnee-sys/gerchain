@@ -98,7 +98,7 @@ def test_checksum_conflict_fails_closed(dsn, tmp_path):
     assert result.returncode != 0
     assert "checksum conflict" in result.stderr
     with psycopg.connect(dsn) as conn:
-        checksum = conn.execute("SELECT checksum FROM schema_version WHERE version=9902").fetchone()[0]
+        checksum = conn.execute("SELECT checksum FROM schema_version WHERE version=%s", (version,)).fetchone()[0]
     assert checksum == hashlib.sha256(original.read_bytes()).hexdigest()
 
 
