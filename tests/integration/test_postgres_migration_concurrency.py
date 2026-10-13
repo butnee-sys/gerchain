@@ -90,7 +90,8 @@ def test_concurrent_first_apply_and_same_checksum_replay(dsn, tmp_path):
 
 
 def test_checksum_conflict_fails_closed(dsn, tmp_path):
-    original = make_migration(tmp_path, unique_version(), "CREATE TABLE migration_probe_checksum (id integer);")
+    table = "migration_probe_checksum_" + uuid.uuid4().hex
+    original = make_migration(tmp_path, unique_version(), f"CREATE TABLE {table} (id integer);")
     assert run_cli(dsn, original).returncode == 0
     changed = make_migration(tmp_path, 9902, "CREATE TABLE migration_probe_checksum (id integer, note text);", "changed")
     result = run_cli(dsn, changed)
