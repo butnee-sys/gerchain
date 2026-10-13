@@ -81,7 +81,7 @@ def _has_unique_key(inspector, table_name: str, columns: tuple[str, ...]) -> boo
 
 def assert_canonical_production_schema(connection) -> None:
     """Fail closed unless all canonical ORM tables/columns and 16 migrations exist."""
-    from sqlalchemy import inspect, text
+    from sqlalchemy import inspect, text as sql_text
 
     inspector = inspect(connection)
     required_tables = {}
@@ -223,7 +223,6 @@ def assert_canonical_production_schema(connection) -> None:
 
     # A named but NOT VALID constraint does not prove legacy rows satisfy the
     # invariant. Reject boot until every required constraint has been validated.
-    from sqlalchemy import text as sql_text
     required_constraint_names = sorted(
         name for names in required_checks.values() for name in names
     )
