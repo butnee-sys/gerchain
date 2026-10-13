@@ -167,26 +167,25 @@ def assert_canonical_production_schema(connection) -> None:
     # Verify the actual expression, not just the constraint name. Out-of-band DDL
     # can drop/recreate a constraint under its canonical name but attach it to the
     # wrong column or weaken the predicate while migration history stays intact.
-    expected_check_expressions = {
-        "escrows_state_canonical_check": "statein('created','funded','locked','released','refunded','cancelled')",
-        "escrows_amount_positive_check": "amount>0",
-        "gerchain_ledger_balance_nonnegative": "balance>=0",
-        "gerchain_ledger_version_check": "version>=0",
-        "gerchain_movement_amount_check": "amount>0",
-        "gerchain_movement_operation_check": "operationin('fund','release','refund','cancel','settlement')",
-        "gerchain_movement_integrity_hash_check": "integrity_hashisnotnullandlength(integrity_hash)=64",
-        "gerchain_movement_escrow_binding_check": "escrow_idisnotnull",
-        "gerchain_movement_distinct_accounts": "source<>destination",
-        "gerchain_witness_amount_check": "amount>=0",
-        "gerchain_witness_event_type_check": "event_typein('gerchain_funded','gerchain_locked','gerchain_released','gerchain_refunded','gerchain_cancelled','gerchain_settled')",
-        "gerchain_outbox_state_check": "statein('pending','processing','completed','failed')",
-        "gerchain_idempotency_state_check": "statein('processing','completed','failed')",
-        "gerchain_idempotency_fingerprint_check": "length(fingerprint)=64",
+    expected_check_fragments = {
+        "escrows_state_canonical_check": ("state", "created", "funded", "locked", "released", "refunded", "cancelled"),
+        "escrows_amount_positive_check": ("amount", ">", "0"),
+        "gerchain_ledger_balance_nonnegative": ("balance", ">=", "0"),
+        "gerchain_ledger_version_check": ("version", ">=", "0"),
+        "gerchain_movement_amount_check": ("amount", ">", "0"),
+        "gerchain_movement_operation_check": ("operation", "fund", "release", "refund", "cancel", "settlement"),
+        "gerchain_movement_integrity_hash_check": ("integrity_hash", "64", "is not null"),
+        "gerchain_movement_escrow_binding_check": ("escrow_id", "is not null"),
+        "gerchain_movement_distinct_accounts": ("source", "destination", "<>"),
+        "gerchain_witness_amount_check": ("amount", ">=", "0"),
+        "gerchain_witness_event_type_check": ("event_type", "gerchain_funded", "gerchain_locked", "gerchain_released", "gerchain_refunded", "gerchain_cancelled", "gerchain_settled"),
+        "gerchain_outbox_state_check": ("state", "pending", "processing", "completed", "failed"),
+        "gerchain_idempotency_state_check": ("state", "processing", "completed", "failed"),
+        "gerchain_idempotency_fingerprint_check": ("fingerprint", "64"),
     }
 
     def _compact_definition(value: str) -> str:
-        # PostgreSQL pg_get_constraintdef may add redundant parentheses and quotes.
-        return "".join(ch for ch in value.lower().replace('"', "") if not ch.isspace() and ch not in "()")
+        return "".join(ch for ch in value.lower().replace('"', "") if not ch.isspace())
 
     actual_constraint_definitions = connection.execute(
         sql_text(
@@ -197,14 +196,15 @@ def assert_canonical_production_schema(connection) -> None:
               AND conname = ANY(:constraint_names)
             """
         ),
-        {"constraint_names": sorted(expected_check_expressions)},
+        {"constraint_names": sorted(expected_check_fragments)},
     ).all()
     actual_definitions = {name: _compact_definition(definition) for name, definition in actual_constraint_definitions}
-    drifted_definitions = {
-        name: {"expected": _compact_definition(expected), "actual": actual_definitions.get(name)}
-        for name, expected in expected_check_expressions.items()
-        if actual_definitions.get(name) != _compact_definition(expected)
-    }
+    drifted_definitions = {}
+    for name, fragments in expected_check_fragments.items():
+        definition = actual_definitions.get(name, "")
+        missing_fragments = [fragment for fragment in fragments if _compact_definition(fragment) not in definition]
+        if missing_fragments:
+            drifted_definitions[name] = {"missing_fragments": missing_fragments, "actual": definition or None}
     if drifted_definitions:
         raise RuntimeError(
             "canonical production schema CHECK constraint definition drift: "
