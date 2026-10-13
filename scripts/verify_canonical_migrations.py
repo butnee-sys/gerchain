@@ -66,7 +66,7 @@ def _run() -> dict:
         rollback_schema = new_schema("rollback_retry")
         with tempfile.TemporaryDirectory(prefix="gerchain-migration-rollback-") as temp_dir:
             retry_dir = Path(temp_dir)
-            retry_file = retry_dir / "900_retry_probe.sql"
+            retry_file = retry_dir / "001_retry_probe.sql"
             retry_file.write_text(
                 "CREATE TABLE migration_rollback_probe (id INTEGER PRIMARY KEY);\n"
                 "THIS IS INTENTIONALLY INVALID SQL;\n",
@@ -102,9 +102,9 @@ def _run() -> dict:
             )
             with _connect(base_url, rollback_schema) as conn:
                 applied_retry = apply_migrations(conn, retry_dir)
-            if applied_retry != (900,):
+            if applied_retry != (1,):
                 raise AssertionError(
-                    f"corrected same-version migration expected applied=(900,), got {applied_retry}"
+                    f"corrected same-version migration expected applied=(1,), got {applied_retry}"
                 )
             with _connect(base_url, rollback_schema) as conn:
                 probe_rows = conn.execute(
@@ -128,7 +128,7 @@ def _run() -> dict:
                 )
             report["scenarios"]["failed_migration_rollback_and_same_version_retry"] = {
                 "status": "PASS",
-                "migration_version": 900,
+                "migration_version": 1,
                 "failure": {
                     "result": "rolled-back",
                     "error": failed_error,
