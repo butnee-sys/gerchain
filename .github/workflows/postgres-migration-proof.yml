@@ -41,7 +41,7 @@ jobs:
         with:
           python-version: "3.13"
       - name: Install test dependencies
-        run: python -m pip install --upgrade pip pytest "psycopg[binary]"
+        run: python -m pip install --upgrade pip -r requirements-dee-security.txt -r postgres/requirements-test.txt
       - name: Record exact test identity
         run: |
           {
