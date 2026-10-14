@@ -32,6 +32,27 @@ def apply_migrations(database_url: str) -> list[str]:
     if not files:
         raise RuntimeError(f"no numbered migrations found in {MIGRATION_DIR}")
 
+    # Fail before opening a database connection if filenames map to the same
+    # numeric schema_version key. Never rely on a late PRIMARY KEY violation:
+    # the operator needs an explicit, reviewable migration-registry error.
+    versions: dict[int, str] = {}
+    duplicates: list[str] = []
+    for path in files:
+        match = MIGRATION_NAME.match(path.name)
+        assert match is not None
+        version = int(match.group(1))
+        previous = versions.get(version)
+        if previous is not None:
+            duplicates.append(f"version {version}: {previous}, {path.name}")
+        else:
+            versions[version] = path.name
+    if duplicates:
+        raise RuntimeError(
+            "duplicate numeric migration versions; production migration is blocked "
+            "until a reviewed, backward-compatible migration registry is supplied: "
+            + "; ".join(duplicates)
+        )
+
     engine = create_engine(database_url, pool_pre_ping=True)
     applied_now: list[str] = []
     try:
