@@ -136,6 +136,63 @@ jobs:
           finally:
               engine.dispose()
           PY
+      - name: Bind migration 014-016 source, selection, and schema_version evidence
+        run: |
+          python - <<'PY'
+          import hashlib
+          import os
+          from pathlib import Path
+          import psycopg
+          from postgres.migrations import _canonical_migration_files, checksum
+
+          root = Path.cwd()
+          expected = {
+              14: "014_canonical_escrow_state_constraint.sql",
+              15: "015_repair_escrow_state_constraint_drift.sql",
+              16: "016_reconcile_escrow_state_constraint.sql",
+          }
+          selected = {
+              int(path.name.split("_", 1)[0]): path
+              for path in _canonical_migration_files(root / "postgres/migrations")
+          }
+          evidence = []
+          for version, name in expected.items():
+              path = selected.get(version)
+              assert path is not None, f"version {version} was not selected"
+              assert path.name == name, f"version {version} selected {path.name}, expected {name}"
+              source = path.read_text(encoding="utf-8")
+              evidence.append({
+                  "version": version,
+                  "path": str(path.relative_to(root)),
+                  "file_sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+                  "runner_checksum": checksum(source),
+              })
+
+          dsn = os.environ["GERCHAIN_TEST_DATABASE_URL"].replace(
+              "postgresql+psycopg://", "postgresql://"
+          )
+          with psycopg.connect(dsn) as conn:
+              rows = conn.execute(
+                  "SELECT version, checksum, applied_at FROM schema_version "
+                  "WHERE version BETWEEN 14 AND 16 ORDER BY version"
+              ).fetchall()
+              assert [row[0] for row in rows] == [14, 15, 16], (
+                  f"schema_version must contain exactly 14,15,16 in range; got {rows}"
+              )
+              for item, row in zip(evidence, rows):
+                  assert row[1] == item["runner_checksum"], (
+                      f"schema_version checksum mismatch for {item['version']}: "
+                      f"database={row[1]} runner={item['runner_checksum']}"
+                  )
+                  assert row[2] is not None, f"version {item['version']} has no applied_at"
+                  item["schema_version_checksum"] = row[1]
+                  item["applied_at"] = row[2].isoformat()
+
+          print("PASS: migration 014-016 exact source, selection, runner checksum, and schema_version are bound")
+          for item in evidence:
+              print(item)
+          PY
+
       - name: Deep value-truth reconciliation tests on PostgreSQL
         run: set -o pipefail; pytest -vv -s tests/persistence/test_deep_value_reconciliation_postgres.py 2>&1 | tee artifacts/canonical-postgres-evidence/logs/deep-value-reconciliation.log
 
