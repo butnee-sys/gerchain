@@ -26,12 +26,12 @@ pytestmark = pytest.mark.skipif(
 
 def _schema_snapshot(connection, schema: str) -> tuple:
     """Stable schema/history fingerprint for migration idempotency checks."""
-    tables = connection.execute(
+    relations = connection.execute(
         """
-        SELECT table_name
-        FROM information_schema.tables
-        WHERE table_schema = %s AND table_type = 'BASE TABLE'
-        ORDER BY table_name
+        SELECT c.relname, c.relkind
+        FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+        WHERE n.nspname = %s AND c.relkind IN ('r', 'p', 'v', 'm', 'S')
+        ORDER BY c.relname, c.relkind
         """,
         (schema,),
     ).fetchall()
@@ -63,10 +63,29 @@ def _schema_snapshot(connection, schema: str) -> tuple:
         """,
         (schema,),
     ).fetchall()
+    triggers = connection.execute(
+        """
+        SELECT c.relname, t.tgname, pg_get_triggerdef(t.oid, true)
+        FROM pg_trigger t JOIN pg_class c ON c.oid = t.tgrelid
+        JOIN pg_namespace n ON n.oid = c.relnamespace
+        WHERE n.nspname = %s AND NOT t.tgisinternal
+        ORDER BY c.relname, t.tgname
+        """,
+        (schema,),
+    ).fetchall()
+    functions = connection.execute(
+        """
+        SELECT p.proname, pg_get_functiondef(p.oid)
+        FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+        WHERE n.nspname = %s
+        ORDER BY p.proname, pg_get_functiondef(p.oid)
+        """,
+        (schema,),
+    ).fetchall()
     history = connection.execute(
         f'SELECT version, checksum FROM "{schema}".schema_version ORDER BY version'
     ).fetchall()
-    return tuple(tables), tuple(columns), tuple(constraints), tuple(indexes), tuple(history)
+    return (tuple(relations), tuple(columns), tuple(constraints), tuple(indexes), tuple(triggers), tuple(functions), tuple(history))
 
 
 def test_postgresql_clean_migration_rerun_and_checksum_drift_are_safe(tmp_path: Path):
