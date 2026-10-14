@@ -89,7 +89,6 @@ jobs:
             tests/services/test_gerchain_runtime_refund_canonical.py \
             tests/services/test_gerchain_runtime_cancel_canonical.py \
             tests/services/test_gerchain_runtime_settlement_canonical.py \
-            tests/persistence/test_escrow_aggregate.py
       - name: Run full repository test suite on the same commit
         env:
           GERCHAIN_TEST_DATABASE_URL: postgresql+psycopg://gerchain:gerchain@127.0.0.1:5432/gerchain_test
