@@ -52,7 +52,17 @@ jobs:
           test -n "$INCIDENT_ID"
           printf '%s\n' "$INCIDENT_ID" > /tmp/shuud_sandbox_incident_id
 
-          CAPTURED_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          # Use the incident source timestamp, not a later runner wall-clock value.
+          # This keeps evidence time aligned with the event the evidence describes.
+          CAPTURED_AT=$(python - <<'PY'
+          import json
+          incident = json.load(open("/tmp/incident.json", encoding="utf-8"))
+          value = incident.get("occurred_at")
+          if not value:
+              raise SystemExit("incident response missing occurred_at; refusing to invent evidence time")
+          print(value)
+          PY
+          )
           curl -fsS -X POST "$API/evidence" -H 'content-type: application/json' \
             -d "{\"incident_id\":\"$INCIDENT_ID\",\"evidence_refs\":[\"SANDBOX-MEDIA-001\"],\"gps_coordinates\":\"47.9184,106.9177\",\"captured_at\":\"$CAPTURED_AT\",\"vehicle_identity_refs\":[\"TEST-A\",\"TEST-B\"],\"consent_refs\":[\"CONSENT-A\",\"CONSENT-B\"],\"media_complete\":true}" | tee "$EVIDENCE_JSON"
 
