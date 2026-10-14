@@ -187,12 +187,12 @@ def assert_canonical_production_schema(connection) -> None:
     # wrong column or weaken the predicate while migration history stays intact.
     expected_check_fragments = {
         "escrows_state_canonical_check": ("state", "created", "funded", "locked", "released", "refunded", "cancelled"),
-        "escrows_amount_positive_check": ("amount", ">0"),
+        "escrows_amount_positive_check": ("amount", ">", "0"),
         "gerchain_ledger_balance_nonnegative": ("balance", ">=0"),
         "gerchain_ledger_version_check": ("version", ">=0"),
         "gerchain_movement_amount_check": ("amount", ">", "0"),
         "gerchain_movement_operation_check": ("operation", "fund", "release", "refund", "cancel", "settlement"),
-        "gerchain_movement_integrity_hash_check": ("integrity_hash", "64", "is not null"),
+        "gerchain_movement_integrity_hash_check": ("integrity_hash", "length", "64"),
         "gerchain_movement_escrow_binding_check": ("escrow_id", "is not null"),
         "gerchain_movement_distinct_accounts": ("source", "destination", "<>"),
         "gerchain_witness_amount_check": ("amount", ">=", "0"),
@@ -219,6 +219,17 @@ def assert_canonical_production_schema(connection) -> None:
         raise RuntimeError(
             "canonical production schema CHECK constraint definition drift: "
             f"{drifted_definitions}"
+        )
+
+    # PostgreSQL enforces NOT NULL separately from CHECK constraints; verify both.
+    movement_columns = {
+        column["name"]: column
+        for column in inspector.get_columns("gerchain_ledger_movements")
+    }
+    integrity_column = movement_columns.get("integrity_hash")
+    if integrity_column is None or integrity_column.get("nullable", True):
+        raise RuntimeError(
+            "canonical production schema requires gerchain_ledger_movements.integrity_hash NOT NULL"
         )
 
     # A named but NOT VALID constraint does not prove legacy rows satisfy the
