@@ -122,7 +122,7 @@ def test_identical_legacy_duplicate_publication_is_collapsed(isolated_database):
         rows = conn.execute("SELECT version, checksum FROM schema_version ORDER BY version").fetchall()
         assert [row[0] for row in rows] == list(range(1, 17))
         assert len({row[0] for row in rows}) == 16
-        assert len({row[0]: row[1] for row in rows}) == 15
+        assert len({row[0]: row[1] for row in rows}) == 16
 
 
 def test_conflicting_duplicate_checksums_fail_closed_without_repair(isolated_database):
@@ -162,7 +162,7 @@ def test_applied_checksum_mismatch_rolls_back_and_preserves_history(isolated_dat
 def test_real_fourteen_migration_registry_is_idempotent_and_checksum_failure_is_atomic(
     isolated_database, tmp_path
 ):
-    """Run versions 1..16 twice on one real PostgreSQL DB, then prove v13 tampering rolls back."""
+    """Run versions 1..16 twice on PostgreSQL, then prove v13 tampering rolls back."""
     import shutil
 
     migration_copy = tmp_path / "canonical_migrations"
@@ -175,8 +175,8 @@ def test_real_fourteen_migration_registry_is_idempotent_and_checksum_failure_is_
         first_rows = conn.execute(
             "SELECT version, checksum FROM schema_version ORDER BY version"
         ).fetchall()
-        assert [version for version, _ in first_rows] == list(range(1, 16))
-        assert len({version for version, _ in first_rows}) == 15
+        assert [version for version, _ in first_rows] == list(range(1, 17))
+        assert len({version for version, _ in first_rows}) == 16
         first_schema = _public_schema_fingerprint(conn)
         conn.commit()
 
