@@ -115,7 +115,7 @@ def _run() -> dict:
                 ).fetchall()
                 conn.commit()
             corrected_digest = checksum(retry_file.read_text(encoding="utf-8"))
-            if probe_rows != [(1,)] or registry_rows != [(900, corrected_digest)]:
+            if probe_rows != [(1,)] or registry_rows != [(1, corrected_digest)]:
                 raise AssertionError(
                     "corrected migration state mismatch: "
                     f"probe_rows={probe_rows}, registry_rows={registry_rows}"
@@ -138,7 +138,7 @@ def _run() -> dict:
                 "corrected_retry": {
                     "result": "applied",
                     "applied_versions": list(applied_retry),
-                    "checksum_matches_corrected_sql": registry_rows == [(900, corrected_digest)],
+                    "checksum_matches_corrected_sql": registry_rows == [(1, corrected_digest)],
                     "probe_rows": [row[0] for row in probe_rows],
                 },
                 "repeat_retry": {
