@@ -160,7 +160,7 @@ def _backfill_legacy_escrow_metadata_before_v11(connection: Connection) -> None:
     The published SQL migration files and their checksums remain unchanged.
     """
     table_exists = connection.execute(
-        "SELECT to_regclass('public.escrows') IS NOT NULL"
+        "SELECT to_regclass('escrows') IS NOT NULL"
     ).fetchone()[0]
     if not table_exists:
         return
@@ -169,7 +169,7 @@ def _backfill_legacy_escrow_metadata_before_v11(connection: Connection) -> None:
         """
         SELECT column_name, column_default
         FROM information_schema.columns
-        WHERE table_schema = 'public' AND table_name = 'escrows'
+        WHERE table_schema = current_schema() AND table_name = 'escrows'
         """
     ).fetchall()
     column_defaults = {name: default for name, default in columns}
