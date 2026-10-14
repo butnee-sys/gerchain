@@ -267,7 +267,7 @@ def assert_canonical_production_schema(connection) -> None:
     )
     if not has_unique_version:
         raise RuntimeError("canonical production schema requires unique schema_version.version")
-    versions = connection.execute(text("SELECT version FROM schema_version ORDER BY version")).scalars().all()
+    versions = connection.execute(sql_text("SELECT version FROM schema_version ORDER BY version")).scalars().all()
     if versions != list(range(1, 17)):
         raise RuntimeError(
             f"canonical production schema migration history incomplete; required=16, actual={versions}"
