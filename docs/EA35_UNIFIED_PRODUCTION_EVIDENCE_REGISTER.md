@@ -1,71 +1,80 @@
 # EA-35 — Unified Production Evidence Register
 
 Status: IN PROGRESS / NOT LOCKED
-Evidence target commit: 31db2abcf1a91a5b9e9436c8495bfd67e0aa0ac2
-Evidence captured: 2026-10-14
+Current evidence target commit: 8fe3cb3949f0d3bc172a89119318a7081cf2f843
+Evidence inspected: 2026-10-15
 Repository: https://github.com/butnee-sys/gerchain
+Branch: feat/ea35-production-lock-candidate
 
-## 1. Exact-SHA CI and security evidence
+## 1. Exact-SHA run identity and completion
 
-All workflow runs below report head SHA `31db2abcf1a91a5b9e9436c8495bfd67e0aa0ac2` in GitHub's artifact metadata where artifacts are available.
+Each run below was fetched from the GitHub Actions API. The returned run metadata reports status `completed`, conclusion `success`, and exact `head_sha` `8fe3cb3949f0d3bc172a89119318a7081cf2f843`.
 
-| Gate | Run ID | Result | Evidence |
-|---|---:|---|---|
-| EA-35 Production PostgreSQL Evidence | 38551475961 | SUCCESS | Artifact `ea35-postgres-deep-reconciliation`, ID 11886627484 |
-| EA-36 Independent PostgreSQL Transaction Graph | 38551475997 | SUCCESS | Artifact `ea36-postgresql-reperformance`, ID 11886169950 |
-| PostgreSQL Production Runtime | 38551476074 | SUCCESS | Artifact `postgres-production-runtime-junit`, ID 11886204803 |
-| core-gates | 38551475976 | SUCCESS | Fundamental architecture, PostgreSQL concurrency, production runtime boot steps completed |
-| CodeQL Advanced | 38551475990 | SUCCESS | Analyze (python) job completed successfully |
-| Snyk | n/a | SUCCESS status | Commit status context `security/snyk (butnee-sys)`; target URL below |
-| CORE Operating Reconciliation | 38551475810 | SUCCESS | Workflow run completed successfully |
+| Gate | Run ID | Job | Job result | Run URL |
+|---|---:|---|---|---|
+| PostgreSQL Production Runtime | 38554672120 | production-runtime (115820737718) | SUCCESS | https://github.com/butnee-sys/gerchain/actions/runs/38554672120 |
+| EA-35 Production PostgreSQL Evidence | 38554672125 | production-postgresql-evidence (115820738405) | SUCCESS | https://github.com/butnee-sys/gerchain/actions/runs/38554672125 |
+| EA-36 Independent PostgreSQL Transaction Graph | 38554672123 | ea36-postgresql (115820737788) | SUCCESS | https://github.com/butnee-sys/gerchain/actions/runs/38554672123 |
+| core-gates | 38554672102 | core-gates (115820738025) | SUCCESS | https://github.com/butnee-sys/gerchain/actions/runs/38554672102 |
+| CORE Operating Reconciliation | 38554672099 | core-reconciliation (115820737675) | SUCCESS | https://github.com/butnee-sys/gerchain/actions/runs/38554672099 |
+| CodeQL Advanced | 38554672281 | run completed successfully | SUCCESS | https://github.com/butnee-sys/gerchain/actions/runs/38554672281 |
+| SHUUD Command Layer | 38554672284 | run completed successfully | SUCCESS | https://github.com/butnee-sys/gerchain/actions/runs/38554672284 |
+| SHUUD Sandbox Smoke | 38554672107 | run completed successfully | SUCCESS | https://github.com/butnee-sys/gerchain/actions/runs/38554672107 |
+| Snyk commit status | n/a | security/snyk (butnee-sys) | SUCCESS | https://app.snyk.io/org/butnee-sys/pr-checks/c448c994-69b3-4d07-85ed-c21d4343f044 |
 
-Run URL pattern: https://github.com/butnee-sys/gerchain/actions/runs/<RUN_ID>
+## 2. Job-step verification
 
-Snyk status target: https://app.snyk.io/org/butnee-sys/pr-checks/19e58d28-d763-4de6-8713-de2a2bde93ae
+The job-step API was inspected for production runtime, EA-35, EA-36, and core-gates. All reported steps were completed successfully, including:
+- Verify canonical production runtime boot
+- Upload PostgreSQL production runtime evidence
+- Run deep value truth reconciliation on PostgreSQL
+- Upload PostgreSQL evidence
+- Run independent EA-36 PostgreSQL transaction graph
+- Upload EA-36 evidence
+- Run core structure and boundary tests
 
-## 2. Artifact integrity metadata
+The production runtime job log includes PostgreSQL 16.15 startup and an intentionally invalid SQL statement used to exercise migration-failure rollback. This log entry is not by itself a test failure; the JUnit evidence below reports the migration rollback test passed.
 
-These are GitHub Actions artifact-service SHA-256 digests, not independently recomputed hashes of the unzipped files.
+## 3. Downloaded artifact and content hash verification
 
-| Artifact | Artifact ID | Size (bytes) | Service SHA-256 digest | Expires |
-|---|---:|---:|---|---|
-| ea35-postgres-deep-reconciliation | 11886627484 | 705 | 51ae1a1cfc1d9a31ab0fb4ec23d6bb18b5e7768a3c8d2f1313603f7f7b9a8bee | 2027-01-12 |
-| ea36-postgresql-reperformance | 11886169950 | 418 | 8bddc621a48268e6e7ee2c0a280aec7b8defe141439cf629c7c116767a1c268b | 2027-01-12 |
-| postgres-production-runtime-junit | 11886204803 | 448 | ecdb0f3b754933ae9a60ec080666a4850e16f06509d14634cca1266c43004813 | 2027-01-12 |
+The following artifacts were downloaded from the completed exact-SHA runs, ZIP contents inspected, and SHA-256 hashes independently computed from the downloaded ZIP bytes and extracted JUnit XML bytes.
 
-Artifacts were reported as present and not expired when this register was assembled. Artifact ZIP contents, internal JUnit XML hashes, reconciliation report contents, and internal-file SHA-256 values have NOT yet been independently recomputed or cross-compared. Do not treat service digests as proof of report-content equivalence.
+| Artifact | Artifact ID | ZIP size (bytes) | ZIP SHA-256 | Extracted JUnit XML | XML SHA-256 | JUnit result |
+|---|---:|---:|---|---|---|---|
+| postgres-production-runtime-junit | 11888062319 | 446 (GitHub metadata) | 085803f47f0adeb52d34e99a5101e2353726c392d7e5afc21282c7ffae91718a | postgres-production-runtime.xml | ed5eb9ad28293de1972d2e2d01c604615e3ac129bd6758810555da9f84546af5 | 2 tests, 0 failures, 0 errors |
+| ea35-postgres-deep-reconciliation | 11887694560 | 700 (GitHub metadata) | a1deb60f151c29c525a50251f8bcf7d11c356a3357e4e6a4e366e174237a9799 | ea35-postgres-deep-reconciliation.xml | fc2e1c979b464ec5e1b5aa55fb3e4fe66030c2ddcd8d089554496864c42fe47e | 18 tests, 0 failures, 0 errors |
+| ea36-postgresql-reperformance | 11889181276 | 417 (GitHub metadata) | 03c85fcf63aed0f7e2c7d6a5e9c6978fecd0f0a59ae8453343e01e0fb7f0dc4f | ea36-postgresql-reperformance.xml | 8900c0985842d98f0180c982324af43ad46ab93db658a224648b00faf2d5f1f7 | 1 test, 0 failures, 0 errors |
 
-## 3. Migration concurrency gate
+The JUnit reports' embedded timestamps are 2026-10-14 11:10:41Z (runtime), 2026-10-14 11:11:29Z (EA-35), and 2026-10-14 11:11:15Z (EA-36). All three artifacts were listed as present and not expired at inspection time.
 
-The exact-SHA `core-gates` workflow completed successfully. Its job step `PostgreSQL concurrency gate` is recorded as completed with conclusion SUCCESS under run 38551475976. The independent production PostgreSQL runtime and reconciliation workflows also completed successfully on this SHA.
+## 4. Historical failed run — explicitly not the current head
 
-This records CI outcomes; it does not by itself prove a production deployment migration was applied to a live customer database. Migration provenance, schema version, and deployment-environment identity must be attached separately before production lock.
+Older commit `e860f502f3e1a2d56fd873ad2faab7b1ab630740` had failed runs:
+- PostgreSQL Concurrency: https://github.com/butnee-sys/gerchain/actions/runs/36542458201
+- core-gates: https://github.com/butnee-sys/gerchain/actions/runs/36542458205
 
-## 4. Independent transaction-graph re-performance
+The core-gates log identifies a Python SyntaxError in `services/gerchain_runtime.py` around the FUND method, caused by literal `\\n` text in source. These runs report `head_sha=e860f502f3e1a2d56fd873ad2faab7b1ab630740`; they are historical failures, not the current branch head. Current branch head `8fe3cb3949f0d3bc172a89119318a7081cf2f843` has its own completed successful runs recorded in section 1. The old failed runs remain in the evidence trail and must not be erased or relabeled as successful.
 
-Workflow run 38551475997 completed successfully; job `ea36-postgresql` ran `Run independent EA-36 PostgreSQL transaction graph` and uploaded artifact 11886169950. Artifact metadata binds the run to the target SHA. The artifact contents still need to be downloaded, inspected, and hashed independently.
+## 5. What this evidence proves — and does not prove
 
-## 5. Gate inventory
+Supported by exact-SHA evidence:
+- CI runs completed successfully on the current branch head.
+- The canonical production runtime boot tests passed against a PostgreSQL 16.15 service container.
+- Two production-runtime JUnit tests passed, including failed-migration rollback.
+- EAI/EA-35 deep value-truth reconciliation ran on PostgreSQL: 18 tests passed.
+- EA-36 independent transaction-graph re-performance ran on PostgreSQL: 1 test passed.
+- Downloaded JUnit artifact contents were inspected and their ZIP/XML SHA-256 values recomputed.
 
-| Gate | Status | Evidence / next action |
-|---|---|---|
-| PostgreSQL production runtime boot | CI SUCCESS | Inspect JUnit contents and verify schema migration identity |
-| Deep value-truth reconciliation | CI SUCCESS | Inspect report contents; independently recompute report-file SHA-256 |
-| Independent transaction-graph re-performance | CI SUCCESS | Inspect artifact; confirm scope and assertions |
-| core-gates / PostgreSQL concurrency | CI SUCCESS | Preserve exact-SHA run/job record |
-| CodeQL | CI SUCCESS | Exact-SHA workflow run 38551475990 |
-| Snyk | SUCCESS status | Commit status context and target URL recorded |
-| Artifact service digests | RECORDED | Re-download ZIPs and verify ZIP/content hashes independently |
-| IAM/MFA | OPEN / NOT VERIFIED HERE | Attach policy/configuration evidence and privileged identity inventory |
-| Privileged-access review | OPEN / NOT VERIFIED HERE | Attach dated reviewer, scope, findings, remediation |
-| Main-branch governance | OPEN / NOT VERIFIED HERE | Verify branch protection/rulesets, required checks, review rules |
-| Production deployment | OPEN / NOT VERIFIED HERE | Attach environment deployment ID, image digest, schema version, health check |
-| Recovery / restart / duplicate-movement prevention | OPEN / NOT VERIFIED HERE | Attach PostgreSQL-backed failure/restart/replay evidence |
-| Migration applied to target production environment | OPEN / NOT VERIFIED HERE | Record target environment identity, migration version, and post-migration checks |
-| Independent human/third-party audit | OPEN / NOT VERIFIED HERE | Attach signed review or explicitly approved exception |
+Not established by these CI artifacts:
+- Deployment and migration execution against the actual target production environment.
+- Live environment identity, release image digest, applied schema version, and post-deployment health.
+- IAM/MFA and privileged-access review.
+- Main-branch protection/ruleset configuration and approval governance.
+- Operational restart/recovery drill in the target environment.
+- Signed independent human/third-party audit.
 
-## 6. Lock decision
+## 6. Gate decision
 
-**NO PRODUCTION LOCK.** CI run success is positive evidence, but governance, deployment, recovery, migration provenance, and artifact-content integrity remain open. The lock decision must not be inferred from green workflow badges alone.
+**NO PRODUCTION LOCK YET.** Exact-SHA CI and PostgreSQL test evidence is now materially stronger and artifact contents have been inspected, but production deployment provenance, governance controls, and target-environment recovery evidence remain open. Do not infer production-ready from successful CI alone.
 
-Production lock may be considered only after every required gate is either evidenced closed or has a formally approved, scoped exception, and the final register points to immutable exact-SHA artifacts.
+Lock can be considered only after every required gate is evidenced closed or a scoped exception is formally approved, and the final evidence register remains pinned to an immutable commit SHA.
