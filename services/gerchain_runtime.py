@@ -350,7 +350,6 @@ Production syntax gate: this module must remain importable before runtime constr
                 session.commit()
                 return result
 
-        self._require_test_memory_fallback("FUND")
         return self.escrow_service.fund(
             transaction_id=transaction_id,
             source=source,
