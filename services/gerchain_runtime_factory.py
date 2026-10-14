@@ -198,7 +198,7 @@ def assert_canonical_production_schema(connection) -> None:
         "gerchain_witness_amount_check": ("amount", ">=", "0"),
         "gerchain_witness_event_type_check": ("event_type", "gerchain_funded", "gerchain_locked", "gerchain_released", "gerchain_refunded", "gerchain_cancelled", "gerchain_settled"),
         "gerchain_outbox_state_check": ("state", "pending", "processing", "completed", "failed"),
-        "gerchain_idempotency_state_check": ("state", "processing", "completed", "failed"),
+        "gerchain_idempotency_state_check": ("state", "processing", "completed"),
         "gerchain_idempotency_fingerprint_check": ("fingerprint", "64"),
     }
 
