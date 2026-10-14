@@ -95,3 +95,18 @@ jobs:
           GERCHAIN_TEST_DATABASE_URL: postgresql+psycopg://gerchain:gerchain@127.0.0.1:5432/gerchain_test
           GERCHAIN_TEST_POSTGRES_URL: postgresql://gerchain:gerchain@127.0.0.1:5432/gerchain_test
         run: pytest -q --import-mode=importlib
+      - name: Audit canonical migration inventory and applied history
+        env:
+          GERCHAIN_MIGRATION_AUDIT_DATABASE_URL: postgresql://gerchain:gerchain@127.0.0.1:5432/gerchain_test
+          MIGRATION_INVENTORY_REPORT: artifacts/canonical-postgres-evidence/migration-inventory-report.json
+        run: |
+          mkdir -p artifacts/canonical-postgres-evidence
+          python scripts/audit_migration_inventory.py
+      - name: Upload migration inventory evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: migration-inventory-${{ github.sha }}
+          path: artifacts/canonical-postgres-evidence/migration-inventory-report.json
+          if-no-files-found: warn
+          retention-days: 90
