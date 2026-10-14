@@ -102,17 +102,42 @@ def main() -> int:
                 rows_db = connection.execute(
                     "SELECT version, checksum, applied_at FROM schema_version ORDER BY version"
                 ).fetchall()
+            applied_versions = [row[0] for row in rows_db]
+            duplicates = sorted(
+                version for version in set(applied_versions)
+                if applied_versions.count(version) > 1
+            )
+            canonical_digests = {
+                int(path.name.split("_", 1)[0]): checksum(path.read_text(encoding="utf-8"))
+                for path in canonical
+            }
+            checksum_mismatches = []
+            for version, digest, _applied_at in rows_db:
+                accepted = {canonical_digests.get(version)}
+                accepted.update(FROZEN_CHECKSUMS.get(version, set()))
+                accepted.update(LEGACY_CHECKSUMS.get(version, set()))
+                if digest not in accepted:
+                    checksum_mismatches.append({
+                        "version": version,
+                        "applied_checksum": digest,
+                        "accepted_checksums": sorted(item for item in accepted if item),
+                    })
             report["applied_history"] = {
                 "status": "CAPTURED",
                 "rows": [
                     {"version": version, "checksum": digest, "applied_at": applied_at.isoformat()}
                     for version, digest, applied_at in rows_db
                 ],
-                "versions": [row[0] for row in rows_db],
-                "duplicate_versions": [],
+                "versions": applied_versions,
+                "duplicate_versions": duplicates,
+                "checksum_mismatches": checksum_mismatches,
             }
-            if report["applied_history"]["versions"] != actual_versions:
-                report["applied_history"]["status"] = "VERSION_MISMATCH"
+            if (
+                applied_versions != actual_versions
+                or duplicates
+                or checksum_mismatches
+            ):
+                report["applied_history"]["status"] = "HISTORY_MISMATCH"
                 report["status"] = "FAIL"
         except Exception as exc:
             report["applied_history"] = {
