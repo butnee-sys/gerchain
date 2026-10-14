@@ -13,7 +13,7 @@ from pathlib import Path
 
 from sqlalchemy import create_engine, text
 
-MIGRATION_DIR = Path(__file__).resolve().parent / "postgres" / "schema"
+MIGRATION_DIR = Path(__file__).resolve().parent.parent / "postgres" / "schema"
 MIGRATION_NAME = re.compile(r"^(\d{3,})_[a-zA-Z0-9_]+\.sql$")
 
 
