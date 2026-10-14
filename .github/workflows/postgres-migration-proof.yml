@@ -8,6 +8,10 @@ on:
     paths:
       - "tests/integration/test_postgres_migration_concurrency.py"
       - "scripts/postgres_migration_runner.py"
+      - "postgres/**"
+      - "persistence/**"
+      - "production_entrypoint.py"
+      - "services/gerchain_runtime_factory.py"
       - ".github/workflows/postgres-migration-proof.yml"
 
 jobs:
