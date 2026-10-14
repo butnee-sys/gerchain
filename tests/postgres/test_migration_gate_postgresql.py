@@ -77,7 +77,7 @@ def _schema_snapshot(connection, schema: str) -> tuple:
         """
         SELECT p.proname, pg_get_functiondef(p.oid)
         FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
-        WHERE n.nspname = %s
+        WHERE n.nspname = %s AND p.prokind IN ('f', 'p')
         ORDER BY p.proname, pg_get_functiondef(p.oid)
         """,
         (schema,),
