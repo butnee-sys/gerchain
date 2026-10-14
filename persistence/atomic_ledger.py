@@ -116,6 +116,8 @@ class PostgreSQLAtomicLedger:
                 separators=(",", ":"),
             )
             integrity_hash = hashlib.sha256(integrity_material.encode("utf-8")).hexdigest()
+        if not isinstance(integrity_hash, str) or len(integrity_hash) != 64 or any(ch not in "0123456789abcdef" for ch in integrity_hash.lower()):
+            raise ValueError("integrity_hash must be a 64-character SHA-256 hex digest")
         if amount <= 0:
             raise ValueError("Transfer amount must be positive")
         if source == destination:
