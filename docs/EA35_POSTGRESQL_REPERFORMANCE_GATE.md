@@ -2,52 +2,47 @@
 
 Status: **IN PROGRESS / NOT LOCKED**
 
-This gate is evidence-driven. A source review or a successful unit-test run is not proof that a clean PostgreSQL migration and production boot have succeeded.
+This document records observed CI evidence and the gates required before production lock. It is not a production certification.
 
-## Required execution environment
+## Evidence observed
 
-- Disposable PostgreSQL 16 database.
-- `GERCHAIN_POSTGRES_DSN` pointing to the disposable database.
-- The exact Git commit under review checked out in the runner.
-- Preserve workflow run ID, job ID, commit SHA, migration output, and final catalog query output together.
+Repository: `butnee-sys/gerchain`
 
-## Required order
+- CORE Operating Reconciliation: run [36542458262](https://github.com/butnee-sys/gerchain/actions/runs/36542458262) completed successfully.
+- PostgreSQL Concurrency: run [36542458201](https://github.com/butnee-sys/gerchain/actions/runs/36542458201) failed.
+- core-gates: run [36542458205](https://github.com/butnee-sys/gerchain/actions/runs/36542458205) failed.
+- SHUUD Command Layer: run [36542458292](https://github.com/butnee-sys/gerchain/actions/runs/36542458292) failed.
+- Snyk status for commit `e860f502f3e1a2d56fd873ad2faab7b1ab630740`: success. This is a security check only and does not supersede failed tests.
 
-1. Create a genuinely empty disposable database.
-2. Apply the canonical migrations once.
-3. Capture `schema_version` as ordered `(version, checksum)` pairs.
-4. Verify versions are unique, contiguous from 1 through the expected latest version, and each checksum is non-empty.
-5. Re-run the complete migration set.
-6. Assert the ordered version/checksum pairs are byte-for-byte unchanged.
-7. Query PostgreSQL catalogs for required tables, columns, constraints, and unique indexes.
-8. Boot `production_entrypoint.py` using the same PostgreSQL database and verify the runtime selected Canonical Ledger authority.
-9. Execute the required escrow lifecycle and deep value-truth reconciliation in an isolated integration test.
-10. Restart/recovery test and verify no duplicate value movement.
-11. Attach all results to the exact commit SHA. A workflow run on an earlier SHA is historical evidence only.
+## Failure evidence
 
-## Fail-closed rules
+### Runtime syntax error
 
-- Duplicate `schema_version.version` publication is a failure, not a warning.
-- Conflicting checksums for the same version must stop migration and must not be silently normalized.
-- Re-running migrations must not alter existing version/checksum history.
-- Missing required schema objects, constraints, or runtime authority is a failure.
-- Unknown or unexecuted checks remain **UNVERIFIED**; they must never be labeled PASS.
-- Do not lock production readiness until the exact-SHA PostgreSQL gate and independent re-performance pass.
+The `core-gates` job log shows Python collection failed in `services/gerchain_runtime.py` because a `fund()` implementation was stored with literal escaped newline sequences. Nine test modules failed collection as a consequence. This proves that the affected workflow revision was not test-clean; it does not by itself prove the current branch still contains that defect.
 
-## Known evidence from historical run
+### PostgreSQL migration concurrency
 
-A historical PostgreSQL Concurrency workflow run reported a duplicate `schema_version` publication for version 2 (`UniqueViolation`). That run is evidence of a past failure, not proof of the current source state. The conflict-safe publisher and current dedicated-database concurrency test require a fresh run on the exact current commit before this finding can be closed.
+The PostgreSQL concurrency job log records a duplicate-key failure on `schema_version_pkey`, version `2`, during concurrent migration execution. The log also records repeated “there is already a transaction in progress” warnings. The invalid escrow state rejection was enforced by the database CHECK constraint and is not, by itself, a failure of the protection mechanism.
 
-## Final evidence record
+The current migration runner source describes a session-level advisory lock and transactional schema-version publication. This source inspection is not a substitute for a fresh passing PostgreSQL concurrency run on the exact current commit.
 
-| Gate | Required evidence | Status |
-|---|---|---|
-| Fresh database migration | Exact-SHA PostgreSQL run | UNVERIFIED |
-| Migration repeatability | Identical ordered version/checksum pairs | UNVERIFIED |
-| Catalog/schema validation | Catalog query output and assertions | UNVERIFIED |
-| Production entrypoint boot | Startup log + Canonical Ledger authority assertion | UNVERIFIED |
-| Lifecycle/deep reconciliation | Integration-test output and matched report | UNVERIFIED |
-| Restart/recovery | No duplicate movement; evidence remains consistent | UNVERIFIED |
-| Independent re-performance | Reviewer/run record on same SHA | OPEN |
+## Required closure evidence
 
-No PASS status is implied by this document.
+1. Record the exact current branch head SHA.
+2. Run Python syntax/collection checks and the targeted runtime/factory tests at that SHA.
+3. Run PostgreSQL concurrency and migration tests against a clean PostgreSQL database; repeat migration to verify idempotency and concurrency serialization.
+4. Run the production runtime factory/entrypoint boot against PostgreSQL and verify the canonical ledger authority flag.
+5. Exercise commit, rollback, idempotent replay, conflicting replay, and recovery after interruption.
+6. Run deep value-truth reconciliation and retain output covering Ledger movements, Escrow aggregate, Witness, Outbox, Idempotency, and integrity hashes.
+7. Bind each workflow run and artifact to the exact tested commit SHA.
+8. Require independent re-performance before production lock.
+
+## Lock rule
+
+Do not mark a gate GREEN based solely on source inspection, successful security scanning, or an unrelated passing workflow. Missing, stale, or non-matching-SHA evidence remains **UNVERIFIED**. Failed exact-SHA tests remain **BLOCKED** until corrected and rerun.
+
+## Current disposition
+
+**EA-35: IN PROGRESS / NOT LOCKED.**
+
+No production-ready declaration is authorized by the evidence recorded here.
