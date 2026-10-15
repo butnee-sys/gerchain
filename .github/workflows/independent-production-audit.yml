@@ -1,0 +1,87 @@
+name: Independent Production Audit
+
+on:
+  push:
+    branches:
+      - feat/ea21-transaction-aware-ledger
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  clean-postgres-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: audit
+          POSTGRES_PASSWORD: audit
+          POSTGRES_DB: gerchain_audit
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U audit -d gerchain_audit"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      GERCHAIN_DATABASE_URL: postgresql+psycopg://audit:audit@localhost:5432/gerchain_audit
+      PYTHONUNBUFFERED: "1"
+    steps:
+      - name: Checkout audited commit
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements-dee-security.txt pytest
+      - name: Record audit identity and PostgreSQL preflight
+        run: |
+          mkdir -p audit-artifacts
+          { echo "commit_sha=$(git rev-parse HEAD)"; echo "run_id=$GITHUB_RUN_ID"; echo "attempt=$GITHUB_RUN_ATTEMPT"; echo "postgres_image=postgres:16"; date -u; } | tee audit-artifacts/audit-metadata.txt
+          python - <<'PY' | tee audit-artifacts/postgres-preflight.txt
+          import os
+          from sqlalchemy import create_engine, text
+          e=create_engine(os.environ['GERCHAIN_DATABASE_URL'])
+          with e.connect() as c:
+              print('server_version:', c.execute(text('show server_version')).scalar())
+              print('database:', c.execute(text('select current_database()')).scalar())
+          e.dispose()
+          PY
+      - name: Run complete test suite
+        id: full
+        continue-on-error: true
+        run: python -m pytest -q 2>&1 | tee audit-artifacts/pytest-full.log
+      - name: Run PostgreSQL-marked tests
+        id: pg
+        continue-on-error: true
+        run: python -m pytest -q -m postgres 2>&1 | tee audit-artifacts/pytest-postgres.log
+      - name: Run integration-marked tests
+        id: integration
+        continue-on-error: true
+        run: python -m pytest -q -m integration 2>&1 | tee audit-artifacts/pytest-integration.log
+      - name: Write audit verdict
+        if: always()
+        run: |
+          { echo '# Automated Production Audit'; echo; echo 'This is automated evidence, not a production-ready certification.'; echo; echo "Commit: $(git rev-parse HEAD)"; echo "Full suite: ${{ steps.full.outcome }}"; echo "PostgreSQL suite: ${{ steps.pg.outcome }}"; echo "Integration suite: ${{ steps.integration.outcome }}"; } | tee audit-artifacts/audit-verdict.md
+      - name: Upload audit evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-audit-${{ github.sha }}-${{ github.run_id }}
+          path: audit-artifacts/
+          if-no-files-found: error
+          retention-days: 90
+      - name: Enforce passing suites
+        if: always()
+        run: |
+          test "${{ steps.full.outcome }}" = success
+          test "${{ steps.pg.outcome }}" = success
+          test "${{ steps.integration.outcome }}" = success
