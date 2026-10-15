@@ -34,6 +34,9 @@ _CANONICAL_FILES = (
 )
 
 
+CANONICAL_MIGRATION_NAMES = {version: name for version, name in enumerate(_CANONICAL_FILES, start=1)}
+
+
 def checksum(source: str) -> str:
     return hashlib.sha256(source.encode("utf-8")).hexdigest()
 
@@ -380,4 +383,4 @@ def apply_migrations(connection: Connection, migration_dir: Path) -> tuple[int, 
     return tuple(applied_now)
 
 
-__all__ = ["apply_migrations", "checksum", "_canonical_migration_files", "_split_sql_statements"]
+__all__ = ["apply_migrations", "checksum", "CANONICAL_MIGRATION_NAMES", "_canonical_migration_files", "_split_sql_statements"]
