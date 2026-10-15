@@ -220,12 +220,12 @@ jobs:
           if not report_path.exists():
               raise SystemExit("migration report missing; refusing evidence publication")
           report = json.loads(report_path.read_text())
-          assert report["commit_sha"] == os.environ["GITHUB_SHA"], (report["commit_sha"], os.environ["GITHUB_SHA"])
+          assert report["commit_sha"] == os.environ["EVIDENCE_COMMIT_SHA"], (report["commit_sha"], os.environ["EVIDENCE_COMMIT_SHA"])
           actual = hashlib.sha256(report_path.read_bytes()).hexdigest()
           recorded = (root / "migration-report.sha256").read_text().split()[0]
           assert actual == recorded, (actual, recorded)
           evidence = {
-              "commit_sha": os.environ["GITHUB_SHA"],
+              "commit_sha": os.environ["EVIDENCE_COMMIT_SHA"],
               "run_id": os.environ["GITHUB_RUN_ID"],
               "run_attempt": os.environ["GITHUB_RUN_ATTEMPT"],
               "report_sha256": actual,
