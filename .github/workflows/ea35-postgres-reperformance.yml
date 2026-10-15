@@ -33,8 +33,25 @@ jobs:
       GERCHAIN_WITNESS_ID: ea35-reperformance-witness
       PYTHONPATH: .
     steps:
-      - name: Checkout exact revision
+      - name: Checkout exact tested revision
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Assert checkout matches requested evidence SHA
+        env:
+          EXPECTED_COMMIT_SHA: ${{ github.sha }}
+        run: |
+          python - <<'PY'
+          import os, subprocess
+          expected = os.environ['EXPECTED_COMMIT_SHA']
+          actual = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
+          print(f'EXPECTED_COMMIT_SHA={expected}')
+          print(f'CHECKED_OUT_HEAD_SHA={actual}')
+          if actual != expected:
+              raise SystemExit('FAIL: checkout HEAD differs from evidence SHA')
+          print('CHECKOUT_SHA_MATCH=PASS')
+          PY
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -474,7 +491,7 @@ jobs:
           EVIDENCE_JOB_STATUS: ${{ job.status }}
         run: |
           python - <<'PY'
-          import json, os
+          import json, os, subprocess
           from pathlib import Path
           root = Path("artifacts/ea35")
           root.mkdir(parents=True, exist_ok=True)
@@ -491,9 +508,19 @@ jobs:
           ]
           present = sorted(path.name for path in root.iterdir() if path.is_file())
           missing = [name for name in expected if name not in present]
+          checked_out_head = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+          expected_sha = os.environ["EVIDENCE_COMMIT_SHA"]
+          manifest_sha = None
+          manifest_path = root / "migration-manifest.json"
+          if manifest_path.exists():
+              manifest_sha = json.loads(manifest_path.read_text(encoding="utf-8")).get("commit_sha")
+          sha_matches = checked_out_head == expected_sha and manifest_sha == expected_sha
           report = {
               "repository": os.environ.get("GITHUB_REPOSITORY"),
-              "commit_sha": os.environ["EVIDENCE_COMMIT_SHA"],
+              "commit_sha": expected_sha,
+              "checked_out_head_sha": checked_out_head,
+              "manifest_commit_sha": manifest_sha,
+              "commit_sha_matches_head_and_manifest": sha_matches,
               "workflow": os.environ.get("GITHUB_WORKFLOW"),
               "workflow_run_id": os.environ["EVIDENCE_RUN_ID"],
               "workflow_run_attempt": int(os.environ["EVIDENCE_RUN_ATTEMPT"]),
@@ -501,7 +528,7 @@ jobs:
               "expected_evidence_files": expected,
               "present_evidence_files": present,
               "missing_evidence_files": missing,
-              "evidence_complete": not missing,
+              "evidence_complete": not missing and sha_matches,
           }
           (root / "final-evidence-report.json").write_text(
               json.dumps(report, indent=2) + "\n", encoding="utf-8"
@@ -511,6 +538,9 @@ jobs:
               print("EVIDENCE_CLOSEOUT=BLOCKED_JOB_NOT_SUCCESS")
           elif missing:
               print("EVIDENCE_CLOSEOUT=BLOCKED_MISSING_FILES")
+          elif not sha_matches:
+              print("EVIDENCE_CLOSEOUT=BLOCKED_SHA_MISMATCH")
+              raise SystemExit("FAIL: expected SHA, checked-out HEAD, and manifest commit SHA must match")
           else:
               print("EVIDENCE_CLOSEOUT=EVIDENCE_COMPLETE_JOB_SUCCESS")
           PY
