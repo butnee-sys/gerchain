@@ -59,6 +59,9 @@ jobs:
       - name: Apply canonical migrations and capture PostgreSQL evidence
         env:
           GERCHAIN_MIGRATION_TEST_DSN: postgresql://gerchain:gerchain@localhost:5432/gerchain_migration_test
+          SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
         run: |
           mkdir -p production-evidence
           python - <<'PY'
@@ -82,7 +85,7 @@ jobs:
                   ORDER BY tc.table_name, tc.constraint_name, column_name
               """).fetchall()
               with open("production-evidence/migration-history.json", "w", encoding="utf-8") as f:
-                  json.dump({"commit_sha": os.environ["GITHUB_SHA"], "workflow_run_id": int(os.environ["GITHUB_RUN_ID"]), "history": [{"version": v, "checksum": h} for v,h in history]}, f, indent=2, sort_keys=True)
+                  json.dump({"commit_sha": os.environ["SOURCE_SHA"], "workflow_run_id": int(os.environ["RUN_ID"]), "workflow_run_attempt": int(os.environ["RUN_ATTEMPT"]), "history": [{"version": v, "checksum": h} for v,h in history]}, f, indent=2, sort_keys=True)
                   f.write("\\n")
               with open("production-evidence/postgres-constraints.json", "w", encoding="utf-8") as f:
                   json.dump({"commit_sha": os.environ["GITHUB_SHA"], "workflow_run_id": int(os.environ["GITHUB_RUN_ID"]), "constraints": [{"schema": s, "table": t, "name": n, "type": ty, "column": col} for s,t,n,ty,col in constraints]}, f, indent=2, sort_keys=True)
