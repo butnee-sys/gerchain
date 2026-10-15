@@ -76,16 +76,25 @@ jobs:
           engine.dispose()
           PY
 
-      - name: Apply ordered SQL schema files
-        shell: bash
+      - name: Apply canonical versioned PostgreSQL migrations
         run: |
           set -euo pipefail
-          while IFS= read -r file; do
-            echo "Applying ${file}"
-            PGPASSWORD=gerchain_test psql \
-              "postgresql://gerchain@localhost:5432/gerchain_test" \
-              -v ON_ERROR_STOP=1 -f "${file}"
-          done < <(find postgres/schema -type f -name '*.sql' | sort)
+          python - <<'PY'
+          import os
+          from pathlib import Path
+          import psycopg
+          from sqlalchemy.engine import make_url
+          from postgres.migrations import apply_migrations, _canonical_migration_files, checksum
+          dsn = make_url(os.environ["GERCHAIN_DATABASE_URL"]).set(drivername="postgresql").render_as_string(hide_password=False)
+          folder = Path("postgres/migrations")
+          with psycopg.connect(dsn) as connection:
+              applied = apply_migrations(connection, folder)
+          with psycopg.connect(dsn) as connection:
+              actual = connection.execute("SELECT version, checksum FROM schema_version ORDER BY version").fetchall()
+          expected = [(i, checksum(path.read_text(encoding="utf-8"))) for i, path in enumerate(_canonical_migration_files(folder), 1)]
+          assert actual == expected, {"expected": expected, "actual": actual}
+          print({"canonical_migrations": len(actual), "newly_applied": list(applied), "history_matches_manifest": True})
+          PY
 
       - name: Run deep value-truth reconciliation tests
         run: python -m pytest -q tests/persistence/test_deep_value_reconciliation.py
