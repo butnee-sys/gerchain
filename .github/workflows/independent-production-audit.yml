@@ -58,15 +58,21 @@ jobs:
       - name: Run complete test suite
         id: full
         continue-on-error: true
-        run: |\n          set -o pipefail\n          python -m pytest -q 2>&1 | tee audit-artifacts/pytest-full.log
+        run: |
+          set -o pipefail
+          python -m pytest -q 2>&1 | tee audit-artifacts/pytest-full.log
       - name: Run PostgreSQL-marked tests
         id: pg
         continue-on-error: true
-        run: |\n          set -o pipefail\n          python -m pytest -q -m postgres 2>&1 | tee audit-artifacts/pytest-postgres.log
+        run: |
+          set -o pipefail
+          python -m pytest -q -m postgres 2>&1 | tee audit-artifacts/pytest-postgres.log
       - name: Run integration-marked tests
         id: integration
         continue-on-error: true
-        run: |\n          set -o pipefail\n          python -m pytest -q -m integration 2>&1 | tee audit-artifacts/pytest-integration.log
+        run: |
+          set -o pipefail
+          python -m pytest -q -m integration 2>&1 | tee audit-artifacts/pytest-integration.log
       - name: Write audit verdict
         if: always()
         run: |
