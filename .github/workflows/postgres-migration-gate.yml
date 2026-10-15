@@ -36,6 +36,7 @@ jobs:
           --health-timeout 5s
           --health-retries 20
     env:
+      EVIDENCE_COMMIT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
       GERCHAIN_TEST_DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/gerchain_test
       GERCHAIN_TEST_POSTGRES_URL: postgresql://postgres:postgres@localhost:5432/gerchain_test
       GERCHAIN_MIGRATION_TEST_DSN: postgresql://postgres:postgres@localhost:5432/gerchain_test
@@ -49,6 +50,21 @@ jobs:
     steps:
       - name: Checkout exact tested commit
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Assert checkout matches evidence commit
+        env:
+          EVIDENCE_COMMIT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          python - <<'PY'
+          import os, subprocess
+          expected = os.environ['EVIDENCE_COMMIT_SHA']
+          actual = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
+          print(f'EVIDENCE_COMMIT_SHA={expected}')
+          print(f'CHECKED_OUT_HEAD_SHA={actual}')
+          if actual != expected:
+              raise SystemExit('FAIL: checkout HEAD differs from evidence commit')
+          PY
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -143,7 +159,7 @@ jobs:
               for path in manifest_paths if Path(path).is_file()
           }
           report = {
-              "commit_sha": os.environ["GITHUB_SHA"],
+              "commit_sha": os.environ["EVIDENCE_COMMIT_SHA"],
               "migration_count": len(rows),
               "schema_version_checksums": [{"version": v, "checksum": c} for v,c in rows],
               "schema_history_sha256": hashlib.sha256(json.dumps(rows, separators=(",", ":")).encode()).hexdigest(),
