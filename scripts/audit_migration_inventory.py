@@ -93,6 +93,13 @@ def main() -> int:
     }
 
     database_url = os.environ.get("GERCHAIN_MIGRATION_AUDIT_DATABASE_URL")
+    require_history = os.environ.get("REQUIRE_MIGRATION_HISTORY", "").strip().lower() in {"1", "true", "yes"}
+    if require_history and not database_url:
+        report["applied_history"] = {
+            "status": "REQUIRED_BUT_NOT_CONFIGURED",
+            "error": "REQUIRE_MIGRATION_HISTORY is enabled but GERCHAIN_MIGRATION_AUDIT_DATABASE_URL is missing",
+        }
+        report["status"] = "FAIL"
     if database_url:
         try:
             import psycopg
