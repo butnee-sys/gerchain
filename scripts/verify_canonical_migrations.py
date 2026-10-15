@@ -291,24 +291,75 @@ def _run() -> dict:
         # 6. Two independent runners against the same fresh schema: advisory lock
         # serializes execution; one applies all versions and the other observes NOOP.
         concurrent_schema = new_schema("concurrent")
-        def runner():
+        def runner(runner_id: str):
+            started_at = time.time()
             with _connect(base_url, concurrent_schema) as conn:
-                return list(apply_migrations(conn, MIGRATION_DIR))
+                backend_pid = conn.execute("SELECT pg_backend_pid()").fetchone()[0]
+                database_name = conn.info.dbname
+                conn.commit()  # The diagnostic SELECT must not leave a transaction open.
+                applied_versions = list(apply_migrations(conn, MIGRATION_DIR))
+                rows = conn.execute(
+                    "SELECT version, checksum FROM schema_version ORDER BY version"
+                ).fetchall()
+                conn.commit()
+            result = {
+                "runner_id": runner_id,
+                "backend_pid": backend_pid,
+                "database": database_name,
+                "started_at_epoch": started_at,
+                "finished_at_epoch": time.time(),
+                "applied_versions": applied_versions,
+                "migration_history": [{"version": int(v), "checksum": str(d)} for v, d in rows],
+            }
+            print("MIGRATION_GATE_CONCURRENT_RUNNER " + json.dumps(result, sort_keys=True), flush=True)
+            return result
+
         with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
-            results = list(pool.map(lambda _: runner(), range(2)))
-        normalized = sorted((tuple(result) for result in results), key=len, reverse=True)
+            results = list(pool.map(runner, ("A", "B")))
+        normalized = sorted((tuple(result["applied_versions"]) for result in results), key=len, reverse=True)
         if normalized != [EXPECTED, ()]:
             raise AssertionError(f"concurrent runners expected one full apply and one NOOP, got {results}")
-        labeled_results = [
-            {"result": "applied", "versions": list(normalized[0])},
-            {"result": "already-applied", "versions": list(normalized[1])},
+        if len({result["backend_pid"] for result in results}) != 2:
+            raise AssertionError(f"concurrent migration gate did not use two independent backend PIDs: {results}")
+        final_history = results[0]["migration_history"]
+        if any(result["migration_history"] != final_history for result in results[1:]):
+            raise AssertionError(f"runners observed different migration histories: {results}")
+        if [row["version"] for row in final_history] != list(EXPECTED):
+            raise AssertionError(f"final migration history has gaps or duplicates: {final_history}")
+        invalid_digests = [
+            row for row in final_history
+            if len(row["checksum"]) != 64
+            or any(ch not in "0123456789abcdef" for ch in row["checksum"])
         ]
+        if invalid_digests:
+            raise AssertionError(f"invalid SHA-256 migration checksum(s): {invalid_digests}")
+        with _connect(base_url, concurrent_schema) as conn:
+            duplicate_publications = conn.execute(
+                "SELECT COUNT(*) FROM (SELECT version FROM schema_version GROUP BY version HAVING COUNT(*) > 1) d"
+            ).fetchone()[0]
+            unique_version_index = conn.execute("""
+                SELECT EXISTS (
+                    SELECT 1 FROM pg_index i JOIN pg_attribute a
+                    ON a.attrelid=i.indrelid AND a.attnum=i.indkey[0]
+                    WHERE i.indrelid='schema_version'::regclass AND i.indisunique
+                    AND i.indpred IS NULL AND i.indnkeyatts=1 AND a.attname='version'
+                )
+            """).fetchone()[0]
+        if duplicate_publications != 0 or not unique_version_index:
+            raise AssertionError(
+                f"schema_version uniqueness invariant failed: duplicates={duplicate_publications}, "
+                f"unique_index={unique_version_index}"
+            )
         report["scenarios"]["concurrent_runners"] = {
             "status": "PASS",
-            "raw_runner_results": results,
-            "runner_results": labeled_results,
+            "runner_logs": results,
+            "final_migration_history": final_history,
+            "final_history_sha256": hashlib.sha256(
+                json.dumps(final_history, sort_keys=True, separators=(",", ":")).encode("utf-8")
+            ).hexdigest(),
+            "schema_version_duplicate_publications": duplicate_publications,
+            "schema_version_unique_index": unique_version_index,
             "serialized_outcome": "exactly one applied; exactly one already-applied",
-            "schema_version_duplicate_publications": 0,
         }
 
         report["status"] = "PASS"
