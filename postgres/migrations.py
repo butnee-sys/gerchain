@@ -35,6 +35,25 @@ from sqlalchemy import text
 
 MIGRATION_LOCK_KEY = 73546501
 
+CANONICAL_MIGRATION_NAMES = {
+    1: "001_canonical_production.sql",
+    2: "002_canonical_production.sql",
+    3: "003_canonical_compatibility.sql",
+    4: "004_canonical_value_truth.sql",
+    5: "005_canonical_production.sql",
+    6: "006_canonical_production.sql",
+    7: "007_canonical_production.sql",
+    8: "008_ea35_idempotency_compat.sql",
+    9: "009_canonical_movement_integrity_hardening.sql",
+    10: "010_canonical_evidence_constraints.sql",
+    11: "011_ea35_canonical_schema_finalization.sql",
+    12: "012_canonical_production.sql",
+    13: "013_ea35_canonical_schema_hardening.sql",
+    14: "014_canonical_escrow_state_constraint.sql",
+    15: "015_repair_escrow_state_constraint_drift.sql",
+    16: "016_reconcile_escrow_state_constraint.sql",
+}
+
 # Version 004 previously shipped with explicit BEGIN/COMMIT wrappers. Keep its
 # historical checksum accepted so existing databases can migrate to the
 # runner-compatible source without rewriting schema history.
@@ -175,22 +194,7 @@ def _canonical_migration_files(path: Path) -> list[Path]:
         # Prefer the explicitly frozen canonical filename when present.
         # This avoids relying on substring matching when historical aliases
         # share the same numeric migration version.
-        preferred_name = {
-            1: "001_canonical_production.sql",
-            2: "002_canonical_production.sql",
-            3: "003_canonical_compatibility.sql",
-            4: "004_canonical_value_truth.sql",
-            5: "005_canonical_production.sql",
-            6: "006_canonical_production.sql",
-            7: "007_canonical_production.sql",
-            8: "008_ea35_idempotency_compat.sql",
-            9: "009_canonical_movement_integrity_hardening.sql",
-            10: "010_canonical_evidence_constraints.sql",
-            11: "011_ea35_canonical_schema_finalization.sql",
-            12: "012_canonical_production.sql",
-            13: "013_ea35_canonical_schema_hardening.sql",
-        14: "014_canonical_escrow_state_constraint.sql",
-        }.get(version)
+        preferred_name = CANONICAL_MIGRATION_NAMES.get(version)
         if preferred_name:
             preferred_path = next((p for p in candidates if p.name == preferred_name), None)
             if preferred_path is not None:
@@ -219,23 +223,6 @@ def apply_migrations(conn, migration_dir: str | Path) -> None:
     # historical aliases: one deterministic file is applied on a fresh
     # database, while an already-applied checksum from any alias remains
     # accepted.
-    preferred_names = {
-        1: "001_canonical_production.sql",
-        2: "002_canonical_production.sql",
-        3: "003_canonical_compatibility.sql",
-        4: "004_canonical_value_truth.sql",
-        5: "005_canonical_production.sql",
-        6: "006_canonical_production.sql",
-        7: "007_canonical_production.sql",
-        8: "008_ea35_idempotency_compat.sql",
-        9: "009_canonical_movement_integrity_hardening.sql",
-        10: "010_canonical_evidence_constraints.sql",
-        11: "011_ea35_canonical_schema_finalization.sql",
-        12: "012_canonical_production.sql",
-        13: "013_ea35_canonical_schema_hardening.sql",
-        14: "014_canonical_escrow_state_constraint.sql",
-        15: "015_repair_escrow_state_constraint_drift.sql",
-    }
     versions: dict[int, list[Path]] = {}
     for migration in files:
         version = int(migration.name.split("_", 1)[0])
@@ -243,7 +230,7 @@ def apply_migrations(conn, migration_dir: str | Path) -> None:
 
     preferred: dict[int, Path] = {}
     for version, candidates in versions.items():
-        preferred_name = preferred_names.get(version)
+        preferred_name = CANONICAL_MIGRATION_NAMES.get(version)
         if preferred_name:
             selected = next((p for p in candidates if p.name == preferred_name), None)
             if selected is not None:
