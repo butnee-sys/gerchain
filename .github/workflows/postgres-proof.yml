@@ -103,15 +103,15 @@ jobs:
               ).stdout.splitlines(),
           }
           (out / "manifest.json").write_text(
-              json.dumps(manifest, indent=2) + "\\n", encoding="utf-8"
+              json.dumps(manifest, indent=2) + "\n", encoding="utf-8"
           )
           (out / "commit-sha.txt").write_text(
-              manifest["commit_sha"] + "\\n", encoding="utf-8"
+              manifest["commit_sha"] + "\n", encoding="utf-8"
           )
           print(json.dumps(manifest, indent=2))
           PY
           sha256sum -c artifacts/ea35-postgres-proof/SHA256SUMS
-          printf '%s  %s\\n' "$(sha256sum artifacts/ea35-postgres-proof/manifest.json | cut -d' ' -f1)" "manifest.json" > artifacts/ea35-postgres-proof/MANIFEST.SHA256
+          printf '%s  %s\n' "$(sha256sum artifacts/ea35-postgres-proof/manifest.json | cut -d' ' -f1)" "manifest.json" > artifacts/ea35-postgres-proof/MANIFEST.SHA256
           (cd artifacts/ea35-postgres-proof && sha256sum -c MANIFEST.SHA256)
 
       - name: Upload exact-SHA PostgreSQL evidence bundle
