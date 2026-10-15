@@ -8,7 +8,7 @@ from uuid import uuid4
 import psycopg
 import pytest
 
-from postgres.migrations import apply_migrations
+from postgres.migrations import _canonical_migration_files, apply_migrations, checksum
 
 MIGRATION_DIR = Path(__file__).resolve().parents[2] / "postgres" / "migrations"
 EXPECTED_VERSIONS = list(range(1, 17))
@@ -55,6 +55,13 @@ def test_two_connections_apply_canonical_migrations_without_duplicate_schema_ver
             assert len(rows) == 16
             assert len({row[0] for row in rows}) == 16
             assert all(row[1] for row in rows)
+            expected_checksums = {
+                int(path.name.split("_", 1)[0]): checksum(path.read_text(encoding="utf-8"))
+                for path in _canonical_migration_files(MIGRATION_DIR)
+            }
+            assert {version: digest for version, digest, _ in rows} == expected_checksums, (
+                "concurrent publication must preserve the exact SHA-256 of every canonical migration"
+            )
 
             unique_version = check.execute(
                 """
