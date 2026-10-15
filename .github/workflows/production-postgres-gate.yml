@@ -39,6 +39,8 @@ jobs:
     steps:
       - name: Checkout exact commit
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -162,7 +164,7 @@ jobs:
       - name: Write SHA-bound PostgreSQL migration and lifecycle evidence
         if: always()
         env:
-          GITHUB_SHA: ${{ github.sha }}
+          EVIDENCE_COMMIT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
           mkdir -p artifacts/production-postgres
           python - <<'PY'
@@ -172,7 +174,7 @@ jobs:
           from postgres.migrations import _canonical_migration_files
 
           head = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
-          expected_sha = os.environ["GITHUB_SHA"]
+          expected_sha = os.environ["EVIDENCE_COMMIT_SHA"]
           migration_dir = Path("postgres/migrations")
           migrations = []
           for path in _canonical_migration_files(migration_dir):
