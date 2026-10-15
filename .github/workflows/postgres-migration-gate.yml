@@ -105,7 +105,7 @@ jobs:
       - name: Verify history, all checksums, constraints, and report SHA-256
         run: |
           python - <<'PY'
-          import hashlib, json, os
+          import hashlib, json, os, subprocess
           from pathlib import Path
           import psycopg
           from sqlalchemy import create_engine
@@ -117,6 +117,16 @@ jobs:
           expected = [(i, checksum(p.read_text(encoding="utf-8"))) for i,p in enumerate(files,1)]
           with psycopg.connect(dsn) as conn:
               rows = conn.execute("SELECT version, checksum FROM schema_version ORDER BY version").fetchall()
+              constraint_rows = conn.execute("""
+                  SELECT n.nspname AS schema_name, t.relname AS table_name,
+                         c.conname, c.contype, pg_get_constraintdef(c.oid) AS definition,
+                         c.convalidated
+                  FROM pg_constraint c
+                  JOIN pg_class t ON t.oid = c.conrelid
+                  JOIN pg_namespace n ON n.oid = t.relnamespace
+                  WHERE n.nspname = current_schema()
+                  ORDER BY t.relname, c.conname
+              """).fetchall()
           assert rows == expected, {"expected": expected, "actual": rows}
           engine = create_engine(os.environ["GERCHAIN_TEST_DATABASE_URL"])
           try:
@@ -124,11 +134,31 @@ jobs:
                   assert_canonical_production_schema(conn)
           finally:
               engine.dispose()
+          tracked = subprocess.check_output(["git", "ls-files", "-z"], text=False).split(b"\\0")
+          manifest_paths = sorted(
+              p.decode("utf-8") for p in tracked if p and b"manifest" in p.lower()
+          )
+          manifest_hashes = {
+              path: hashlib.sha256(Path(path).read_bytes()).hexdigest()
+              for path in manifest_paths if Path(path).is_file()
+          }
           report = {
               "commit_sha": os.environ["GITHUB_SHA"],
               "migration_count": len(rows),
               "schema_version_checksums": [{"version": v, "checksum": c} for v,c in rows],
               "schema_history_sha256": hashlib.sha256(json.dumps(rows, separators=(",", ":")).encode()).hexdigest(),
+              "actual_constraint_definitions": [
+                  {"schema": s, "table": t, "name": name, "type": typ,
+                   "definition": definition, "validated": validated}
+                  for s,t,name,typ,definition,validated in constraint_rows
+              ],
+              "constraint_catalog_sha256": hashlib.sha256(
+                  json.dumps(
+                      [(s,t,name,typ,definition,validated) for s,t,name,typ,definition,validated in constraint_rows],
+                      separators=(",", ":"), sort_keys=False
+                  ).encode()
+              ).hexdigest(),
+              "manifest_sha256": manifest_hashes,
               "canonical_schema_assertion": "PASS",
               "database": "fresh PostgreSQL 16",
           }
