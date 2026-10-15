@@ -44,6 +44,7 @@ jobs:
       GERCHAIN_ESCROW_AMOUNT: "100"
       GERCHAIN_CURRENCY: MNT
       GERCHAIN_WITNESS_ID: migration-gate-witness
+      PYTHONPATH: .
       PYTHONUNBUFFERED: "1"
     steps:
       - name: Checkout exact tested commit
