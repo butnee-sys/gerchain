@@ -2,9 +2,12 @@ name: PostgreSQL Concurrency
 
 on:
   push:
-    branches: ["postgres-concurrency-hardening"]
+    branches: ["feat/ea35-production-lock-candidate"]
   pull_request:
     branches: ["main"]
+    paths:
+      - "postgres/**"
+      - ".github/workflows/postgres-concurrency.yml"
 
 jobs:
   postgres-concurrency:
@@ -23,7 +26,6 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 20
-
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -34,4 +36,13 @@ jobs:
       - name: Run PostgreSQL concurrency suite
         env:
           GERCHAIN_POSTGRES_DSN: postgresql://gerchain:gerchain@127.0.0.1:5432/gerchain_test
-        run: python -m pytest -q postgres/tests/test_concurrency.py
+        run: |
+          mkdir -p artifacts
+          python -m pytest -q postgres/tests/test_concurrency.py --junitxml=artifacts/postgres-concurrency.xml
+      - name: Upload PostgreSQL concurrency evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: postgres-concurrency-junit
+          path: artifacts/postgres-concurrency.xml
+          if-no-files-found: error

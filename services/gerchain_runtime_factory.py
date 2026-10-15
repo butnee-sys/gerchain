@@ -1,15 +1,38 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Callable
 
 from sqlalchemy import Engine
 
-from persistence.atomic_release import initialize_atomic_release_schema
+from postgres.migrations import apply_migrations
+
+from persistence.atomic_ledger import AtomicLedgerBase
+from persistence.atomic_value_transaction import WitnessBase
+from persistence.durable_idempotency import IdempotencyBase
+from persistence.escrow_aggregate import EscrowBase
+from persistence.recovery_outbox import OutboxBase
+from persistence.production_schema_guard import assert_canonical_production_schema
 from services.gerchain_runtime import GerchainRuntime
+
+
+@dataclass(frozen=True)
+class ProductionRuntimeConfig:
+    database_url: str
+    escrow_id: str
+    amount: int
+    currency: str
+    witness_id: str
 
 
 class ProductionRuntimeFactory:
     """Create the production GerChain runtime with PostgreSQL as authority."""
+
+    def __init__(self, config: ProductionRuntimeConfig, *, engine: Engine | None = None):
+        self.config = config
+        if engine is not None and engine.dialect.name != "postgresql":
+            raise ValueError("ProductionRuntimeFactory requires PostgreSQL engine")
 
     @staticmethod
     def create(
@@ -26,7 +49,12 @@ class ProductionRuntimeFactory:
     ) -> GerchainRuntime:
         if engine is None or session_factory is None:
             raise ValueError("production runtime requires PostgreSQL engine and session factory")
-        initialize_atomic_release_schema(engine)
+        if engine.dialect.name != "postgresql":
+            raise ValueError("production runtime requires PostgreSQL engine")
+        migration_dir = Path(__file__).resolve().parents[1] / "postgres" / "schema"
+        with engine.begin() as connection:
+            apply_migrations(connection, migration_dir)
+            assert_canonical_production_schema(connection)
         runtime = GerchainRuntime(
             escrow_id=escrow_id,
             amount=amount,
@@ -36,9 +64,8 @@ class ProductionRuntimeFactory:
             manifest=manifest,
             initial_money_state=initial_money_state,
         )
-        runtime.configure_postgres_release(session_factory)
-        runtime.runtime_mode = "production-postgresql"
+        runtime.configure_canonical_ledger(session_factory)
         return runtime
 
 
-__all__ = ["ProductionRuntimeFactory"]
+__all__ = ["ProductionRuntimeConfig", "ProductionRuntimeFactory"]

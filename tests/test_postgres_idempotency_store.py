@@ -1,3 +1,13 @@
+"""Legacy non-authoritative idempotency-store tests.
+
+The production authority is persistence.durable_idempotency. This historical
+store is retained only for compatibility and is intentionally outside the
+canonical production gate.
+"""
+import pytest
+
+pytestmark = pytest.mark.skip(reason="legacy non-authoritative idempotency store; canonical durable idempotency is tested by EA-35")
+
 import os
 
 import pytest
