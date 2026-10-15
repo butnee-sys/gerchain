@@ -19,7 +19,25 @@ from persistence.atomic_ledger import (
     PostgreSQLAtomicLedger,
 )
 
-from postgres.migrations import apply_migrations
+from postgres.migrations import (
+    CANONICAL_MIGRATION_NAMES,
+    _canonical_migration_files,
+    apply_migrations,
+)
+
+
+
+def test_canonical_migration_inventory_has_one_authoritative_filename_per_version():
+    """Prevent selection-map drift from repeatedly reviving duplicate migration paths."""
+    migration_dir = Path(__file__).resolve().parents[1] / "migrations"
+    selected = _canonical_migration_files(migration_dir)
+    versions = [int(path.name.split("_", 1)[0]) for path in selected]
+    assert versions == list(range(1, len(CANONICAL_MIGRATION_NAMES) + 1))
+    assert len(versions) == len(set(versions)), f"duplicate selected migration versions: {versions}"
+    assert {
+        int(path.name.split("_", 1)[0]): path.name for path in selected
+    } == CANONICAL_MIGRATION_NAMES
+    assert all((migration_dir / name).is_file() for name in CANONICAL_MIGRATION_NAMES.values())
 
 
 def _dsn() -> str:
