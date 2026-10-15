@@ -166,7 +166,12 @@ def test_migrations_are_serialized_and_checksum_is_stable(monkeypatch):
         assert versions
         assert versions == list(range(1, 17)), f"schema_version history has gaps or unexpected versions: {versions}"
         assert max(versions) >= 16
-        assert all(checksum for _, checksum in rows)
+        # Every published digest must be a full SHA-256 hex string; truthy-but-invalid
+        # checksums are not sufficient evidence for a canonical migration history.
+        assert all(
+            len(digest) == 64 and all(ch in "0123456789abcdef" for ch in digest)
+            for _, digest in rows
+        ), f"invalid schema_version SHA-256 checksum(s): {rows!r}"
 
         # Re-run the publisher and prove both the version set and each checksum
         # are unchanged after a second complete migration pass.
