@@ -4,7 +4,7 @@
 **Scope:** GerChain CORE only
 **SHUUD:** Explicitly out of CORE assurance scope
 **Frozen PwC baseline:** `274f45c83ce088e2229a2628e3a80403a68503df`
-**Current main commit under audit:** `62594d16e926aa084c73f326eb77445d57fd4267`
+**Current main commit under audit:** `621e7e2acefe243d4c72e783970e1eb833c60b96`
 
 ## 1. Purpose
 
@@ -24,7 +24,7 @@ This document establishes the controlled starting point for the GerChain CORE au
 | PwC evidence baseline | FROZEN | Baseline SHA retained; no false promotion |
 | IAM / MFA organizational evidence (`GC-IDM-001/002`) | MISSING | Organizational MFA, privileged-access and review evidence not independently available |
 | Main branch protection governance | MISSING / UNVERIFIED | Administrative verification is still required |
-| Post-merge main workflow evidence | UNVERIFIED | New main merge commit `62594d16...` currently has no commit-associated workflow result visible through the available endpoint |
+| Post-merge main workflow evidence | UNVERIFIED | Main baseline `621e7e2...` currently has no commit-associated workflow result visible through the available endpoint |
 
 ## 3. Lock rule
 
