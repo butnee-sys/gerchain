@@ -76,6 +76,17 @@ jobs:
           engine.dispose()
           PY
 
+      - name: Apply ordered SQL schema files
+        shell: bash
+        run: |
+          set -euo pipefail
+          while IFS= read -r file; do
+            echo "Applying ${file}"
+            PGPASSWORD=gerchain_test psql \
+              "postgresql://gerchain@localhost:5432/gerchain_test" \
+              -v ON_ERROR_STOP=1 -f "${file}"
+          done < <(find postgres/schema -type f -name '*.sql' | sort)
+
       - name: Run deep value-truth reconciliation tests
         run: python -m pytest -q tests/persistence/test_deep_value_reconciliation.py
 
