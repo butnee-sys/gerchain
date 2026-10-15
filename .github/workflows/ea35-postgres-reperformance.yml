@@ -36,11 +36,11 @@ jobs:
       - name: Checkout exact tested revision
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.sha }}
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Assert checkout matches requested evidence SHA
         env:
-          EXPECTED_COMMIT_SHA: ${{ github.sha }}
+          EXPECTED_COMMIT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
           python - <<'PY'
           import os, subprocess
@@ -250,7 +250,7 @@ jobs:
 
       - name: Capture schema snapshot and exact 16-migration manifest
         env:
-          EVIDENCE_COMMIT_SHA: ${{ github.sha }}
+          EVIDENCE_COMMIT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
           EVIDENCE_RUN_ID: ${{ github.run_id }}
           EVIDENCE_RUN_ATTEMPT: ${{ github.run_attempt }}
         run: |
