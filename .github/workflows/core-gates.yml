@@ -98,6 +98,7 @@ jobs:
       - name: Audit canonical migration inventory and applied history
         env:
           GERCHAIN_MIGRATION_AUDIT_DATABASE_URL: postgresql://gerchain:gerchain@127.0.0.1:5432/gerchain_test
+          REQUIRE_MIGRATION_HISTORY: "1"
           MIGRATION_INVENTORY_REPORT: artifacts/canonical-postgres-evidence/migration-inventory-report.json
         run: |
           mkdir -p artifacts/canonical-postgres-evidence
