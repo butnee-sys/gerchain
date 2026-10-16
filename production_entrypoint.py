@@ -5,8 +5,12 @@ import signal
 import time
 
 from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
 
-from services.gerchain_runtime_factory import ProductionRuntimeFactory
+from services.gerchain_runtime_factory import (
+    ProductionRuntimeConfig,
+    ProductionRuntimeFactory,
+)
 
 
 _running = True
@@ -18,18 +22,22 @@ def _stop(*_args) -> None:
 
 
 def build_production_runtime():
-    """Build and verify the canonical PostgreSQL runtime; dispose on any failure."""
+    """Build canonical PostgreSQL runtime; fail closed and dispose on startup error."""
     database_url = os.environ.get("GERCHAIN_DATABASE_URL")
-    if not database_url or not database_url.startswith(
-        ("postgresql://", "postgresql+psycopg://", "postgresql+psycopg2://")
-    ):
-        raise RuntimeError("production entrypoint requires GERCHAIN_DATABASE_URL pointing to PostgreSQL")
+    supported_prefixes = (
+        "postgresql://",
+        "postgresql+psycopg://",
+        "postgresql+psycopg2://",
+    )
+    if not database_url or not database_url.startswith(supported_prefixes):
+        raise RuntimeError(
+            "production entrypoint requires GERCHAIN_DATABASE_URL pointing to PostgreSQL"
+        )
 
     escrow_id = os.environ.get("GERCHAIN_ESCROW_ID")
     currency = os.environ.get("GERCHAIN_CURRENCY")
     witness_id = os.environ.get("GERCHAIN_WITNESS_ID")
     amount_raw = os.environ.get("GERCHAIN_ESCROW_AMOUNT")
-
     if not all((escrow_id, currency, witness_id, amount_raw)):
         raise RuntimeError(
             "production entrypoint requires GERCHAIN_ESCROW_ID, "
@@ -45,14 +53,42 @@ def build_production_runtime():
 
     engine = create_engine(database_url, pool_pre_ping=True)
     try:
-        from sqlalchemy.orm import sessionmaker
-
         session_factory = sessionmaker(bind=engine, expire_on_commit=False)
-        runtime = ProductionRuntimeFactory.create(
-        escrow_id=escrow_id,
-        amount=amount,
-        currency=currency,
-        witness_id=witness_id,
-        engine=engine,
-        session_factory=session_factory,
+        factory = ProductionRuntimeFactory(
+            ProductionRuntimeConfig(
+                database_url=database_url,
+                escrow_id=escrow_id,
+                amount=amount,
+                currency=currency,
+                witness_id=witness_id,
+            ),
+            engine=engine,
+            session_factory=session_factory,
+        )
+        runtime = factory.create()
+        if not runtime.is_canonical_ledger_authoritative:
+            raise RuntimeError("canonical ledger authority was not established")
+        return engine, runtime
+    except Exception:
+        engine.dispose()
+        raise
+
+
+def main() -> None:
+    engine, runtime = build_production_runtime()
+    print(
+        "GerChain production runtime initialized: "
+        f"mode={runtime.runtime_mode} canonical_ledger_authoritative="
+        f"{runtime.is_canonical_ledger_authoritative}"
     )
+    signal.signal(signal.SIGTERM, _stop)
+    signal.signal(signal.SIGINT, _stop)
+    try:
+        while _running:
+            time.sleep(1)
+    finally:
+        engine.dispose()
+
+
+if __name__ == "__main__":
+    main()
