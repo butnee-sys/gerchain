@@ -118,7 +118,7 @@ jobs:
               )
           engine.dispose()
 
-          engine, runtime = build_production_runtime()
+          runtime, engine = build_production_runtime()
           try:
               assert runtime.is_canonical_ledger_authoritative
               required = {
