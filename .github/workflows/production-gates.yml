@@ -1,0 +1,106 @@
+name: Production Readiness Gates
+
+on:
+  push:
+    branches:
+      - "**"
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  production-postgresql-boot:
+    name: Production PostgreSQL migration and boot
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: gerchain
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d gerchain"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      GERCHAIN_DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/gerchain
+      GERCHAIN_ESCROW_ID: production-smoke-escrow
+      GERCHAIN_ESCROW_AMOUNT: "100"
+      GERCHAIN_CURRENCY: MNT
+      GERCHAIN_WITNESS_ID: production-smoke-witness
+    steps:
+      - name: Checkout exact tested revision
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+      - name: Install runtime dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt pytest
+      - name: Run canonical migrations and assert production runtime authority
+        run: |
+          python - <<'PY'
+          from production_entrypoint import build_production_runtime
+
+          runtime, engine = build_production_runtime()
+          try:
+              assert runtime.is_canonical_ledger_authoritative
+              assert runtime.runtime_mode == "production-postgresql"
+              print("POSTGRES_BOOT=PASS")
+              print("CANONICAL_LEDGER_AUTHORITY=PASS")
+          finally:
+              engine.dispose()
+          PY
+      - name: Record tested revision
+        run: |
+          echo "tested_sha=$GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
+          echo "postgres_migration_and_boot=PASS" >> "$GITHUB_STEP_SUMMARY"
+
+  postgres-value-truth-tests:
+    name: PostgreSQL value-truth reconciliation tests
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: gerchain
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d gerchain"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      GERCHAIN_TEST_DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/gerchain
+    steps:
+      - name: Checkout exact tested revision
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+      - name: Install test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt pytest
+      - name: Run production entrypoint guard tests
+        run: pytest -q tests/services/test_production_entrypoint.py
+      - name: Run deep value-truth reconciliation tests on PostgreSQL
+        run: pytest -q tests/persistence/test_deep_value_reconciliation.py
+      - name: Record tested revision
+        run: |
+          echo "tested_sha=$GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
+          echo "postgres_value_truth_tests=PASS" >> "$GITHUB_STEP_SUMMARY"
