@@ -44,7 +44,7 @@ def test_build_production_runtime_uses_instance_factory_and_canonical_authority(
     monkeypatch.setattr(entrypoint, "create_engine", lambda *args, **kwargs: engine)
 
     class FakeFactory:
-        def __init__(self, config, *, engine):
+        def __init__(self, config, *, engine, session_factory=None):
             captured["config"] = config
             captured["engine"] = engine
 
@@ -78,7 +78,7 @@ def test_build_production_runtime_disposes_engine_if_authority_is_not_establishe
     monkeypatch.setattr(entrypoint, "create_engine", lambda *args, **kwargs: engine)
 
     class FakeFactory:
-        def __init__(self, config, *, engine):
+        def __init__(self, config, *, engine, session_factory=None):
             pass
 
         def create(self):
