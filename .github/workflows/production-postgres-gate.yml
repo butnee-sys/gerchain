@@ -197,6 +197,16 @@ jobs:
                   junit = [{"tests": int(root.attrib.get("tests", 0)), "failures": int(root.attrib.get("failures", 0)), "errors": int(root.attrib.get("errors", 0)), "skipped": int(root.attrib.get("skipped", 0))}]
               except Exception as exc:
                   junit = [{"parse_error": f"{type(exc).__name__}: {exc}"}]
+          expected_by_version = {
+              int(item["path"].split("/")[-1].split("_", 1)[0]): item["sha256"]
+              for item in migrations
+          }
+          applied_by_version = {int(item["version"]): str(item["checksum"]) for item in applied}
+          checksum_match = (
+              len(applied) == len(expected_by_version)
+              and applied_by_version == expected_by_version
+              and len(applied_by_version) == len(applied)
+          )
           report = {
               "commit_sha": expected_sha,
               "checked_out_head_sha": head,
@@ -206,13 +216,15 @@ jobs:
               "migration_file_count": len(migrations),
               "applied_migration_count": len(applied),
               "migration_checksums_sha256_valid": bool(applied) and all(len(str(x["checksum"])) == 64 for x in applied),
+              "migration_checksums_match_files": checksum_match,
+              "migration_history_versions_exact": sorted(applied_by_version) == list(range(1, len(expected_by_version) + 1)),
               "migration_read_error": migration_error,
               "lifecycle_junit": junit,
-              "evidence_status": "PASS_CANDIDATE" if expected_sha == head and not migration_error and len(applied) == len(migrations) and junit and all(x.get("failures", 0) == 0 and x.get("errors", 0) == 0 for x in junit) else "INCOMPLETE_OR_FAILED",
+              "evidence_status": "PASS_CANDIDATE" if expected_sha == head and not migration_error and len(applied) == len(migrations) and checksum_match and sorted(applied_by_version) == list(range(1, len(expected_by_version) + 1)) and junit and all(x.get("failures", 0) == 0 and x.get("errors", 0) == 0 for x in junit) else "INCOMPLETE_OR_FAILED",
           }
           out = Path("artifacts/production-postgres/migration-lifecycle-report.json")
           out.write_text(json.dumps(report, indent=2, sort_keys=True) + "\\n", encoding="utf-8")
-          print(json.dumps({k: report[k] for k in ("commit_sha", "checked_out_head_sha", "sha_match", "migration_file_count", "applied_migration_count", "evidence_status")}, indent=2))
+          print(json.dumps({k: report[k] for k in ("commit_sha", "checked_out_head_sha", "sha_match", "migration_file_count", "applied_migration_count", "migration_checksums_match_files", "migration_history_versions_exact", "evidence_status")}, indent=2))
           if not report["sha_match"]:
               raise SystemExit("commit_sha does not match checked_out_head_sha")
           PY
