@@ -510,6 +510,7 @@ jobs:
               "pg-constraints-after-second-run.json",
               "checksum-runner.log",
               "concurrency-runner.log",
+              "junit.xml",
           ]
           present = sorted(path.name for path in root.iterdir() if path.is_file())
           missing = [name for name in expected if name not in present]
