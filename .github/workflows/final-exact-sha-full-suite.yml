@@ -80,7 +80,7 @@ jobs:
           import psycopg
           from postgres.migrations import _canonical_migration_files, apply_migrations, checksum
           migration_dir = Path("postgres/migrations")
-          dsn = os.environ["GERCHAIN_DATABASE_URL"].replace("postgresql+psycopg://", "postgresql://")
+          dsn = os.environ["GERCHAIN_MIGRATION_TEST_DSN"]
           with tempfile.TemporaryDirectory(prefix="gerchain-migrations-001-014-") as tmp:
               baseline_dir = Path(tmp)
               canonical_files = _canonical_migration_files(migration_dir)
