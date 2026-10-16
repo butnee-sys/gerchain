@@ -33,7 +33,7 @@ def test_entrypoint_builds_instance_factory_and_requires_canonical_authority(mon
     seen = {}
 
     class Factory:
-        def __init__(self, config, *, engine):
+        def __init__(self, config, *, engine, session_factory=None):
             seen["config"] = config
             seen["engine"] = engine
 
@@ -90,7 +90,7 @@ def test_entrypoint_disposes_engine_when_factory_fails(monkeypatch):
     monkeypatch.setattr(entrypoint, "create_engine", lambda *args, **kwargs: engine)
 
     class Factory:
-        def __init__(self, config, *, engine):
+        def __init__(self, config, *, engine, session_factory=None):
             pass
 
         def create(self):
@@ -109,7 +109,7 @@ def test_entrypoint_fails_closed_if_factory_does_not_establish_canonical_authori
     monkeypatch.setattr(entrypoint, "create_engine", lambda *args, **kwargs: engine)
 
     class Factory:
-        def __init__(self, config, *, engine):
+        def __init__(self, config, *, engine, session_factory=None):
             pass
 
         def create(self):
