@@ -475,12 +475,12 @@ jobs:
                   stdout = stdout.decode("utf-8", errors="replace")
               if isinstance(stderr, bytes):
                   stderr = stderr.decode("utf-8", errors="replace")
-              output = stdout + "\\n" + stderr
+              output = stdout + "\n" + stderr
               assert "GerChain production runtime initialized:" in output, output
               print("PRODUCTION_ENTRYPOINT_BOOT=PASS")
               print("PRODUCTION_ENTRYPOINT_REMAINS_ALIVE=PASS")
           else:
-              output = completed.stdout + "\\n" + completed.stderr
+              output = completed.stdout + "\n" + completed.stderr
               assert completed.returncode == 0, output
               assert "GerChain production runtime initialized:" in output, output
               print("PRODUCTION_ENTRYPOINT_BOOT=PASS")
@@ -510,11 +510,11 @@ jobs:
           junit_generated_by_pytest = junit_path.exists()
           if not junit_generated_by_pytest:
               junit_path.write_text(
-                  '<?xml version="1.0" encoding="UTF-8"?>\\n'
+                  '<?xml version="1.0" encoding="UTF-8"?>\n'
                   '<testsuites tests="0" failures="0" errors="0" skipped="0">'
                   '<testsuite name="pytest-not-run" tests="0" failures="0" errors="0" skipped="0">'
                   '<system-out>pytest did not produce JUnit XML; this is a placeholder, not passing test evidence.</system-out>'
-                  '</testsuite></testsuites>\\n',
+                  '</testsuite></testsuites>\n',
                   encoding="utf-8",
               )
 
@@ -547,7 +547,7 @@ jobs:
               "commit_sha_matches_checkout_and_migration_manifest": commit_matches,
               "evidence_complete": False,
           }
-          (root / "manifest.json").write_text(json.dumps(report, indent=2) + "\\n", encoding="utf-8")
+          (root / "manifest.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
 
           if not commit_matches:
               print("EVIDENCE_CLOSEOUT=BLOCKED_SHA_MISMATCH")
@@ -571,7 +571,7 @@ jobs:
           for path in sorted(root.iterdir()):
               if path.is_file() and path.name != target.name:
                   entries.append(f"{hashlib.sha256(path.read_bytes()).hexdigest()}  {path.name}")
-          target.write_text("\\n".join(entries) + "\\n", encoding="utf-8")
+          target.write_text("\n".join(entries) + "\n", encoding="utf-8")
           print(f"SHA256SUMS_ENTRIES={len(entries)}")
           PY
 
