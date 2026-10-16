@@ -333,26 +333,11 @@ class GerchainRuntime:
     def fund(self, transaction_id: str, source: str, timestamp: str, evidence: Any):
         if self.is_canonical_ledger_authoritative:
             from persistence.fund_escrow import fund_escrow_in_transaction
-
             with self._session_factory() as session:
-                result = fund_escrow_in_transaction(
-                    session,
-                    transaction_id=transaction_id,
-                    escrow_id=self.escrow_engine.escrow_id,
-                    source=source,
-                    amount=self.escrow_engine.amount,
-                    currency=self.escrow_engine.currency,
-                    payload={"timestamp": timestamp, "evidence": evidence},
-                )
+                result = fund_escrow_in_transaction(session, transaction_id=transaction_id, escrow_id=self.escrow_engine.escrow_id, source=source, amount=self.escrow_engine.amount, currency=self.escrow_engine.currency, payload={"timestamp": timestamp, "evidence": evidence})
                 session.commit()
                 return result
-
-        return self.escrow_service.fund(
-            transaction_id=transaction_id,
-            source=source,
-            timestamp=timestamp,
-            evidence=evidence,
-        )
+        return self.escrow_service.fund(transaction_id=transaction_id, source=source, timestamp=timestamp, evidence=evidence)
 
     def lock(self, transaction_id: str, timestamp: str, evidence: Any):
         if self.is_canonical_ledger_authoritative:
