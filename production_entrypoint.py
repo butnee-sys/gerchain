@@ -6,7 +6,7 @@ import time
 
 from sqlalchemy import create_engine
 
-from services.gerchain_runtime_factory import ProductionRuntimeConfig, ProductionRuntimeFactory
+from services.gerchain_runtime_factory import ProductionRuntimeFactory
 
 
 _running = True
@@ -48,40 +48,11 @@ def build_production_runtime():
         from sqlalchemy.orm import sessionmaker
 
         session_factory = sessionmaker(bind=engine, expire_on_commit=False)
-        factory = ProductionRuntimeFactory(
-            ProductionRuntimeConfig(
-                database_url=database_url,
-                escrow_id=escrow_id,
-                amount=amount,
-                currency=currency,
-                witness_id=witness_id,
-            ),
-            engine=engine,
-            session_factory=session_factory,
-        )
-        runtime = factory.create()
-        if not runtime.is_canonical_ledger_authoritative:
-            raise RuntimeError("canonical ledger authority was not established")
-        return runtime, engine
-    except Exception:
-        engine.dispose()
-        raise
-
-
-def main() -> None:
-    runtime, engine = build_production_runtime()
-    print(
-        "GerChain production runtime initialized: "
-        f"escrow={runtime.escrow_engine.escrow_id} currency={runtime.escrow_engine.currency}"
+        runtime = ProductionRuntimeFactory.create(
+        escrow_id=escrow_id,
+        amount=amount,
+        currency=currency,
+        witness_id=witness_id,
+        engine=engine,
+        session_factory=session_factory,
     )
-    signal.signal(signal.SIGTERM, _stop)
-    signal.signal(signal.SIGINT, _stop)
-    try:
-        while _running:
-            time.sleep(1)
-    finally:
-        engine.dispose()
-
-
-if __name__ == "__main__":
-    main()
