@@ -28,16 +28,19 @@ def set_required_env(monkeypatch, url="postgresql+psycopg://user:pass@localhost/
     monkeypatch.setenv("GERCHAIN_WITNESS_ID", "witness-1")
 
 
-def test_build_production_runtime_uses_static_factory_and_canonical_authority(monkeypatch):
+def test_build_production_runtime_uses_configured_factory_and_canonical_authority(monkeypatch):
     set_required_env(monkeypatch)
     engine = FakeEngine()
     monkeypatch.setattr(entrypoint, "create_engine", lambda *args, **kwargs: engine)
     captured = {}
 
     class Factory:
-        @staticmethod
-        def create(**kwargs):
-            captured.update(kwargs)
+        def __init__(self, config, *, engine, session_factory):
+            captured["config"] = config
+            captured["engine"] = engine
+            captured["session_factory"] = session_factory
+
+        def create(self):
             return FakeRuntime()
 
     monkeypatch.setattr(entrypoint, "ProductionRuntimeFactory", Factory)
@@ -45,10 +48,11 @@ def test_build_production_runtime_uses_static_factory_and_canonical_authority(mo
     assert runtime.is_canonical_ledger_authoritative is True
     assert actual_engine is engine
     assert captured["engine"] is engine
-    assert captured["escrow_id"] == "escrow-1"
-    assert captured["amount"] == 100
-    assert captured["currency"] == "MNT"
-    assert captured["witness_id"] == "witness-1"
+    assert captured["config"].database_url == "postgresql+psycopg://user:pass@localhost/db"
+    assert captured["config"].escrow_id == "escrow-1"
+    assert captured["config"].amount == 100
+    assert captured["config"].currency == "MNT"
+    assert captured["config"].witness_id == "witness-1"
     assert captured["session_factory"] is not None
 
 
