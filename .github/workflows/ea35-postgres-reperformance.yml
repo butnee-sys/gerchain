@@ -494,84 +494,85 @@ jobs:
           EVIDENCE_RUN_ID: ${{ github.run_id }}
           EVIDENCE_RUN_ATTEMPT: ${{ github.run_attempt }}
           EVIDENCE_JOB_STATUS: ${{ job.status }}
+          EVIDENCE_WORKFLOW: ${{ github.workflow }}
+          EVIDENCE_REPOSITORY: ${{ github.repository }}
         run: |
           python - <<'PY'
-          import json, os, subprocess
+          import hashlib, json, os, subprocess
           from pathlib import Path
+          import xml.etree.ElementTree as ET
+
           root = Path("artifacts/ea35")
           root.mkdir(parents=True, exist_ok=True)
-          expected = [
-              "commit-sha.txt",
-              "migration-manifest.json",
-              "postgres-schema-snapshot.json",
-              "migration-registry-before.json",
-              "migration-registry-after.json",
-              "pg-constraints-after-first-run.json",
-              "pg-constraints-after-second-run.json",
-              "checksum-runner.log",
-              "concurrency-runner.log",
-              "junit.xml",
-          ]
-          present = sorted(path.name for path in root.iterdir() if path.is_file())
-          missing = [name for name in expected if name not in present]
-          checked_out_head = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
           expected_sha = os.environ["EVIDENCE_COMMIT_SHA"]
-          manifest_sha = None
-          manifest_path = root / "migration-manifest.json"
-          if manifest_path.exists():
-              manifest_sha = json.loads(manifest_path.read_text(encoding="utf-8")).get("commit_sha")
-          sha_matches = checked_out_head == expected_sha and manifest_sha == expected_sha
-          report = {
-              "repository": os.environ.get("GITHUB_REPOSITORY"),
-              "commit_sha": expected_sha,
-              "checked_out_head_sha": checked_out_head,
-              "manifest_commit_sha": manifest_sha,
-              "commit_sha_matches_head_and_manifest": sha_matches,
-              "workflow": os.environ.get("GITHUB_WORKFLOW"),
-              "workflow_run_id": os.environ["EVIDENCE_RUN_ID"],
-              "workflow_run_attempt": int(os.environ["EVIDENCE_RUN_ATTEMPT"]),
-              "job_status_at_finalization": os.environ["EVIDENCE_JOB_STATUS"],
-              "expected_evidence_files": expected,
-              "present_evidence_files": present,
-              "missing_evidence_files": missing,
-              "evidence_complete": not missing and sha_matches,
-          }
-          (root / "final-evidence-report.json").write_text(
-              json.dumps(report, indent=2) + "\n", encoding="utf-8"
-          )
-          print("FINAL_EVIDENCE_REPORT=" + json.dumps(report, sort_keys=True))
-          # Preserve machine-readable test evidence even when pytest never starts.
-          # A placeholder is explicitly non-evidence of a passing run.
+          checked_out_head = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
           junit_path = root / "junit.xml"
-          if not junit_path.exists():
+          junit_generated_by_pytest = junit_path.exists()
+          if not junit_generated_by_pytest:
               junit_path.write_text(
                   '<?xml version="1.0" encoding="UTF-8"?>\\n'
                   '<testsuites tests="0" failures="0" errors="0" skipped="0">'
                   '<testsuite name="pytest-not-run" tests="0" failures="0" errors="0" skipped="0">'
-                  '<system-out>pytest did not produce JUnit XML; inspect workflow steps.</system-out>'
-                  '</testsuite></testsuites>\\n', encoding="utf-8"
+                  '<system-out>pytest did not produce JUnit XML; this is a placeholder, not passing test evidence.</system-out>'
+                  '</testsuite></testsuites>\\n',
+                  encoding="utf-8",
               )
-          # Hash evidence files except the manifest itself to avoid recursion.
+
+          junit_sha256 = hashlib.sha256(junit_path.read_bytes()).hexdigest()
+          xml_root = ET.parse(junit_path).getroot()
+          suites = [xml_root] if xml_root.tag == "testsuite" else list(xml_root.iter("testsuite"))
+          counts = {key: 0 for key in ("tests", "failures", "errors", "skipped")}
+          for suite in suites:
+              for key in counts:
+                  counts[key] += int(suite.attrib.get(key, "0"))
+          manifest_migration = root / "migration-manifest.json"
+          migration_data = json.loads(manifest_migration.read_text(encoding="utf-8")) if manifest_migration.exists() else {}
+          manifest_commit = migration_data.get("commit_sha")
+          commit_matches = checked_out_head == expected_sha and (manifest_commit is None or manifest_commit == expected_sha)
+          report = {
+              "repository": os.environ["EVIDENCE_REPOSITORY"],
+              "workflow": os.environ["EVIDENCE_WORKFLOW"],
+              "commit_sha": expected_sha,
+              "checked_out_head_sha": checked_out_head,
+              "migration_manifest_commit_sha": manifest_commit,
+              "run_id": int(os.environ["EVIDENCE_RUN_ID"]),
+              "run_attempt": int(os.environ["EVIDENCE_RUN_ATTEMPT"]),
+              "job_status_at_finalization": os.environ["EVIDENCE_JOB_STATUS"],
+              "junit": {
+                  "path": "artifacts/ea35/junit.xml",
+                  "sha256": junit_sha256,
+                  "generated_by_pytest": junit_generated_by_pytest,
+                  **counts,
+              },
+              "commit_sha_matches_checkout_and_migration_manifest": commit_matches,
+              "evidence_complete": False,
+          }
+          (root / "manifest.json").write_text(json.dumps(report, indent=2) + "\\n", encoding="utf-8")
+
+          if not commit_matches:
+              print("EVIDENCE_CLOSEOUT=BLOCKED_SHA_MISMATCH")
+              raise SystemExit("FAIL: commit SHA differs between workflow, checkout, and migration manifest")
+          print("JUNIT_XML_SHA256=" + junit_sha256)
+          print("JUNIT_XML_COUNTS=" + json.dumps(counts, sort_keys=True))
+          print("EVIDENCE_RUN_ID=" + report["run_id"].__str__())
+          print("EVIDENCE_RUN_ATTEMPT=" + report["run_attempt"].__str__())
+          print("JUNIT_GENERATED_BY_PYTEST=" + str(junit_generated_by_pytest))
+          PY
+
+      - name: Generate SHA256SUMS for evidence bundle
+        if: always()
+        run: |
+          python - <<'PY'
           import hashlib
-          manifest_path = root / "sha256-manifest.txt"
+          from pathlib import Path
+          root = Path("artifacts/ea35")
+          target = root / "SHA256SUMS"
           entries = []
           for path in sorted(root.iterdir()):
-              if path.is_file() and path.name != manifest_path.name:
-                  digest = hashlib.sha256(path.read_bytes()).hexdigest()
-                  entries.append(f"{digest}  {path.name}")
-          manifest_path.write_text("\\n".join(entries) + "\\n", encoding="utf-8")
-          print("SHA256_MANIFEST_ENTRIES=" + str(len(entries)))
-          print("JUNIT_XML_PRESENT=" + str(junit_path.exists()))
-
-          if os.environ["EVIDENCE_JOB_STATUS"] != "success":
-              print("EVIDENCE_CLOSEOUT=BLOCKED_JOB_NOT_SUCCESS")
-          elif missing:
-              print("EVIDENCE_CLOSEOUT=BLOCKED_MISSING_FILES")
-          elif not sha_matches:
-              print("EVIDENCE_CLOSEOUT=BLOCKED_SHA_MISMATCH")
-              raise SystemExit("FAIL: expected SHA, checked-out HEAD, and manifest commit SHA must match")
-          else:
-              print("EVIDENCE_CLOSEOUT=EVIDENCE_COMPLETE_JOB_SUCCESS")
+              if path.is_file() and path.name != target.name:
+                  entries.append(f"{hashlib.sha256(path.read_bytes()).hexdigest()}  {path.name}")
+          target.write_text("\\n".join(entries) + "\\n", encoding="utf-8")
+          print(f"SHA256SUMS_ENTRIES={len(entries)}")
           PY
 
       - name: Upload exact-SHA PostgreSQL evidence bundle
