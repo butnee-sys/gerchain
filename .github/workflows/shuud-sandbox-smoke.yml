@@ -5,11 +5,25 @@ concurrency:
 
 
 on:
-  # SHUUD is a separate project; do not include it in GERCHAIN EAI production gates.
   workflow_dispatch:
 
 jobs:
+  # Temporarily closed: SHUUD/SANDBOX remain out of scope until EAI production lock.
+  eai_lock_gate:
+    if: ${{ false }}
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "SHUUD/SANDBOX is intentionally disabled until EAI is production-locked."
+
+  disabled_jobs:
+    if: ${{ false }}
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Disabled until EAI production lock."
+
+  # Previous jobs are intentionally held below this gate.
   smoke:
+    if: ${{ false }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
