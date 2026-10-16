@@ -77,6 +77,10 @@ jobs:
           PGPASSWORD=gerchain psql -h localhost -U gerchain -d gerchain_reperformance -c "SELECT current_database();"
           PGPASSWORD=gerchain psql -h localhost -U gerchain -d gerchain_upgrade -c "SELECT current_database();"
 
+      - name: Prepare test evidence directory
+        if: always()
+        run: mkdir -p artifacts/ea35
+
       - name: Run exact CORE fundamental-architecture gates (only after compileall passes)
         env:
           GERCHAIN_DATABASE_URL: postgresql+psycopg://gerchain:gerchain@localhost:5432/gerchain_reperformance
@@ -99,7 +103,8 @@ jobs:
             tests/production/test_postgres_canonical_concurrency.py \
             tests/test_postgres_atomic_ledger.py \
             postgres/tests/test_concurrency.py \
-            tests/test_production_runtime_factory.py
+            tests/test_production_runtime_factory.py \
+            --junitxml=artifacts/ea35/junit.xml
 
       - name: Verify PostgreSQL connection
         run: |
@@ -534,6 +539,29 @@ jobs:
               json.dumps(report, indent=2) + "\n", encoding="utf-8"
           )
           print("FINAL_EVIDENCE_REPORT=" + json.dumps(report, sort_keys=True))
+          # Preserve machine-readable test evidence even when pytest never starts.
+          # A placeholder is explicitly non-evidence of a passing run.
+          junit_path = root / "junit.xml"
+          if not junit_path.exists():
+              junit_path.write_text(
+                  '<?xml version="1.0" encoding="UTF-8"?>\\n'
+                  '<testsuites tests="0" failures="0" errors="0" skipped="0">'
+                  '<testsuite name="pytest-not-run" tests="0" failures="0" errors="0" skipped="0">'
+                  '<system-out>pytest did not produce JUnit XML; inspect workflow steps.</system-out>'
+                  '</testsuite></testsuites>\\n', encoding="utf-8"
+              )
+          # Hash evidence files except the manifest itself to avoid recursion.
+          import hashlib
+          manifest_path = root / "sha256-manifest.txt"
+          entries = []
+          for path in sorted(root.iterdir()):
+              if path.is_file() and path.name != manifest_path.name:
+                  digest = hashlib.sha256(path.read_bytes()).hexdigest()
+                  entries.append(f"{digest}  {path.name}")
+          manifest_path.write_text("\\n".join(entries) + "\\n", encoding="utf-8")
+          print("SHA256_MANIFEST_ENTRIES=" + str(len(entries)))
+          print("JUNIT_XML_PRESENT=" + str(junit_path.exists()))
+
           if os.environ["EVIDENCE_JOB_STATUS"] != "success":
               print("EVIDENCE_CLOSEOUT=BLOCKED_JOB_NOT_SUCCESS")
           elif missing:
