@@ -1,5 +1,8 @@
 name: SHUUD Command Layer
 
+concurrency:
+  group: shuud-command-layer-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 on:
   push:
     branches: ["main"]
