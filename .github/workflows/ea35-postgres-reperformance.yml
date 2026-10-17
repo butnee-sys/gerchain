@@ -512,11 +512,11 @@ jobs:
           )
           if not junit_paths:
               (root / "junit.xml").write_text(
-                  '<?xml version="1.0" encoding="UTF-8"?>\\n'
+                  '<?xml version="1.0" encoding="UTF-8"?>\n'
                   '<testsuites tests="0" failures="0" errors="0" skipped="0">'
                   '<testsuite name="pytest-not-run" tests="0" failures="0" errors="0" skipped="0">'
                   '<system-out>pytest did not produce JUnit XML; this is a placeholder, not passing test evidence.</system-out>'
-                  '</testsuite></testsuites>\\n',
+                  '</testsuite></testsuites>\n',
                   encoding="utf-8",
               )
               junit_paths = [root / "junit.xml"]
@@ -538,13 +538,13 @@ jobs:
           aggregate_xml = root / "junit.xml"
           if aggregate_xml not in junit_paths:
               aggregate_xml.write_text(
-                  '<?xml version="1.0" encoding="UTF-8"?>\\n'
-                  f'<testsuites tests="{counts["tests"]}" failures="{counts["failures"]}" errors="{counts["errors"]}" skipped="{counts["skipped"]}">\\n'
+                  '<?xml version="1.0" encoding="UTF-8"?>\n'
+                  f'<testsuites tests="{counts["tests"]}" failures="{counts["failures"]}" errors="{counts["errors"]}" skipped="{counts["skipped"]}">\n'
                   + "".join(
                       ET.tostring(ET.parse(path).getroot(), encoding="unicode")
                       for path in junit_paths
                   )
-                  + '</testsuites>\\n',
+                  + '</testsuites>\n',
                   encoding="utf-8",
               )
           junit_path = aggregate_xml
