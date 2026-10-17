@@ -147,7 +147,8 @@ def _run() -> dict:
                     "result": "rolled-back",
                     "error": failed_error,
                     "ddl_absent_after_failure": table_after_failure is None,
-                    "schema_version_absent_after_failure": registry_after_failure is None,\n                    "advisory_lock_released_after_failure": lock_probe,
+                    "schema_version_absent_after_failure": registry_after_failure is None,
+                    "advisory_lock_released_after_failure": lock_probe,
                 },
                 "corrected_retry": {
                     "result": "applied",
