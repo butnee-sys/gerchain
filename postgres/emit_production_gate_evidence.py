@@ -146,7 +146,7 @@ def main() -> None:
         }
         output = Path("artifacts/production-gate-evidence.json")
         output.parent.mkdir(parents=True, exist_ok=True)
-        output.write_text(json.dumps(evidence, indent=2, sort_keys=True) + "\\n", encoding="utf-8")
+        output.write_text(json.dumps(evidence, indent=2, sort_keys=True) + "\n", encoding="utf-8")
         print(json.dumps(evidence, indent=2, sort_keys=True))
     finally:
         engine.dispose()
