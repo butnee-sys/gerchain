@@ -176,15 +176,14 @@ jobs:
               evidence = []
               for source, row in zip(source_by_version.values(), rows):
                   version, database_checksum, applied_at = row
-                  accepted = {source["runner_checksum"]}
-                  # Existing frozen migration histories may legitimately use
-                  # checksums accepted by the canonical migration registry.
-                  from postgres.migrations import FROZEN_CHECKSUMS, LEGACY_CHECKSUMS
-                  accepted.update(FROZEN_CHECKSUMS.get(version, set()))
-                  accepted.update(LEGACY_CHECKSUMS.get(version, set()))
-                  assert database_checksum in accepted, (
-                      f"version {version} checksum not accepted by canonical registry: "
-                      f"database={database_checksum}; expected={sorted(accepted)}"
+                  # This job applies the canonical chain to a fresh PostgreSQL
+                  # database, so every published checksum must match the exact
+                  # migration source checked out at this commit. Historical aliases
+                  # are tested by dedicated upgrade/re-performance jobs.
+                  expected_checksum = source["runner_checksum"]
+                  assert database_checksum == expected_checksum, (
+                      f"version {version} checksum differs from exact checked-out source: "
+                      f"database={database_checksum}; expected={expected_checksum}"
                   )
                   assert applied_at is not None, f"version {version} has no applied_at"
                   evidence.append({
