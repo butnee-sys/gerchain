@@ -92,7 +92,7 @@ jobs:
           report["workflow_run_id"] = os.environ["EVIDENCE_RUN_ID"]
           report["workflow_run_attempt"] = int(os.environ["EVIDENCE_RUN_ATTEMPT"])
           report["commit_sha_matches_head"] = expected == head
-          report_path.write_text(json.dumps(report, indent=2, sort_keys=True) + "\\n")
+          report_path.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n")
           if expected != head:
               raise SystemExit("FAIL: migration evidence SHA does not match checked-out HEAD")
           if report.get("status") != "PASS":
