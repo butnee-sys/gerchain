@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 from architecture.contracts import AdapterContract, BoundaryRequest, BoundaryResponse
+from architecture.g3_core import G3ToCoreBoundaryAdapter
 from architecture.governed_flow_adapters import (
     DEToDEEBoundaryAdapter,
     DEEToG3BoundaryAdapter,
-    G3ToCoreBoundaryAdapter,
     CoreToEXIMBoundaryAdapter,
     EXIMToI2BBoundaryAdapter,
 )
@@ -44,6 +44,10 @@ class CanonicalComposition:
         exim_endpoint = _LayerEndpoint(exim, exim_to_i2b)
         core_to_exim = CoreToEXIMBoundaryAdapter(exim_endpoint)
         core_endpoint = _LayerEndpoint(core, core_to_exim)
+        # Use the specific G-3/Core boundary adapter here. It validates the
+        # required NEF asset reference, G-3 policy and escrow context before
+        # forwarding into Core; the generic forwarding adapter is not used as
+        # the canonical G-3/Core boundary.
         g3_to_core = G3ToCoreBoundaryAdapter(core_endpoint)
         g3_endpoint = _LayerEndpoint(g3, g3_to_core)
         dee_to_g3 = DEEToG3BoundaryAdapter(g3_endpoint)
