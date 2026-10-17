@@ -85,6 +85,14 @@ class Index:
     backing_constraint: bool = False
 
 
+@dataclass(frozen=True)
+class Descriptor:
+    descriptor_version: str
+    schema_id: str
+    tables: tuple[Table, ...] = ()
+    indexes: tuple[Index, ...] = ()
+
+
 _SCOPE_RELKINDS = {"r"}
 
 
