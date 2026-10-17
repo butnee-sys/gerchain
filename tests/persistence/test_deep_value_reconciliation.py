@@ -532,3 +532,83 @@ def test_production_runtime_factory_boots_against_postgresql_when_configured() -
     }.issubset(tables)
 
     factory.engine.dispose()
+
+
+
+def test_restart_recovery_evidence_bundle_preserves_value_truth(tmp_path):
+    """Restart/recovery must preserve balances and the canonical evidence graph."""
+    from datetime import timedelta
+    from sqlalchemy import func
+    from persistence.recovery_outbox import PostgreSQLOutbox
+
+    database_url = f"sqlite+pysqlite:///{tmp_path / 'restart-recovery.sqlite'}"
+    engine = create_engine(database_url, pool_pre_ping=True)
+    AtomicLedgerBase.metadata.create_all(engine)
+    EscrowBase.metadata.create_all(engine)
+    OutboxBase.metadata.create_all(engine)
+    IdempotencyBase.metadata.create_all(engine)
+    TransactionWitness.metadata.create_all(engine)
+    factory = sessionmaker(bind=engine, expire_on_commit=False)
+
+    with factory() as session:
+        _seed_clean(session)
+        now = datetime.now(timezone.utc)
+        session.add_all([
+            LedgerAccountModel(account_id="esc-1", currency="USD", balance=0, version=1, updated_at=now),
+            LedgerAccountModel(account_id="DST", currency="USD", balance=10, version=1, updated_at=now),
+        ])
+        event = session.query(OutboxEvent).filter_by(event_id="gerchain_release:tx-1").one()
+        event.state = "PROCESSING"
+        event.attempts = 1
+        event.lease_until = now - timedelta(seconds=5)
+        event.updated_at = now
+        session.commit()
+
+        before = {
+            "balances": sorted((r.account_id, r.currency, r.balance, r.version)
+                               for r in session.query(LedgerAccountModel).all()),
+            "movements": session.query(func.count(LedgerMovementModel.id)).scalar(),
+            "witnesses": session.query(func.count(TransactionWitness.id)).scalar(),
+            "outbox": session.query(func.count(OutboxEvent.id)).scalar(),
+            "idempotency": session.query(func.count(DurableIdempotencyRecord.key)).scalar(),
+        }
+        assert before == {
+            "balances": [("DST", "USD", 10, 1), ("esc-1", "USD", 0, 1)],
+            "movements": 1, "witnesses": 1, "outbox": 1, "idempotency": 1,
+        }
+
+    engine.dispose()
+
+    # Simulate process restart: create a fresh engine/session factory over the same durable file.
+    restarted_engine = create_engine(database_url, pool_pre_ping=True)
+    restarted_factory = sessionmaker(bind=restarted_engine, expire_on_commit=False)
+    outbox = PostgreSQLOutbox(restarted_factory, lease_seconds=1)
+    assert outbox.recover_expired() == 1
+    first_claim = outbox.claim(limit=10)
+    assert len(first_claim) == 1
+    assert first_claim[0].attempts == 2
+
+    # Simulate another crash after claim; expire the lease, recover, and claim again.
+    with restarted_factory() as session:
+        event = session.query(OutboxEvent).filter_by(event_id="gerchain_release:tx-1").one()
+        event.lease_until = datetime.now(timezone.utc) - timedelta(seconds=5)
+        session.commit()
+    assert outbox.recover_expired() == 1
+    second_claim = outbox.claim(limit=10)
+    assert len(second_claim) == 1
+    assert second_claim[0].attempts == 3
+
+    with restarted_factory() as session:
+        after = {
+            "balances": sorted((r.account_id, r.currency, r.balance, r.version)
+                               for r in session.query(LedgerAccountModel).all()),
+            "movements": session.query(func.count(LedgerMovementModel.id)).scalar(),
+            "witnesses": session.query(func.count(TransactionWitness.id)).scalar(),
+            "outbox": session.query(func.count(OutboxEvent.id)).scalar(),
+            "idempotency": session.query(func.count(DurableIdempotencyRecord.key)).scalar(),
+        }
+        report = deep_reconcile_value_truth(session)
+        assert after == before, {"before": before, "after": after}
+        assert report.matched is True, report.issues
+
+    restarted_engine.dispose()
