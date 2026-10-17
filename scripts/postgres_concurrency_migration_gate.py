@@ -77,6 +77,33 @@ def main() -> None:
                 f"migration checksum drift: stored={stored}, current={migration_checksum}"
             )
 
+        # Seed non-empty canonical rows so migration replay proves preservation
+        # of actual schema data, not only stability of empty-table fingerprints.
+        conn.execute("""
+            INSERT INTO escrows
+                (id, sender_address, receiver_address, amount, state, condition_desc,
+                 updated_at, refund_destination, currency, version, created_at)
+            VALUES
+                ('gate-escrow', 'gate-source', 'gate-beneficiary', 17, 'CREATED',
+                 'migration-gate-fixture', now(), 'gate-source', 'MNT', 0, now())
+            ON CONFLICT (id) DO NOTHING
+        """)
+        conn.execute("""
+            INSERT INTO gerchain_ledger_accounts
+                (account_id, currency, balance, version, updated_at)
+            VALUES ('gate-account', 'MNT', 1700, 0, now())
+            ON CONFLICT (account_id) DO NOTHING
+        """)
+        conn.execute("""
+            INSERT INTO gerchain_ledger_movements
+                (transaction_id, source, destination, amount, currency, operation,
+                 escrow_id, integrity_hash, created_at)
+            VALUES
+                ('gate-movement', 'gate-source', 'gate-beneficiary', 17, 'MNT',
+                 'SETTLEMENT', 'gate-escrow', 'gate-integrity-hash', now())
+            ON CONFLICT (transaction_id) DO NOTHING
+        """)
+
     # 32 competing inserts (two independent connections per variant) must leave
     # exactly one authoritative row for each of variants 1..16.
     jobs = [(variant, worker) for variant in VARIANTS for worker in (1, 2)]
