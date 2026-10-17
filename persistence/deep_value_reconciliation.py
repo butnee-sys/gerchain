@@ -168,10 +168,16 @@ def deep_reconcile_value_truth(session: Session) -> DeepValueTruthReport:
     }
 
     for witness in witnesses:
+        state_only_cancel = (
+            witness.event_type == "GERCHAIN_CANCELLED"
+            and witness.amount == 0
+            and witness.transaction_id not in movement_by_tx
+        )
         if (
             witness.event_type in value_event_types
             and witness.transaction_id not in movement_by_tx
-        ):
+            and not state_only_cancel
+        )
             issue(
                 "ORPHAN_WITNESS",
                 witness.transaction_id,
@@ -183,7 +189,12 @@ def deep_reconcile_value_truth(session: Session) -> DeepValueTruthReport:
             continue
         parts = event.event_id.split(":", 1)
         tx = parts[1] if len(parts) == 2 else None
-        if tx is None or tx not in movement_by_tx:
+        state_only_cancel = (
+            event.event_type == "GERCHAIN_CANCELLED"
+            and event.aggregate_id in escrow_by_id
+            and _is_state_only_cancel_payload(event.payload_json)
+        )
+        if (tx is None or tx not in movement_by_tx) and not state_only_cancel:
             issue("ORPHAN_OUTBOX", tx, "value-moving outbox event has no canonical movement")
 
     # Idempotency is also used by state-only operations. A completed record
