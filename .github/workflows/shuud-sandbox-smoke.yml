@@ -1,5 +1,8 @@
 name: SHUUD Sandbox Smoke
 
+concurrency:
+  group: shuud-sandbox-smoke-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 on:
   push:
     branches: ["main"]
