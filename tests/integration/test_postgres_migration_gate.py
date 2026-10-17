@@ -7,6 +7,7 @@ from PostgreSQL itself.
 from __future__ import annotations
 
 import os
+from uuid import uuid4
 from pathlib import Path
 
 import psycopg
@@ -38,16 +39,19 @@ def test_canonical_migrations_apply_idempotently_on_real_postgres():
     assert DATABASE_URL
     migration_dir = Path(__file__).resolve().parents[2] / "postgres" / "migrations"
 
-    with psycopg.connect(_driver_url(DATABASE_URL)) as conn:
-        first = apply_migrations(conn, migration_dir)
-    assert first == tuple(range(1, 17))
-
-    with psycopg.connect(_driver_url(DATABASE_URL)) as conn:
-        second = apply_migrations(conn, migration_dir)
-    assert second == ()
-
-    engine = create_engine(DATABASE_URL)
+    schema = "migration_idempotency_" + uuid4().hex
+    with psycopg.connect(_driver_url(DATABASE_URL), autocommit=True) as admin:
+        admin.execute(f'CREATE SCHEMA "{schema}"')
+    options = f"-c search_path={schema}"
+    engine = create_engine(DATABASE_URL, connect_args={"options": options})
     try:
+        with psycopg.connect(_driver_url(DATABASE_URL), options=options) as conn:
+            first = apply_migrations(conn, migration_dir)
+        assert first == tuple(range(1, 17))
+
+        with psycopg.connect(_driver_url(DATABASE_URL), options=options) as conn:
+            second = apply_migrations(conn, migration_dir)
+        assert second == ()
         inspector = inspect(engine)
         tables = set(inspector.get_table_names())
         assert {
@@ -85,6 +89,8 @@ def test_canonical_migrations_apply_idempotently_on_real_postgres():
             assert len(set(constraints)) == 6
     finally:
         engine.dispose()
+        with psycopg.connect(_driver_url(DATABASE_URL), autocommit=True) as admin:
+            admin.execute(f'DROP SCHEMA IF EXISTS "{schema}" CASCADE')
 
 
 def test_production_factory_uses_canonical_ledger_on_real_postgres():
