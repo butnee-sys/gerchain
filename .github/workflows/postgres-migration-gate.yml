@@ -102,9 +102,14 @@ jobs:
           with psycopg.connect(dsn) as conn:
               applied = apply_migrations(conn, folder)
           with psycopg.connect(dsn) as conn:
-              rows = conn.execute("SELECT version, checksum FROM schema_version ORDER BY version").fetchall()
+              rows = conn.execute("SELECT version, checksum, applied_at FROM schema_version ORDER BY version").fetchall()
           expected = [(i, checksum(p.read_text(encoding="utf-8"))) for i,p in enumerate(_canonical_migration_files(folder),1)]
-          assert rows == expected, {"expected": expected, "actual": rows}
+          observed = [(version, digest) for version, digest, _applied_at in rows]
+          assert observed == expected, {"expected": expected, "actual": observed}
+          assert len(rows) == 16, f"expected 16 migration records, got {len(rows)}"
+          missing_applied_at = [version for version, _digest, applied_at in rows if applied_at is None]
+          assert not missing_applied_at, f"missing applied_at for migration versions: {missing_applied_at}"
+          print("MIGRATION_APPLIED_AT=PASS versions=16 all_non_null=true")
           assert set(applied).issubset(set(range(1,17)))
           print(f"CONCURRENT_RUNNER_PASS versions={len(rows)} newly_applied={len(applied)}")
           PY
@@ -143,7 +148,8 @@ jobs:
                   WHERE n.nspname = current_schema()
                   ORDER BY t.relname, c.conname
               """).fetchall()
-          assert rows == expected, {"expected": expected, "actual": rows}
+          assert [(v, c) for v, c, _applied_at in rows] == expected, {"expected": expected, "actual": rows}
+          assert len(rows) == 16 and all(applied_at is not None for _v, _c, applied_at in rows), "all 16 applied_at timestamps must be present"
           engine = create_engine(os.environ["GERCHAIN_TEST_DATABASE_URL"])
           try:
               with engine.connect() as conn:
@@ -161,7 +167,9 @@ jobs:
           report = {
               "commit_sha": os.environ["EVIDENCE_COMMIT_SHA"],
               "migration_count": len(rows),
-              "schema_version_checksums": [{"version": v, "checksum": c} for v,c in rows],
+              "schema_version_checksums": [{"version": v, "checksum": c, "applied_at": applied_at.isoformat()} for v,c,applied_at in rows],
+              "migration_applied_at_count": sum(1 for _v, _c, applied_at in rows if applied_at is not None),
+              "migration_applied_at_all_non_null": all(applied_at is not None for _v, _c, applied_at in rows),
               "schema_history_sha256": hashlib.sha256(json.dumps(rows, separators=(",", ":")).encode()).hexdigest(),
               "actual_constraint_definitions": [
                   {"schema": s, "table": t, "name": name, "type": typ,
