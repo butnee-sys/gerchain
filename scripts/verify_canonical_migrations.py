@@ -47,6 +47,10 @@ def _run() -> dict:
     report = {
         "commit_sha": _git_sha(),
         "migration_versions_expected": list(EXPECTED),
+        "migration_files_sha256": [
+            {"version": int(path.name.split("_", 1)[0]), "file": path.name, "sha256": hashlib.sha256(path.read_bytes()).hexdigest()}
+            for path in _canonical_migration_files(MIGRATION_DIR)
+        ],
         "started_at_epoch": time.time(),
         "scenarios": {},
         "status": "IN_PROGRESS",
@@ -340,7 +344,7 @@ def _run() -> dict:
                 })
                 raise
 
-        ctx = multiprocessing.get_context("spawn")
+        ctx = multiprocessing.get_context("fork")
         result_queue = ctx.Queue()
         processes = [
             ctx.Process(target=runner_process, args=(runner_id, concurrent_schema, result_queue))
