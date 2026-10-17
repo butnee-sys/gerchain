@@ -44,7 +44,15 @@ jobs:
       - name: Verify canonical production runtime boot
         env:
           GERCHAIN_POSTGRES_DSN: postgresql://gerchain:gerchain@127.0.0.1:5432/gerchain_test
-        run: python -m pytest -q --junitxml=artifacts/postgres-production-runtime.xml postgres/tests/test_production_runtime_boot.py
+        run: |
+          mkdir -p artifacts
+          python -m pytest -q --junitxml=artifacts/postgres-production-runtime.xml postgres/tests/test_production_runtime_boot.py
+      - name: Verify SHA, migration checksums, schema, and test report
+        env:
+          EXPECTED_COMMIT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          GERCHAIN_POSTGRES_DSN: postgresql://gerchain:gerchain@127.0.0.1:5432/gerchain_test
+          JUNIT_XML_PATH: artifacts/postgres-production-runtime.xml
+        run: python postgres/emit_production_gate_evidence.py
       - name: Upload PostgreSQL production runtime evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -53,4 +61,5 @@ jobs:
           path: |
             artifacts/postgres-production-runtime.xml
             artifacts/checkout-identity.txt
+            artifacts/production-gate-evidence.json
           if-no-files-found: error
