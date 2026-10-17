@@ -362,6 +362,43 @@ def _run() -> dict:
             "serialized_outcome": "exactly one applied; exactly one already-applied",
         }
 
+        # 7. Bind the persisted applied_at timestamp for every canonical migration.
+        # Version/checksum alone is insufficient to prove the live registry row.
+        with _connect(base_url, clean) as conn:
+            applied_rows = conn.execute(
+                "SELECT version, checksum, applied_at FROM schema_version ORDER BY version"
+            ).fetchall()
+            conn.commit()
+        applied_history = [
+            {
+                "version": int(version),
+                "checksum": str(digest),
+                "applied_at": applied_at.isoformat() if applied_at is not None else None,
+            }
+            for version, digest, applied_at in applied_rows
+        ]
+        if [row["version"] for row in applied_history] != list(EXPECTED):
+            raise AssertionError(
+                f"applied_at verification expected versions {list(EXPECTED)}, "
+                f"got {[row['version'] for row in applied_history]}"
+            )
+        if any(not row["applied_at"] for row in applied_history):
+            raise AssertionError(
+                "schema_version contains missing applied_at timestamp(s): "
+                f"{[row['version'] for row in applied_history if not row['applied_at']]}"
+            )
+        if any(len(row["checksum"]) != 64 for row in applied_history):
+            raise AssertionError("schema_version contains a non-SHA256 checksum")
+        report["scenarios"]["persisted_migration_history_applied_at"] = {
+            "status": "PASS",
+            "database": "migration_gate",
+            "migration_count": len(applied_history),
+            "versions_exact": [row["version"] for row in applied_history] == list(EXPECTED),
+            "all_checksums_sha256": all(len(row["checksum"]) == 64 for row in applied_history),
+            "all_applied_at_present": all(row["applied_at"] for row in applied_history),
+            "rows": applied_history,
+        }
+
         report["status"] = "PASS"
         return report
     except Exception as exc:
