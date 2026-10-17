@@ -48,7 +48,7 @@ class CanonicalComposition:
         # required NEF asset reference, G-3 policy and escrow context before
         # forwarding into Core; the generic forwarding adapter is not used as
         # the canonical G-3/Core boundary.
-        g3_to_core = G3ToCoreBoundaryAdapter(core_endpoint)
+        g3_to_core = G3ToCoreBoundaryAdapter(core_endpoint.handle)
         g3_endpoint = _LayerEndpoint(g3, g3_to_core)
         dee_to_g3 = DEEToG3BoundaryAdapter(g3_endpoint)
         dee_endpoint = _LayerEndpoint(dee, dee_to_g3)
