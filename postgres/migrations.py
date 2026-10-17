@@ -1,4 +1,4 @@
-# EA-35.51: exact-commit PostgreSQL concurrency gate requested on this revision; evidence must bind checkout, report, and CI SHA.
+# EA-35.52: clarify the session-lock/transaction/publication contract after migration duplicate-history review.
 # EA-35.50: fresh exact-SHA re-performance required after reviewing historical schema_version duplicate-publication failure logs; do not treat prior run as current evidence.
 # EA-35.48: exact-SHA PostgreSQL migration race re-performance trigger; prior failed runs are historical only.
 # EA-35.47: exact-branch re-performance after reviewing concurrent schema_version duplicate-publication evidence.
@@ -27,7 +27,7 @@
 from __future__ import annotations
 
 import hashlib
-from contextlib import contextmanager, nullcontext
+from contextlib import contextmanager
 from pathlib import Path
 
 import psycopg.sql
@@ -157,10 +157,6 @@ def _migration_transaction(conn):
                 raise
 
 
-def _connection_in_transaction(conn) -> bool:
-    value = getattr(conn, "in_transaction", False)
-    return value() if callable(value) else bool(value)
-
 def _execute(conn, sql: str, params=None):
     # Non-parameterized DDL/PLpgSQL may contain literal percent signs.
     # Avoid psycopg's pyformat parser when there are no parameters.
@@ -264,7 +260,8 @@ def apply_migrations(conn, migration_dir: str | Path) -> None:
                 + ", ".join(p.name for p in candidates)
             )
 
-    # EA-35.51: one transaction-scoped lock serializes migration DDL and version publication.
+    # Session advisory lock serializes the full batch; DDL and version publication
+    # commit or roll back together in the migration transaction.
     migration_context = _migration_transaction(conn)
     applied_now: list[int] = []
     try:
@@ -407,7 +404,7 @@ def apply_migrations(conn, migration_dir: str | Path) -> None:
                 # Concurrent runners must never publish duplicate schema history.
                 # The unique version key is a final publication barrier even if
                 # an older runner reaches this point after the advisory lock path.
-                # The transaction-scoped advisory lock serializes compliant runners;
+                # The session-scoped advisory lock serializes compliant runners;
                 # ON CONFLICT remains a second-line idempotency barrier for legacy
                 # or differently-versioned bootstrap callers.
                 # Publish the version/checksum as one conflict-safe statement.
