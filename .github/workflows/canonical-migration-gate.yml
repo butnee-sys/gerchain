@@ -98,11 +98,33 @@ jobs:
           if report.get("status") != "PASS":
               raise SystemExit("FAIL: migration report status is not PASS")
           PY
+      - name: Generate JUnit migration report
+        if: always()
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p = Path('migration-gate-report.json')
+          r = json.loads(p.read_text()) if p.exists() else {'status': 'MISSING', 'scenarios': {}}
+          cases = []
+          for name, scenario in r.get('scenarios', {}).items():
+              if scenario.get('status') == 'PASS':
+                  cases.append(f'<testcase classname="canonical_migration_gate" name="{name}"/>')
+              else:
+                  msg = str(r.get('failure', scenario.get('status', 'MISSING'))).replace('&', '&amp;').replace('"', '&quot;')
+                  cases.append(f'<testcase classname="canonical_migration_gate" name="{name}"><failure message="{msg}"/></testcase>')
+          failures = 0 if r.get('status') == 'PASS' else 1
+          xml = '<?xml version="1.0" encoding="UTF-8"?>\n' + f'<testsuite name="canonical-migration-gate" tests="{len(cases)}" failures="{failures}" errors="0">' + ''.join(cases) + '</testsuite>\n'
+          Path('migration-gate-junit.xml').write_text(xml)
+          if r.get('status') != 'PASS': raise SystemExit('Migration report is not PASS')
+          PY
       - name: Preserve evidence report
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: canonical-migration-gate-${{ github.sha }}
-          path: migration-gate-report.json
+          path: |
+            migration-gate-report.json
+            migration-gate-junit.xml
           if-no-files-found: error
           retention-days: 90
