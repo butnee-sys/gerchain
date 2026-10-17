@@ -96,6 +96,27 @@ jobs:
           print({"canonical_migrations": len(actual), "newly_applied": list(applied), "history_matches_manifest": True})
           PY
 
+      - name: Boot canonical production entrypoint against migrated PostgreSQL
+        env:
+          GERCHAIN_ESCROW_ID: migration-gate-escrow
+          GERCHAIN_ESCROW_AMOUNT: "100"
+          GERCHAIN_CURRENCY: MNT
+          GERCHAIN_WITNESS_ID: migration-gate-witness
+        run: |
+          python - <<'PY'
+          from production_entrypoint import build_production_runtime
+          runtime, engine = build_production_runtime()
+          try:
+              assert runtime.is_canonical_ledger_authoritative is True
+              print({
+                  "runtime_mode": runtime.runtime_mode,
+                  "canonical_ledger_authoritative": runtime.is_canonical_ledger_authoritative,
+                  "postgresql_boot": "PASS",
+              })
+          finally:
+              engine.dispose()
+          PY
+
       - name: Run deep value-truth reconciliation tests
         run: python -m pytest -q tests/persistence/test_deep_value_reconciliation.py
 
