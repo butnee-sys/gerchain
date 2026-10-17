@@ -83,7 +83,8 @@ jobs:
             tests/production/test_postgres_canonical_concurrency.py \
             tests/test_postgres_atomic_ledger.py \
             tests/test_production_runtime_factory.py \
-            tests/test_production_runtime_factory_postgres.py \
+            tests/production/test_production_runtime_factory_postgres.py \
+            tests/production/test_postgres_ten_movement_evidence.py \
             tests/production/test_production_entrypoint.py \
             tests/persistence/test_deep_value_reconciliation.py \
             tests/services/test_gerchain_runtime_fund_canonical.py \
