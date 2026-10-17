@@ -269,6 +269,62 @@ def test_checksum_failure_rolls_back_prior_migration_ddl_and_history(monkeypatch
                 )
             )
 
+
+def test_modified_applied_migration_is_rejected_by_checksum(monkeypatch, tmp_path):
+    """Changing a migration file after publication must fail closed."""
+    admin_dsn = _dsn()
+    database_name = f"gerchain_checksum_mutation_{uuid.uuid4().hex[:12]}"
+    with psycopg.connect(admin_dsn, autocommit=True) as admin:
+        admin.execute(sql.SQL("CREATE DATABASE {}").format(sql.Identifier(database_name)))
+
+    fresh_dsn = make_conninfo(admin_dsn, dbname=database_name)
+    migration_dir = tmp_path / "checksum_mutation_bundle"
+    migration_dir.mkdir()
+    migration = migration_dir / "001_create_probe.sql"
+    migration.write_text(
+        "CREATE TABLE checksum_probe (id INTEGER);", encoding="utf-8"
+    )
+    try:
+        with psycopg.connect(fresh_dsn) as conn:
+            apply_migrations(conn, migration_dir)
+            original = conn.execute(
+                "SELECT version, checksum FROM schema_version ORDER BY version"
+            ).fetchall()
+            assert len(original) == 1
+            assert original[0][0] == 1
+            conn.commit()
+
+            migration.write_text(
+                "CREATE TABLE checksum_probe (id INTEGER, changed TEXT);",
+                encoding="utf-8",
+            )
+            with pytest.raises(
+                RuntimeError, match="Migration checksum mismatch for version 1"
+            ):
+                apply_migrations(conn, migration_dir)
+
+            history = conn.execute(
+                "SELECT version, checksum FROM schema_version ORDER BY version"
+            ).fetchall()
+            columns = conn.execute(
+                """
+                SELECT column_name FROM information_schema.columns
+                WHERE table_schema = current_schema()
+                  AND table_name = 'checksum_probe'
+                ORDER BY ordinal_position
+                """
+            ).fetchall()
+            assert history == original
+            assert [row[0] for row in columns] == ["id"]
+    finally:
+        with psycopg.connect(admin_dsn, autocommit=True) as admin:
+            admin.execute(
+                sql.SQL("DROP DATABASE IF EXISTS {} WITH (FORCE)").format(
+                    sql.Identifier(database_name)
+                )
+            )
+
+
 def test_postgres_interruption_and_retry_moves_value_exactly_once(monkeypatch):
     """A rolled-back attempt moves no value; a retry and replay move it once."""
     admin_dsn = _dsn()
