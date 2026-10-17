@@ -172,7 +172,7 @@ jobs:
               "schema_version_checksums": [{"version": v, "checksum": c, "applied_at": applied_at.isoformat()} for v,c,applied_at in rows],
               "migration_applied_at_count": sum(1 for _v, _c, applied_at in rows if applied_at is not None),
               "migration_applied_at_all_non_null": all(applied_at is not None for _v, _c, applied_at in rows),
-              "schema_history_sha256": hashlib.sha256(json.dumps(rows, separators=(",", ":")).encode()).hexdigest(),
+              "schema_history_sha256": hashlib.sha256(json.dumps([(v, digest, applied_at.isoformat()) for v, digest, applied_at in rows], separators=(",", ":")).encode()).hexdigest(),
               "actual_constraint_definitions": [
                   {"schema": s, "table": t, "name": name, "type": typ,
                    "definition": definition, "validated": validated}
