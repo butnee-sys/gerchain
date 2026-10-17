@@ -119,32 +119,42 @@ def checksum(sql: str) -> str:
 
 @contextmanager
 def _migration_transaction(conn):
-    """Serialize the complete migration batch in one PostgreSQL transaction.
+    """Serialize the complete migration batch with a PostgreSQL session lock.
 
-    The runner strips historical BEGIN/COMMIT wrappers from migration files,
-    so no migration is permitted to commit independently. A transaction-scoped
-    advisory lock therefore protects the full read/DDL/publication sequence and
-    is released atomically by commit or rollback. This avoids the session-lock
-    acquire/unlock lifecycle, which can leave a connection holding a lock after
-    an interrupted or partially failed migration runner.
+    A transaction-scoped advisory lock is insufficient if any legacy migration
+    script or driver path commits while the batch is running: that commit releases
+    the lock and permits another runner to publish the same version. A session
+    lock survives transaction boundaries. It is always released in finally;
+    migration DDL and schema_version publication remain transactionally committed
+    or rolled back by the existing runner.
     """
     if _connection_in_transaction(conn):
         raise RuntimeError("migration runner requires a clean transaction")
 
     is_sqlalchemy = hasattr(conn, "exec_driver_sql")
 
-    def execute(sql, params=()):
+    def execute(statement, params=()):
         if is_sqlalchemy:
-            return conn.exec_driver_sql(sql, params)
-        return conn.execute(sql, params)
+            return conn.exec_driver_sql(statement, params)
+        return conn.execute(statement, params)
 
+    acquired = False
     try:
-        execute("SELECT pg_advisory_xact_lock(%s)", (MIGRATION_LOCK_KEY,))
+        execute("SELECT pg_advisory_lock(%s)", (MIGRATION_LOCK_KEY,))
+        acquired = True
         yield
         conn.commit()
     except Exception:
         conn.rollback()
         raise
+    finally:
+        if acquired:
+            try:
+                execute("SELECT pg_advisory_unlock(%s)", (MIGRATION_LOCK_KEY,))
+                conn.commit()
+            except Exception:
+                conn.rollback()
+                raise
 
 
 def _connection_in_transaction(conn) -> bool:
