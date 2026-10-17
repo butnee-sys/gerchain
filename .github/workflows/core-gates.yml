@@ -1,5 +1,8 @@
 name: core-gates
 
+concurrency:
+  group: core-gates-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 on:
   push:
     branches: ["feat/de-dee-gate01", "feat/gerchain-flow-hardening", "feat/core-gate02-capability-audit", "main"]
