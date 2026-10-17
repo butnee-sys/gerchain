@@ -60,6 +60,7 @@ def build_production_runtime():
                 witness_id=witness_id,
             ),
             engine=engine,
+            session_factory=session_factory,
         )
         runtime = factory.create()
         if not runtime.is_canonical_ledger_authoritative:
