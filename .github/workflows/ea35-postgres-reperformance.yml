@@ -362,35 +362,35 @@ jobs:
 
       - name: Verify canonical migration runner compatibility and migration contracts
         run: |
-          pytest -q tests/postgres/test_migrations.py
-          pytest -q postgres/tests/test_schema_version_bootstrap_contract.py
+          pytest -q tests/postgres/test_migrations.py --junitxml=artifacts/ea35/junit-migrations.xml
+          pytest -q postgres/tests/test_schema_version_bootstrap_contract.py --junitxml=artifacts/ea35/junit-schema-bootstrap.xml
 
       - name: Verify checksum mismatch fails without partial schema or history changes
         run: |
           set -o pipefail
-          pytest -vv -s postgres/tests/test_migration_checksum_atomicity.py 2>&1 | tee artifacts/ea35/checksum-runner.log
+          pytest -vv -s postgres/tests/test_migration_checksum_atomicity.py --junitxml=artifacts/ea35/junit-checksum-atomicity.xml 2>&1 | tee artifacts/ea35/checksum-runner.log
 
       - name: Re-perform concurrent migration publication on fresh PostgreSQL database
         run: |
           set -o pipefail
-          pytest -vv -s postgres/tests/test_concurrency.py 2>&1 | tee artifacts/ea35/concurrency-runner.log
+          pytest -vv -s postgres/tests/test_concurrency.py --junitxml=artifacts/ea35/junit-concurrency.xml 2>&1 | tee artifacts/ea35/concurrency-runner.log
 
       - name: Confirm isolated PostgreSQL test database remains available
         run: PGPASSWORD=gerchain psql -h localhost -U gerchain -d gerchain_reperformance -c "SELECT current_database();"
 
       - name: Re-perform durable value-truth test suite on PostgreSQL
         run: |
-          pytest -q tests/persistence/test_deep_value_reconciliation_postgres.py
+          pytest -q tests/persistence/test_deep_value_reconciliation_postgres.py --junitxml=artifacts/ea35/junit-value-reconciliation-postgres.xml
 
       - name: Re-perform CREATE/FUND/LOCK/RELEASE/REFUND/CANCEL/SETTLEMENT on PostgreSQL
         env:
           GERCHAIN_TEST_DATABASE_URL: postgresql+psycopg://gerchain:gerchain@localhost:5432/gerchain_reperformance
         run: |
-          pytest -q -s tests/persistence/test_canonical_lifecycle_postgres.py
+          pytest -q -s tests/persistence/test_canonical_lifecycle_postgres.py --junitxml=artifacts/ea35/junit-canonical-lifecycle-postgres.xml
 
       - name: Re-perform canonical atomic lifecycle, rollback, and replay tests on PostgreSQL
         run: |
-          pytest -q -s tests/persistence/test_deep_value_reconciliation.py
+          pytest -q -s tests/persistence/test_deep_value_reconciliation.py --junitxml=artifacts/ea35/junit-deep-value-reconciliation.xml
 
       - name: Verify production factory boots with canonical Ledger authority
         run: |
@@ -506,25 +506,49 @@ jobs:
           root.mkdir(parents=True, exist_ok=True)
           expected_sha = os.environ["EVIDENCE_COMMIT_SHA"]
           checked_out_head = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
-          junit_path = root / "junit.xml"
-          junit_generated_by_pytest = junit_path.exists()
-          if not junit_generated_by_pytest:
-              junit_path.write_text(
-                  '<?xml version="1.0" encoding="UTF-8"?>\n'
+          junit_paths = sorted(root.glob("junit*.xml"))
+          junit_generated_by_pytest = bool(junit_paths) and all(
+              path.stat().st_size > 0 for path in junit_paths
+          )
+          if not junit_paths:
+              (root / "junit.xml").write_text(
+                  '<?xml version="1.0" encoding="UTF-8"?>\\n'
                   '<testsuites tests="0" failures="0" errors="0" skipped="0">'
                   '<testsuite name="pytest-not-run" tests="0" failures="0" errors="0" skipped="0">'
                   '<system-out>pytest did not produce JUnit XML; this is a placeholder, not passing test evidence.</system-out>'
-                  '</testsuite></testsuites>\n',
+                  '</testsuite></testsuites>\\n',
                   encoding="utf-8",
               )
-
-          junit_sha256 = hashlib.sha256(junit_path.read_bytes()).hexdigest()
-          xml_root = ET.parse(junit_path).getroot()
-          suites = [xml_root] if xml_root.tag == "testsuite" else list(xml_root.iter("testsuite"))
+              junit_paths = [root / "junit.xml"]
           counts = {key: 0 for key in ("tests", "failures", "errors", "skipped")}
-          for suite in suites:
-              for key in counts:
-                  counts[key] += int(suite.attrib.get(key, "0"))
+          junit_files = []
+          for path in junit_paths:
+              xml_root = ET.parse(path).getroot()
+              suites = [xml_root] if xml_root.tag == "testsuite" else list(xml_root.iter("testsuite"))
+              file_counts = {key: 0 for key in counts}
+              for suite in suites:
+                  for key in counts:
+                      file_counts[key] += int(suite.attrib.get(key, "0"))
+                      counts[key] += int(suite.attrib.get(key, "0"))
+              junit_files.append({
+                  "path": str(path),
+                  "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+                  **file_counts,
+              })
+          aggregate_xml = root / "junit.xml"
+          if aggregate_xml not in junit_paths:
+              aggregate_xml.write_text(
+                  '<?xml version="1.0" encoding="UTF-8"?>\\n'
+                  f'<testsuites tests="{counts["tests"]}" failures="{counts["failures"]}" errors="{counts["errors"]}" skipped="{counts["skipped"]}">\\n'
+                  + "".join(
+                      ET.tostring(ET.parse(path).getroot(), encoding="unicode")
+                      for path in junit_paths
+                  )
+                  + '</testsuites>\\n',
+                  encoding="utf-8",
+              )
+          junit_path = aggregate_xml
+          junit_sha256 = hashlib.sha256(junit_path.read_bytes()).hexdigest()
           manifest_migration = root / "migration-manifest.json"
           migration_data = json.loads(manifest_migration.read_text(encoding="utf-8")) if manifest_migration.exists() else {}
           manifest_commit = migration_data.get("commit_sha")
@@ -542,6 +566,7 @@ jobs:
                   "path": "artifacts/ea35/junit.xml",
                   "sha256": junit_sha256,
                   "generated_by_pytest": junit_generated_by_pytest,
+                  "files": junit_files,
                   **counts,
               },
               "commit_sha_matches_checkout_and_migration_manifest": commit_matches,
