@@ -18,9 +18,12 @@ def _stop(*_args) -> None:
     _running = False
 
 
-def main() -> None:
+def build_production_runtime():
+    """Build the canonical PostgreSQL runtime and fail closed on any boot error."""
     database_url = os.environ.get("GERCHAIN_DATABASE_URL")
-    if not database_url or not database_url.startswith(("postgresql://", "postgresql+psycopg://", "postgresql+psycopg2://")):
+    if not database_url or not database_url.startswith(
+        ("postgresql://", "postgresql+psycopg://", "postgresql+psycopg2://")
+    ):
         raise RuntimeError("production entrypoint requires GERCHAIN_DATABASE_URL pointing to PostgreSQL")
 
     escrow_id = os.environ.get("GERCHAIN_ESCROW_ID")
@@ -60,16 +63,26 @@ def main() -> None:
         if not runtime.is_canonical_ledger_authoritative:
             raise RuntimeError("canonical ledger authority was not established")
 
-        # Force a real DB connection before reporting successful initialization.
+        # Prove the configured database is reachable before returning readiness.
         with engine.connect() as connection:
             connection.exec_driver_sql("SELECT 1")
+        return runtime, engine
+    except Exception:
+        engine.dispose()
+        raise
 
-        print(
-            "GerChain production runtime initialized: "
-            f"escrow={escrow_id} currency={currency}"
-        )
-        signal.signal(signal.SIGTERM, _stop)
-        signal.signal(signal.SIGINT, _stop)
+
+def main() -> None:
+    global _running
+    runtime, engine = build_production_runtime()
+    print(
+        "GerChain production runtime initialized: "
+        f"escrow={runtime.escrow_engine.escrow_id} "
+        f"currency={runtime.escrow_engine.currency}"
+    )
+    signal.signal(signal.SIGTERM, _stop)
+    signal.signal(signal.SIGINT, _stop)
+    try:
         while _running:
             time.sleep(1)
     finally:
