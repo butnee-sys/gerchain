@@ -176,8 +176,10 @@ def test_migrations_are_serialized_and_checksum_is_stable():
 
     with connect() as conn:
         rows = conn.execute("SELECT version, checksum FROM schema_version ORDER BY version").fetchall()
-        assert [row[0] for row in rows] == [1]
-        assert len(rows[0][1]) == 64
+        expected_versions = [int(path.name.split("_", 1)[0]) for path in sorted(MIGRATION_DIR.glob("*.sql"))]
+        assert [row[0] for row in rows] == expected_versions
+        assert len({row[0] for row in rows}) == len(expected_versions)
+        assert all(len(row[1]) == 64 for row in rows)
 
 
 def test_migration_checksum_mismatch_is_rejected(tmp_path):
