@@ -6,7 +6,7 @@ Run with GERCHAIN_MIGRATION_TEST_DATABASE_URL pointing to a disposable PostgreSQ
 database. This intentionally does not invoke the general test suite, so unrelated
 regressions cannot mask or contaminate migration-gate evidence.
 """
-import concurrent.futures
+import multiprocessing
 import hashlib
 import json
 import os
@@ -15,6 +15,7 @@ import sys
 import shutil
 import tempfile
 import time
+from datetime import datetime, timezone
 import uuid
 from pathlib import Path
 
@@ -93,7 +94,16 @@ def _run() -> dict:
                     "failed migration left DDL or registry behind: "
                     f"table={table_after_failure}, registry={registry_after_failure}"
                 )
-
+            # Prove the failed runner released the session-level advisory lock.
+            with _connect(base_url, rollback_schema) as conn:
+                lock_probe = conn.execute(
+                    "SELECT pg_try_advisory_lock(%s)", (73546501,)
+                ).fetchone()[0]
+                if lock_probe:
+                    conn.execute("SELECT pg_advisory_unlock(%s)", (73546501,))
+                conn.commit()
+            if not lock_probe:
+                raise AssertionError("migration advisory lock remained held after failure")
             # Correct the SQL without changing the migration version/filename.
             retry_file.write_text(
                 "CREATE TABLE migration_rollback_probe (id INTEGER PRIMARY KEY);\n"
@@ -133,7 +143,7 @@ def _run() -> dict:
                     "result": "rolled-back",
                     "error": failed_error,
                     "ddl_absent_after_failure": table_after_failure is None,
-                    "schema_version_absent_after_failure": registry_after_failure is None,
+                    "schema_version_absent_after_failure": registry_after_failure is None,\n                    "advisory_lock_released_after_failure": lock_probe,
                 },
                 "corrected_retry": {
                     "result": "applied",
@@ -288,39 +298,71 @@ def _run() -> dict:
             "stored_conflicting_checksum_preserved": True
         }
 
-        # 6. Two independent runners against the same fresh schema: advisory lock
-        # serializes execution; one applies all versions and the other observes NOOP.
+        # 6. Two independent OS processes against the same fresh schema.
+        # Each process records OS PID, PostgreSQL backend PID, UTC start/end,
+        # applied versions and the exact migration history it observed.
         concurrent_schema = new_schema("concurrent")
-        def runner(runner_id: str):
-            started_at = time.time()
-            with _connect(base_url, concurrent_schema) as conn:
-                backend_pid = conn.execute("SELECT pg_backend_pid()").fetchone()[0]
-                database_name = conn.info.dbname
-                conn.commit()  # The diagnostic SELECT must not leave a transaction open.
-                applied_versions = list(apply_migrations(conn, MIGRATION_DIR))
-                rows = conn.execute(
-                    "SELECT version, checksum FROM schema_version ORDER BY version"
-                ).fetchall()
-                conn.commit()
-            result = {
-                "runner_id": runner_id,
-                "backend_pid": backend_pid,
-                "database": database_name,
-                "started_at_epoch": started_at,
-                "finished_at_epoch": time.time(),
-                "applied_versions": applied_versions,
-                "migration_history": [{"version": int(v), "checksum": str(d)} for v, d in rows],
-            }
-            print("MIGRATION_GATE_CONCURRENT_RUNNER " + json.dumps(result, sort_keys=True), flush=True)
-            return result
 
-        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
-            results = list(pool.map(runner, ("A", "B")))
+        def runner_process(runner_id: str, schema: str, result_queue) -> None:
+            started_utc = datetime.now(timezone.utc).isoformat()
+            started_epoch = time.time()
+            try:
+                with _connect(base_url, schema) as conn:
+                    backend_pid = conn.execute("SELECT pg_backend_pid()").fetchone()[0]
+                    database_name = conn.info.dbname
+                    conn.commit()
+                    applied_versions = list(apply_migrations(conn, MIGRATION_DIR))
+                    rows = conn.execute(
+                        "SELECT version, checksum FROM schema_version ORDER BY version"
+                    ).fetchall()
+                    conn.commit()
+                result_queue.put({
+                    "runner_id": runner_id,
+                    "process_pid": os.getpid(),
+                    "postgres_session_pid": backend_pid,
+                    "database": database_name,
+                    "started_at_utc": started_utc,
+                    "finished_at_utc": datetime.now(timezone.utc).isoformat(),
+                    "started_at_epoch": started_epoch,
+                    "finished_at_epoch": time.time(),
+                    "applied_versions": applied_versions,
+                    "migration_history": [{"version": int(v), "checksum": str(d)} for v, d in rows],
+                    "status": "PASS",
+                })
+            except Exception as exc:
+                result_queue.put({
+                    "runner_id": runner_id,
+                    "process_pid": os.getpid(),
+                    "started_at_utc": started_utc,
+                    "finished_at_utc": datetime.now(timezone.utc).isoformat(),
+                    "status": "FAIL",
+                    "error": f"{type(exc).__name__}: {exc}",
+                })
+                raise
+
+        ctx = multiprocessing.get_context("spawn")
+        result_queue = ctx.Queue()
+        processes = [
+            ctx.Process(target=runner_process, args=(runner_id, concurrent_schema, result_queue))
+            for runner_id in ("A", "B")
+        ]
+        for process in processes:
+            process.start()
+        results = [result_queue.get(timeout=240) for _ in processes]
+        for process in processes:
+            process.join(timeout=240)
+            if process.is_alive():
+                process.terminate()
+                process.join()
+                raise AssertionError(f"migration process {process.pid} timed out")
+            if process.exitcode != 0:
+                raise AssertionError(f"migration process {process.pid} exited {process.exitcode}: {results}")
+        results.sort(key=lambda result: result["runner_id"])
         normalized = sorted((tuple(result["applied_versions"]) for result in results), key=len, reverse=True)
         if normalized != [EXPECTED, ()]:
             raise AssertionError(f"concurrent runners expected one full apply and one NOOP, got {results}")
-        if len({result["backend_pid"] for result in results}) != 2:
-            raise AssertionError(f"concurrent migration gate did not use two independent backend PIDs: {results}")
+        if len({result["postgres_session_pid"] for result in results}) != 2:
+            raise AssertionError(f"concurrent migration gate did not use two independent PostgreSQL session PIDs: {results}")
         final_history = results[0]["migration_history"]
         if any(result["migration_history"] != final_history for result in results[1:]):
             raise AssertionError(f"runners observed different migration histories: {results}")
@@ -350,13 +392,32 @@ def _run() -> dict:
                 f"schema_version uniqueness invariant failed: duplicates={duplicate_publications}, "
                 f"unique_index={unique_version_index}"
             )
+        with _connect(base_url, concurrent_schema) as conn:
+            catalog_rows = conn.execute("""
+                SELECT c.relkind, n.nspname, c.relname,
+                       COALESCE(pg_get_viewdef(c.oid, true), ''),
+                       COALESCE((
+                           SELECT string_agg(pg_get_constraintdef(k.oid), E'\\n' ORDER BY k.conname)
+                           FROM pg_constraint k WHERE k.conrelid = c.oid
+                       ), '')
+                FROM pg_class c
+                JOIN pg_namespace n ON n.oid = c.relnamespace
+                WHERE n.nspname = %s AND c.relkind IN ('r', 'p', 'v', 'm')
+                ORDER BY n.nspname, c.relname
+            """, (concurrent_schema,)).fetchall()
+            conn.commit()
+        schema_material = json.dumps(
+            [list(row) for row in catalog_rows], sort_keys=True, separators=(",", ":"), default=str
+        ).encode("utf-8")
+        database_schema_checksum = hashlib.sha256(schema_material).hexdigest()
         report["scenarios"]["concurrent_runners"] = {
             "status": "PASS",
-            "runner_logs": results,
+            "runner_logs": results,\n            "distinct_process_pids": len({result["process_pid"] for result in results}) == 2,\n            "distinct_postgres_session_pids": len({result["postgres_session_pid"] for result in results}) == 2,
             "final_migration_history": final_history,
             "final_history_sha256": hashlib.sha256(
                 json.dumps(final_history, sort_keys=True, separators=(",", ":")).encode("utf-8")
             ).hexdigest(),
+            "database_schema_checksum_sha256": database_schema_checksum,\n            "database_schema_object_count": len(catalog_rows),
             "schema_version_duplicate_publications": duplicate_publications,
             "schema_version_unique_index": unique_version_index,
             "serialized_outcome": "exactly one applied; exactly one already-applied",
