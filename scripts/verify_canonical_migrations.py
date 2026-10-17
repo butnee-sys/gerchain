@@ -421,12 +421,15 @@ def _run() -> dict:
         database_schema_checksum = hashlib.sha256(schema_material).hexdigest()
         report["scenarios"]["concurrent_runners"] = {
             "status": "PASS",
-            "runner_logs": results,\n            "distinct_process_pids": len({result["process_pid"] for result in results}) == 2,\n            "distinct_postgres_session_pids": len({result["postgres_session_pid"] for result in results}) == 2,
+            "runner_logs": results,
+            "distinct_process_pids": len({result["process_pid"] for result in results}) == 2,
+            "distinct_postgres_session_pids": len({result["postgres_session_pid"] for result in results}) == 2,
             "final_migration_history": final_history,
             "final_history_sha256": hashlib.sha256(
                 json.dumps(final_history, sort_keys=True, separators=(",", ":")).encode("utf-8")
             ).hexdigest(),
-            "database_schema_checksum_sha256": database_schema_checksum,\n            "database_schema_object_count": len(catalog_rows),
+            "database_schema_checksum_sha256": database_schema_checksum,
+            "database_schema_object_count": len(catalog_rows),
             "schema_version_duplicate_publications": duplicate_publications,
             "schema_version_unique_index": unique_version_index,
             "serialized_outcome": "exactly one applied; exactly one already-applied",
