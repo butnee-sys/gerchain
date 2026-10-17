@@ -34,6 +34,16 @@ jobs:
       GERCHAIN_TEST_DATABASE_URL: postgresql+psycopg://postgres:postgres@127.0.0.1:5432/gerchain_test
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Verify exact checked-out commit
+        env:
+          EXPECTED_COMMIT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          actual="$(git rev-parse HEAD)"
+          mkdir -p artifacts
+          printf 'commit_sha=%s\nchecked_out_head_sha=%s\n' "$EXPECTED_COMMIT_SHA" "$actual" | tee artifacts/checkout-identity.txt
+          test "$EXPECTED_COMMIT_SHA" = "$actual"
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
@@ -50,5 +60,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ea36-postgresql-reperformance
-          path: artifacts/ea36-postgresql-reperformance.xml
+          path: |
+            artifacts/ea36-postgresql-reperformance.xml
+            artifacts/checkout-identity.txt
           if-no-files-found: error
