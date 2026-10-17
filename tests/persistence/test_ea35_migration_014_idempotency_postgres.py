@@ -1,0 +1,108 @@
+from __future__ import annotations
+
+import os
+import uuid
+from pathlib import Path
+
+import psycopg
+import pytest
+
+
+DATABASE_URL = os.getenv("GERCHAIN_TEST_DATABASE_URL")
+pytestmark = pytest.mark.skipif(
+    not DATABASE_URL,
+    reason="GERCHAIN_TEST_DATABASE_URL must point to a disposable PostgreSQL database",
+)
+
+
+def _constraint_snapshot(connection, schema: str) -> tuple[tuple[str, str, bool], ...]:
+    rows = connection.execute(
+        """
+        SELECT c.conname, pg_get_constraintdef(c.oid, true), c.convalidated
+        FROM pg_constraint AS c
+        JOIN pg_class AS t ON t.oid = c.conrelid
+        JOIN pg_namespace AS n ON n.oid = t.relnamespace
+        WHERE n.nspname = %s AND t.relname = 'escrows'
+        ORDER BY c.conname
+        """,
+        (schema,),
+    ).fetchall()
+    return tuple((name, definition, validated) for name, definition, validated in rows)
+
+
+def _apply_migration(connection, schema: str, sql: str) -> None:
+    connection.execute(f'SET search_path TO "{schema}"')
+    connection.execute(sql)
+
+
+def test_014_escrow_state_constraint_is_idempotent_and_preserves_definition():
+    """Compare one versus two applications in isolated schemas, including legacy DDL."""
+    migration_path = (
+        Path(__file__).resolve().parents[2]
+        / "postgres"
+        / "migrations"
+        / "014_canonical_escrow_state_constraint.sql"
+    )
+    migration_sql = migration_path.read_text(encoding="utf-8")
+    historical_path = (
+        Path(__file__).resolve().parents[2]
+        / "postgres"
+        / "migrations"
+        / "001_concurrency.sql"
+    )
+    historical_sql = historical_path.read_text(encoding="utf-8")
+    suffix = uuid.uuid4().hex[:12]
+    once_schema = f"ea35_once_{suffix}"
+    twice_schema = f"ea35_twice_{suffix}"
+
+    with psycopg.connect(DATABASE_URL, autocommit=True) as connection:
+        try:
+            for schema in (once_schema, twice_schema):
+                connection.execute(f'CREATE SCHEMA "{schema}"')
+                connection.execute(f'SET search_path TO "{schema}"')
+                # Build the pre-migration schema from the actual historical migration,
+                # not a hand-written approximation of its state constraint.
+                connection.execute(historical_sql)
+                # Capture the exact pre-migration state constraint from PostgreSQL.
+                old = connection.execute(
+                    """
+                    SELECT c.conname, pg_get_constraintdef(c.oid, true), c.convalidated
+                    FROM pg_constraint c
+                    JOIN pg_class t ON t.oid = c.conrelid
+                    JOIN pg_namespace n ON n.oid = t.relnamespace
+                    WHERE n.nspname = %s AND t.relname = 'escrows'
+                    ORDER BY c.conname
+                    """,
+                    (schema,),
+                ).fetchall()
+                state_constraints = [row for row in old if row[0] == "escrows_state_check"]
+                assert len(state_constraints) == 1, old
+                old_name, old_definition, old_validated = state_constraints[0]
+                assert old_name == "escrows_state_check"
+                assert old_definition.startswith("CHECK")
+                assert all(state in old_definition for state in ("CREATED", "LOCKED", "RELEASED"))
+                assert "FUNDED" not in old_definition
+                assert old_validated is True
+
+            _apply_migration(connection, once_schema, migration_sql)
+            once_snapshot = _constraint_snapshot(connection, once_schema)
+
+            _apply_migration(connection, twice_schema, migration_sql)
+            _apply_migration(connection, twice_schema, migration_sql)
+            twice_snapshot = _constraint_snapshot(connection, twice_schema)
+
+            assert once_snapshot == twice_snapshot
+            canonical = [row for row in once_snapshot if row[0] == "escrows_state_canonical_check"]
+            assert len(canonical) == 1, once_snapshot
+            assert not any(row[0] == "escrows_state_check" for row in once_snapshot)
+            assert not any(row[0] == "legacy_escrow_state_check" for row in once_snapshot)
+            name, definition, validated = canonical[0]
+            assert all(
+                state in definition
+                for state in ("CREATED", "FUNDED", "LOCKED", "RELEASED", "REFUNDED", "CANCELLED")
+            )
+            assert validated is True
+        finally:
+            connection.execute("SET search_path TO public")
+            connection.execute(f'DROP SCHEMA IF EXISTS "{once_schema}" CASCADE')
+            connection.execute(f'DROP SCHEMA IF EXISTS "{twice_schema}" CASCADE')

@@ -1,0 +1,207 @@
+name: EAI PostgreSQL Re-performance
+
+on:
+  push:
+    branches:
+      - feat/ea21-transaction-aware-ledger
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  postgres-reperformance:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: gerchain_ci
+          POSTGRES_USER: gerchain
+          POSTGRES_PASSWORD: gerchain_ci_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U gerchain -d gerchain_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      GERCHAIN_DATABASE_URL: postgresql+psycopg://gerchain:gerchain_ci_password@localhost:5432/gerchain_ci
+      PGHOST: localhost
+      PGPORT: "5432"
+      PGDATABASE: gerchain_ci
+      PGUSER: gerchain
+      PGPASSWORD: gerchain_ci_password
+      PYTHONUNBUFFERED: "1"
+    steps:
+      - name: Checkout exact tested commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt pytest
+      - name: Record tested revision and PostgreSQL version
+        run: |
+          set -euo pipefail
+          mkdir -p evidence/postgres
+          git rev-parse HEAD | tee evidence/postgres/commit.txt
+          python --version 2>&1 | tee evidence/postgres/python-version.txt
+          psql -v ON_ERROR_STOP=1 -c 'SELECT version();' | tee evidence/postgres/postgres-version.txt
+      - name: Compile all Python sources (fail closed)
+        run: |
+          set -euo pipefail
+          python -m compileall -q .
+          echo "COMPILEALL=PASS" | tee evidence/postgres/compileall.txt
+      - name: Run canonical core gates (fail closed)
+        env:
+          GERCHAIN_DATABASE_URL: postgresql+psycopg://gerchain:gerchain_ci_password@localhost:5432/gerchain_ci
+          GERCHAIN_TEST_DATABASE_URL: postgresql+psycopg://gerchain:gerchain_ci_password@localhost:5432/gerchain_ci
+          GERCHAIN_POSTGRES_DSN: postgresql+psycopg://gerchain:gerchain_ci_password@localhost:5432/gerchain_ci
+        run: |
+          set -euo pipefail
+          pytest -q \
+            tests/test_core_structure.py \
+            tests/test_core_final_lock_contract.py \
+            tests/test_boundary_adapters.py \
+            tests/test_composition_root.py \
+            tests/test_governed_flow_adapters.py \
+            tests/test_g3_core_boundary.py \
+            tests/test_g3_core_runtime_e2e.py \
+            tests/test_g3_dee_authorized_handler.py \
+            tests/test_dee_security.py \
+            tests/test_nef_gerchain_boundary.py \
+            tests/test_nef_gerchain_port.py \
+            tests/production/test_runtime_source_compiles.py \
+            tests/production/test_postgres_canonical_concurrency.py \
+            tests/test_postgres_atomic_ledger.py \
+            postgres/tests/test_concurrency.py \
+            tests/test_production_runtime_factory.py 2>&1 | tee evidence/postgres/core-gates.log
+      - name: Apply the authoritative canonical migration chain
+        run: |
+          set -euo pipefail
+          sha256sum postgres/migrations/*.sql > evidence/postgres/migration-file-sha256.txt
+          python - <<'PY' 2>&1 | tee evidence/postgres/migration-apply.log
+          import os
+          from sqlalchemy import create_engine, text
+          from pathlib import Path
+          from postgres.migrations import _canonical_migration_files
+          from services.gerchain_runtime_factory import initialize_canonical_postgres_schema
+
+          engine = create_engine(os.environ["GERCHAIN_DATABASE_URL"], pool_pre_ping=True)
+          try:
+              initialize_canonical_postgres_schema(engine)
+              with engine.connect() as connection:
+                  rows = connection.execute(
+                      text("SELECT version, checksum, applied_at FROM schema_version ORDER BY version")
+                  ).all()
+                  versions = [row.version for row in rows]
+                  print({"migration_versions": versions, "migration_rows": len(rows)})
+                  expected_versions = list(range(1, len(_canonical_migration_files(Path('postgres/migrations'))) + 1))
+                  if versions != expected_versions:
+                      raise SystemExit(f"migration history mismatch: expected {expected_versions}, got {versions}")
+                  with open("evidence/postgres/migration-history.txt", "w", encoding="utf-8") as handle:
+                      handle.write("version\\tchecksum\\tapplied_at\\n")
+                      for row in rows:
+                          handle.write(f"{row.version}\\t{row.checksum}\\t{row.applied_at.isoformat()}\\n")
+                  print("MIGRATION_HISTORY=PASS")
+          finally:
+              engine.dispose()
+          PY
+          grep -q 'MIGRATION_HISTORY=PASS' evidence/postgres/migration-apply.log
+      - name: Verify canonical production runtime construction against PostgreSQL
+        run: |
+          set -euo pipefail
+          python - <<'PY' 2>&1 | tee evidence/postgres/runtime-boot.log
+          import os
+          from sqlalchemy import create_engine, inspect
+          from services.gerchain_runtime_factory import ProductionRuntimeConfig, ProductionRuntimeFactory
+
+          url = os.environ["GERCHAIN_DATABASE_URL"]
+          engine = create_engine(url, pool_pre_ping=True)
+          try:
+              assert engine.dialect.name == "postgresql"
+              factory = ProductionRuntimeFactory(
+                  ProductionRuntimeConfig(
+                      database_url=url,
+                      escrow_id="ci-escrow",
+                      amount=1,
+                      currency="MNT",
+                      witness_id="ci-witness",
+                  ),
+                  engine=engine,
+              )
+              runtime = factory.create()
+              assert runtime.is_canonical_ledger_authoritative
+              inspector = inspect(engine)
+              required = {
+                  "gerchain_ledger_accounts",
+                  "gerchain_ledger_movements",
+                  "escrows",
+                  "gerchain_transaction_witnesses",
+                  "gerchain_outbox_events",
+                  "gerchain_idempotency_records",
+              }
+              actual = set(inspector.get_table_names())
+              missing = sorted(required - actual)
+              required_columns = {
+                  "escrows": {"id", "sender_address", "receiver_address", "amount", "state",
+                              "condition_desc", "refund_destination", "currency", "version",
+                              "created_at", "updated_at"},
+                  "gerchain_ledger_accounts": {"account_id", "currency", "balance", "version", "updated_at"},
+                  "gerchain_ledger_movements": {"transaction_id", "source", "destination", "amount",
+                                                "currency", "operation", "escrow_id", "integrity_hash"},
+              }
+              missing_columns = {
+                  table: sorted(columns - {col["name"] for col in inspector.get_columns(table)})
+                  for table, columns in required_columns.items()
+                  if table in actual and columns - {col["name"] for col in inspector.get_columns(table)}
+              }
+              print({"runtime_authoritative": runtime.is_canonical_ledger_authoritative,
+                     "required_tables": sorted(required),
+                     "missing_tables": missing,
+                     "missing_columns": missing_columns,
+                     "actual_tables": sorted(actual)})
+              if missing or missing_columns:
+                  raise SystemExit(f"canonical schema incomplete: missing_tables={missing}; missing_columns={missing_columns}")
+          finally:
+              engine.dispose()
+          PY
+      - name: Run deep value-truth reconciliation tests
+        run: |
+          set -euo pipefail
+          pytest -q tests/persistence/test_deep_value_reconciliation.py 2>&1 | tee evidence/postgres/pytest-deep-reconciliation.log
+      - name: Capture final schema and migration evidence
+        if: always()
+        run: |
+          set -euo pipefail
+          psql -v ON_ERROR_STOP=1 -c "SELECT table_schema, table_name FROM information_schema.tables WHERE table_schema='public' ORDER BY table_name;" > evidence/postgres/final-schema.txt 2>&1 || true
+          psql -v ON_ERROR_STOP=1 -c 'SELECT version, checksum, applied_at FROM schema_version ORDER BY version;' > evidence/postgres/final-migration-history.txt 2>&1 || true
+          test "$(psql -v ON_ERROR_STOP=1 -Atc 'SELECT count(*) FROM schema_version;' 2>/dev/null || echo 0)" -ge 1 || true
+          git rev-parse HEAD > evidence/postgres/final-commit.txt
+          sha256sum .github/workflows/core-gates.yml .github/workflows/eai-postgres-reperformance.yml \
+            postgres/migrations/*.sql persistence/deep_value_reconciliation.py \
+            tests/persistence/test_deep_value_reconciliation.py \
+            > evidence/postgres/source-artifact-sha256.txt
+          (
+            cd evidence/postgres
+            find . -type f ! -name SHA256SUMS.txt ! -name SHA256SUMS.sha256 -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS.txt
+            sha256sum SHA256SUMS.txt > SHA256SUMS.sha256
+            sha256sum -c SHA256SUMS.txt
+            sha256sum -c SHA256SUMS.sha256
+          )
+      - name: Upload commit-bound evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eai-postgres-reperformance-${{ github.event.pull_request.head.sha || github.sha }}
+          path: evidence/postgres/
+          if-no-files-found: error
+          retention-days: 90

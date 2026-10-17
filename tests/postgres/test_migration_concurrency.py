@@ -1,0 +1,255 @@
+from __future__ import annotations
+
+import os
+from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
+from uuid import uuid4
+
+import psycopg
+import pytest
+
+from postgres.migrations import _canonical_migration_files, apply_migrations, checksum
+
+MIGRATION_DIR = Path(__file__).resolve().parents[2] / "postgres" / "migrations"
+EXPECTED_VERSIONS = list(range(1, 17))
+
+
+@pytest.mark.postgres
+def test_two_connections_apply_canonical_migrations_without_duplicate_schema_versions():
+    """Exercise the full canonical 16-migration chain on concurrent connections.
+
+    Requires a disposable PostgreSQL database in GERCHAIN_TEST_POSTGRES_URL.
+    The test creates and drops a uniquely named schema; it never touches public.
+    """
+    database_url = os.environ.get("GERCHAIN_TEST_POSTGRES_URL")
+    if not database_url:
+        pytest.skip("GERCHAIN_TEST_POSTGRES_URL is not configured")
+
+    schema = "migration_race_" + uuid4().hex
+    with psycopg.connect(database_url, autocommit=True) as admin:
+        admin.execute(f'CREATE SCHEMA "{schema}"')
+
+    try:
+        def apply_once() -> tuple[int, ...]:
+            with psycopg.connect(
+                database_url,
+                options=f"-c search_path={schema}",
+            ) as connection:
+                return apply_migrations(connection, MIGRATION_DIR)
+
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            first = pool.submit(apply_once)
+            second = pool.submit(apply_once)
+            results = [first.result(timeout=180), second.result(timeout=180)]
+
+        # The session-scoped advisory lock must allow exactly one runner to
+        # apply the chain while the other sees it as already applied.
+        assert sorted(len(result) for result in results) == [0, 16]
+        assert sorted(version for result in results for version in result) == EXPECTED_VERSIONS
+
+        with psycopg.connect(database_url, options=f"-c search_path={schema}") as check:
+            rows = check.execute(
+                "SELECT version, checksum, applied_at FROM schema_version ORDER BY version"
+            ).fetchall()
+            assert [row[0] for row in rows] == EXPECTED_VERSIONS
+            assert len(rows) == 16
+            assert len({row[0] for row in rows}) == 16
+            assert all(row[1] for row in rows)
+            expected_checksums = {
+                int(path.name.split("_", 1)[0]): checksum(path.read_text(encoding="utf-8"))
+                for path in _canonical_migration_files(MIGRATION_DIR)
+            }
+            assert {version: digest for version, digest, _ in rows} == expected_checksums, (
+                "concurrent publication must preserve the exact SHA-256 of every canonical migration"
+            )
+
+            unique_version = check.execute(
+                """
+                SELECT EXISTS (
+                    SELECT 1
+                    FROM pg_index i
+                    JOIN pg_class t ON t.oid = i.indrelid
+                    JOIN pg_namespace n ON n.oid = t.relnamespace
+                    JOIN pg_attribute a ON a.attrelid = t.oid AND a.attnum = i.indkey[0]
+                    WHERE n.nspname = %s
+                      AND t.relname = 'schema_version'
+                      AND i.indisunique
+                      AND i.indpred IS NULL
+                      AND i.indnkeyatts = 1
+                      AND a.attname = 'version'
+                )
+                """,
+                (schema,),
+            ).fetchone()[0]
+            assert unique_version is True
+
+            state_constraints = check.execute(
+                """
+                SELECT conname
+                FROM pg_constraint
+                WHERE conrelid = 'escrows'::regclass
+                  AND contype = 'c'
+                  AND pg_get_constraintdef(oid) ILIKE '%state%'
+                ORDER BY conname
+                """
+            ).fetchall()
+            assert len(state_constraints) == 1, (
+                "canonical schema must have exactly one escrow state CHECK; "
+                f"found={state_constraints!r}"
+            )
+            assert state_constraints[0][0] == "escrows_state_canonical_check"
+    finally:
+        with psycopg.connect(database_url, autocommit=True) as admin:
+            admin.execute(f'DROP SCHEMA IF EXISTS "{schema}" CASCADE')
+
+@pytest.mark.postgres
+def test_concurrent_bootstrap_creates_registry_once():
+    """Prove repeated bootstrap preserves schema_version and every checksum."""
+    database_url = os.environ.get("GERCHAIN_TEST_POSTGRES_URL")
+    if not database_url:
+        pytest.skip("GERCHAIN_TEST_POSTGRES_URL is not configured")
+
+    schema = "migration_registry_" + uuid4().hex
+    with psycopg.connect(database_url, autocommit=True) as admin:
+        admin.execute(f'CREATE SCHEMA "{schema}"')
+
+    try:
+        with psycopg.connect(
+            database_url, options=f"-c search_path={schema}"
+        ) as connection:
+            first_applied = apply_migrations(connection, MIGRATION_DIR)
+        assert first_applied == tuple(EXPECTED_VERSIONS) or first_applied == EXPECTED_VERSIONS
+
+        with psycopg.connect(database_url, options=f"-c search_path={schema}") as check:
+            before = check.execute(
+                "SELECT version, checksum, applied_at FROM schema_version ORDER BY version"
+            ).fetchall()
+        assert [version for version, _, _ in before] == EXPECTED_VERSIONS
+        assert all(checksum for _, checksum, _ in before)
+
+        with psycopg.connect(
+            database_url, options=f"-c search_path={schema}"
+        ) as connection:
+            second_applied = apply_migrations(connection, MIGRATION_DIR)
+        assert not second_applied
+
+        with psycopg.connect(database_url, options=f"-c search_path={schema}") as check:
+            after = check.execute(
+                "SELECT version, checksum, applied_at FROM schema_version ORDER BY version"
+            ).fetchall()
+        assert after == before, "repeat migration changed version, checksum, or applied_at"
+    finally:
+        with psycopg.connect(database_url, autocommit=True) as admin:
+            admin.execute(f'DROP SCHEMA IF EXISTS "{schema}" CASCADE')
+
+
+@pytest.mark.postgres
+def test_migration_checksum_mismatch_fails_closed():
+    """A changed historical checksum must block migration reuse, not be overwritten."""
+    database_url = os.environ.get("GERCHAIN_TEST_POSTGRES_URL")
+    if not database_url:
+        pytest.skip("GERCHAIN_TEST_POSTGRES_URL is not configured")
+
+    schema = "migration_checksum_" + uuid4().hex
+    with psycopg.connect(database_url, autocommit=True) as admin:
+        admin.execute(f'CREATE SCHEMA "{schema}"')
+
+    try:
+        with psycopg.connect(
+            database_url, options=f"-c search_path={schema}"
+        ) as connection:
+            applied = apply_migrations(connection, MIGRATION_DIR)
+        assert sorted(applied) == EXPECTED_VERSIONS
+
+        with psycopg.connect(
+            database_url, options=f"-c search_path={schema}"
+        ) as tamper:
+            tamper.execute(
+                "UPDATE schema_version SET checksum = %s WHERE version = %s",
+                ("0" * 64, 3),
+            )
+            tamper.commit()
+
+        with psycopg.connect(
+            database_url, options=f"-c search_path={schema}"
+        ) as before_conn:
+            versions_before = before_conn.execute(
+                "SELECT version, checksum, applied_at FROM schema_version ORDER BY version"
+            ).fetchall()
+            tables_before = before_conn.execute(
+                """
+                SELECT table_name FROM information_schema.tables
+                WHERE table_schema = %s ORDER BY table_name
+                """,
+                (schema,),
+            ).fetchall()
+
+        with psycopg.connect(
+            database_url, options=f"-c search_path={schema}"
+        ) as connection:
+            with pytest.raises(RuntimeError, match=r"Migration checksum mismatch for version 3"):
+                apply_migrations(connection, MIGRATION_DIR)
+
+        with psycopg.connect(
+            database_url, options=f"-c search_path={schema}"
+        ) as verify:
+            versions_after = verify.execute(
+                "SELECT version, checksum, applied_at FROM schema_version ORDER BY version"
+            ).fetchall()
+            tables_after = verify.execute(
+                """
+                SELECT table_name FROM information_schema.tables
+                WHERE table_schema = %s ORDER BY table_name
+                """,
+                (schema,),
+            ).fetchall()
+
+        assert versions_after == versions_before, (
+            "checksum mismatch must leave every migration version, checksum, and timestamp unchanged"
+        )
+        assert tables_after == tables_before, (
+            "checksum mismatch must leave the applied schema object inventory unchanged"
+        )
+        assert versions_after[2][1] == "0" * 64, (
+            "runner must fail closed rather than silently repair tampered history"
+        )
+    finally:
+        with psycopg.connect(database_url, autocommit=True) as admin:
+            admin.execute(f'DROP SCHEMA IF EXISTS "{schema}" CASCADE')
+
+
+
+@pytest.mark.postgres
+def test_invalid_escrow_state_is_rejected_by_named_database_constraint():
+    """The production schema, not just Python validation, rejects unknown states."""
+    database_url = os.environ.get("GERCHAIN_TEST_POSTGRES_URL")
+    if not database_url:
+        pytest.skip("GERCHAIN_TEST_POSTGRES_URL is not configured")
+
+    schema = "migration_state_check_" + uuid4().hex
+    with psycopg.connect(database_url, autocommit=True) as admin:
+        admin.execute(f'CREATE SCHEMA "{schema}"')
+
+    try:
+        with psycopg.connect(
+            database_url, options=f"-c search_path={schema}"
+        ) as connection:
+            apply_migrations(connection, MIGRATION_DIR)
+            with pytest.raises(psycopg.errors.CheckViolation) as exc:
+                connection.execute(
+                    """
+                    INSERT INTO escrows (
+                        id, sender_address, receiver_address, amount, state,
+                        condition_desc, refund_destination, currency, version,
+                        created_at, updated_at
+                    ) VALUES (
+                        'invalid-state-test', 'sender', 'receiver', 1,
+                        'NOT_A_STATE', 'test', 'sender', 'MNT', 0, now(), now()
+                    )
+                    """
+                )
+            assert exc.value.diag.constraint_name == "escrows_state_canonical_check"
+            connection.rollback()
+    finally:
+        with psycopg.connect(database_url, autocommit=True) as admin:
+            admin.execute(f'DROP SCHEMA IF EXISTS "{schema}" CASCADE')

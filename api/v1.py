@@ -4,6 +4,9 @@ from database.db import get_connection, log_transition
 
 router = APIRouter(prefix="/api/v1", tags=["Fintech API"])
 
+# Legacy SQLite mutation surface is not a production value/state authority.
+LEGACY_MUTATION_DISABLED = True
+
 class EscrowCreateRequest(BaseModel):
     escrow_id: str
     sender_address: str
@@ -17,6 +20,8 @@ class ActionRequest(BaseModel):
 
 @router.post("/escrows/create")
 def api_create_escrow(data: EscrowCreateRequest):
+    if LEGACY_MUTATION_DISABLED:
+        raise HTTPException(status_code=410, detail="Legacy SQLite escrow mutation is disabled; use the production runtime boundary.")
     conn = get_connection()
     cursor = conn.cursor()
     try:
@@ -56,6 +61,8 @@ def api_get_escrow(escrow_id: str):
 
 @router.post("/escrows/{escrow_id}/action")
 def api_escrow_action(escrow_id: str, data: ActionRequest):
+    if LEGACY_MUTATION_DISABLED:
+        raise HTTPException(status_code=410, detail="Legacy direct escrow mutation is disabled; use the production runtime boundary.")
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute("SELECT * FROM escrows WHERE id = ?", (escrow_id,))

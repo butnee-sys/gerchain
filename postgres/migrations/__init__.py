@@ -1,0 +1,386 @@
+"""Serialized, checksummed PostgreSQL migration runner.
+
+The 16-file canonical chain is explicit because historical aliases coexist in
+this directory. Schema DDL, checksum verification, and schema_version publication run in one
+transaction while a session-level advisory lock serializes competing migration
+processes. The lock is explicitly released after commit or rollback.
+"""
+from __future__ import annotations
+
+import hashlib
+import re
+from pathlib import Path
+
+from psycopg import Connection
+
+_MIGRATION_LOCK_KEY = 731946205821
+_CANONICAL_FILES = (
+    "001_canonical_production.sql",
+    "002_canonical_production.sql",
+    "003_canonical_compatibility.sql",
+    "004_canonical_value_truth.sql",
+    "005_canonical_production.sql",
+    "006_canonical_movement_integrity.sql",
+    "007_canonical_production_reconciliation.sql",
+    "008_ea35_idempotency_compat.sql",
+    "009_canonical_movement_integrity_hardening.sql",
+    "010_canonical_evidence_constraints.sql",
+    "011_ea35_canonical_schema_finalization.sql",
+    "012_canonical_production.sql",
+    "013_ea35_canonical_schema_hardening.sql",
+    "014_canonical_escrow_state_constraint.sql",
+    "015_repair_escrow_state_constraint_drift.sql",
+    "016_reconcile_escrow_state_constraint.sql",
+)
+
+
+CANONICAL_MIGRATION_NAMES = {version: name for version, name in enumerate(_CANONICAL_FILES, start=1)}
+
+
+def checksum(source: str) -> str:
+    return hashlib.sha256(source.encode("utf-8")).hexdigest()
+
+
+def _canonical_migration_files(migration_dir: Path) -> list[Path]:
+    directory = Path(migration_dir)
+    if not directory.is_dir():
+        raise FileNotFoundError(f"migration directory does not exist: {directory}")
+    files = list(directory.glob("*.sql"))
+    by_version: dict[int, list[Path]] = {}
+    for path in files:
+        match = re.match(r"^(\d+)_", path.name)
+        if match:
+            by_version.setdefault(int(match.group(1)), []).append(path)
+    # Support both the current full chain and historical prefix directories
+    # used to reproduce upgrades from an older schema version. In either case,
+    # the supplied directory must be a contiguous canonical prefix; it may not
+    # silently skip a version or introduce a version beyond the known chain.
+    selected: list[Path] = []
+    if not by_version:
+        raise RuntimeError("no numbered canonical migrations found")
+    max_version = max(by_version)
+    if max_version > len(_CANONICAL_FILES):
+        raise RuntimeError(f"unexpected migration versions: {sorted(set(by_version) - set(range(1, len(_CANONICAL_FILES) + 1)))}")
+    for version in range(1, max_version + 1):
+        canonical_name = _CANONICAL_FILES[version - 1]
+        candidates = by_version.get(version, [])
+        canonical = directory / canonical_name
+        if not canonical.is_file():
+            raise RuntimeError(f"missing canonical migration version {version}: {canonical_name}")
+        if len(candidates) > 1 and canonical not in candidates:
+            raise RuntimeError(f"ambiguous migration version {version}: {[p.name for p in candidates]}")
+        selected.append(canonical)
+    unexpected = sorted(set(by_version) - set(range(1, len(_CANONICAL_FILES) + 1)))
+    if unexpected:
+        raise RuntimeError(f"unexpected migration versions: {unexpected}")
+    return selected
+
+
+def _split_sql_statements(source: str) -> list[str]:
+    """Split SQL statements while respecting quotes, dollar blocks, and comments."""
+    statements: list[str] = []
+    buffer: list[str] = []
+    single = double = False
+    line_comment = block_comment = False
+    dollar_tag: str | None = None
+    i = 0
+    while i < len(source):
+        if line_comment:
+            if source[i] == "\n":
+                line_comment = False
+                buffer.append("\n")
+            i += 1
+            continue
+        if block_comment:
+            if source.startswith("*/", i):
+                block_comment = False
+                i += 2
+            else:
+                if source[i] == "\n":
+                    buffer.append("\n")
+                i += 1
+            continue
+        if dollar_tag is not None:
+            if source.startswith(dollar_tag, i):
+                buffer.append(dollar_tag)
+                i += len(dollar_tag)
+                dollar_tag = None
+            else:
+                buffer.append(source[i])
+                i += 1
+            continue
+        if not single and not double:
+            if source.startswith("--", i):
+                line_comment = True
+                i += 2
+                continue
+            if source.startswith("/*", i):
+                block_comment = True
+                i += 2
+                continue
+            if source[i] == "$":
+                match = re.match(r"\$[A-Za-z_][A-Za-z0-9_]*\$|\$\$", source[i:])
+                if match:
+                    dollar_tag = match.group(0)
+                    buffer.append(dollar_tag)
+                    i += len(dollar_tag)
+                    continue
+        char = source[i]
+        if char == "'" and not double:
+            if single and i + 1 < len(source) and source[i + 1] == "'":
+                buffer.extend(("'", "'"))
+                i += 2
+                continue
+            single = not single
+        elif char == '"' and not single:
+            if double and i + 1 < len(source) and source[i + 1] == '"':
+                buffer.extend(('"', '"'))
+                i += 2
+                continue
+            double = not double
+        if char == ";" and not single and not double:
+            statement = "".join(buffer).strip()
+            if statement:
+                statements.append(statement)
+            buffer = []
+        else:
+            buffer.append(char)
+        i += 1
+    tail = "".join(buffer).strip()
+    if tail:
+        statements.append(tail)
+    if single or double or dollar_tag is not None or block_comment:
+        raise ValueError("unterminated quote or block comment in migration SQL")
+    return statements
+
+def _backfill_legacy_escrow_metadata_before_v11(connection: Connection) -> None:
+    """Safely derive escrow metadata needed by migration 011 from legacy rows.
+
+    This compatibility step runs inside the migration transaction immediately
+    before v11. A legacy refund destination is deterministically the original
+    sender. A missing currency value may be filled only when the existing
+    legacy column declares MNT as its default; unknown currency is never guessed.
+    The published SQL migration files and their checksums remain unchanged.
+    """
+    table_exists = connection.execute(
+        "SELECT to_regclass('escrows') IS NOT NULL"
+    ).fetchone()[0]
+    if not table_exists:
+        return
+
+    columns = connection.execute(
+        """
+        SELECT column_name, column_default
+        FROM information_schema.columns
+        WHERE table_schema = current_schema() AND table_name = 'escrows'
+        """
+    ).fetchall()
+    column_defaults = {name: default for name, default in columns}
+
+    if "refund_destination" not in column_defaults:
+        connection.execute("ALTER TABLE escrows ADD COLUMN refund_destination TEXT")
+    connection.execute(
+        """
+        UPDATE escrows
+        SET refund_destination = sender_address
+        WHERE refund_destination IS NULL AND sender_address IS NOT NULL
+        """
+    )
+    missing_refunds = connection.execute(
+        "SELECT COUNT(*) FROM escrows WHERE refund_destination IS NULL"
+    ).fetchone()[0]
+    if missing_refunds:
+        raise RuntimeError(
+            "cannot derive refund_destination for legacy escrow rows without sender_address"
+        )
+
+    if "currency" in column_defaults:
+        missing_currency = connection.execute(
+            "SELECT COUNT(*) FROM escrows WHERE currency IS NULL"
+        ).fetchone()[0]
+        default = column_defaults["currency"]
+        if missing_currency and default and "'MNT'" in default.upper():
+            connection.execute(
+                "UPDATE escrows SET currency = 'MNT' WHERE currency IS NULL"
+            )
+        remaining = connection.execute(
+            "SELECT COUNT(*) FROM escrows WHERE currency IS NULL"
+        ).fetchone()[0]
+        if remaining:
+            raise RuntimeError(
+                "cannot derive currency for legacy escrow rows; refusing to invent currency"
+            )
+
+
+def apply_migrations(connection: Connection, migration_dir: Path) -> tuple[int, ...]:
+    if connection.closed:
+        raise ValueError("migration connection must be open")
+    if connection.info.transaction_status != 0:
+        raise RuntimeError("migration runner requires a clean connection with no active transaction")
+    directory = Path(migration_dir)
+    canonical_first = directory / _CANONICAL_FILES[0]
+    is_canonical_chain = canonical_first.is_file()
+    if is_canonical_chain:
+        selected = _canonical_migration_files(directory)
+    else:
+        # Isolated test/migration bundles may use a generic sequential chain.
+        # Production always uses the explicit canonical chain above.
+        candidates = sorted(directory.glob("*.sql"))
+        if not candidates:
+            raise RuntimeError("no SQL migrations found")
+        versions: dict[int, list[Path]] = {}
+        for path in candidates:
+            match = re.match(r"^(\d+)_", path.name)
+            if not match:
+                raise RuntimeError(f"invalid migration filename: {path.name}")
+            versions.setdefault(int(match.group(1)), []).append(path)
+        duplicates = [version for version, paths in versions.items() if len(paths) > 1]
+        if duplicates:
+            raise RuntimeError(f"ambiguous migration version {min(duplicates)}")
+        expected = list(range(1, max(versions) + 1))
+        if sorted(versions) != expected:
+            raise RuntimeError(f"migration versions contain gaps: {sorted(versions)}")
+        selected = [versions[version][0] for version in expected]
+    applied_now: list[int] = []
+    # Use a session-scoped advisory lock so migration serialization survives
+    # any transaction-boundary drift in historical SQL files. Release it on
+    # both success and failure; schema publication remains transaction-scoped.
+    connection.execute("SELECT pg_advisory_lock(%s)", (_MIGRATION_LOCK_KEY,))
+    connection.commit()
+    try:
+        with connection.transaction():
+            connection.execute(
+                """
+                CREATE TABLE IF NOT EXISTS schema_version (
+                    version INTEGER PRIMARY KEY,
+                    checksum TEXT NOT NULL,
+                    applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
+                )
+                """
+            )
+            # Reconcile legacy schema_version tables that predate the canonical
+            # primary key. Identical duplicate publications are safe to collapse;
+            # conflicting checksums for one version must fail closed.
+            conflicts = connection.execute(
+                """
+                SELECT version
+                FROM schema_version
+                GROUP BY version
+                HAVING COUNT(DISTINCT checksum) > 1
+                ORDER BY version
+                """
+            ).fetchall()
+            if conflicts:
+                version = conflicts[0][0]
+                raise RuntimeError(
+                    f"Conflicting schema_version checksums for version {version}"
+                )
+            connection.execute(
+                """
+                DELETE FROM schema_version AS duplicate
+                USING schema_version AS keeper
+                WHERE duplicate.version = keeper.version
+                  AND duplicate.checksum = keeper.checksum
+                  AND duplicate.ctid > keeper.ctid
+                """
+            )
+            # Legacy installations may have a schema_version table without a
+            # primary key/unique constraint. After collapsing identical duplicate
+            # publications, establish the uniqueness invariant before relying on
+            # ON CONFLICT(version) in the publication path.
+            has_version_unique_index = connection.execute(
+                """
+                SELECT EXISTS (
+                    SELECT 1
+                    FROM pg_index AS idx
+                    JOIN pg_attribute AS attr
+                      ON attr.attrelid = idx.indrelid
+                     AND attr.attnum = idx.indkey[0]
+                    WHERE idx.indrelid = 'schema_version'::regclass
+                      AND idx.indisunique
+                      AND idx.indpred IS NULL
+                      AND idx.indnkeyatts = 1
+                      AND attr.attname = 'version'
+                )
+                """
+            ).fetchone()[0]
+            if not has_version_unique_index:
+                connection.execute(
+                    "CREATE UNIQUE INDEX schema_version_version_uq ON schema_version (version)"
+                )
+            for version, path in enumerate(selected, start=1):
+                source = path.read_text(encoding="utf-8")
+                if not source.strip():
+                    raise ValueError(f"empty migration is not allowed: {path.name}")
+                digest = checksum(source)
+                historical_checksums = {
+                    1: {
+                        "6eea24dae8b3ac9aa9413a32da1617250f14725bdb19f50e5d8300308ad173d4",
+                        "538e0f5132ec775ec8963a2a72072dd00e81afa37383a6c5f6a8f54259716a31",
+                        "ab6838b3e69a9a9faa28bdd82c98fe579921763be8b5dd56e1c686b77c098596",
+                        "494763e210c8a3839972ba21e8705dcf2e6564e5abca9c76161f2f49c6664ec8",
+                        "6766267c9e939a320bf6ac28ee516c4c11fe537ef2b6a7778d94ca6e3cd5b246",
+                    }
+                }
+                accepted_checksums = {digest} | historical_checksums.get(version, set())
+                # Version 002 hardens refund_destination before later EA-35
+                # finalization migrations. Existing legacy rows must be backfilled
+                # before the first NOT NULL DDL, not only before v11/v13. Run this
+                # before checksum/skip handling too, so drifted databases that
+                # already published a version are repaired deterministically.
+                if is_canonical_chain and version in (2, 7, 11, 13):
+                    _backfill_legacy_escrow_metadata_before_v11(connection)
+                row = connection.execute(
+                    "SELECT checksum FROM schema_version WHERE version = %s FOR UPDATE",
+                    (version,),
+                ).fetchone()
+                if row is not None:
+                    if row[0] not in accepted_checksums:
+                        raise RuntimeError(
+                            f"Migration checksum mismatch for version {version}: {path.name}"
+                        )
+                    # Version 016 is a deliberate drift-reconciliation migration:
+                    # its repair must also run when the version is already recorded,
+                    # because an out-of-band schema mutation can reintroduce the
+                    # legacy escrow state CHECK after migration publication. Check
+                    # the stored checksum first so checksum drift still fails closed
+                    # without applying any repair SQL.
+                    if is_canonical_chain and version == 16:
+                        for statement in _split_sql_statements(source):
+                            connection.execute(statement)
+                    continue
+                for statement in _split_sql_statements(source):
+                    connection.execute(statement)
+                connection.execute(
+                    """
+                    INSERT INTO schema_version(version, checksum)
+                    VALUES (%s, %s)
+                    ON CONFLICT (version) DO NOTHING
+                    """,
+                    (version, digest),
+                )
+                # Concurrent or legacy bootstrap paths may publish a version row
+                # while this runner is applying the same chain. Treat only an
+                # identical checksum as idempotent; never mask schema drift.
+                published = connection.execute(
+                    "SELECT checksum FROM schema_version WHERE version = %s FOR UPDATE",
+                    (version,),
+                ).fetchone()
+                if published is None or published[0] != digest:
+                    accepted = published is not None and published[0] in accepted_checksums
+                    if not accepted:
+                        raise RuntimeError(
+                            f"Migration publication conflict for version {version}: {path.name}"
+                        )
+                else:
+                    applied_now.append(version)
+    finally:
+        if not connection.closed:
+            if connection.info.transaction_status != 0:
+                connection.rollback()
+            connection.execute("SELECT pg_advisory_unlock(%s)", (_MIGRATION_LOCK_KEY,))
+            connection.commit()
+    return tuple(applied_now)
+
+
+__all__ = ["apply_migrations", "checksum", "CANONICAL_MIGRATION_NAMES", "_canonical_migration_files", "_split_sql_statements"]

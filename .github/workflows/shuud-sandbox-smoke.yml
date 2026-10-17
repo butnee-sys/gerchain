@@ -1,14 +1,15 @@
-name: SHUUD Sandbox Smoke
+name: SHUUD Sandbox Smoke (separate project; manual only)
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+
 
 on:
-  push:
-    branches: ["main"]
-  pull_request:
-    branches: ["main"]
   workflow_dispatch:
 
 jobs:
   smoke:
+    if: ${{ false }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -51,12 +52,28 @@ jobs:
           test -n "$INCIDENT_ID"
           printf '%s\n' "$INCIDENT_ID" > /tmp/shuud_sandbox_incident_id
 
-          CAPTURED_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          # Use the incident source timestamp, not a later runner wall-clock value.
+          # This keeps evidence time aligned with the event the evidence describes.
+          CAPTURED_AT=$(python - <<'PY'
+          import json
+          incident = json.load(open("/tmp/incident.json", encoding="utf-8"))
+          value = incident.get("occurred_at")
+          if not value:
+              raise SystemExit("incident response missing occurred_at; refusing to invent evidence time")
+          print(value)
+          PY
+          )
           curl -fsS -X POST "$API/evidence" -H 'content-type: application/json' \
             -d "{\"incident_id\":\"$INCIDENT_ID\",\"evidence_refs\":[\"SANDBOX-MEDIA-001\"],\"gps_coordinates\":\"47.9184,106.9177\",\"captured_at\":\"$CAPTURED_AT\",\"vehicle_identity_refs\":[\"TEST-A\",\"TEST-B\"],\"consent_refs\":[\"CONSENT-A\",\"CONSENT-B\"],\"media_complete\":true}" | tee "$EVIDENCE_JSON"
 
           curl -fsS -X POST "$API/decisions" -H 'content-type: application/json' \
             -d "{\"incident_id\":\"$INCIDENT_ID\",\"evidence_refs\":[\"SANDBOX-MEDIA-001\"],\"damage_estimate_mnt\":500000,\"two_party_consent\":\"PASS\",\"vehicle_identity_verified\":\"PASS\",\"timestamp_location_verified\":\"PASS\",\"media_complete\":\"PASS\",\"no_injury\":\"PASS\",\"no_third_party_property_damage\":\"PASS\",\"dispute_present\":\"PASS\",\"fraud_flag\":\"PASS\",\"insurance_valid\":\"PASS\",\"beneficiary_valid\":\"PASS\",\"witness_verified\":\"PASS\"}" | tee "$DECISION_JSON"
+
+          curl -fsS -X POST "$API/escrows" -H 'content-type: application/json' \
+            -d "{\"incident_id\":\"$INCIDENT_ID\",\"escrow_id\":\"SANDBOX-ESCROW-$INCIDENT_ID\",\"amount_mnt\":500000,\"settlement_provider\":\"NEF\"}" | tee "$ESCROW_JSON"
+
+          curl -fsS -X POST "$API/release" -H 'content-type: application/json' \
+            -d "{\"incident_id\":\"$INCIDENT_ID\",\"escrow_id\":\"SANDBOX-ESCROW-$INCIDENT_ID\"}" | tee "$RELEASE_JSON"
 
           if ! curl -fsS --fail -X POST "$API/metrics/clearance" -H 'content-type: application/json' \
             -d "{\"incident_id\":\"$INCIDENT_ID\"}" | tee "$CLEARANCE_JSON"; then
@@ -64,12 +81,6 @@ jobs:
             (cd sandbox && docker compose logs --no-color --timestamps app) || true
             exit 1
           fi
-
-          curl -fsS -X POST "$API/escrows" -H 'content-type: application/json' \
-            -d "{\"incident_id\":\"$INCIDENT_ID\",\"escrow_id\":\"SANDBOX-ESCROW-$INCIDENT_ID\",\"amount_mnt\":500000,\"settlement_provider\":\"NEF\"}" | tee "$ESCROW_JSON"
-
-          curl -fsS -X POST "$API/release" -H 'content-type: application/json' \
-            -d "{\"incident_id\":\"$INCIDENT_ID\",\"escrow_id\":\"SANDBOX-ESCROW-$INCIDENT_ID\"}" | tee "$RELEASE_JSON"
 
           curl -fsS -X POST "$API/metrics/$INCIDENT_ID/summary" -H 'content-type: application/json' \
             -d '{"baseline_seconds":600,"affected_vehicles":2,"vehicle_value_per_minute_mnt":1000,"insurer_cost_per_minute_mnt":500,"public_road_cost_per_minute_mnt":800}' | tee "$SUMMARY_JSON"

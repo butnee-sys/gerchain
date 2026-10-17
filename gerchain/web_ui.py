@@ -15,6 +15,9 @@ Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="Gerchain + NEF RWA Dashboard", version="1.1.0")
 
+# Legacy application-owned escrow balance mutations are not production authority.
+LEGACY_VALUE_MUTATION_DISABLED = True
+
 @app.on_event("startup")
 def startup_event():
     print("--- REGISTERED ROUTES ---")

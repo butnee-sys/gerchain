@@ -10,6 +10,7 @@ Purpose:
   дарааллаар нь шалгах.
 """
 
+from dee_security.root_of_trust import RootOfTrust
 from escrow.engine import EscrowEngine
 from money.engine import MoneyEngine
 from money.ledger import MoneyLedger
@@ -118,6 +119,12 @@ def build_valid_bundle():
         evidence={
             "type": "settlement",
         },
+    
+        root=RootOfTrust("TEST-OWNER", "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8="),
+        owner_id="TEST-OWNER",
+        authorized=True,
+        evidence_verified=True,
+        trinity_proof={"trust": True, "transparency": True, "performance": True},
     )
 
     return __import__("json").loads(

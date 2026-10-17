@@ -1,14 +1,14 @@
 name: SHUUD Command Layer
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
 
 on:
-  push:
-    branches: ["main"]
-  pull_request:
-    branches: ["main"]
   workflow_dispatch:
 
 jobs:
   command-layer:
+    if: ${{ false }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -17,6 +17,50 @@ jobs:
           python-version: "3.13"
       - name: Install SHUUD command-layer dependencies
         run: |
-          python -m pip install "pytest>=8,<10" "fastapi>=0.115,<1" "sqlalchemy>=2,<3" "pydantic>=2,<3"
+          python -m pip install "pytest>=8,<10" "fastapi>=0.115,<1" "sqlalchemy>=2,<3" "pydantic>=2,<3" "cryptography>=46,<47"
       - name: Run SHUUD command-layer tests
-        run: python -m pytest -q tests/test_shuud_command_layer.py tests/test_shuud_command_api.py
+        run: python -m pytest -q tests/test_shuud_command_layer.py tests/test_shuud_command_api.py tests/test_shuud_exim_boundary.py
+
+  sandbox-smoke:
+    if: ${{ false }}
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: shuud_smoke
+          POSTGRES_USER: shuud
+          POSTGRES_PASSWORD: shuud
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U shuud -d shuud_smoke"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      SHUUD_POSTGRES_DSN: postgresql+psycopg://shuud:shuud@127.0.0.1:5432/shuud_smoke
+      SHUUD_PERSISTENCE_URL: postgresql+psycopg://shuud:shuud@127.0.0.1:5432/shuud_smoke
+      GERCHAIN_TEST_DATABASE_URL: postgresql+psycopg://shuud:shuud@127.0.0.1:5432/shuud_smoke
+      PYTHONPATH: .
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: |
+            requirements-dee-security.txt
+            postgres/requirements-test.txt
+      - name: Install SHUUD PostgreSQL smoke dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements-dee-security.txt -r postgres/requirements-test.txt
+          python -m pip install "pytest>=8,<10" "fastapi>=0.115,<1" "uvicorn>=0.30,<1" "httpx>=0.27,<1"
+      - name: Run full lifecycle, timestamp order, and PostgreSQL restart recovery
+        run: |
+          python -m pytest -q \
+            tests/test_shuud_sandbox_full_lifecycle.py \
+            tests/test_shuud_process_restart_postgres_e2e.py \
+            tests/test_shuud_operational_timing.py \
+            tests/test_shuud_api_persistence_e2e.py

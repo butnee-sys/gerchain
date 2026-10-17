@@ -29,6 +29,8 @@ FORBIDDEN_IMPORT_ROOTS = {
     "money_engine",
     "escrow_engine",
     "witness_chain",
+    "architecture",
+    "services",
 }
 
 
@@ -53,6 +55,12 @@ def test_shuud_has_no_direct_gerchain_core_imports() -> None:
                 violations.append((path.name, module))
 
     assert not violations, f"SHUUD direct core imports found: {violations}"
+
+
+def test_shuud_has_no_legacy_core_service_modules() -> None:
+    """SHUUD must not re-enter the canonical services namespace."""
+    leaked = sorted(p.name for p in (ROOT / "services").glob("shuud*.py"))
+    assert not leaked, f"Legacy SHUUD service modules found in canonical services/: {leaked}"
 
 
 def test_shuud_uses_exim_port_not_legacy_integration_module() -> None:
@@ -82,12 +90,10 @@ def test_exim_port_is_the_published_shuud_boundary() -> None:
 
 def test_exim_port_rejects_float_money_at_boundary() -> None:
     """Money entering the Port must be integer MNT units, never floating point."""
-    port = ExternalPortImport()
-    request = EscrowRequest(
-        escrow_id="SHUUD-BOUNDARY-001",
-        amount=1000.5,
-        currency="MNT",
-        settlement_provider="NEF",
-    )
     with pytest.raises(TypeError, match="integer amount"):
-        port.create_escrow(request, object())
+        EscrowRequest(
+            escrow_id="SHUUD-BOUNDARY-001",
+            amount=1000.5,
+            currency="MNT",
+            settlement_provider="NEF",
+        )

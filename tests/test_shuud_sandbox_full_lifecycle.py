@@ -87,6 +87,13 @@ def test_shuud_full_sandbox_lifecycle() -> None:
     assert escrow.json()["settlement_provider"] == "NEF"
     assert escrow.json()["state"] == "LOCKED"
 
+    release = client.post(
+        "/api/v1/shuud/release",
+        json={"incident_id": incident_id, "escrow_id": escrow_id},
+    )
+    assert release.status_code == 200
+    assert release.json()["new_state"] == "RELEASED"
+
     clearance = client.post(
         "/api/v1/shuud/metrics/clearance",
         json={"incident_id": incident_id},
@@ -94,13 +101,6 @@ def test_shuud_full_sandbox_lifecycle() -> None:
     assert clearance.status_code == 200
     assert clearance.json()["incident_id"] == incident_id
     assert clearance.json()["elapsed_seconds"] >= 0
-
-    release = client.post(
-        "/api/v1/shuud/release",
-        json={"incident_id": incident_id, "escrow_id": escrow_id},
-    )
-    assert release.status_code == 200
-    assert release.json()["new_state"] == "RELEASED"
 
     summary = client.post(
         f"/api/v1/shuud/metrics/{incident_id}/summary",
@@ -125,3 +125,22 @@ def test_shuud_full_sandbox_lifecycle() -> None:
     assert metric_body["milestones"]["incident_created_at"] is not None
     assert metric_body["milestones"]["clearance_confirmed_at"] is not None
     assert metric_body["milestones"]["settlement_released_at"] is not None
+
+    from datetime import datetime
+
+    ordered_milestones = (
+        "incident_created_at",
+        "evidence_locked_at",
+        "verification_completed_at",
+        "shiid_decided_at",
+        "settlement_released_at",
+        "clearance_confirmed_at",
+    )
+    milestone_times = [
+        datetime.fromisoformat(metric_body["milestones"][name])
+        for name in ordered_milestones
+    ]
+    assert milestone_times == sorted(milestone_times), {
+        "milestones": dict(zip(ordered_milestones, milestone_times)),
+        "source": "SHUUD operational timing milestone sequence",
+    }

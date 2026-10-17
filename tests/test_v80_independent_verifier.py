@@ -3,6 +3,7 @@ GerChain V80.0
 Tests for Unified Independent Verifier.
 """
 
+from dee_security.root_of_trust import RootOfTrust
 import json
 
 from escrow.engine import EscrowEngine
@@ -114,6 +115,12 @@ def build_valid_bundle():
             "source": "test",
             "type": "settlement",
         },
+    
+        root=RootOfTrust("TEST-OWNER", "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8="),
+        owner_id="TEST-OWNER",
+        authorized=True,
+        evidence_verified=True,
+        trinity_proof={"trust": True, "transparency": True, "performance": True},
     )
 
     data = serialize_chain(witness_chain)
