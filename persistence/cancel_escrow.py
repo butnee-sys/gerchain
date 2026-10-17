@@ -102,6 +102,7 @@ def cancel_escrow_in_transaction(
                 "transaction_id": transaction_id,
                 "escrow_id": escrow_id,
                 "operation": "CANCEL",
+                "value_movement": False,
                 "source": None,
                 "destination": None,
                 "amount": 0,
