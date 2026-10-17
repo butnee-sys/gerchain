@@ -138,7 +138,7 @@ jobs:
           finally:
               engine.dispose()
           PY
-      - name: Bind migration 014-016 source, selection, and schema_version evidence
+      - name: Bind all 16 migration checksums and validate canonical constraints from PostgreSQL catalog
         run: |
           python - <<'PY'
           import hashlib
@@ -148,51 +148,87 @@ jobs:
           from postgres.migrations import _canonical_migration_files, checksum
 
           root = Path.cwd()
-          expected = {
-              14: "014_canonical_escrow_state_constraint.sql",
-              15: "015_repair_escrow_state_constraint_drift.sql",
-              16: "016_reconcile_escrow_state_constraint.sql",
-          }
-          selected = {
-              int(path.name.split("_", 1)[0]): path
-              for path in _canonical_migration_files(root / "postgres/migrations")
-          }
-          evidence = []
-          for version, name in expected.items():
-              path = selected.get(version)
-              assert path is not None, f"version {version} was not selected"
-              assert path.name == name, f"version {version} selected {path.name}, expected {name}"
+          selected = _canonical_migration_files(root / "postgres/migrations")
+          assert [int(p.name.split("_", 1)[0]) for p in selected] == list(range(1, 17)), (
+              "canonical migration chain must be exactly versions 1..16"
+          )
+          source_by_version = {}
+          for path in selected:
+              version = int(path.name.split("_", 1)[0])
               source = path.read_text(encoding="utf-8")
-              evidence.append({
+              source_by_version[version] = {
                   "version": version,
                   "path": str(path.relative_to(root)),
                   "file_sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
                   "runner_checksum": checksum(source),
-              })
+              }
 
           dsn = os.environ["GERCHAIN_TEST_DATABASE_URL"].replace(
               "postgresql+psycopg://", "postgresql://"
-          )
+          ).replace("postgresql+psycopg2://", "postgresql://")
           with psycopg.connect(dsn) as conn:
               rows = conn.execute(
-                  "SELECT version, checksum, applied_at FROM schema_version "
-                  "WHERE version BETWEEN 14 AND 16 ORDER BY version"
+                  "SELECT version, checksum, applied_at FROM schema_version ORDER BY version"
               ).fetchall()
-              assert [row[0] for row in rows] == [14, 15, 16], (
-                  f"schema_version must contain exactly 14,15,16 in range; got {rows}"
+              assert [row[0] for row in rows] == list(range(1, 17)), (
+                  f"schema_version must contain exactly 16 unique rows; got {rows}"
               )
-              for item, row in zip(evidence, rows):
-                  assert row[1] == item["runner_checksum"], (
-                      f"schema_version checksum mismatch for {item['version']}: "
-                      f"database={row[1]} runner={item['runner_checksum']}"
+              evidence = []
+              for source, row in zip(source_by_version.values(), rows):
+                  version, database_checksum, applied_at = row
+                  accepted = {source["runner_checksum"]}
+                  # Existing frozen migration histories may legitimately use
+                  # checksums accepted by the canonical migration registry.
+                  from postgres.migrations import FROZEN_CHECKSUMS, LEGACY_CHECKSUMS
+                  accepted.update(FROZEN_CHECKSUMS.get(version, set()))
+                  accepted.update(LEGACY_CHECKSUMS.get(version, set()))
+                  assert database_checksum in accepted, (
+                      f"version {version} checksum not accepted by canonical registry: "
+                      f"database={database_checksum}; expected={sorted(accepted)}"
                   )
-                  assert row[2] is not None, f"version {item['version']} has no applied_at"
-                  item["schema_version_checksum"] = row[1]
-                  item["applied_at"] = row[2].isoformat()
+                  assert applied_at is not None, f"version {version} has no applied_at"
+                  evidence.append({
+                      **source,
+                      "database_checksum": database_checksum,
+                      "applied_at": applied_at.isoformat(),
+                  })
 
-          print("PASS: migration 014-016 exact source, selection, runner checksum, and schema_version are bound")
-          for item in evidence:
-              print(item)
+              # Check the actual PostgreSQL catalog, including validation state
+              # and duplicate/legacy state checks that could otherwise survive
+              # under a different name.
+              constraint_rows = conn.execute("""
+                  SELECT c.conname, c.convalidated, c.contype,
+                         t.relname AS table_name,
+                         pg_get_constraintdef(c.oid) AS definition
+                  FROM pg_constraint c
+                  JOIN pg_class t ON t.oid = c.conrelid
+                  JOIN pg_namespace n ON n.oid = t.relnamespace
+                  WHERE n.nspname = 'public'
+                    AND t.relname = 'escrows'
+                    AND c.contype = 'c'
+                    AND pg_get_constraintdef(c.oid) ILIKE '%state%'
+                  ORDER BY c.conname
+              """).fetchall()
+              assert len(constraint_rows) == 1, (
+                  "expected exactly one escrow-state CHECK constraint, "
+                  f"found {constraint_rows}"
+              )
+              name, validated, kind, table_name, definition = constraint_rows[0]
+              assert name == "escrows_state_canonical_check", name
+              assert validated is True, f"constraint is NOT VALID: {name}"
+              normalized = definition.lower()
+              for state in ("created", "funded", "locked", "released", "refunded", "cancelled"):
+                  assert state in normalized, f"canonical state missing from {name}: {state}"
+              print("PASS: all 16 migration rows have accepted checksums and applied_at")
+              print("PASS: escrow-state CHECK is unique, canonical, and convalidated=true")
+              for item in evidence:
+                  print(item)
+              print({
+                  "constraint_name": name,
+                  "convalidated": validated,
+                  "table": table_name,
+                  "definition": definition,
+              })
           PY
 
       - name: Deep value-truth reconciliation tests on PostgreSQL
