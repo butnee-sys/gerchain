@@ -92,8 +92,12 @@ def test_build_production_runtime_disposes_engine_if_factory_fails(monkeypatch):
     monkeypatch.setattr(entrypoint, "create_engine", lambda *args, **kwargs: engine)
 
     class Factory:
-        @staticmethod
-        def create(**kwargs):
+        def __init__(self, config, *, engine, session_factory):
+            assert config.database_url.startswith("postgresql")
+            assert engine is not None
+            assert session_factory is not None
+
+        def create(self):
             raise RuntimeError("schema initialization failed")
 
     monkeypatch.setattr(entrypoint, "ProductionRuntimeFactory", Factory)
@@ -108,8 +112,12 @@ def test_build_production_runtime_fails_closed_without_canonical_authority(monke
     monkeypatch.setattr(entrypoint, "create_engine", lambda *args, **kwargs: engine)
 
     class Factory:
-        @staticmethod
-        def create(**kwargs):
+        def __init__(self, config, *, engine, session_factory):
+            assert config.database_url.startswith("postgresql")
+            assert engine is not None
+            assert session_factory is not None
+
+        def create(self):
             return SimpleNamespace(is_canonical_ledger_authoritative=False)
 
     monkeypatch.setattr(entrypoint, "ProductionRuntimeFactory", Factory)
