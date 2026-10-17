@@ -564,6 +564,25 @@ jobs:
           migration_data = json.loads(manifest_migration.read_text(encoding="utf-8")) if manifest_migration.exists() else {}
           manifest_commit = migration_data.get("commit_sha")
           commit_matches = checked_out_head == expected_sha and (manifest_commit is None or manifest_commit == expected_sha)
+          value_flow_path = root / "postgres-value-flow-evidence.json"
+          value_flow = json.loads(value_flow_path.read_text(encoding="utf-8")) if value_flow_path.exists() else {}
+          required_value_flow_keys = {
+              "commit_sha", "migration_history", "opening_balances", "closing_balances",
+              "movement_count", "witness_count", "outbox_count", "idempotency_count",
+              "reconciliation",
+          }
+          value_flow_complete = (
+              required_value_flow_keys.issubset(value_flow)
+              and value_flow.get("status") == "PASS"
+              and value_flow.get("commit_sha") == expected_sha
+              and len(value_flow.get("migration_history", [])) == 16
+              and value_flow.get("movement_count") == 7
+              and value_flow.get("witness_count") == 10
+              and value_flow.get("outbox_count") == 10
+              and value_flow.get("idempotency_count") == 10
+              and value_flow.get("reconciliation", {}).get("matched") is True
+              and not value_flow.get("reconciliation", {}).get("issues")
+          )
           report = {
               "repository": os.environ["EVIDENCE_REPOSITORY"],
               "workflow": os.environ["EVIDENCE_WORKFLOW"],
@@ -581,7 +600,16 @@ jobs:
                   **counts,
               },
               "commit_sha_matches_checkout_and_migration_manifest": commit_matches,
-              "evidence_complete": False,
+              "value_flow_evidence": {
+                  "path": "artifacts/ea35/postgres-value-flow-evidence.json" if value_flow_path.exists() else None,
+                  "complete": value_flow_complete,
+                  "movement_count": value_flow.get("movement_count"),
+                  "witness_count": value_flow.get("witness_count"),
+                  "outbox_count": value_flow.get("outbox_count"),
+                  "idempotency_count": value_flow.get("idempotency_count"),
+                  "reconciliation_matched": value_flow.get("reconciliation", {}).get("matched"),
+              },
+              "evidence_complete": bool(commit_matches and junit_generated_by_pytest and counts["failures"] == 0 and counts["errors"] == 0 and value_flow_complete),
           }
           (root / "manifest.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
 
@@ -593,6 +621,10 @@ jobs:
           print("EVIDENCE_RUN_ID=" + report["run_id"].__str__())
           print("EVIDENCE_RUN_ATTEMPT=" + report["run_attempt"].__str__())
           print("JUNIT_GENERATED_BY_PYTEST=" + str(junit_generated_by_pytest))
+          print("VALUE_FLOW_EVIDENCE_COMPLETE=" + str(value_flow_complete))
+          print("EVIDENCE_COMPLETE=" + str(report["evidence_complete"]))
+          if not report["evidence_complete"]:
+              raise SystemExit("FAIL: commit-bound PostgreSQL value-flow evidence bundle is incomplete")
           PY
 
       - name: Generate SHA256SUMS for evidence bundle
