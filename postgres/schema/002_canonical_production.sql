@@ -65,6 +65,3 @@ CREATE TABLE IF NOT EXISTS gerchain_idempotency_records (
     updated_at TIMESTAMPTZ NOT NULL
 );
 
-INSERT INTO schema_version(version, checksum)
-VALUES (2, 'canonical-production-v1')
-ON CONFLICT (version) DO NOTHING;
