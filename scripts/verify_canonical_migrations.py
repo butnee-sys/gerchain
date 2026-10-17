@@ -365,8 +365,12 @@ def _run() -> dict:
         normalized = sorted((tuple(result["applied_versions"]) for result in results), key=len, reverse=True)
         if normalized != [EXPECTED, ()]:
             raise AssertionError(f"concurrent runners expected one full apply and one NOOP, got {results}")
+        if len({result["process_pid"] for result in results}) != 2:
+            raise AssertionError(f"concurrent migration gate did not use two independent OS process PIDs: {results}")
         if len({result["postgres_session_pid"] for result in results}) != 2:
             raise AssertionError(f"concurrent migration gate did not use two independent PostgreSQL session PIDs: {results}")
+        if any(not result.get("started_at_utc") or not result.get("finished_at_utc") for result in results):
+            raise AssertionError(f"concurrent process UTC timestamps are missing: {results}")
         final_history = results[0]["migration_history"]
         if any(result["migration_history"] != final_history for result in results[1:]):
             raise AssertionError(f"runners observed different migration histories: {results}")
