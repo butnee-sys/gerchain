@@ -1,0 +1,42 @@
+name: PostgreSQL Production Gate
+
+on:
+  pull_request:
+  push:
+    branches:
+      - feat/ea21-transaction-aware-ledger
+
+jobs:
+  postgres-production-gate:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: gerchain_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d gerchain_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      GERCHAIN_TEST_POSTGRES_URL: postgresql://postgres:postgres@localhost:5432/gerchain_test
+      GERCHAIN_TEST_PRODUCTION_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/gerchain_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dee-security.txt pytest
+      - name: Verify concurrent migration serialization and immutable history
+        run: pytest -q tests/postgres/test_migration_concurrency.py
+      - name: Verify production entrypoint and canonical schema separately
+        run: pytest -q tests/postgres/test_production_entrypoint.py
