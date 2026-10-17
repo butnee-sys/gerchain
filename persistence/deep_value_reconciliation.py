@@ -177,7 +177,7 @@ def deep_reconcile_value_truth(session: Session) -> DeepValueTruthReport:
             witness.event_type in value_event_types
             and witness.transaction_id not in movement_by_tx
             and not state_only_cancel
-        )
+        ):
             issue(
                 "ORPHAN_WITNESS",
                 witness.transaction_id,
