@@ -25,6 +25,16 @@ jobs:
           --health-retries 20
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Verify exact checked-out commit
+        env:
+          EXPECTED_COMMIT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          actual="$(git rev-parse HEAD)"
+          mkdir -p artifacts
+          printf 'commit_sha=%s\nchecked_out_head_sha=%s\n' "$EXPECTED_COMMIT_SHA" "$actual" | tee artifacts/checkout-identity.txt
+          test "$EXPECTED_COMMIT_SHA" = "$actual"
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
@@ -44,5 +54,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ea35-postgres-deep-reconciliation
-          path: artifacts/ea35-postgres-deep-reconciliation.xml
+          path: |
+            artifacts/ea35-postgres-deep-reconciliation.xml
+            artifacts/checkout-identity.txt
           if-no-files-found: error
