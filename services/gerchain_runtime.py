@@ -123,6 +123,18 @@ class GerchainRuntime:
         self.runtime_mode = "production-postgresql"
         return self._postgres_release
 
+    @property
+    def is_postgresql_authoritative(self) -> bool:
+        """Compatibility status for the legacy PostgreSQL release adapter.
+
+        This is deliberately distinct from Canonical Ledger authority.
+        """
+        return self.runtime_mode == "production-postgresql" and self._postgres_release is not None
+
+    def require_postgresql_authority(self) -> None:
+        if not self.is_postgresql_authoritative:
+            raise RuntimeError("PostgreSQL authoritative runtime is required")
+
     def configure_canonical_ledger(self, session_factory) -> PostgreSQLAtomicLedger:
         """Attach the production Canonical Ledger boundary."""
         if session_factory is None:
