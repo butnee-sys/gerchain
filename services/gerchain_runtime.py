@@ -272,7 +272,31 @@ class GerchainRuntime:
                 )
         return self.escrow_service.get_state()
 
-    def fund(self, transaction_id: str, source: str, timestamp: str, evidence: Any):\n        if self.is_canonical_ledger_authoritative:\n            from persistence.fund_escrow import fund_escrow_in_transaction\n\n            with self._session_factory() as session:\n                result = fund_escrow_in_transaction(\n                    session,\n                    transaction_id=transaction_id,\n                    escrow_id=self.escrow_engine.escrow_id,\n                    source=source,\n                    amount=self.escrow_engine.amount,\n                    currency=self.escrow_engine.currency,\n                    payload={"timestamp": timestamp, "evidence": evidence},\n                )\n                session.commit()\n                return result\n\n        return self.escrow_service.fund(\n            transaction_id=transaction_id,\n            source=source,\n            timestamp=timestamp,\n            evidence=evidence,\n        )\n\n    def lock(self, transaction_id: str, timestamp: str, evidence: Any):
+    def fund(self, transaction_id: str, source: str, timestamp: str, evidence: Any):
+        if self.is_canonical_ledger_authoritative:
+            from persistence.fund_escrow import fund_escrow_in_transaction
+
+            with self._session_factory() as session:
+                result = fund_escrow_in_transaction(
+                    session,
+                    transaction_id=transaction_id,
+                    escrow_id=self.escrow_engine.escrow_id,
+                    source=source,
+                    amount=self.escrow_engine.amount,
+                    currency=self.escrow_engine.currency,
+                    payload={"timestamp": timestamp, "evidence": evidence},
+                )
+                session.commit()
+                return result
+
+        return self.escrow_service.fund(
+            transaction_id=transaction_id,
+            source=source,
+            timestamp=timestamp,
+            evidence=evidence,
+        )
+
+    def lock(self, transaction_id: str, timestamp: str, evidence: Any):
         if self.is_canonical_ledger_authoritative:
             from persistence.lock_escrow import lock_escrow_in_transaction
 
