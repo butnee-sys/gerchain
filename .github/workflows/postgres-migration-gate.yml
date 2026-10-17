@@ -197,7 +197,9 @@ jobs:
           print(f"REPORT_SHA256_ASSERTION=PASS {digest}")
           PY
       - name: Run PostgreSQL migration and transaction evidence tests
+        shell: bash
         run: |
+          set -euo pipefail
           pytest -vv -ra tests/integration/test_postgres_migration_gate.py tests/postgres/test_migration_runner_postgres_integration.py tests/postgres/test_migration_014_catalog_invariants.py tests/postgres/test_migration_reperformance.py tests/persistence/test_deep_value_reconciliation.py --junitxml=postgres-migration-evidence/postgres-migration-junit.xml 2>&1 | tee postgres-migration-evidence/postgres-migration.log
       - name: Verify production runtime boot and restart
         shell: bash
