@@ -47,7 +47,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt pytest
+          pip install -r requirements.txt pytest pytest-json-report
       - name: Record tested revision and PostgreSQL version
         run: |
           set -euo pipefail
@@ -83,7 +83,9 @@ jobs:
             tests/production/test_postgres_canonical_concurrency.py \
             tests/test_postgres_atomic_ledger.py \
             postgres/tests/test_concurrency.py \
-            tests/test_production_runtime_factory.py 2>&1 | tee evidence/postgres/core-gates.log
+            tests/test_production_runtime_factory.py \
+            --junitxml=evidence/postgres/core-gates-junit.xml \
+            --json-report --json-report-file=evidence/postgres/core-gates-report.json 2>&1 | tee evidence/postgres/core-gates.log
       - name: Apply the authoritative canonical migration chain
         run: |
           set -euo pipefail
@@ -177,7 +179,10 @@ jobs:
       - name: Run deep value-truth reconciliation tests
         run: |
           set -euo pipefail
-          pytest -q tests/persistence/test_deep_value_reconciliation.py 2>&1 | tee evidence/postgres/pytest-deep-reconciliation.log
+          pytest -q tests/persistence/test_deep_value_reconciliation.py \
+            --junitxml=evidence/postgres/deep-reconciliation-junit.xml \
+            --json-report --json-report-file=evidence/postgres/deep-reconciliation-report.json \
+            2>&1 | tee evidence/postgres/pytest-deep-reconciliation.log
       - name: Capture final schema and migration evidence
         if: always()
         run: |
