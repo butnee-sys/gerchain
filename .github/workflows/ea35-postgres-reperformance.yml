@@ -487,6 +487,17 @@ jobs:
               print("PRODUCTION_ENTRYPOINT_EXITED_CLEANLY=PASS")
           PY
 
+      - name: Run independent-process migration concurrency regression
+        if: always()
+        env:
+          GERCHAIN_TEST_DATABASE_URL: postgresql+psycopg://gerchain:gerchain@localhost:5432/gerchain_reperformance
+          PYTHONPATH: .
+        run: |
+          set -o pipefail
+          pytest -q tests/postgres/test_migration_runner_concurrency.py \
+            --junitxml=artifacts/ea35/junit-migration-process-concurrency.xml \
+            2>&1 | tee artifacts/ea35/migration-process-concurrency.log
+
       - name: Finalize exact-SHA evidence report
         if: always()
         env:
