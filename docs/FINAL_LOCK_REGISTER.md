@@ -102,3 +102,20 @@ This section updates the lock register from current source inspection. These are
 7. Update gate statuses from observed outcomes; do not infer GREEN from code inspection or a successful static security scan.
 
 **Register status remains: FINAL LOCK IN PROGRESS — NOT LOCKED.** The work continues by implementing and closing these accumulated gates; no product/application layer is brought into scope before the foundational architecture + EAI lock.
+
+
+## 8. Implementation added for the accumulated migration gate
+
+Commit: `0ac5a89637ef263256ffa0598dcd52c069d625d2`
+
+Added `tests/postgres/test_canonical_migration_registry.py` to cover:
+- exact canonical migration ordering (001–017);
+- rejection of a missing migration version;
+- rejection of an unexpected version;
+- rejection of an ambiguous version alias;
+- SQL statement splitting with semicolons inside quoted strings and dollar-quoted blocks;
+- rejection of an unterminated quote.
+
+This is an implementation increment for L-13, not a closure claim. The tests have been added to the branch but have **not been executed in this turn**. Their result is therefore **UNVERIFIED** until the exact-SHA test workflow runs. These pure registry tests also do not replace clean PostgreSQL migration, upgrade, checksum-drift, concurrency, or schema-drift tests.
+
+Next execution: run the focused test and relevant CI on the new commit; fix any test/import issues, then implement the next highest-risk gap from L-13–L-18. Overall status remains **FINAL LOCK IN PROGRESS — NOT LOCKED**.
