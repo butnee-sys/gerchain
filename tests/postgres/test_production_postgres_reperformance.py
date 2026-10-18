@@ -42,11 +42,11 @@ def test_production_postgres_factory_and_canonical_value_flow():
     assert runtime.is_canonical_ledger_authoritative
 
     # Prove the runtime boot used the actual canonical migration runner and the
-    # repository's exact 16-file migration chain, rather than metadata.create_all
+    # repository's exact 17-file migration chain, rather than metadata.create_all
     # alone. This assertion runs against the real PostgreSQL service in CI.
     migration_dir = Path(__file__).resolve().parents[2] / "postgres" / "migrations"
     canonical_files = _canonical_migration_files(migration_dir)
-    assert [int(path.name.split("_", 1)[0]) for path in canonical_files] == list(range(1, 17))
+    assert [int(path.name.split("_", 1)[0]) for path in canonical_files] == list(range(1, 18)
     expected_checksums = {
         int(path.name.split("_", 1)[0]): checksum(path.read_text(encoding="utf-8"))
         for path in canonical_files
@@ -56,7 +56,7 @@ def test_production_postgres_factory_and_canonical_value_flow():
             text("SELECT version, checksum FROM schema_version ORDER BY version")
         ).all()
     applied_checksums = {int(version): digest for version, digest in applied_rows}
-    assert list(applied_checksums) == list(range(1, 17)), applied_checksums
+    assert list(applied_checksums) == list(range(1, 18)), applied_checksums
     assert applied_checksums == expected_checksums, {
         "expected": expected_checksums,
         "applied": applied_checksums,
