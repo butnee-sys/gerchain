@@ -53,7 +53,7 @@ def test_production_factory_boots_real_postgresql_and_establishes_canonical_auth
             migration_rows = connection.execute(
                 text("SELECT version, checksum FROM schema_version ORDER BY version")
             ).all()
-            assert [row.version for row in migration_rows] == list(range(1, 17))
+            assert [row.version for row in migration_rows] == list(range(1, 18))
             # Bind production boot evidence to the full versioned migration history,
             # not merely the presence of a schema_version table.
             assert all(len(row.checksum) == 64 for row in migration_rows)
