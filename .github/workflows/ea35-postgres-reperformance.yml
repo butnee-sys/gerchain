@@ -147,7 +147,7 @@ jobs:
               rows_first = connection.execute(
                   "SELECT version, checksum, applied_at::text FROM schema_version ORDER BY version"
               ).fetchall()
-              assert [row[0] for row in rows_first] == list(range(1, 17)), rows_first
+              assert [row[0] for row in rows_first] == list(range(1, 18)), rows_first
               assert all(row[1] for row in rows_first), rows_first
               constraints_first = connection.execute("""
                   SELECT conname, contype, convalidated, pg_get_constraintdef(oid)
@@ -196,7 +196,7 @@ jobs:
           print(f"MIGRATION_REGISTRY_AFTER_SHA256_INPUT={[(row[0], row[1]) for row in rows]!r}")
           PY
 
-      - name: Re-perform upgrade from canonical migrations 001-014 through 016
+      - name: Re-perform upgrade from canonical migrations 001-014 through 017
         run: |
           python - <<'PY'
           import os, tempfile
@@ -227,7 +227,7 @@ jobs:
                   applied_015 = apply_migrations(connection, Path('postgres/migrations'))
                   assert applied_015 == (15, 16), applied_015
                   after = connection.execute('SELECT version, checksum, applied_at FROM schema_version ORDER BY version').fetchall()
-                  assert [row[0] for row in after] == list(range(1, 17)), after
+                  assert [row[0] for row in after] == list(range(1, 18)), after
                   assert [(row[0], row[1]) for row in after[:14]] == before_checksums
                   state_constraints = connection.execute("""
                       SELECT conname, convalidated, pg_get_constraintdef(oid)
@@ -253,7 +253,7 @@ jobs:
                   print('UPGRADE_RERUN_IDEMPOTENCY=PASS')
           PY
 
-      - name: Capture schema snapshot and exact 16-migration manifest
+      - name: Capture schema snapshot and exact 17-migration manifest
         env:
           EVIDENCE_COMMIT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
           EVIDENCE_RUN_ID: ${{ github.run_id }}
@@ -302,7 +302,7 @@ jobs:
           expected = [(item["version"], item["sha256"]) for item in manifest_rows]
           actual = [(row[0], row[1]) for row in applied]
           assert actual == expected, {
-              "reason": "database migration registry does not match the canonical 16-file manifest",
+              "reason": "database migration registry does not match the canonical 17-file manifest",
               "expected": expected,
               "actual": actual,
           }
@@ -349,11 +349,11 @@ jobs:
                   json.dumps(schema, sort_keys=True, separators=(",", ":")).encode("utf-8")
               ).hexdigest(),
           }
-          assert len(manifest_rows) == 16
+          assert len(manifest_rows) == 17
           (out / "migration-manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
           (out / "postgres-schema-snapshot.json").write_text(json.dumps(schema, indent=2) + "\n", encoding="utf-8")
           (out / "commit-sha.txt").write_text(os.environ["EVIDENCE_COMMIT_SHA"] + "\n", encoding="utf-8")
-          print("MIGRATION_MANIFEST=16/16")
+          print("MIGRATION_MANIFEST=17/17")
           print("SCHEMA_VERSION_MATCHES_MANIFEST=PASS")
           print(f"POSTGRES_VERSION={pg_version}")
           print(f"SCHEMA_SNAPSHOT_SHA256={manifest['schema_snapshot_sha256']}")
@@ -575,7 +575,7 @@ jobs:
               required_value_flow_keys.issubset(value_flow)
               and value_flow.get("status") == "PASS"
               and value_flow.get("commit_sha") == expected_sha
-              and len(value_flow.get("migration_history", [])) == 16
+              and len(value_flow.get("migration_history", [])) == 17
               and value_flow.get("movement_count") == 7
               and value_flow.get("witness_count") == 10
               and value_flow.get("outbox_count") == 10
