@@ -53,7 +53,56 @@ Main-branch protection/ruleset, required-review policy, and post-merge required-
 Do not rerun completed technical work merely to create duplicate tasks. An independent reviewer/oracle must verify the retained exact-SHA PostgreSQL/value-truth evidence and the closures of FL-1 through FL-4.
 **Closure evidence:** signed/attributed independent result, consolidated evidence index, explicit exceptions (if any) accepted by the responsible authority, and final immutable lock decision tied to a single SHA.
 
-## 4. Decision rule
+## 4. Required PostgreSQL and final-evidence execution gates
+
+These gates are explicitly included in the FINAL LOCK work plan. They must be evaluated against the same exact candidate commit SHA; workflow configuration or a historical successful run is not itself proof.
+
+### PG-1 — Clean PostgreSQL migration and schema verification
+- Provision a fresh PostgreSQL database and apply the canonical migration chain from an empty state.
+- Verify the migration registry has the expected contiguous versions and checksums.
+- Re-run migrations and prove idempotency: no changed registry rows, checksums, timestamps, or constraints.
+- Verify required tables, columns, indexes, foreign keys, check constraints, uniqueness constraints, and validated constraint status.
+- Re-perform an upgrade path from the supported prior migration state and compare the resulting schema with the clean-install result.
+- Preserve migration logs and schema/constraint snapshots as workflow artifacts.
+**Closure evidence:** successful exact-SHA PostgreSQL workflow, clean-install and upgrade outputs, migration registry, schema/constraint comparison, and retained artifact references.
+
+### PG-2 — Production entrypoint boot
+- Start the production entrypoint against the freshly migrated PostgreSQL database using the production runtime factory.
+- Assert the configured runtime reports Canonical Ledger authority; prove it does not initialize or fall back to legacy ReleaseAccount, in-memory MoneyLedger, SQLite, or other alternate value authority.
+- Verify startup failure is fail-closed for missing configuration, non-PostgreSQL URLs, and schema/configuration errors.
+- Capture process startup, readiness/health result, and clean SIGTERM/SIGINT shutdown evidence.
+**Closure evidence:** exact-SHA logs and automated assertions showing successful PostgreSQL boot, canonical authority, negative startup cases, and clean shutdown.
+
+### PG-3 — Full canonical escrow/value-flow re-performance
+On PostgreSQL, exercise and verify:
+1. CREATE — durable CREATED aggregate, no value movement.
+2. FUND — source-to-escrow movement and CREATED→FUNDED.
+3. LOCK — FUNDED→LOCKED, state-only, no ledger movement.
+4. RELEASE — LOCKED→RELEASED, canonical Ledger movement.
+5. REFUND — LOCKED→REFUNDED to the authoritative refund destination; caller-selected destination must not override it.
+6. CANCEL — CREATED state-only cancellation and FUNDED cancellation with canonical reversal; invalid states fail closed.
+7. SETTLEMENT — uses the same canonical Ledger authority, not a second balance store.
+8. Account creation and balance/escrow READ — read the durable canonical records.
+- Include idempotent replay, conflicting replay, insufficient balance, currency mismatch, concurrent operations, rollback/no-partial-write, and invalid-transition cases.
+- Assert each value-moving operation commits exactly one consistent movement and its required escrow state, witness, outbox, and durable idempotency evidence.
+**Closure evidence:** PostgreSQL integration-test results and persisted before/after balances, movements, escrow states, witness/outbox/idempotency records, including negative-case results.
+
+### PG-4 — Deep Value Truth Reconciliation and recovery
+- Run deep reconciliation over movement↔escrow↔witness↔outbox↔idempotency↔integrity bindings.
+- Prove clean graph passes and deliberate corruption cases fail with actionable issue codes.
+- Test transaction rollback and restart/abandoned-operation recovery; prove recovery cannot duplicate value movement.
+- If verification fails during recovery, the operation remains held and is not promoted to authoritative truth.
+**Closure evidence:** exact-SHA reconciliation report, injected-failure matrix, recovery logs, and proof of no duplicate movement.
+
+### PG-5 — Exact-SHA CI, independent review, IAM/MFA
+- Record the candidate commit SHA and verify every required CI job ran on that exact SHA; queued/pending/empty checks are UNVERIFIED, not PASS.
+- Retain workflow/run IDs, job conclusions, logs, artifacts, and security scan output.
+- Obtain an independent reviewer’s re-performance of the PostgreSQL migration, runtime boot, operation matrix, reconciliation, and recovery evidence.
+- Attach organizational IAM/MFA evidence: privileged-account inventory and review, MFA enforcement proof, policy/configuration record, and accountable approval. Source tests alone cannot close this control.
+- Verify main-branch protection, required reviews, and required status-check governance; preserve the machine-readable configuration evidence.
+**Closure evidence:** exact-SHA CI evidence, attributed independent report, IAM/MFA approval evidence, and repository-governance record tied to the same lock candidate.
+
+## 6. Decision rule
 
 - No queued, pending, missing, or unverified item may be marked GREEN.
 - A historical successful run does not prove a different SHA.
