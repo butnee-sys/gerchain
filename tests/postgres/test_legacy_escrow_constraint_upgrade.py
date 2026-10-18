@@ -130,7 +130,7 @@ def test_full_17_migration_chain_repairs_legacy_constraint_without_losing_escrow
                 "SELECT version FROM schema_version ORDER BY version"
             ).fetchall()
             assert rerun_rows == actual_rows
-            assert [row[0] for row in rerun_versions] == list(range(1, 17))
+            assert [row[0] for row in rerun_versions] == list(range(1, 18))
             assert conn.execute(
                 "SELECT COUNT(*) FROM pg_constraint WHERE conrelid='escrows'::regclass "
                 "AND conname='legacy_escrow_state_check'"
