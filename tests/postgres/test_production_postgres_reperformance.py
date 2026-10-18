@@ -11,6 +11,7 @@ from persistence.durable_idempotency import IdempotencyBase
 from persistence.escrow_aggregate import EscrowBase, CanonicalEscrow, EscrowState
 from persistence.recovery_outbox import OutboxBase, OutboxEvent
 from persistence.fund_escrow import fund_escrow_in_transaction
+from persistence.create_escrow import create_escrow_in_transaction
 from persistence.lock_escrow import lock_escrow_in_transaction
 from persistence.release_escrow import release_escrow_in_transaction
 from services.gerchain_runtime_factory import ProductionRuntimeConfig, ProductionRuntimeFactory
@@ -76,10 +77,22 @@ def test_production_postgres_factory_and_canonical_value_flow():
         for account_id, balance in accounts:
             session.add(LedgerAccountModel(account_id=account_id, currency="MNT", balance=balance, version=0, updated_at=now))
         session.add_all([
-            CanonicalEscrow(id="pg-release-escrow", sender_address="pg-fund-source", receiver_address="pg-release-beneficiary", refund_destination="pg-fund-source", amount=100, state=EscrowState.CREATED.value, condition_desc="postgres-release", currency="MNT", version=0, created_at=now, updated_at=now),
             CanonicalEscrow(id="pg-refund-escrow", sender_address="pg-refund-source", receiver_address="pg-refund-source", refund_destination="pg-refund-source", amount=100, state=EscrowState.CREATED.value, condition_desc="postgres-refund", currency="MNT", version=0, created_at=now, updated_at=now),
             CanonicalEscrow(id="pg-cancel-escrow", sender_address="pg-cancel-source", receiver_address="pg-cancel-source", refund_destination="pg-cancel-source", amount=75, state=EscrowState.CREATED.value, condition_desc="postgres-cancel", currency="MNT", version=0, created_at=now, updated_at=now),
         ])
+        create_result = create_escrow_in_transaction(
+            session,
+            transaction_id="pg-create-tx",
+            escrow_id="pg-release-escrow",
+            source="pg-fund-source",
+            beneficiary="pg-release-beneficiary",
+            refund_destination="pg-fund-source",
+            amount=100,
+            currency="MNT",
+            condition="postgres-release",
+        )
+        assert create_result["state"] == EscrowState.CREATED.value
+        assert create_result["value_movement"] is False
         session.commit()
 
         fund_escrow_in_transaction(session, transaction_id="pg-fund-tx", escrow_id="pg-release-escrow", source="pg-fund-source", amount=100, currency="MNT")
@@ -113,6 +126,8 @@ def test_production_postgres_factory_and_canonical_value_flow():
         assert balances["pg-settle-source"] == 25
         assert balances["pg-settle-destination"] == 25
         assert len(movements) == 7
+        assert session.query(TransactionWitness).filter_by(transaction_id="pg-create-tx", event_type="GERCHAIN_CREATED", amount=0).count() == 1
+        assert session.query(OutboxEvent).filter_by(event_type="GERCHAIN_CREATED", aggregate_id="pg-release-escrow").count() == 1
         assert {m.operation for m in movements} == {"FUND", "RELEASE", "REFUND", "CANCEL", "SETTLEMENT"}
         assert {w.event_type for w in witnesses} >= {"GERCHAIN_FUNDED", "GERCHAIN_LOCKED", "GERCHAIN_RELEASED", "GERCHAIN_REFUNDED", "GERCHAIN_CANCELLED", "GERCHAIN_SETTLED"}
         assert {e.event_type for e in outbox} >= {"GERCHAIN_FUNDED", "GERCHAIN_LOCKED", "GERCHAIN_RELEASED", "GERCHAIN_REFUNDED", "GERCHAIN_CANCELLED", "GERCHAIN_SETTLED"}
