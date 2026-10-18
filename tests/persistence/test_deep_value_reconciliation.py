@@ -612,3 +612,47 @@ def test_restart_recovery_evidence_bundle_preserves_value_truth(tmp_path):
         assert report.matched is True, report.issues
 
     restarted_engine.dispose()
+
+
+
+def test_canonical_create_is_atomic_state_only_and_replay_safe():
+    from persistence.create_escrow import create_escrow_in_transaction
+
+    engine, factory = _session_factory()
+    with factory() as session:
+        first = create_escrow_in_transaction(
+            session,
+            transaction_id="create-tx-1",
+            escrow_id="create-escrow-1",
+            source="create-source",
+            beneficiary="create-beneficiary",
+            refund_destination="create-source",
+            amount=25,
+            currency="MNT",
+            condition="CREATE gate",
+        )
+        session.commit()
+        assert first["state"] == "CREATED"
+        assert first["value_movement"] is False
+        assert first["replayed"] is False
+
+    with factory() as session:
+        replay = create_escrow_in_transaction(
+            session,
+            transaction_id="create-tx-1",
+            escrow_id="create-escrow-1",
+            source="create-source",
+            beneficiary="create-beneficiary",
+            refund_destination="create-source",
+            amount=25,
+            currency="MNT",
+            condition="CREATE gate",
+        )
+        assert replay["replayed"] is True
+        assert session.query(LedgerMovementModel).count() == 0
+        assert session.query(TransactionWitness).filter_by(transaction_id="create-tx-1").count() == 1
+        assert session.query(OutboxEvent).filter_by(event_type="GERCHAIN_CREATED").count() == 1
+        assert session.query(DurableIdempotencyRecord).filter_by(key="create-tx-1", state="COMPLETED").count() == 1
+        report = deep_reconcile_value_truth(session)
+        assert report.matched, report.issues
+    engine.dispose()
