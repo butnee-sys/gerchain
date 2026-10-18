@@ -656,3 +656,29 @@ def test_canonical_create_is_atomic_state_only_and_replay_safe():
         report = deep_reconcile_value_truth(session)
         assert report.matched, report.issues
     engine.dispose()
+
+
+def test_canonical_create_rollback_leaves_no_partial_evidence():
+    from persistence.create_escrow import create_escrow_in_transaction
+
+    engine, factory = _session_factory()
+    with factory() as session:
+        create_escrow_in_transaction(
+            session,
+            transaction_id="create-rollback-tx",
+            escrow_id="create-rollback-escrow",
+            source="rollback-source",
+            beneficiary="rollback-beneficiary",
+            refund_destination="rollback-source",
+            amount=7,
+            currency="MNT",
+        )
+        session.rollback()
+
+    with factory() as session:
+        assert session.query(CanonicalEscrow).filter_by(id="create-rollback-escrow").count() == 0
+        assert session.query(TransactionWitness).filter_by(transaction_id="create-rollback-tx").count() == 0
+        assert session.query(OutboxEvent).filter(OutboxEvent.event_id.like("%create-rollback-tx")).count() == 0
+        assert session.query(DurableIdempotencyRecord).filter_by(key="create-rollback-tx").count() == 0
+        assert session.query(LedgerMovementModel).count() == 0
+    engine.dispose()
