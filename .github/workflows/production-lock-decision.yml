@@ -1,0 +1,111 @@
+name: Production lock decision
+
+on:
+  workflow_run:
+    workflows:
+      - Canonical PostgreSQL production gate
+    types:
+      - completed
+    branches:
+      - feat/ea21-transaction-aware-ledger
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  decide-production-lock:
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.event == 'push' || github.event.workflow_run.event == 'workflow_dispatch' }}
+    steps:
+      - name: Checkout the exact revision tested by the PostgreSQL gate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - name: Download evidence from the exact PostgreSQL gate run
+        uses: actions/download-artifact@v4
+        with:
+          name: ea35-${{ github.event.workflow_run.head_sha }}
+          path: artifacts/ea35
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ github.event.workflow_run.id }}
+
+      - name: Verify exact checked-out SHA
+        env:
+          EXPECTED_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          python - <<'PY'
+          import os, subprocess
+          expected = os.environ['EXPECTED_SHA']
+          actual = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
+          print(f'expected_sha={expected}')
+          print(f'checked_out_sha={actual}')
+          if expected != actual:
+              raise SystemExit('NOT_LOCKED: checkout SHA does not match tested SHA')
+          PY
+
+      - name: Produce fail-closed production lock decision
+        id: decision
+        env:
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_SHA: ${{ github.event.workflow_run.head_sha }}
+          GATE_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+        run: |
+          python - <<'PY'
+          import json, os, subprocess
+          from pathlib import Path
+          gates = (
+              'compile', 'regression', 'postgres_connection', 'migration_atomicity',
+              'legacy_upgrade', 'lifecycle', 'migration_concurrency',
+              'publication_integrity', 'entrypoint', 'production_boot',
+              'migration_catalog', 'deep_reconciliation', 'manifest',
+          )
+          conclusion = os.environ.get('GATE_CONCLUSION', 'missing')
+          outcomes = {name: ('success' if conclusion == 'success' else conclusion) for name in gates}
+          subprocess.run([
+              'python', 'scripts/production_gate_controller.py',
+              '--manifest', 'artifacts/ea35/manifest.json',
+              '--output', 'artifacts/ea35/production-gate-decision.json',
+              '--expected-sha', os.environ['GITHUB_SHA'],
+              '--outcomes-json', json.dumps(outcomes, sort_keys=True),
+          ], check=False)
+          report_path = Path('artifacts/ea35/production-gate-decision.json')
+          report = json.loads(report_path.read_text(encoding='utf-8'))
+          summary = Path(os.environ['GITHUB_STEP_SUMMARY'])
+          summary.write_text(
+              '# Production lock decision\n\n'
+              + f"**Decision:** `{report.get('decision', 'NOT_LOCKED')}`\n\n"
+              + f"**Tested commit:** `{os.environ['GITHUB_SHA']}`\n\n"
+              + f"**PostgreSQL gate conclusion:** `{conclusion}`\n\n"
+              + '## Blocking findings\n'
+              + ''.join(f'- `{item}`\n' for item in report.get('failures', [])),
+              encoding='utf-8',
+          )
+          if report.get('decision') != 'LOCKED':
+              raise SystemExit('NOT_LOCKED: required gate or evidence condition did not pass')
+          PY
+
+      - name: Preserve decision evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-lock-decision-${{ github.event.workflow_run.head_sha }}
+          path: artifacts/ea35/production-gate-decision.json
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Fail the decision workflow unless lock evidence is complete
+        if: always()
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p = Path('artifacts/ea35/production-gate-decision.json')
+          if not p.exists():
+              raise SystemExit('NOT_LOCKED: decision evidence file missing')
+          report = json.loads(p.read_text(encoding='utf-8'))
+          if report.get('decision') != 'LOCKED':
+              raise SystemExit('NOT_LOCKED: see production-gate-decision.json for blocking findings')
+          print('LOCKED: every required gate and exact-SHA evidence check passed')
+          PY
