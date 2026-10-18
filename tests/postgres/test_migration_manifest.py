@@ -12,7 +12,7 @@ def test_postgresql_migration_versions_resolve_to_exact_canonical_chain():
     versions = [int(path.name.split("_", 1)[0]) for path in selected]
 
     assert len(selected) == 17
-    assert versions == list(range(1, 18)
+    assert versions == list(range(1, 18))
 
 
 def test_canonical_migration_chain_contains_required_stages():
