@@ -67,3 +67,38 @@ CI evidence checked for commit `e860f502f3e1a2d56fd873ad2faab7b1ab630740`: the c
 6. Only then create a separate FINAL LOCK decision record referencing this register, exact SHA and evidence links.
 
 **Current disposition: FINAL LOCK PROCESS OPENED; PRODUCTION FINAL LOCK DENIED PENDING EVIDENCE.**
+
+
+## 7. Cumulative findings added to FINAL LOCK (2026-10-18)
+
+This section updates the lock register from current source inspection. These are requirements to close through implementation and repeatable evidence—not reasons to stop at a “proof needed” statement.
+
+### Current source anchors
+
+- `services/gerchain_runtime_factory.py` blob: `126f51789101d60f9552cf4cc59af7cec78c3101`. It contains the explicit canonical migration invocation, model metadata setup, and fail-closed schema assertions.
+- `production_entrypoint.py` blob: `7d466b715af03d982efbd41306959dc758bb0542`. It validates PostgreSQL configuration, constructs the factory instance, requires Canonical Ledger authority, tests database connectivity, and disposes the engine on failure/shutdown.
+- `postgres/migrations/__init__.py` blob: `24c9578c8d697630e72f5121ff39aeb99a9f45a8`. It defines the ordered 17-file canonical migration chain and migration runner.
+- `tests/services/test_production_entrypoint.py` blob: `c04a8d87b10a112d324f14edacc7de44c8f7f832`. It contains entrypoint-level regression tests; these do not substitute for running against a real PostgreSQL server.
+
+### Newly explicit gates
+
+| Gate | Requirement added to FINAL LOCK | Closure evidence required | Status |
+|---|---|---|---|
+| L-13 | **Migration registry integrity** — only the declared 17 canonical migration files are applied; missing, ambiguous, skipped, unexpected or checksum-drifted files fail closed | Clean database and supported upgrade-path runs; exact `schema_version` sequence 1–17; checksum history retained | OPEN |
+| L-14 | **Database-enforced schema integrity** — required constraints must exist, have the expected semantic expressions, be validated, and include required NOT NULL / unique guarantees | PostgreSQL schema assertion output for clean install and upgrade; negative tests for weakened/rebound constraints | OPEN |
+| L-15 | **Factory/entrypoint integration** — runtime factory, session factory and engine are the same PostgreSQL authority; no legacy Release authority is configured as the production value path | Exact-SHA automated test plus real PostgreSQL container boot and shutdown | OPEN |
+| L-16 | **Container readiness contract** — successful process start alone is not readiness; readiness must imply migrations, schema assertions, connectivity and canonical authority succeeded | Container-level health/readiness test for success and failure modes | OPEN |
+| L-17 | **Migration idempotency and concurrency** — repeated boot is safe and concurrent boot/migration attempts serialize without duplicate or partial schema history | Two-run and concurrent-start PostgreSQL tests, including injected migration failure and retry | OPEN |
+| L-18 | **Schema history versus physical schema** — version rows cannot mask out-of-band DDL drift; boot rejects weakened constraints even when the migration ledger looks complete | Drift injection test followed by fail-closed boot; repair/re-run evidence | OPEN |
+
+### Execution order updated
+
+1. Add/retain regression tests for L-13 through L-18, including negative-path cases.
+2. Run the canonical migration chain against a genuinely clean PostgreSQL database.
+3. Run the same chain against a representative prior-version database and verify the resulting schema/history.
+4. Run production-entrypoint/container boot and lifecycle integration tests against PostgreSQL.
+5. Exercise failure, restart, concurrent migration, idempotency and deep-reconciliation scenarios.
+6. Bind every result to one exact candidate SHA and retain job logs/artifacts.
+7. Update gate statuses from observed outcomes; do not infer GREEN from code inspection or a successful static security scan.
+
+**Register status remains: FINAL LOCK IN PROGRESS — NOT LOCKED.** The work continues by implementing and closing these accumulated gates; no product/application layer is brought into scope before the foundational architecture + EAI lock.
