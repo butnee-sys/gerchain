@@ -194,7 +194,21 @@ jobs:
           if junit_path.exists():
               try:
                   root = ET.parse(junit_path).getroot()
-                  junit = [{"tests": int(root.attrib.get("tests", 0)), "failures": int(root.attrib.get("failures", 0)), "errors": int(root.attrib.get("errors", 0)), "skipped": int(root.attrib.get("skipped", 0))}]
+                  # pytest commonly emits a <testsuites> root without aggregate
+                  # attributes. Sum actual <testsuite> nodes; never report a
+                  # false zero merely because the root has no counters.
+                  suites = [root] if root.tag == "testsuite" else list(root.iter("testsuite"))
+                  if not suites:
+                      raise ValueError(f"JUnit XML contains no testsuite nodes: root={root.tag!r}")
+                  junit = [{
+                      "tests": sum(int(s.attrib.get("tests", 0)) for s in suites),
+                      "failures": sum(int(s.attrib.get("failures", 0)) for s in suites),
+                      "errors": sum(int(s.attrib.get("errors", 0)) for s in suites),
+                      "skipped": sum(int(s.attrib.get("skipped", 0)) for s in suites),
+                      "suite_count": len(suites),
+                  }]
+                  if junit[0]["tests"] <= 0:
+                      raise ValueError("JUnit report contains zero tests")
               except Exception as exc:
                   junit = [{"parse_error": f"{type(exc).__name__}: {exc}"}]
           expected_by_version = {
@@ -207,10 +221,37 @@ jobs:
               and applied_by_version == expected_by_version
               and len(applied_by_version) == len(applied)
           )
+          source_paths = [
+              "production_entrypoint.py",
+              "services/gerchain_runtime_factory.py",
+              "services/gerchain_runtime.py",
+              "persistence/atomic_ledger.py",
+              "persistence/escrow_aggregate.py",
+              "persistence/atomic_value_transaction.py",
+              "persistence/durable_idempotency.py",
+              "persistence/recovery_outbox.py",
+              "persistence/deep_value_reconciliation.py",
+              "postgres/migrations.py",
+              "tests/production/test_production_runtime_entrypoint.py",
+              "tests/postgres/test_production_postgres_reperformance.py",
+              "tests/persistence/test_deep_value_reconciliation_postgres.py",
+          ]
+          source_files = []
+          source_missing = []
+          for name in source_paths:
+              path = Path(name)
+              if not path.is_file():
+                  source_missing.append(name)
+              else:
+                  source_files.append({"path": name, "sha256": hashlib.sha256(path.read_bytes()).hexdigest()})
           report = {
               "commit_sha": expected_sha,
               "checked_out_head_sha": head,
               "sha_match": expected_sha == head,
+              "source_files": source_files,
+              "source_file_count": len(source_files),
+              "source_missing": source_missing,
+              "source_hashes_complete": not source_missing and len(source_files) == len(source_paths),
               "migration_files": migrations,
               "applied_migrations": applied,
               "migration_file_count": len(migrations),
@@ -220,11 +261,11 @@ jobs:
               "migration_history_versions_exact": sorted(applied_by_version) == list(range(1, len(expected_by_version) + 1)),
               "migration_read_error": migration_error,
               "lifecycle_junit": junit,
-              "evidence_status": "PASS_CANDIDATE" if expected_sha == head and not migration_error and len(applied) == len(migrations) and checksum_match and sorted(applied_by_version) == list(range(1, len(expected_by_version) + 1)) and junit and all(x.get("failures", 0) == 0 and x.get("errors", 0) == 0 for x in junit) else "INCOMPLETE_OR_FAILED",
+              "evidence_status": "PASS_CANDIDATE" if expected_sha == head and not migration_error and len(applied) == len(migrations) and checksum_match and sorted(applied_by_version) == list(range(1, len(expected_by_version) + 1)) and source_files and not source_missing and junit and all(x.get("tests", 0) > 0 and x.get("failures", 0) == 0 and x.get("errors", 0) == 0 for x in junit) else "INCOMPLETE_OR_FAILED",
           }
           out = Path("artifacts/production-postgres/migration-lifecycle-report.json")
           out.write_text(json.dumps(report, indent=2, sort_keys=True) + "\\n", encoding="utf-8")
-          print(json.dumps({k: report[k] for k in ("commit_sha", "checked_out_head_sha", "sha_match", "migration_file_count", "applied_migration_count", "migration_checksums_match_files", "migration_history_versions_exact", "evidence_status")}, indent=2))
+          print(json.dumps({k: report[k] for k in ("commit_sha", "checked_out_head_sha", "sha_match", "source_file_count", "source_hashes_complete", "source_missing", "migration_file_count", "applied_migration_count", "migration_checksums_match_files", "migration_history_versions_exact", "lifecycle_junit", "evidence_status")}, indent=2))
           if not report["sha_match"]:
               raise SystemExit("commit_sha does not match checked_out_head_sha")
           PY
