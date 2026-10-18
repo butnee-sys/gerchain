@@ -42,11 +42,11 @@ jobs:
           pip install -r requirements-dee-security.txt -r postgres/requirements-test.txt
       - name: Prepare migration evidence directory
         if: always()
-        run: mkdir -p artifacts/canonical-postgres-evidence/logs
+        run: mkdir -p artifacts/ea35/logs
       - name: Compile production and persistence modules
-        run: set -o pipefail; python -m compileall -q production_entrypoint.py persistence services core postgres 2>&1 | tee artifacts/canonical-postgres-evidence/logs/python-compile.log
+        run: set -o pipefail; python -m compileall -q production_entrypoint.py persistence services core postgres 2>&1 | tee artifacts/ea35/logs/python-compile.log
       - name: Collect CORE foundation regression tests separately
-        run: set -o pipefail; pytest --collect-only -q tests/services/test_gerchain_runtime_atomic_lifecycle.py tests/services/test_gerchain_runtime_canonical_ledger.py tests/services/test_gerchain_runtime_factory.py tests/persistence/test_deep_value_reconciliation.py tests/postgres/test_migrations.py tests/postgres/test_migration_manifest.py 2>&1 | tee artifacts/canonical-postgres-evidence/logs/pytest-collection.log
+        run: set -o pipefail; pytest --collect-only -q tests/services/test_gerchain_runtime_atomic_lifecycle.py tests/services/test_gerchain_runtime_canonical_ledger.py tests/services/test_gerchain_runtime_factory.py tests/persistence/test_deep_value_reconciliation.py tests/postgres/test_migrations.py tests/postgres/test_migration_manifest.py 2>&1 | tee artifacts/ea35/logs/pytest-collection.log
       - name: Run CORE foundation regression tests
         run: >-
           pytest -q
@@ -71,17 +71,17 @@ jobs:
                   print(f"PASS: PostgreSQL connection: {database}; {version}")
           PY
       - name: Validate checksum atomicity and duplicate migration publication
-        run: set -o pipefail; pytest -vv -s postgres/tests/test_migration_checksum_atomicity.py tests/postgres/test_migration_runner_concurrency.py 2>&1 | tee artifacts/canonical-postgres-evidence/logs/checksum-atomicity-concurrency.log
+        run: set -o pipefail; pytest -vv -s postgres/tests/test_migration_checksum_atomicity.py tests/postgres/test_migration_runner_concurrency.py 2>&1 | tee artifacts/ea35/logs/checksum-atomicity-concurrency.log
       - name: Re-perform legacy escrow constraint upgrade and data preservation
-        run: set -o pipefail; pytest -vv -s tests/postgres/test_legacy_escrow_constraint_upgrade.py 2>&1 | tee artifacts/canonical-postgres-evidence/logs/legacy-escrow-upgrade.log
+        run: set -o pipefail; pytest -vv -s tests/postgres/test_legacy_escrow_constraint_upgrade.py 2>&1 | tee artifacts/ea35/logs/legacy-escrow-upgrade.log
       - name: Re-perform canonical PostgreSQL escrow lifecycle
-        run: set -o pipefail; pytest -vv -s tests/postgres/test_production_postgres_reperformance.py 2>&1 | tee artifacts/canonical-postgres-evidence/logs/production-lifecycle.log
+        run: set -o pipefail; pytest -vv -s tests/postgres/test_production_postgres_reperformance.py 2>&1 | tee artifacts/ea35/logs/production-lifecycle.log
       - name: Re-perform PostgreSQL migration concurrency and checksum gate
-        run: set -o pipefail; python -m pytest -vv -s postgres/tests/test_concurrency.py 2>&1 | tee artifacts/canonical-postgres-evidence/logs/migration-concurrency.log
+        run: set -o pipefail; python -m pytest -vv -s postgres/tests/test_concurrency.py 2>&1 | tee artifacts/ea35/logs/migration-concurrency.log
       - name: Re-perform duplicate publication and checksum fail-closed cases on PostgreSQL
-        run: set -o pipefail; pytest -vv -s postgres/tests/test_migration_publication_integrity.py 2>&1 | tee artifacts/canonical-postgres-evidence/logs/migration-publication-integrity.log
+        run: set -o pipefail; pytest -vv -s postgres/tests/test_migration_publication_integrity.py 2>&1 | tee artifacts/ea35/logs/migration-publication-integrity.log
       - name: Test production entrypoint contract
-        run: set -o pipefail; pytest -vv -s tests/services/test_production_entrypoint.py 2>&1 | tee artifacts/canonical-postgres-evidence/logs/production-entrypoint.log
+        run: set -o pipefail; pytest -vv -s tests/services/test_production_entrypoint.py 2>&1 | tee artifacts/ea35/logs/production-entrypoint.log
       - name: Boot real PostgreSQL production runtime and validate schema
         run: |
           python - <<'PY'
@@ -248,7 +248,7 @@ jobs:
           PY
 
       - name: Deep value-truth reconciliation tests on PostgreSQL
-        run: set -o pipefail; pytest -vv -s tests/persistence/test_deep_value_reconciliation_postgres.py 2>&1 | tee artifacts/canonical-postgres-evidence/logs/deep-value-reconciliation.log
+        run: set -o pipefail; pytest -vv -s tests/persistence/test_deep_value_reconciliation_postgres.py 2>&1 | tee artifacts/ea35/logs/deep-value-reconciliation.log
 
       - name: Build canonical migration evidence manifest
         if: always()
@@ -317,7 +317,7 @@ jobs:
           manifest['checked_out_head_sha'] = head_sha
           manifest['commit_sha_matches_head'] = manifest['commit_sha'] == head_sha
           manifest['git_status_porcelain'] = subprocess.run(['git', 'status', '--porcelain'], capture_output=True, text=True, check=False).stdout.splitlines()
-          out = root / 'artifacts/canonical-postgres-evidence'
+          out = root / 'artifacts/ea35'
           out.mkdir(parents=True, exist_ok=True)
           (out / 'manifest.json').write_text(json.dumps(manifest, indent=2) + '\n', encoding='utf-8')
           (out / 'commit-sha.txt').write_text(manifest['commit_sha'] + '\n', encoding='utf-8')
@@ -344,7 +344,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: canonical-postgres-evidence-${{ github.sha }}
-          path: artifacts/canonical-postgres-evidence/
+          name: ea35-${{ github.sha }}
+          path: artifacts/ea35/
           if-no-files-found: warn
           retention-days: 90
