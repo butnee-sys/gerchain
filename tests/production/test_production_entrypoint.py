@@ -10,6 +10,8 @@ import production_entrypoint as entrypoint
 class FakeEngine:
     def __init__(self):
         self.disposed = False
+        # Match the SQLAlchemy Engine contract used by the production boot guard.
+        self.dialect = SimpleNamespace(name="postgresql")
 
     def dispose(self):
         self.disposed = True
