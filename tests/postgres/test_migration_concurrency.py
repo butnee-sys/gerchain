@@ -44,7 +44,7 @@ def test_two_connections_apply_canonical_migrations_without_duplicate_schema_ver
 
         # The session-scoped advisory lock must allow exactly one runner to
         # apply the chain while the other sees it as already applied.
-        assert sorted(len(result) for result in results) == [0, 16]
+        assert sorted(len(result) for result in results) == [0, len(EXPECTED_VERSIONS)]
         assert sorted(version for result in results for version in result) == EXPECTED_VERSIONS
 
         with psycopg.connect(database_url, options=f"-c search_path={schema}") as check:
@@ -52,7 +52,7 @@ def test_two_connections_apply_canonical_migrations_without_duplicate_schema_ver
                 "SELECT version, checksum, applied_at FROM schema_version ORDER BY version"
             ).fetchall()
             assert [row[0] for row in rows] == EXPECTED_VERSIONS
-            assert len(rows) == 16
+            assert len(rows) == len(EXPECTED_VERSIONS)
             assert len({row[0] for row in rows}) == 16
             assert all(row[1] for row in rows)
             expected_checksums = {
