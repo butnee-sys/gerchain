@@ -45,10 +45,12 @@
     "evidence_manifest": {
       "status": "OPEN",
       "required": [
-        "Bind exact commit SHA to workflow run ID and workflow conclusion",
-        "Bind artifact name and SHA-256 digest",
-        "Retain test summaries and PostgreSQL version/configuration metadata",
-        "Reject evidence from a different commit SHA"
+        "Generated report commit_sha equals checked_out_head_sha and the workflow run head_sha",
+        "JUnit totals are computed from actual testsuite nodes and tests > 0",
+        "Source-file SHA-256 inventory is complete and every listed file exists at the exact tested commit",
+        "Migration file hashes match the applied versioned migration registry",
+        "Record workflow run ID, completed conclusion, artifact name, and GitHub artifact SHA-256 digest in a detached evidence register",
+        "Reject evidence from any other commit SHA"
       ],
       "workflow_run_id": null,
       "artifact_name": null,
@@ -73,5 +75,23 @@
     "missing_evidence_means_pass": false,
     "security_governance_requires_external_evidence": true,
     "production_lock_authorized": false
+  },
+  "manifest_mode": "source_template",
+  "evidence_binding": {
+    "runtime_generated_report": "artifacts/production-postgres/migration-lifecycle-report.json",
+    "rule": "The source manifest cannot contain its own final commit SHA without changing that SHA. Exact tested SHA, checked-out SHA, JUnit counts, source-file SHA-256 values, and migration checksums are emitted by the workflow as a run-bound artifact. Record run ID, conclusion, artifact name, and GitHub artifact digest in a detached evidence register after the run completes.",
+    "required_fields": [
+      "commit_sha",
+      "checked_out_head_sha",
+      "sha_match",
+      "workflow_run_id",
+      "workflow_conclusion",
+      "artifact_name",
+      "artifact_sha256",
+      "source_files",
+      "lifecycle_junit",
+      "migration_files",
+      "applied_migrations"
+    ]
   }
 }
