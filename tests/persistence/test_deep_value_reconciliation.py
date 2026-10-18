@@ -682,3 +682,61 @@ def test_canonical_create_rollback_leaves_no_partial_evidence():
         assert session.query(DurableIdempotencyRecord).filter_by(key="create-rollback-tx").count() == 0
         assert session.query(LedgerMovementModel).count() == 0
     engine.dispose()
+
+
+def test_deep_reconciliation_detects_incomplete_state_only_lock_evidence():
+    engine, factory = _session_factory()
+    with factory() as session:
+        now = datetime.now(timezone.utc)
+        session.add(CanonicalEscrow(
+            id="lock-escrow", sender_address="SRC", receiver_address="DST",
+            amount=5, state="LOCKED", condition_desc="lock test",
+            refund_destination="SRC", currency="MNT", version=2,
+            created_at=now, updated_at=now,
+        ))
+        session.add(TransactionWitness(
+            transaction_id="lock-tx", event_type="GERCHAIN_LOCKED",
+            escrow_id="lock-escrow", amount=0, created_at=now,
+        ))
+        session.commit()
+
+        report = deep_reconcile_value_truth(session)
+        codes = {issue.code for issue in report.issues}
+        assert "STATE_ONLY_OUTBOX_MISSING" in codes
+        assert "STATE_ONLY_IDEMPOTENCY_MISSING" in codes
+        assert report.matched is False
+    engine.dispose()
+
+
+def test_deep_reconciliation_accepts_complete_state_only_lock_evidence():
+    engine, factory = _session_factory()
+    with factory() as session:
+        now = datetime.now(timezone.utc)
+        session.add(CanonicalEscrow(
+            id="lock-escrow", sender_address="SRC", receiver_address="DST",
+            amount=5, state="LOCKED", condition_desc="lock test",
+            refund_destination="SRC", currency="MNT", version=2,
+            created_at=now, updated_at=now,
+        ))
+        session.add(TransactionWitness(
+            transaction_id="lock-tx", event_type="GERCHAIN_LOCKED",
+            escrow_id="lock-escrow", amount=0, created_at=now,
+        ))
+        session.add(OutboxEvent(
+            event_id="gerchain_locked:lock-tx", event_type="GERCHAIN_LOCKED",
+            aggregate_id="lock-escrow", payload_json='{"transaction_id":"lock-tx","escrow_id":"lock-escrow"}',
+            state="PENDING", attempts=0, lease_until=None,
+            created_at=now, updated_at=now,
+        ))
+        payload = {"escrow_id": "lock-escrow", "operation": "LOCK"}
+        session.add(DurableIdempotencyRecord(
+            key="lock-tx", fingerprint=IdempotencyEngine.fingerprint(payload),
+            result_json='{"status":"LOCKED","value_movement":false}',
+            state="COMPLETED", created_at=now, updated_at=now,
+        ))
+        session.commit()
+
+        report = deep_reconcile_value_truth(session)
+        assert report.matched, report.issues
+        assert report.canonical_movement_count == 0
+    engine.dispose()
