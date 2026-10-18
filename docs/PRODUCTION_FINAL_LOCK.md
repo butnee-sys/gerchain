@@ -42,3 +42,33 @@ Gate 1 may be marked **CLOSED** only when a fresh PostgreSQL Actions run tied to
 ## Final lock rule
 
 No downstream product-layer readiness, CORE-only result, or source-code presence substitutes for the complete production evidence chain. The overall architecture and EAI remain **IN PROGRESS / NOT LOCKED** until all required gates are evidenced, independently re-performed, and formally accepted.
+
+
+---
+
+## Master Work Plan — Step 1: Inventory / Map
+
+**Work-plan step status:** CLOSED — FINAL LOCKED (inventory scope only)  
+**Evidence:** `docs/PRODUCTION_GATE_01_INVENTORY_MAP.md`  
+**Inventory evidence commit:** `c6ec9e01af56ffbc8be7dd7df67d2067b8c8d2da`  
+**Overall production lock:** NOT LOCKED
+
+### Completed inventory
+
+The repository inventory and dependency map now explicitly record:
+- canonical architecture layers and adapter boundaries;
+- DEE, G3, NEF + GerChain, EXIM, I2B, MultiConnector and PDEIZ responsibilities;
+- production entrypoint, factory, runtime and non-production/legacy entrypoints;
+- authoritative Ledger, Escrow, Witness, Outbox, Idempotency and reconciliation boundaries;
+- operation routing for CREATE, FUND, LOCK, RELEASE, REFUND, CANCEL, SETTLEMENT, READ and recovery;
+- migration registry, schema bootstrap and production schema guard;
+- legacy/alternate value stores and previously identified bypass paths;
+- outstanding migration/restart proof, legacy-store physical freeze, IAM/MFA, branch governance, CI and independent review gaps.
+
+### Acceptance boundary
+
+This closes the **Master Work Plan's Step 1 — Inventory / Map** as a repository/source inventory deliverable and authorizes progression to **Step 2 — Error / Duplicate / Excess**. It does not claim that the migration-history race gate above is closed, does not claim current-tip PostgreSQL execution success, and does not grant overall production readiness.
+
+**Master Work Plan Step 1: CLOSED.**  
+**Next work-plan step: Step 2 — Error / Duplicate / Excess.**  
+**Overall fundamental architecture + EAI: IN PROGRESS / NOT LOCKED.**
