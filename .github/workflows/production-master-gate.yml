@@ -1,0 +1,135 @@
+name: Production master gate and lock decision
+
+on:
+  push:
+    branches:
+      - feat/ea21-transaction-aware-ledger
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  master-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 70
+    steps:
+      - name: Checkout exact pushed revision
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Test the fail-closed decision controller
+        run: |
+          python -m pip install 'pytest>=8,<9'
+          pytest -q tests/scripts/test_production_gate_controller.py
+
+      - name: Find and wait for the PostgreSQL evidence run for this exact SHA
+        id: source_run
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TARGET_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 360); do
+            runs=$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/canonical-postgres-gate.yml/runs?head_sha=${TARGET_SHA}&per_page=20")
+            run_id=$(printf '%s' "$runs" | jq -r --arg sha "$TARGET_SHA" '[.workflow_runs[] | select(.head_sha == $sha)] | sort_by(.run_number) | last | .id // empty')
+            if [ -n "$run_id" ]; then
+              run_data=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}")
+              status=$(printf '%s' "$run_data" | jq -r '.status')
+              conclusion=$(printf '%s' "$run_data" | jq -r '.conclusion // "pending"')
+              echo "Found PostgreSQL gate run=${run_id} status=${status} conclusion=${conclusion}"
+              if [ "$status" = "completed" ]; then
+                echo "run_id=${run_id}" >> "$GITHUB_OUTPUT"
+                echo "conclusion=${conclusion}" >> "$GITHUB_OUTPUT"
+                exit 0
+              fi
+            fi
+            sleep 10
+          done
+          echo 'Timed out waiting for PostgreSQL evidence run for exact SHA' >&2
+          echo 'run_id=' >> "$GITHUB_OUTPUT"
+          echo 'conclusion=missing' >> "$GITHUB_OUTPUT"
+          exit 1
+
+      - name: Download exact-SHA PostgreSQL evidence bundle
+        id: evidence
+        if: always() && steps.source_run.outputs.run_id != ''
+        uses: actions/download-artifact@v4
+        with:
+          name: ea35-${{ github.sha }}
+          path: artifacts/ea35
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ steps.source_run.outputs.run_id }}
+
+      - name: Decide LOCKED versus NOT_LOCKED from all required gates
+        id: decision
+        if: always()
+        env:
+          GITHUB_SHA: ${{ github.sha }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GATE_CONCLUSION: ${{ steps.source_run.outputs.conclusion || 'missing' }}
+          SOURCE_RUN_ID: ${{ steps.source_run.outputs.run_id || '' }}
+        run: |
+          python - <<'PY'
+          import json, os, subprocess
+          from pathlib import Path
+          gates = (
+              'compile', 'regression', 'postgres_connection', 'migration_atomicity',
+              'legacy_upgrade', 'lifecycle', 'migration_concurrency',
+              'publication_integrity', 'entrypoint', 'production_boot',
+              'migration_catalog', 'deep_reconciliation', 'manifest',
+          )
+          conclusion = os.environ.get('GATE_CONCLUSION', 'missing')
+          outcomes = {name: ('success' if conclusion == 'success' else conclusion) for name in gates}
+          output = Path('artifacts/ea35/production-gate-decision.json')
+          output.parent.mkdir(parents=True, exist_ok=True)
+          subprocess.run([
+              'python', 'scripts/production_gate_controller.py',
+              '--manifest', 'artifacts/ea35/manifest.json',
+              '--output', str(output),
+              '--expected-sha', os.environ['GITHUB_SHA'],
+              '--outcomes-json', json.dumps(outcomes, sort_keys=True),
+          ], check=False)
+          report = json.loads(output.read_text(encoding='utf-8'))
+          report['postgres_gate_run_id'] = os.environ.get('SOURCE_RUN_ID') or None
+          report['postgres_gate_conclusion'] = conclusion
+          output.write_text(json.dumps(report, indent=2, sort_keys=True) + '\n', encoding='utf-8')
+          summary = Path(os.environ['GITHUB_STEP_SUMMARY'])
+          summary.write_text(
+              '# Production master gate\n\n'
+              + f"**Decision:** `{report.get('decision', 'NOT_LOCKED')}`\n\n"
+              + f"**Commit:** `{os.environ['GITHUB_SHA']}`\n\n"
+              + f"**PostgreSQL gate:** `{conclusion}` (run `{os.environ.get('SOURCE_RUN_ID') or 'missing'}`)\n\n"
+              + '## Blocking findings\n'
+              + ''.join(f'- `{failure}`\n' for failure in report.get('failures', [])),
+              encoding='utf-8',
+          )
+          if report.get('decision') != 'LOCKED':
+              raise SystemExit('NOT_LOCKED: inspect production-gate-decision.json and workflow summary')
+          PY
+
+      - name: Preserve final decision evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-master-gate-${{ github.sha }}
+          path: artifacts/ea35/production-gate-decision.json
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Assert final decision is LOCKED
+        if: always()
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          path = Path('artifacts/ea35/production-gate-decision.json')
+          if not path.exists():
+              raise SystemExit('NOT_LOCKED: decision evidence missing')
+          report = json.loads(path.read_text(encoding='utf-8'))
+          if report.get('decision') != 'LOCKED':
+              raise SystemExit('NOT_LOCKED: one or more production gates did not pass')
+          print('LOCKED: all required technical gates and exact-SHA evidence verified')
+          PY
