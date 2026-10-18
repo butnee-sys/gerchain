@@ -53,6 +53,21 @@ def _expected_integrity_hash(movement: LedgerMovementModel) -> str:
     return hashlib.sha256(material.encode("utf-8")).hexdigest()
 
 
+def _is_state_only_cancel_payload(payload_json: str) -> bool:
+    """Return True only when an outbox payload explicitly declares no value movement."""
+    try:
+        payload = json.loads(payload_json)
+    except (TypeError, json.JSONDecodeError):
+        return False
+    return (
+        isinstance(payload, dict)
+        and payload.get("operation") == "CANCEL"
+        and payload.get("value_movement") is False
+        and payload.get("amount") == 0
+        and payload.get("destination") is None
+    )
+
+
 def deep_reconcile_value_truth(session: Session) -> DeepValueTruthReport:
     """Read-only two-way reconciliation of canonical transaction evidence.
 
