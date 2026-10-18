@@ -11,12 +11,12 @@ import pytest
 from postgres.migrations import _canonical_migration_files, apply_migrations, checksum
 
 MIGRATION_DIR = Path(__file__).resolve().parents[2] / "postgres" / "migrations"
-EXPECTED_VERSIONS = list(range(1, 17))
+EXPECTED_VERSIONS = list(range(1, len(_canonical_migration_files(MIGRATION_DIR)) + 1))
 
 
 @pytest.mark.postgres
 def test_two_connections_apply_canonical_migrations_without_duplicate_schema_versions():
-    """Exercise the full canonical 16-migration chain on concurrent connections.
+    """Exercise the full canonical migration chain on concurrent connections.
 
     Requires a disposable PostgreSQL database in GERCHAIN_TEST_POSTGRES_URL.
     The test creates and drops a uniquely named schema; it never touches public.
