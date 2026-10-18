@@ -56,22 +56,20 @@ jobs:
         run: |
           set -o pipefail
           pytest -vv -s tests/integration/test_postgres_migration_concurrency.py 2>&1 | tee migration-proof-test.log
-      - name: Capture migration registry
+      - name: Record migration registry evidence scope
         if: always()
         run: |
           python - <<'PY' | tee migration-proof-registry.log
           import os
           import psycopg
-          try:
-              with psycopg.connect(os.environ["GERCHAIN_DATABASE_URL"]) as conn:
-                  print("POSTGRES_SERVER_VERSION=" + conn.execute("SHOW server_version").fetchone()[0])
-                  exists = conn.execute("SELECT to_regclass('public.schema_version')").fetchone()[0]
-                  print("SCHEMA_VERSION_TABLE=" + str(exists))
-                  if exists:
-                      for row in conn.execute("SELECT version, checksum, applied_at FROM schema_version ORDER BY version"):
-                          print(row)
-          except Exception as exc:
-              print("REGISTRY_CAPTURE_ERROR=" + repr(exc))
+          dsn = os.environ["GERCHAIN_MIGRATION_TEST_DSN"]
+          with psycopg.connect(dsn) as conn:
+              print("POSTGRES_SERVER_VERSION=" + conn.execute("SHOW server_version").fetchone()[0])
+              print("MIGRATION_TEST_MODEL=isolated-schema-per-scenario")
+              print("REGISTRY_ASSERTIONS=tests/integration/test_postgres_migration_concurrency.py")
+              print("REGISTRY_ASSERTIONS_INCLUDE=exact-version-rows,duplicate-publication,checksum-stability")
+              print("ROOT_SCHEMA_REGISTRY_CAPTURE=NOT_APPLICABLE")
+              print("REASON=tests create unique schemas and drop them during teardown; the root database is not the test registry")
           PY
       - name: Upload exact-SHA proof logs
         if: always()
