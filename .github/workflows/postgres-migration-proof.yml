@@ -48,6 +48,7 @@ jobs:
             echo "GITHUB_SHA=$GITHUB_SHA"
             python --version
             python -m pip show psycopg
+            pytest --version
             python -c "import psycopg; print('PSYCOPG_VERSION=' + psycopg.__version__)"
             python -c "import psycopg, os; c=psycopg.connect(os.environ['GERCHAIN_DATABASE_URL']); print('POSTGRES_SERVER_VERSION=' + c.execute('SHOW server_version').fetchone()[0]); c.close()"
             sha256sum scripts/postgres_migration_runner.py tests/integration/test_postgres_migration_concurrency.py
