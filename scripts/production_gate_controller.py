@@ -15,7 +15,27 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
+# Architecture-level release gates are mandatory in addition to the
+# PostgreSQL execution suite. They require explicit evidence from their own
+# checks; success of the database workflow must never be used as a proxy.
 REQUIRED_GATES = (
+    "inventory_map",
+    "error_duplicate_excess",
+    "cross_store_reconciliation",
+    "authority_boundary",
+    "core_correctness",
+    "adapter_boundaries",
+    "eai_g3_governance",
+    "transaction_correctness",
+    "recovery",
+    "auditability",
+    "security_iam_mfa",
+    "observability",
+    "performance_stress",
+    "disaster_recovery",
+    "ci_release_governance",
+    "independent_reperformance",
+    "final_evidence_bundle",
     "compile",
     "regression",
     "postgres_connection",
