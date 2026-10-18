@@ -54,6 +54,7 @@ CANONICAL_MIGRATION_NAMES = {
     14: "014_canonical_escrow_state_constraint.sql",
     15: "015_repair_escrow_state_constraint_drift.sql",
     16: "016_reconcile_escrow_state_constraint.sql",
+    17: "017_ea35_created_witness_event.sql",
 }
 
 # Version 004 previously shipped with explicit BEGIN/COMMIT wrappers. Keep its
