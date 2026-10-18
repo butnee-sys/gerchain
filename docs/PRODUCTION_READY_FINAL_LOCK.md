@@ -116,3 +116,38 @@ For progress reporting, the full MASTER WORK PLAN v1.0 is the 100% denominator. 
 - **Overall completion percentage:** **not yet defensibly computable from the current repository evidence alone**. The plan does not define weights for its heterogeneous workstreams, and assigning equal weights or a guessed percentage would misrepresent production readiness. A scored 100-point rubric must be agreed and applied to the actual gate evidence before publishing a numeric total.
 
 Current decision remains **IN PROGRESS / NOT LOCKED**.
+
+
+## 9. EA-35 PostgreSQL Re-performance — migration gate update (2026-10-19)
+
+Workflow source: `.github/workflows/ea35-postgres-reperformance.yml`
+https://github.com/butnee-sys/gerchain/blob/feat/ea21-transaction-aware-ledger/.github/workflows/ea35-postgres-reperformance.yml
+
+Source inspection confirms the workflow definition is configured to:
+- run a PostgreSQL 16 service;
+- assert that the checked-out HEAD equals the expected evidence SHA;
+- apply the canonical migration chain and assert `schema_version` versions exactly 1–17;
+- rerun migrations and compare registry rows (including checksums and `applied_at`) and PostgreSQL constraints;
+- exercise an upgrade path from the 001–014 prefix through later migrations;
+- compare the live PostgreSQL registry to the 17-file canonical migration manifest; and
+- capture a PostgreSQL schema snapshot and manifest carrying the same expected commit SHA.
+
+**Evidence limitation:** during this update, the workflow definition and migration runner were inspected, but a successful run for the current candidate SHA and its retained artifacts were not retrieved. Therefore these checks are not counted as passed. A workflow file containing assertions is not equivalent to a passing run.
+
+| ID | Acceptance criterion | Status |
+|---|---|---|
+| PG-MIG-01 | Live PostgreSQL `schema_version` contains exactly versions 1–17, with no duplicate version and non-empty checksums | OPEN — exact-SHA run artifact not verified |
+| PG-MIG-02 | Second migration run changes no checksum, applied timestamp, or PostgreSQL constraint | OPEN — exact-SHA before/after evidence not verified |
+| PG-MIG-03 | Live PostgreSQL schema snapshot and 17-migration manifest use the same exact commit SHA | OPEN — exact-SHA artifacts not verified |
+
+### Gate decision
+
+**PRODUCTION MIGRATION GATE — OPEN / NOT LOCKED**
+
+EA-35 migration evidence completion: **0/3 gates verified = 0%**.
+
+Overall PRODUCTION READY FINAL LOCK percentage remains **not yet defensibly computable**: the full plan has no approved weighted scoring rubric, and the available inspection does not prove current-run execution. This gate-specific 0% must not be presented as the percentage of engineering work completed.
+
+### Next action
+
+Retrieve or trigger the `EA-35 PostgreSQL Re-performance` workflow on the exact candidate SHA. Retain the run ID, job conclusions, and `artifacts/ea35` evidence package. Inspect PG-MIG-01, PG-MIG-02, and PG-MIG-03 against the actual artifacts. If any assertion fails, correct the migration/workflow and repeat on a new SHA. Do not issue the global production lock until these and all other mandatory gates are evidenced.
