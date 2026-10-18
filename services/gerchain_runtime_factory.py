@@ -80,7 +80,7 @@ def _has_unique_key(inspector, table_name: str, columns: tuple[str, ...]) -> boo
 
 
 def assert_canonical_production_schema(connection) -> None:
-    """Fail closed unless all canonical ORM tables/columns and 16 migrations exist."""
+    """Fail closed unless all canonical ORM tables/columns and 17 migrations exist."""
     from sqlalchemy import inspect, text as sql_text
 
     inspector = inspect(connection)
