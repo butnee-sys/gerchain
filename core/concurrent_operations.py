@@ -66,10 +66,8 @@ def execute_concurrently(
     result_by_id: dict[str, OperationResult] = {}
     active: dict[Future, OperationSpec] = {}
     active_resources: set[str] = set()
-    next_index = 0
-
     with ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="gerchain-op") as pool:
-        while next_index < len(pending) or active:
+        while pending or active:
             # Scan only in submission order. A conflicting later operation
             # cannot overtake an earlier pending operation on the same resource.
             scan_index = next_index
