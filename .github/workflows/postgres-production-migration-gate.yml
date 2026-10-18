@@ -117,8 +117,79 @@ jobs:
               engine.dispose()
           PY
 
-      - name: Run deep value-truth reconciliation tests
-        run: python -m pytest -q tests/persistence/test_deep_value_reconciliation.py
+      - name: Run deep value-truth reconciliation tests with JUnit evidence
+        run: python -m pytest -q --junitxml=artifacts/lifecycle-junit.xml tests/persistence/test_deep_value_reconciliation.py
+
+      - name: Build exact-SHA lifecycle evidence report
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/production-postgres
+          python - <<'PY'
+          import hashlib
+          import json
+          import os
+          import subprocess
+          import xml.etree.ElementTree as ET
+          from pathlib import Path
+
+          commit = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+          workflow_sha = os.environ.get("GITHUB_SHA", "")
+          junit_path = Path("artifacts/lifecycle-junit.xml")
+          suites = []
+          if junit_path.exists():
+              root = ET.parse(junit_path).getroot()
+              suites = [root] if root.tag == "testsuite" else list(root.iter("testsuite"))
+          tests = sum(int(s.get("tests", "0")) for s in suites)
+          failures = sum(int(s.get("failures", "0")) for s in suites)
+          errors = sum(int(s.get("errors", "0")) for s in suites)
+          skipped = sum(int(s.get("skipped", "0")) for s in suites)
+          source_paths = [
+              "production_entrypoint.py",
+              "services/gerchain_runtime_factory.py",
+              "persistence/deep_value_reconciliation.py",
+              "tests/persistence/test_deep_value_reconciliation.py",
+              "postgres/migrations.py",
+              ".github/workflows/postgres-production-migration-gate.yml",
+          ]
+          sources = []
+          for name in source_paths:
+              path = Path(name)
+              if not path.is_file():
+                  raise SystemExit(f"required evidence source missing: {name}")
+              sources.append({"path": name, "sha256": hashlib.sha256(path.read_bytes()).hexdigest()})
+          report = {
+              "commit_sha": commit,
+              "workflow_sha": workflow_sha,
+              "sha_match": bool(workflow_sha) and commit == workflow_sha,
+              "workflow_run_id": os.environ.get("GITHUB_RUN_ID"),
+              "workflow_run_attempt": os.environ.get("GITHUB_RUN_ATTEMPT"),
+              "lifecycle_junit": {
+                  "path": str(junit_path),
+                  "tests": tests,
+                  "failures": failures,
+                  "errors": errors,
+                  "skipped": skipped,
+                  "suite_count": len(suites),
+                  "present": junit_path.exists(),
+              },
+              "source_files": sources,
+              "migration_files": [
+                  {"path": str(path), "sha256": hashlib.sha256(path.read_bytes()).hexdigest()}
+                  for path in sorted(Path("postgres/migrations").glob("*.sql"))
+              ],
+          }
+          output = Path("artifacts/production-postgres/migration-lifecycle-report.json")
+          output.write_text(json.dumps(report, indent=2, sort_keys=True) + "\\n", encoding="utf-8")
+          print(json.dumps(report, indent=2, sort_keys=True))
+          if not report["sha_match"]:
+              raise SystemExit("commit SHA mismatch in lifecycle evidence")
+          if tests <= 0:
+              raise SystemExit("JUnit evidence contains zero tests")
+          if failures or errors:
+              raise SystemExit("JUnit evidence contains failures/errors")
+          PY
 
       - name: Record post-test schema and checksums
         shell: bash
