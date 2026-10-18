@@ -135,3 +135,65 @@ def test_production_postgres_factory_and_canonical_value_flow():
         assert report.canonical_movement_count == 7
 
     engine.dispose()
+
+
+
+@pytest.mark.postgres
+def test_postgres_create_rollback_leaves_no_partial_canonical_evidence():
+    """A failed caller transaction must roll back CREATE truth and every evidence row."""
+    import uuid
+
+    url = os.environ["GERCHAIN_DATABASE_URL"]
+    engine = create_engine(url, pool_pre_ping=True)
+    factory = ProductionRuntimeFactory(
+        ProductionRuntimeConfig(
+            database_url=url,
+            escrow_id="pg-create-rollback-bootstrap",
+            amount=10,
+            currency="MNT",
+            witness_id="pg-create-rollback-witness",
+        ),
+        engine=engine,
+    )
+    runtime = factory.create()
+    assert runtime.is_canonical_ledger_authoritative
+
+    Session = sessionmaker(bind=engine, expire_on_commit=False)
+    suffix = uuid.uuid4().hex
+    transaction_id = f"pg-create-rollback-tx-{suffix}"
+    escrow_id = f"pg-create-rollback-escrow-{suffix}"
+    try:
+        with Session() as session:
+            try:
+                with session.begin():
+                    result = create_escrow_in_transaction(
+                        session,
+                        transaction_id=transaction_id,
+                        escrow_id=escrow_id,
+                        source=f"source-{suffix}",
+                        beneficiary=f"beneficiary-{suffix}",
+                        refund_destination=f"source-{suffix}",
+                        amount=10,
+                        currency="MNT",
+                        condition="rollback proof",
+                    )
+                    assert result["state"] == EscrowState.CREATED.value
+                    assert result["value_movement"] is False
+                    raise RuntimeError("intentional rollback probe")
+            except RuntimeError as exc:
+                assert str(exc) == "intentional rollback probe"
+
+        with Session() as session:
+            assert session.get(CanonicalEscrow, escrow_id) is None
+            assert session.execute(
+                select(TransactionWitness).where(TransactionWitness.transaction_id == transaction_id)
+            ).scalar_one_or_none() is None
+            assert session.execute(
+                select(OutboxEvent).where(OutboxEvent.event_id == f"gerchain_created:{transaction_id}")
+            ).scalar_one_or_none() is None
+            from persistence.durable_idempotency import DurableIdempotencyRecord
+            assert session.execute(
+                select(DurableIdempotencyRecord).where(DurableIdempotencyRecord.key == transaction_id)
+            ).scalar_one_or_none() is None
+    finally:
+        engine.dispose()
