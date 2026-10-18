@@ -89,3 +89,30 @@ At global lock:
 - EAI implementation remains in progress until live PostgreSQL and independent evidence close the remaining gates.
 - Product layers remain outside this lock.
 - Overall: **IN PROGRESS / NOT LOCKED**.
+
+
+## 7. Required PostgreSQL proof gates — current execution record
+
+The following three gates are mandatory, separate evidence items. A code review or a historical PostgreSQL run does not close them for the current lock candidate.
+
+| ID | Required proof | Required retained artifact | Current status |
+|---|---|---|---|
+| PG-CONC-01 | Run two independent PostgreSQL connections/processes against the same empty migration registry concurrently. Prove advisory-lock serialization, no duplicate `schema_version.version`, no checksum disagreement, and stable results on a subsequent rerun. | Exact-SHA test output; both process results; before/after `schema_version` rows; duplicate/checksum assertions. | OPEN — NOT RE-PERFORMED ON CURRENT CANDIDATE |
+| PG-SCHEMA-02 | Apply all 17 canonical migrations to a clean PostgreSQL database. Read the resulting schema and registry from PostgreSQL itself; verify versions 1–17, checksums, actual columns/indexes, CHECK/UNIQUE constraints, and `convalidated` for applicable constraints. | Exact-SHA migration log; 17 registry rows/checksums; catalog query output for tables, constraints and validation; rerun idempotency output. | OPEN — LIVE CATALOG EVIDENCE REQUIRED |
+| PG-TRUTH-03 | Run `deep_reconcile_value_truth()` against a clean PostgreSQL dataset and prove every value movement binds to the correct Escrow, Witness, Outbox, Idempotency evidence and recomputed integrity hash. Include deliberate mismatch cases. | Exact-SHA clean report; negative-case report; movement-to-evidence linkage export; PostgreSQL connection/runtime details. | OPEN — POSTGRESQL VALUE-TRUTH REPORT REQUIRED |
+
+### Execution rule
+
+These gates must run against one recorded candidate SHA. Two independent PostgreSQL connections are required for PG-CONC-01; SQLite tests cannot substitute. PG-SCHEMA-02 must query PostgreSQL catalogs, not infer the schema from migration files. PG-TRUTH-03 must execute the actual reconciliation function against PostgreSQL rows, not a mocked or SQLite session.
+
+No result has been marked PASS in this register until the corresponding live evidence is retained. The current GitHub source inspection establishes implementation intent only; it does not itself prove these three runtime properties.
+
+## 8. Master-plan completion accounting
+
+For progress reporting, the full MASTER WORK PLAN v1.0 is the 100% denominator. To avoid inflating progress, work is separated into (a) implementation/evidence already retained at a narrower scope and (b) global production-lock gates requiring current proof.
+
+- **Implementation and scoped technical controls:** substantially implemented; retain only the controls and evidence explicitly listed in Sections 2–3.
+- **Global FINAL LOCK:** **0% closed as a final release decision** until all mandatory gates are evidenced and approved. This does not mean 0% engineering work; it means no platform-wide lock has been issued.
+- **Overall completion percentage:** **not yet defensibly computable from the current repository evidence alone**. The plan does not define weights for its heterogeneous workstreams, and assigning equal weights or a guessed percentage would misrepresent production readiness. A scored 100-point rubric must be agreed and applied to the actual gate evidence before publishing a numeric total.
+
+Current decision remains **IN PROGRESS / NOT LOCKED**.
