@@ -102,7 +102,7 @@ On PostgreSQL, exercise and verify:
 - Verify main-branch protection, required reviews, and required status-check governance; preserve the machine-readable configuration evidence.
 **Closure evidence:** exact-SHA CI evidence, attributed independent report, IAM/MFA approval evidence, and repository-governance record tied to the same lock candidate.
 
-## 6. Decision rule
+## 5. Decision rule
 
 - No queued, pending, missing, or unverified item may be marked GREEN.
 - A historical successful run does not prove a different SHA.
@@ -110,7 +110,7 @@ On PostgreSQL, exercise and verify:
 - Do not declare FINAL LOCK until FL-1 through FL-5 have evidence and the decision is tied to one immutable commit SHA.
 - If an organizational control cannot be evidenced, the responsible authority must explicitly accept it as an exception; the implementation team must not silently waive it.
 
-## 5. Current disposition
+## 6. Current disposition
 
 **ҮНДСЭН БҮТЭЦ — VERIFIED TECHNICAL BASELINE / FINAL LOCK BLOCKED / NOT LOCKED.**
 
