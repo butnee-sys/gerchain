@@ -53,7 +53,7 @@ def test_two_connections_apply_canonical_migrations_without_duplicate_schema_ver
             ).fetchall()
             assert [row[0] for row in rows] == EXPECTED_VERSIONS
             assert len(rows) == len(EXPECTED_VERSIONS)
-            assert len({row[0] for row in rows}) == 16
+            assert len({row[0] for row in rows}) == len(EXPECTED_VERSIONS)
             assert all(row[1] for row in rows)
             expected_checksums = {
                 int(path.name.split("_", 1)[0]): checksum(path.read_text(encoding="utf-8"))
