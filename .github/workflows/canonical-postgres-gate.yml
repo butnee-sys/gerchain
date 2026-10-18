@@ -138,7 +138,7 @@ jobs:
           finally:
               engine.dispose()
           PY
-      - name: Bind all 16 migration checksums and validate canonical constraints from PostgreSQL catalog
+      - name: Bind all 17 migration checksums and validate canonical constraints from PostgreSQL catalog
         run: |
           python - <<'PY'
           import hashlib
@@ -149,8 +149,8 @@ jobs:
 
           root = Path.cwd()
           selected = _canonical_migration_files(root / "postgres/migrations")
-          assert [int(p.name.split("_", 1)[0]) for p in selected] == list(range(1, 17)), (
-              "canonical migration chain must be exactly versions 1..16"
+          assert [int(p.name.split("_", 1)[0]) for p in selected] == list(range(1, 18)), (
+              "canonical migration chain must be exactly versions 1..17"
           )
           source_by_version = {}
           for path in selected:
@@ -170,8 +170,8 @@ jobs:
               rows = conn.execute(
                   "SELECT version, checksum, applied_at FROM schema_version ORDER BY version"
               ).fetchall()
-              assert [row[0] for row in rows] == list(range(1, 17)), (
-                  f"schema_version must contain exactly 16 unique rows; got {rows}"
+              assert [row[0] for row in rows] == list(range(1, 18)), (
+                  f"schema_version must contain exactly 17 unique rows; got {rows}"
               )
               evidence = []
               for source, row in zip(source_by_version.values(), rows):
@@ -218,7 +218,7 @@ jobs:
               normalized = definition.lower()
               for state in ("created", "funded", "locked", "released", "refunded", "cancelled"):
                   assert state in normalized, f"canonical state missing from {name}: {state}"
-              print("PASS: all 16 migration rows have accepted checksums and applied_at")
+              print("PASS: all 17 migration rows have accepted checksums and applied_at")
               print("PASS: escrow-state CHECK is unique, canonical, and convalidated=true")
               for item in evidence:
                   print(item)
@@ -256,8 +256,8 @@ jobs:
                'bytes': p.stat().st_size}
               for p in selected
           ]
-          if [item['version'] for item in canonical] != list(range(1, 17)):
-              raise SystemExit('canonical migration chain is not exactly versions 1..16')
+          if [item['version'] for item in canonical] != list(range(1, 18)):
+              raise SystemExit('canonical migration chain is not exactly versions 1..17')
           database_rows = []
           database_error = None
           dsn = (os.environ.get('GERCHAIN_TEST_DATABASE_URL') or os.environ.get('GERCHAIN_DATABASE_URL') or '').replace('postgresql+psycopg://', 'postgresql://').replace('postgresql+psycopg2://', 'postgresql://')
@@ -290,12 +290,32 @@ jobs:
               'schema_version_rows': database_rows,
               'database_manifest_error': database_error,
           }
+          head_sha = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
+          manifest['checked_out_head_sha'] = head_sha
+          manifest['commit_sha_matches_head'] = manifest['commit_sha'] == head_sha
           manifest['git_status_porcelain'] = subprocess.run(['git', 'status', '--porcelain'], capture_output=True, text=True, check=False).stdout.splitlines()
           out = root / 'artifacts/canonical-postgres-evidence'
           out.mkdir(parents=True, exist_ok=True)
           (out / 'manifest.json').write_text(json.dumps(manifest, indent=2) + '\\n', encoding='utf-8')
           (out / 'commit-sha.txt').write_text(manifest['commit_sha'] + '\\n', encoding='utf-8')
-          print(json.dumps({'commit_sha': manifest['commit_sha'], 'canonical_migration_count': len(canonical), 'schema_version_rows': len(database_rows), 'manifest': str(out / 'manifest.json')}, indent=2))
+          # Bind the manifest and exact commit marker to a checksum list inside the artifact.
+          checksum_targets = [out / 'manifest.json', out / 'commit-sha.txt'] + sorted((out / 'logs').glob('*'))
+          sums = []
+          for target in checksum_targets:
+              if target.is_file():
+                  sums.append(f"{hashlib.sha256(target.read_bytes()).hexdigest()}  {target.relative_to(out)}")
+          (out / 'SHA256SUMS').write_text('\\n'.join(sums) + '\\n', encoding='utf-8')
+          for line in (out / 'SHA256SUMS').read_text(encoding='utf-8').splitlines():
+              digest, relative = line.split('  ', 1)
+              if hashlib.sha256((out / relative).read_bytes()).hexdigest() != digest:
+                  raise SystemExit(f'SHA256SUMS verification failed: {relative}')
+          if manifest['commit_sha'] != head_sha:
+              raise SystemExit(f"evidence SHA mismatch: target={manifest['commit_sha']} HEAD={head_sha}")
+          if database_error:
+              raise SystemExit(f"PostgreSQL migration evidence unavailable: {database_error}")
+          if database_rows and any(row['checksum'] != item['runner_checksum'] for row, item in zip(database_rows, canonical)):
+              raise SystemExit('database migration checksum differs from canonical manifest')
+          print(json.dumps({'commit_sha': manifest['commit_sha'], 'checked_out_head_sha': head_sha, 'commit_sha_matches_head': manifest['commit_sha_matches_head'], 'canonical_migration_count': len(canonical), 'schema_version_rows': len(database_rows), 'sha256sums': str(out / 'SHA256SUMS'), 'manifest': str(out / 'manifest.json')}, indent=2))
           PY
       - name: Upload canonical PostgreSQL evidence bundle
         if: always()
