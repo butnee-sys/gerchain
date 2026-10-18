@@ -13,6 +13,17 @@ class FakeEngine:
         # Match the SQLAlchemy Engine contract used by the production boot guard.
         self.dialect = SimpleNamespace(name="postgresql")
 
+    def connect(self):
+        class Connection:
+            def __enter__(self):
+                return self
+            def __exit__(self, *_args):
+                return False
+            def exec_driver_sql(self, statement):
+                assert statement == "SELECT 1"
+                return SimpleNamespace(scalar=lambda: 1)
+        return Connection()
+
     def dispose(self):
         self.disposed = True
 
