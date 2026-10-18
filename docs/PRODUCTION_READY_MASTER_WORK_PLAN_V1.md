@@ -115,3 +115,45 @@ On PostgreSQL, exercise and verify:
 **ҮНДСЭН БҮТЭЦ — VERIFIED TECHNICAL BASELINE / FINAL LOCK BLOCKED / NOT LOCKED.**
 
 Execution is limited to FL-1 through FL-5. All other work remains closed or frozen unless contradictory evidence is discovered. No product/application-layer work is included.
+
+
+## 7. Mandatory next execution gate — three independent PostgreSQL proofs
+
+These three proofs are added to the FINAL LOCK evidence package and must be executed against the same exact candidate SHA. They are not considered complete merely because the runner or reconciliation code exists.
+
+### PG-CONC-01 — Concurrent migration-runner execution
+- Start two independent processes/connections against the same clean PostgreSQL database and invoke the canonical migration runner concurrently.
+- Assert the advisory transaction lock serializes the runs.
+- Assert each migration version appears exactly once in `schema_version`, with the expected SHA-256 checksum.
+- Assert neither process reports a checksum conflict, and a subsequent third run is a no-op.
+- Retain both process outputs and SQL query results proving no duplicate version/checksum rows.
+**Status: OPEN — current live PostgreSQL evidence not retained.**
+
+### PG-SCHEMA-02 — Actual post-migration schema verification
+- Apply all 17 migrations to a clean PostgreSQL database.
+- Query PostgreSQL catalogs for the actual 17 migration versions and checksums, tables, columns, indexes, CHECK constraints, UNIQUE constraints, foreign keys, and applicable constraint validation status (`pg_constraint.convalidated`).
+- Verify versions are complete and unique, checksums match the registered migration SQL, and a second migration run changes neither registry rows nor schema.
+- Preserve raw catalog query output as an artifact tied to the candidate SHA.
+**Status: OPEN — live PostgreSQL catalog output required.**
+
+### PG-TRUTH-03 — Deep value-truth reconciliation on PostgreSQL
+- Seed a clean canonical value-flow graph in PostgreSQL and call the real `deep_reconcile_value_truth(session)`.
+- For every value movement, verify its escrow reference, operation/event binding, witness, outbox aggregate/event type, completed durable idempotency evidence, and recomputed integrity hash.
+- Assert the clean graph passes; then inject individual defects (missing/mismatched witness, outbox, idempotency, escrow reference, and integrity hash) and assert reconciliation fails with the expected issue code.
+- Retain the report and negative-test outputs from the actual PostgreSQL engine. SQLite-only results do not close this gate.
+**Status: OPEN — live PostgreSQL reconciliation evidence required.**
+
+### 7.4 Required evidence bundle
+
+The three gates must publish: candidate SHA; PostgreSQL version; migration runner command; connection/process identifiers for concurrency; all 17 version/checksum rows; schema/constraint catalog dump; clean and corrupted reconciliation reports; workflow run/job IDs; logs and artifact references. Empty, queued, stale-SHA, mocked, or SQLite-only results are UNVERIFIED.
+
+## 8. Progress percentage — scoring policy
+
+The plan's total scope is normalized to **100%**, but a numerical completion percentage will only be published after assigning explicit weights to each master gate and scoring each gate from retained evidence. The current plan contains heterogeneous technical and organizational controls and does not define defensible weights; a guessed percentage would not be auditable.
+
+Therefore the honest current reporting is:
+- **Engineering implementation:** substantial; individual implemented controls remain evidence-scoped and are listed in the FINAL LOCK register.
+- **Three requested PostgreSQL proof gates:** **0/3 closed (0% of this specific gate set)** until live PostgreSQL evidence is retained.
+- **Platform-wide PRODUCTION READY FINAL LOCK:** **not issued; global lock closure remains 0%** because mandatory release sign-off gates remain open. This is a lock-decision metric, not a claim that no engineering work has been completed.
+
+The master plan remains **FINAL-LOCK CANDIDATE / BLOCKED — NOT LOCKED** until evidence is collected and a weighted gate rubric is explicitly adopted.
