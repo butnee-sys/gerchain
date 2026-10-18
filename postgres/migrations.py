@@ -1,3 +1,4 @@
+# EA-35.53: exact-branch re-performance after duplicate schema_version publication failure; source review is not runtime evidence.
 # EA-35.52: clarify the session-lock/transaction/publication contract after migration duplicate-history review.
 # EA-35.50: fresh exact-SHA re-performance required after reviewing historical schema_version duplicate-publication failure logs; do not treat prior run as current evidence.
 # EA-35.48: exact-SHA PostgreSQL migration race re-performance trigger; prior failed runs are historical only.
