@@ -1,6 +1,6 @@
 """Serialized, checksummed PostgreSQL migration runner.
 
-The 16-file canonical chain is explicit because historical aliases coexist in
+The 17-file canonical chain is explicit because historical aliases coexist in
 this directory. Schema DDL, checksum verification, and schema_version publication run in one
 transaction while a session-level advisory lock serializes competing migration
 processes. The lock is explicitly released after commit or rollback.
@@ -31,6 +31,7 @@ _CANONICAL_FILES = (
     "014_canonical_escrow_state_constraint.sql",
     "015_repair_escrow_state_constraint_drift.sql",
     "016_reconcile_escrow_state_constraint.sql",
+    "017_ea35_created_witness_event.sql",
 )
 
 
