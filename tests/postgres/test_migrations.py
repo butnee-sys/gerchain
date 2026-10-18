@@ -31,7 +31,7 @@ EXPECTED_CANONICAL_CHAIN = [
 def test_repository_migration_versions_resolve_to_exact_canonical_chain():
     selected = _canonical_migration_files(MIGRATION_DIR)
     assert [path.name for path in selected] == EXPECTED_CANONICAL_CHAIN
-    assert [int(path.name.split("_", 1)[0]) for path in selected] == list(range(1, 18)
+    assert [int(path.name.split("_", 1)[0]) for path in selected] == list(range(1, 18))
 
 
 def test_physical_historical_aliases_are_not_extra_active_migrations():
