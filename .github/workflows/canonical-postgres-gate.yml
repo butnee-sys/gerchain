@@ -218,8 +218,25 @@ jobs:
               normalized = definition.lower()
               for state in ("created", "funded", "locked", "released", "refunded", "cancelled"):
                   assert state in normalized, f"canonical state missing from {name}: {state}"
+              witness_constraints = conn.execute("""
+                  SELECT conname, convalidated, pg_get_constraintdef(oid)
+                  FROM pg_constraint
+                  WHERE conrelid = 'gerchain_transaction_witnesses'::regclass
+                    AND contype = 'c'
+                    AND conname = 'gerchain_witness_event_type_check'
+              """).fetchall()
+              assert len(witness_constraints) == 1, (
+                  "expected one canonical witness event CHECK constraint, "
+                  f"found {witness_constraints}"
+              )
+              witness_name, witness_validated, witness_definition = witness_constraints[0]
+              assert witness_validated is True, f"witness event constraint is NOT VALID: {witness_name}"
+              assert "gerchain_created" in witness_definition.lower(), (
+                  f"migration 017 did not enable GERCHAIN_CREATED witness evidence: {witness_definition}"
+              )
               print("PASS: all 17 migration rows have accepted checksums and applied_at")
               print("PASS: escrow-state CHECK is unique, canonical, and convalidated=true")
+              print("PASS: migration 017 enables validated GERCHAIN_CREATED witness evidence")
               for item in evidence:
                   print(item)
               print({
@@ -272,6 +289,12 @@ jobs:
                           ]
               except Exception as exc:
                   database_error = f'{type(exc).__name__}: {exc}'
+          expected_versions = list(range(1, 18))
+          actual_versions = [row['version'] for row in database_rows]
+          if database_error:
+              raise SystemExit(f'PostgreSQL migration evidence unavailable: {database_error}')
+          if actual_versions != expected_versions:
+              raise SystemExit(f'expected schema_version rows {expected_versions}; got {actual_versions}')
           db_by_version = {row['version']: row['checksum'] for row in database_rows}
           for item in canonical:
               item['database_checksum'] = db_by_version.get(item['version'])
