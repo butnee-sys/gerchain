@@ -61,7 +61,9 @@ def test_ten_real_postgres_movements_have_complete_evidence_graph():
                 source = f"evidence-source-{i:02d}"
                 destination = f"evidence-beneficiary-{i:02d}"
                 ledger.create_account_in_transaction(session, source, "MNT", 100)
-                ledger.create_account_in_transaction(session, escrow_id, "MNT", 0)
+                # Seed the locked escrow with the value being released; this
+                # evidence-only fixture does not exercise the FUND movement.
+                ledger.create_account_in_transaction(session, escrow_id, "MNT", 10)
                 ledger.create_account_in_transaction(session, destination, "MNT", 0)
                 session.add(CanonicalEscrow(
                     id=escrow_id,
