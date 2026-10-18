@@ -11,9 +11,9 @@ The production target is the fundamental architecture and EAI (Escrow as Infrast
 
 ## Step 2 — Error / duplicate / excess review
 
-**Disposition: CLOSED AS A REVIEW PASS; REMEDIATION AND PRODUCTION LOCK REMAIN OPEN.**
+**Disposition: CLOSED — REVIEW AND CLASSIFICATION COMPLETE. Remediation and overall production lock remain separate, open gates.**
 
-The repository review identified and recorded these classes of risks:
+The repository review and final dispositions are recorded in [`MASTER_PRODUCTION_WORK_PLAN_STEP2_ERROR_DUPLICATE_EXCESS.md`](MASTER_PRODUCTION_WORK_PLAN_STEP2_ERROR_DUPLICATE_EXCESS.md). The review identified and dispositioned these classes of risks:
 - Multiple legacy balance authorities (MoneyLedger, ReleaseAccount, AccountBalance) versus Canonical Ledger.
 - Legacy application/API mutation paths that could bypass controlled runtime boundaries.
 - Legacy/in-memory entrypoint risk versus the production PostgreSQL runtime.
@@ -22,6 +22,16 @@ The repository review identified and recorded these classes of risks:
 - Deep value-truth reconciliation must bind canonical movement to escrow, witness, operation-matched outbox, idempotency and integrity hash.
 
 The latest correction changes the entrypoint to instantiate `ProductionRuntimeFactory(ProductionRuntimeConfig(...), engine=engine)`, then call `factory.create()`. The factory now initializes canonical persistence metadata and configures Canonical Ledger authority. This is source-level evidence only until runtime and PostgreSQL checks pass.
+
+### Step 2 final disposition
+
+- Duplicate value authorities are classified; Canonical Ledger is the sole intended production value authority.
+- Legacy/API/UI mutation bypasses are classified with fail-closed disposition; current-tip execution evidence remains a separate verification requirement.
+- Production entrypoint/factory mismatch is corrected at source level.
+- Migration, reconciliation, operation-matched outbox, idempotency and integrity evidence requirements are explicitly assigned.
+- Legacy physical store removal/archive is tracked as remediation, not hidden inside the review status.
+
+**Step 2: CLOSED.** This is closure of the review step, not certification that all listed remediations have been executed or that production is ready.
 
 ## Exact-commit CI evidence
 
@@ -41,7 +51,7 @@ This is **not** a complete CI result. No pytest/workflow-suite pass or PostgreSQ
 
 ## Lock decision
 
-**Step 2 review: CLOSED with recorded findings.**  
+**Step 2 — Error / Duplicate / Excess review: CLOSED.** Findings, canonical ownership, fail-closed dispositions and residual gates are recorded in [`MASTER_PRODUCTION_WORK_PLAN_STEP2_ERROR_DUPLICATE_EXCESS.md`](MASTER_PRODUCTION_WORK_PLAN_STEP2_ERROR_DUPLICATE_EXCESS.md).  
 **EA-35 / PostgreSQL re-performance: IN PROGRESS / NOT LOCKED.**  
 **Overall production FINAL LOCK: NOT GRANTED.**
 
