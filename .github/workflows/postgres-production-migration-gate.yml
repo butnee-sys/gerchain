@@ -96,6 +96,85 @@ jobs:
           print({"canonical_migrations": len(actual), "newly_applied": list(applied), "history_matches_manifest": True})
           PY
 
+      - name: Enforce migration 1-17 history and write migration-gate-report.json
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          python - <<'PY'
+          import hashlib
+          import json
+          import os
+          import subprocess
+          from pathlib import Path
+          import psycopg
+          from sqlalchemy.engine import make_url
+          from postgres.migrations import _canonical_migration_files, checksum
+
+          folder = Path("postgres/migrations")
+          files = _canonical_migration_files(folder)
+          expected_versions = list(range(1, 18))
+          if len(files) != 17:
+              raise SystemExit(f"expected exactly 17 canonical migration files, got {len(files)}")
+          expected_names = [f"{i:03d}_" for i in expected_versions]
+          names = [p.name for p in files]
+          if [int(p.name.split("_", 1)[0]) for p in files] != expected_versions:
+              raise SystemExit(f"migration sequence must be exactly 1..17 without gaps/duplicates: {names}")
+          dsn = make_url(os.environ["GERCHAIN_DATABASE_URL"]).set(drivername="postgresql").render_as_string(hide_password=False)
+          with psycopg.connect(dsn) as connection:
+              history_rows = connection.execute(
+                  "SELECT version, checksum, applied_at::text FROM schema_version ORDER BY version"
+              ).fetchall()
+              duplicate_versions = connection.execute(
+                  "SELECT version, COUNT(*) FROM schema_version GROUP BY version HAVING COUNT(*) <> 1"
+              ).fetchall()
+          expected_checksums = [
+              {"version": i, "path": str(path), "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+               "runner_checksum": checksum(path.read_text(encoding="utf-8"))}
+              for i, path in enumerate(files, 1)
+          ]
+          actual_versions = [int(row[0]) for row in history_rows]
+          if duplicate_versions:
+              raise SystemExit(f"duplicate PostgreSQL migration versions: {duplicate_versions}")
+          if actual_versions != expected_versions:
+              raise SystemExit(f"PostgreSQL history must be exactly 1..17: {actual_versions}")
+          expected_pairs = [(x["version"], x["runner_checksum"]) for x in expected_checksums]
+          actual_pairs = [(int(row[0]), row[1]) for row in history_rows]
+          if actual_pairs != expected_pairs:
+              raise SystemExit(f"PostgreSQL history/checksum mismatch: expected={expected_pairs}; actual={actual_pairs}")
+          commit_sha = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+          report = {
+              "status": "PASS",
+              "commit_sha": commit_sha,
+              "workflow_sha": os.environ.get("GITHUB_SHA", ""),
+              "workflow_run_id": os.environ.get("GITHUB_RUN_ID", ""),
+              "workflow_run_attempt": os.environ.get("GITHUB_RUN_ATTEMPT", ""),
+              "migration_count_expected": 17,
+              "migration_count_actual": len(history_rows),
+              "versions_expected": expected_versions,
+              "versions_actual": actual_versions,
+              "duplicate_versions": [],
+              "migration_sources": expected_checksums,
+              "postgresql_history": [
+                  {"version": int(row[0]), "checksum": row[1], "applied_at": row[2]}
+                  for row in history_rows
+              ],
+              "checks": {
+                  "sequence_1_to_17": True,
+                  "no_duplicate_versions": True,
+                  "checksums_match": True,
+                  "commit_sha_matches_workflow": bool(os.environ.get("GITHUB_SHA")) and commit_sha == os.environ["GITHUB_SHA"],
+              },
+          }
+          if not report["checks"]["commit_sha_matches_workflow"]:
+              report["status"] = "FAIL"
+          out = Path("artifacts/migration-gate-report.json")
+          out.write_text(json.dumps(report, indent=2, sort_keys=True) + "\\n", encoding="utf-8")
+          print(json.dumps(report, indent=2, sort_keys=True))
+          if report["status"] != "PASS":
+              raise SystemExit("migration-gate-report.json status is not PASS")
+          PY
+
       - name: Boot canonical production entrypoint against migrated PostgreSQL
         env:
           GERCHAIN_ESCROW_ID: migration-gate-escrow
@@ -204,6 +283,48 @@ jobs:
             -v ON_ERROR_STOP=1 -c \
             "SELECT version, checksum, applied_at FROM schema_version ORDER BY version" \
             > artifacts/schema-version-history.txt
+
+      - name: Final artifact-to-PostgreSQL evidence reconciliation
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          import psycopg
+          from sqlalchemy.engine import make_url
+
+          report_path = Path("artifacts/migration-gate-report.json")
+          if not report_path.is_file():
+              raise SystemExit("migration-gate-report.json missing; refusing to close migration gate")
+          report = json.loads(report_path.read_text(encoding="utf-8"))
+          if report.get("status") != "PASS":
+              raise SystemExit(f"migration report status is not PASS: {report.get('status')}")
+          if report.get("commit_sha") != os.environ.get("GITHUB_SHA"):
+              raise SystemExit("report commit_sha does not match workflow GITHUB_SHA")
+          if report.get("workflow_run_id") != os.environ.get("GITHUB_RUN_ID"):
+              raise SystemExit("report workflow_run_id mismatch")
+          if report.get("workflow_run_attempt") != os.environ.get("GITHUB_RUN_ATTEMPT"):
+              raise SystemExit("report workflow_run_attempt mismatch")
+          dsn = make_url(os.environ["GERCHAIN_DATABASE_URL"]).set(drivername="postgresql").render_as_string(hide_password=False)
+          with psycopg.connect(dsn) as connection:
+              rows = connection.execute(
+                  "SELECT version, checksum, applied_at::text FROM schema_version ORDER BY version"
+              ).fetchall()
+              duplicates = connection.execute(
+                  "SELECT version, COUNT(*) FROM schema_version GROUP BY version HAVING COUNT(*) <> 1"
+              ).fetchall()
+          actual = [{"version": int(r[0]), "checksum": r[1], "applied_at": r[2]} for r in rows]
+          if duplicates:
+              raise SystemExit(f"PostgreSQL duplicate versions found at final reconciliation: {duplicates}")
+          if actual != report.get("postgresql_history"):
+              raise SystemExit("artifact PostgreSQL history does not match final live database history")
+          if len(actual) != 17 or [x["version"] for x in actual] != list(range(1, 18)):
+              raise SystemExit("final live PostgreSQL history is not exactly versions 1..17")
+          print("PASS: migration-gate-report.json matches final PostgreSQL history and run identity")
+          PY
 
       - name: Upload PostgreSQL gate evidence
         if: always()
