@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from contextlib import contextmanager
+
 import pytest
 
 import production_entrypoint as entrypoint
@@ -9,6 +11,15 @@ class _FakeEngine:
     def __init__(self, url: str):
         self.url = url
         self.disposed = False
+        self.dialect = type("Dialect", (), {"name": "postgresql"})()
+
+    @contextmanager
+    def connect(self):
+        class Connection:
+            @staticmethod
+            def exec_driver_sql(statement):
+                return type("Result", (), {"scalar": staticmethod(lambda: 1)})()
+        yield Connection()
 
     def dispose(self):
         self.disposed = True
@@ -40,9 +51,10 @@ def test_build_production_runtime_uses_canonical_factory_and_validated_env(monke
             captured["config"] = kwargs
 
     class FakeFactory:
-        def __init__(self, config, *, engine=None):
+        def __init__(self, config, *, engine=None, session_factory=None):
             captured["factory_config"] = config
             captured["engine"] = engine
+            captured["session_factory"] = session_factory
 
         def create(self):
             captured["created"] = True
@@ -72,8 +84,8 @@ def test_build_production_runtime_uses_canonical_factory_and_validated_env(monke
     ("variable", "value", "message"),
     [
         ("GERCHAIN_DATABASE_URL", "sqlite:///not-production.db", "pointing to PostgreSQL"),
-        ("GERCHAIN_ESCROW_AMOUNT", "not-an-int", "must be an integer"),
-        ("GERCHAIN_ESCROW_AMOUNT", "0", "must be positive"),
+        ("GERCHAIN_ESCROW_AMOUNT", "not-an-int", "must be a positive integer"),
+        ("GERCHAIN_ESCROW_AMOUNT", "0", "must be a positive integer"),
     ],
 )
 def test_build_production_runtime_rejects_invalid_configuration(
