@@ -195,6 +195,12 @@ def test_migrations_are_serialized_and_checksum_is_stable(monkeypatch):
         # are unchanged after a second complete migration pass.
         rerun_result = _run_migrations("RERUN")
         print(f"MIGRATION_RERUN_RESULT result={rerun_result!r}", flush=True)
+        # The rerun connection itself must observe the exact same version/checksum
+        # history, and the persisted history must remain byte-for-byte stable.
+        assert rerun_result["rows"] == rows, (
+            f"rerun observed changed migration history: {rerun_result['rows']!r} "
+            f"versus original {rows!r}"
+        )
         with psycopg.connect(fresh_dsn) as conn:
             rows_after = conn.execute(
                 "SELECT version, checksum FROM schema_version ORDER BY version"
