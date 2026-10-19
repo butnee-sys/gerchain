@@ -337,6 +337,7 @@ class GerchainRuntime:
                 result = fund_escrow_in_transaction(session, transaction_id=transaction_id, escrow_id=self.escrow_engine.escrow_id, source=source, amount=self.escrow_engine.amount, currency=self.escrow_engine.currency, payload={"timestamp": timestamp, "evidence": evidence})
                 session.commit()
                 return result
+        self._require_test_memory_fallback("FUND")
         return self.escrow_service.fund(transaction_id=transaction_id, source=source, timestamp=timestamp, evidence=evidence)
 
     def lock(self, transaction_id: str, timestamp: str, evidence: Any):
