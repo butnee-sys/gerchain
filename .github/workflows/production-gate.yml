@@ -53,8 +53,10 @@ jobs:
         run: python -m compileall -q .
       - name: Collect the complete test suite (fail closed)
         run: python -m pytest --import-mode=importlib --collect-only -q
-      - name: Run complete test suite
-        run: python -m pytest --import-mode=importlib -q
+      - name: Run complete test suite and emit JUnit evidence
+        run: |
+          mkdir -p production-evidence
+          python -m pytest --import-mode=importlib -q --junitxml=production-evidence/junit.xml
 
       - name: Apply canonical migrations and capture PostgreSQL evidence
         env:
@@ -72,6 +74,11 @@ jobs:
           with psycopg.connect(dsn) as conn:
               apply_migrations(conn, "postgres/migrations")
               history = conn.execute("SELECT version, checksum FROM schema_version ORDER BY version").fetchall()
+              if len(history) != 17:
+                  raise SystemExit(f"FAIL: expected 17 applied migrations, found {len(history)}")
+              versions = [row[0] for row in history]
+              if len(set(versions)) != 17:
+                  raise SystemExit("FAIL: duplicate migration version in schema_version")
               constraints = conn.execute("""
                   SELECT tc.table_schema, tc.table_name, tc.constraint_name,
                          tc.constraint_type, COALESCE(kcu.column_name, '') AS column_name
@@ -184,6 +191,30 @@ jobs:
               raise SystemExit("FAIL: evidence SHA does not match checked-out HEAD")
           if decision["overall_status"] != "PASS" or not decision["lock_authorized"]:
               raise SystemExit("FAIL-CLOSED: master gate remains BLOCKED; production lock prohibited")
+          PY
+      - name: Generate and verify SHA256SUMS and MANIFEST.SHA256
+        if: always()
+        run: |
+          python - <<'PY'
+          import hashlib
+          from pathlib import Path
+          root = Path("production-evidence")
+          if not root.exists():
+              raise SystemExit("FAIL: production-evidence directory missing")
+          files = sorted(p for p in root.rglob("*") if p.is_file() and p.name not in {"SHA256SUMS", "MANIFEST.SHA256"})
+          if not files:
+              raise SystemExit("FAIL: no evidence files to checksum")
+          sums = "".join(f"{hashlib.sha256(p.read_bytes()).hexdigest()}  {p.relative_to(root).as_posix()}\\n" for p in files)
+          (root / "SHA256SUMS").write_text(sums, encoding="utf-8")
+          manifest_hash = hashlib.sha256((root / "SHA256SUMS").read_bytes()).hexdigest()
+          (root / "MANIFEST.SHA256").write_text(f"{manifest_hash}  SHA256SUMS\\n", encoding="utf-8")
+          for line in sums.splitlines():
+              digest, name = line.split("  ", 1)
+              if hashlib.sha256((root / name).read_bytes()).hexdigest() != digest:
+                  raise SystemExit(f"FAIL: checksum mismatch: {name}")
+          if hashlib.sha256((root / "SHA256SUMS").read_bytes()).hexdigest() != manifest_hash:
+              raise SystemExit("FAIL: MANIFEST.SHA256 mismatch")
+          print(f"Verified {len(files)} evidence files; SHA256SUMS and MANIFEST.SHA256 valid.")
           PY
       - name: Upload production evidence
         if: always()
