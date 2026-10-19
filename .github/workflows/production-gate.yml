@@ -129,11 +129,69 @@ jobs:
                   f.write(f"{digest}  {name}\\n")
           print(json.dumps(report, indent=2, sort_keys=True))
           PY
+      - name: Validate fail-closed master gate manifest
+        if: always()
+        env:
+          SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+          JOB_STATUS: ${{ job.status }}
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          manifest_path = Path("docs/production-master-gate-manifest.json")
+          manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+          assert manifest.get("policy") == "FAIL_CLOSED"
+          assert len(manifest.get("architecture_criteria", [])) == 17
+          assert len(manifest.get("postgres_checks", [])) == 13
+          for group in ("architecture_criteria", "postgres_checks"):
+              ids = [item["id"] for item in manifest[group]]
+              assert len(ids) == len(set(ids)), f"duplicate criterion ID in {group}"
+          # This first revision deliberately does not infer per-criterion PASS
+          # from aggregate job success. Criteria remain BLOCKED until each has
+          # a verifier and exact-SHA evidence binding.
+          decision = {
+              "schema_version": "1.0",
+              "gate": "PRODUCTION_MASTER_GATE",
+              "policy": "FAIL_CLOSED",
+              "commit_sha": os.environ["SOURCE_SHA"],
+              "checked_out_sha": os.popen("git rev-parse HEAD").read().strip(),
+              "workflow_run_id": int(os.environ["RUN_ID"]),
+              "workflow_run_attempt": int(os.environ["RUN_ATTEMPT"]),
+              "job_status_at_manifest_step": os.environ["JOB_STATUS"],
+              "architecture_criteria": [
+                  {"id": x["id"], "status": "BLOCKED", "evidence": [],
+                   "reason": "Per-criterion exact-SHA evidence verifier not yet wired."}
+                  for x in manifest["architecture_criteria"]
+              ],
+              "postgres_checks": [
+                  {"id": x["id"], "status": "BLOCKED", "evidence": [],
+                   "reason": "Per-check exact-SHA result binding not yet wired."}
+                  for x in manifest["postgres_checks"]
+              ],
+              "overall_status": "BLOCKED",
+              "lock_authorized": False
+          }
+          Path("production-evidence").mkdir(exist_ok=True)
+          out = Path("production-evidence/master-gate-decision.json")
+          out.write_text(json.dumps(decision, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+          print(json.dumps({"overall_status": decision["overall_status"],
+                            "lock_authorized": decision["lock_authorized"],
+                            "architecture_criteria": len(decision["architecture_criteria"]),
+                            "postgres_checks": len(decision["postgres_checks"])}, indent=2))
+          if decision["commit_sha"] != decision["checked_out_sha"]:
+              raise SystemExit("FAIL: evidence SHA does not match checked-out HEAD")
+          if decision["overall_status"] != "PASS" or not decision["lock_authorized"]:
+              raise SystemExit("FAIL-CLOSED: master gate remains BLOCKED; production lock prohibited")
+          PY
       - name: Upload production evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: production-gate-evidence
-          path: production-evidence/*
+          path: |
+            production-evidence/*
+            docs/production-master-gate-manifest.json
           if-no-files-found: error
           retention-days: 30
