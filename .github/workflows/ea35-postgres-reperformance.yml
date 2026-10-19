@@ -631,7 +631,8 @@ jobs:
         if: always()
         run: |
           python - <<'PY'
-          import hashlib
+          import hashlib, json
+          import xml.etree.ElementTree as ET
           from pathlib import Path
           root = Path("artifacts/ea35")
           target = root / "SHA256SUMS"
