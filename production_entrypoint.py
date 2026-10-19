@@ -4,11 +4,10 @@ import os
 import signal
 import time
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 
-from services.gerchain_runtime_factory import ProductionRuntimeFactory
-
+from services.gerchain_runtime_factory import ProductionRuntimeConfig, ProductionRuntimeFactory
 
 _running = True
 
@@ -19,7 +18,6 @@ def _stop(*_args) -> None:
 
 
 def build_production_runtime():
-    """Build the canonical PostgreSQL runtime and fail closed on any boot error."""
     database_url = os.environ.get("GERCHAIN_DATABASE_URL")
     if not database_url or not database_url.startswith(
         ("postgresql://", "postgresql+psycopg://", "postgresql+psycopg2://")
@@ -38,15 +36,18 @@ def build_production_runtime():
 
     try:
         amount = int(amount_raw)
-    except ValueError as exc:
-        raise RuntimeError("GERCHAIN_ESCROW_AMOUNT must be an integer") from exc
+    except (TypeError, ValueError) as exc:
+        raise RuntimeError("GERCHAIN_ESCROW_AMOUNT must be a positive integer") from exc
     if amount <= 0:
-        raise RuntimeError("GERCHAIN_ESCROW_AMOUNT must be positive")
+        raise RuntimeError("GERCHAIN_ESCROW_AMOUNT must be a positive integer")
 
     engine = create_engine(database_url, pool_pre_ping=True, future=True)
     try:
         if engine.dialect.name != "postgresql":
             raise RuntimeError("production entrypoint requires a PostgreSQL engine")
+        with engine.connect() as connection:
+            if connection.execute(text("SELECT 1")).scalar_one() != 1:
+                raise RuntimeError("PostgreSQL readiness probe failed")
         session_factory = sessionmaker(bind=engine, expire_on_commit=False)
         factory = ProductionRuntimeFactory(
             ProductionRuntimeConfig(
@@ -62,10 +63,6 @@ def build_production_runtime():
         runtime = factory.create()
         if not runtime.is_canonical_ledger_authoritative:
             raise RuntimeError("canonical ledger authority was not established")
-
-        # Prove the configured database is reachable before returning readiness.
-        with engine.connect() as connection:
-            connection.exec_driver_sql("SELECT 1")
         return runtime, engine
     except Exception:
         engine.dispose()
@@ -73,13 +70,13 @@ def build_production_runtime():
 
 
 def main() -> None:
-    global _running
     runtime, engine = build_production_runtime()
     print(
         "GerChain production runtime initialized: "
-        f"escrow={runtime.escrow_engine.escrow_id} "
-        f"currency={runtime.escrow_engine.currency}"
+        f"mode={runtime.runtime_mode} escrow={runtime.escrow_engine.escrow_id} "
+        f"currency={runtime.escrow_engine.currency} canonical_ledger=authoritative"
     )
+    global _running
     signal.signal(signal.SIGTERM, _stop)
     signal.signal(signal.SIGINT, _stop)
     try:
