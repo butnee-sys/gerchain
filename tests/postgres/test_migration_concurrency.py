@@ -253,3 +253,114 @@ def test_invalid_escrow_state_is_rejected_by_named_database_constraint():
     finally:
         with psycopg.connect(database_url, autocommit=True) as admin:
             admin.execute(f'DROP SCHEMA IF EXISTS "{schema}" CASCADE')
+
+
+@pytest.mark.postgres
+def test_identical_duplicate_schema_version_rows_are_repaired_before_migration():
+    """Legacy duplicate publications with the same checksum are safely collapsed."""
+    database_url = os.environ.get("GERCHAIN_TEST_POSTGRES_URL")
+    if not database_url:
+        pytest.skip("GERCHAIN_TEST_POSTGRES_URL is not configured")
+
+    schema = "migration_identical_dupes_" + uuid4().hex
+    with psycopg.connect(database_url, autocommit=True) as admin:
+        admin.execute(f'CREATE SCHEMA "{schema}"')
+
+    try:
+        with psycopg.connect(
+            database_url, options=f"-c search_path={schema}"
+        ) as seed:
+            # Deliberately model a legacy registry without a PK/unique constraint.
+            seed.execute("""
+                CREATE TABLE schema_version (
+                    version BIGINT NOT NULL,
+                    checksum TEXT NOT NULL,
+                    applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
+                )
+            """)
+            seed.execute(
+                "INSERT INTO schema_version(version, checksum) VALUES (%s, %s), (%s, %s)",
+                (999, "a" * 64, 999, "a" * 64),
+            )
+            seed.commit()
+
+        with psycopg.connect(
+            database_url, options=f"-c search_path={schema}"
+        ) as connection:
+            applied = apply_migrations(connection, MIGRATION_DIR)
+        assert sorted(applied) == EXPECTED_VERSIONS
+
+        with psycopg.connect(
+            database_url, options=f"-c search_path={schema}"
+        ) as verify:
+            duplicates = verify.execute(
+                "SELECT version, checksum, count(*) FROM schema_version GROUP BY version, checksum HAVING count(*) > 1"
+            ).fetchall()
+            legacy_rows = verify.execute(
+                "SELECT version, checksum FROM schema_version WHERE version = 999"
+            ).fetchall()
+            unique_version = verify.execute(
+                """
+                SELECT EXISTS (
+                    SELECT 1 FROM pg_indexes
+                    WHERE schemaname = %s
+                      AND tablename = 'schema_version'
+                      AND indexdef ILIKE 'CREATE UNIQUE INDEX%%(version)%%'
+                )
+                """,
+                (schema,),
+            ).fetchone()[0]
+        assert duplicates == []
+        assert legacy_rows == [(999, "a" * 64)]
+        assert unique_version is True
+    finally:
+        with psycopg.connect(database_url, autocommit=True) as admin:
+            admin.execute(f'DROP SCHEMA IF EXISTS "{schema}" CASCADE')
+
+
+@pytest.mark.postgres
+def test_conflicting_duplicate_schema_version_checksums_fail_closed():
+    """Conflicting historical truth is rejected and is never auto-selected."""
+    database_url = os.environ.get("GERCHAIN_TEST_POSTGRES_URL")
+    if not database_url:
+        pytest.skip("GERCHAIN_TEST_POSTGRES_URL is not configured")
+
+    schema = "migration_conflicting_dupes_" + uuid4().hex
+    with psycopg.connect(database_url, autocommit=True) as admin:
+        admin.execute(f'CREATE SCHEMA "{schema}"')
+
+    try:
+        with psycopg.connect(
+            database_url, options=f"-c search_path={schema}"
+        ) as seed:
+            seed.execute("""
+                CREATE TABLE schema_version (
+                    version BIGINT NOT NULL,
+                    checksum TEXT NOT NULL,
+                    applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
+                )
+            """)
+            seed.execute(
+                "INSERT INTO schema_version(version, checksum) VALUES (%s, %s), (%s, %s)",
+                (3, "a" * 64, 3, "b" * 64),
+            )
+            seed.commit()
+
+        with psycopg.connect(
+            database_url, options=f"-c search_path={schema}"
+        ) as connection:
+            with pytest.raises(RuntimeError, match="Conflicting schema_version checksums for version 3"):
+                apply_migrations(connection, MIGRATION_DIR)
+
+        with psycopg.connect(
+            database_url, options=f"-c search_path={schema}"
+        ) as verify:
+            rows = verify.execute(
+                "SELECT version, checksum FROM schema_version ORDER BY checksum"
+            ).fetchall()
+        assert rows == [(3, "a" * 64), (3, "b" * 64)], (
+            "conflicting history must remain untouched for explicit reconciliation"
+        )
+    finally:
+        with psycopg.connect(database_url, autocommit=True) as admin:
+            admin.execute(f'DROP SCHEMA IF EXISTS "{schema}" CASCADE')
