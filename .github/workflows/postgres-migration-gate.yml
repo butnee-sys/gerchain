@@ -109,7 +109,7 @@ jobs:
           assert len(rows) == len(expected), f"expected {len(expected)} migration records, got {len(rows)}"
           missing_applied_at = [version for version, _digest, applied_at in rows if applied_at is None]
           assert not missing_applied_at, f"missing applied_at for migration versions: {missing_applied_at}"
-          print("MIGRATION_APPLIED_AT=PASS versions={len(rows)} all_non_null=true")
+          print(f"MIGRATION_APPLIED_AT=PASS versions={len(rows)} all_non_null=true")
           assert set(applied).issubset(set(range(1, len(expected) + 1)))
           print(f"CONCURRENT_RUNNER_PASS versions={len(rows)} newly_applied={len(applied)}")
           PY
@@ -121,8 +121,8 @@ jobs:
           cat postgres-migration-evidence/runner-a.log
           cat postgres-migration-evidence/runner-b.log
           test "$rc" -eq 0
-          grep -q 'CONCURRENT_RUNNER_PASS versions={len(rows)}' postgres-migration-evidence/runner-a.log
-          grep -q 'CONCURRENT_RUNNER_PASS versions={len(rows)}' postgres-migration-evidence/runner-b.log
+          grep -q 'CONCURRENT_RUNNER_PASS' postgres-migration-evidence/runner-a.log
+          grep -q 'CONCURRENT_RUNNER_PASS' postgres-migration-evidence/runner-b.log
       - name: Verify history, all checksums, constraints, and report SHA-256
         run: |
           python - <<'PY'
