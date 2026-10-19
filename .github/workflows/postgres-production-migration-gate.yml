@@ -169,7 +169,7 @@ jobs:
           if not report["checks"]["commit_sha_matches_workflow"]:
               report["status"] = "FAIL"
           out = Path("artifacts/migration-gate-report.json")
-          out.write_text(json.dumps(report, indent=2, sort_keys=True) + "\\n", encoding="utf-8")
+          out.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
           print(json.dumps(report, indent=2, sort_keys=True))
           if report["status"] != "PASS":
               raise SystemExit("migration-gate-report.json status is not PASS")
