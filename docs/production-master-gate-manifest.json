@@ -1,0 +1,220 @@
+{
+  "schema_version": "1.0",
+  "gate": "PRODUCTION_MASTER_GATE",
+  "policy": "FAIL_CLOSED",
+  "rule": "A criterion may be PASS only when an exact-commit evidence artifact exists, is hashed, and its verifier passes. Missing, stale, ambiguous, or unverified evidence is BLOCKED.",
+  "architecture_criteria": [
+    {
+      "id": "ARCH-01",
+      "title": "Canonical architecture freeze",
+      "status": "BLOCKED",
+      "evidence": [],
+      "reason": "No verified evidence bound to the current exact commit yet."
+    },
+    {
+      "id": "ARCH-02",
+      "title": "Layer boundaries and explicit adapters",
+      "status": "BLOCKED",
+      "evidence": [],
+      "reason": "No verified evidence bound to the current exact commit yet."
+    },
+    {
+      "id": "ARCH-03",
+      "title": "Single authoritative asset truth",
+      "status": "BLOCKED",
+      "evidence": [],
+      "reason": "No verified evidence bound to the current exact commit yet."
+    },
+    {
+      "id": "ARCH-04",
+      "title": "Single authoritative value ledger",
+      "status": "BLOCKED",
+      "evidence": [],
+      "reason": "No verified evidence bound to the current exact commit yet."
+    },
+    {
+      "id": "ARCH-05",
+      "title": "Single authoritative escrow state",
+      "status": "BLOCKED",
+      "evidence": [],
+      "reason": "No verified evidence bound to the current exact commit yet."
+    },
+    {
+      "id": "ARCH-06",
+      "title": "Decision → Authorization → Release",
+      "status": "BLOCKED",
+      "evidence": [],
+      "reason": "No verified evidence bound to the current exact commit yet."
+    },
+    {
+      "id": "ARCH-07",
+      "title": "No direct-release bypass",
+      "status": "BLOCKED",
+      "evidence": [],
+      "reason": "No verified evidence bound to the current exact commit yet."
+    },
+    {
+      "id": "ARCH-08",
+      "title": "Canonical transaction atomicity",
+      "status": "BLOCKED",
+      "evidence": [],
+      "reason": "No verified evidence bound to the current exact commit yet."
+    },
+    {
+      "id": "ARCH-09",
+      "title": "Durable idempotency and replay conflict",
+      "status": "BLOCKED",
+      "evidence": [],
+      "reason": "No verified evidence bound to the current exact commit yet."
+    },
+    {
+      "id": "ARCH-10",
+      "title": "Witness evidence integrity",
+      "status": "BLOCKED",
+      "evidence": [],
+      "reason": "No verified evidence bound to the current exact commit yet."
+    },
+    {
+      "id": "ARCH-11",
+      "title": "Outbox operation and aggregate binding",
+      "status": "BLOCKED",
+      "evidence": [],
+      "reason": "No verified evidence bound to the current exact commit yet."
+    },
+    {
+      "id": "ARCH-12",
+      "title": "Deep cross-store value-truth reconciliation",
+      "status": "BLOCKED",
+      "evidence": [],
+      "reason": "No verified evidence bound to the current exact commit yet."
+    },
+    {
+      "id": "ARCH-13",
+      "title": "Fail-closed legacy runtime boundaries",
+      "status": "BLOCKED",
+      "evidence": [],
+      "reason": "No verified evidence bound to the current exact commit yet."
+    },
+    {
+      "id": "ARCH-14",
+      "title": "Production PostgreSQL entrypoint and migration",
+      "status": "BLOCKED",
+      "evidence": [],
+      "reason": "No verified evidence bound to the current exact commit yet."
+    },
+    {
+      "id": "ARCH-15",
+      "title": "Recovery without duplicate value movement",
+      "status": "BLOCKED",
+      "evidence": [],
+      "reason": "No verified evidence bound to the current exact commit yet."
+    },
+    {
+      "id": "ARCH-16",
+      "title": "Security, identity, and privileged access",
+      "status": "BLOCKED",
+      "evidence": [],
+      "reason": "No verified evidence bound to the current exact commit yet."
+    },
+    {
+      "id": "ARCH-17",
+      "title": "Independent re-performance and release governance",
+      "status": "BLOCKED",
+      "evidence": [],
+      "reason": "No verified evidence bound to the current exact commit yet."
+    }
+  ],
+  "postgres_checks": [
+    {
+      "id": "PG-01",
+      "title": "Exact commit checkout",
+      "status": "BLOCKED",
+      "evidence": [],
+      "reason": "Must be reported by the exact-SHA workflow; aggregate job success alone is insufficient."
+    },
+    {
+      "id": "PG-02",
+      "title": "Python compile",
+      "status": "BLOCKED",
+      "evidence": [],
+      "reason": "Must be reported by the exact-SHA workflow; aggregate job success alone is insufficient."
+    },
+    {
+      "id": "PG-03",
+      "title": "Test collection",
+      "status": "BLOCKED",
+      "evidence": [],
+      "reason": "Must be reported by the exact-SHA workflow; aggregate job success alone is insufficient."
+    },
+    {
+      "id": "PG-04",
+      "title": "Full test suite",
+      "status": "BLOCKED",
+      "evidence": [],
+      "reason": "Must be reported by the exact-SHA workflow; aggregate job success alone is insufficient."
+    },
+    {
+      "id": "PG-05",
+      "title": "PostgreSQL connection",
+      "status": "BLOCKED",
+      "evidence": [],
+      "reason": "Must be reported by the exact-SHA workflow; aggregate job success alone is insufficient."
+    },
+    {
+      "id": "PG-06",
+      "title": "Migration history and checksums",
+      "status": "BLOCKED",
+      "evidence": [],
+      "reason": "Must be reported by the exact-SHA workflow; aggregate job success alone is insufficient."
+    },
+    {
+      "id": "PG-07",
+      "title": "Constraint catalog validation",
+      "status": "BLOCKED",
+      "evidence": [],
+      "reason": "Must be reported by the exact-SHA workflow; aggregate job success alone is insufficient."
+    },
+    {
+      "id": "PG-08",
+      "title": "Production entrypoint boot",
+      "status": "BLOCKED",
+      "evidence": [],
+      "reason": "Must be reported by the exact-SHA workflow; aggregate job success alone is insufficient."
+    },
+    {
+      "id": "PG-09",
+      "title": "Canonical escrow lifecycle",
+      "status": "BLOCKED",
+      "evidence": [],
+      "reason": "Must be reported by the exact-SHA workflow; aggregate job success alone is insufficient."
+    },
+    {
+      "id": "PG-10",
+      "title": "Ledger atomicity and rollback",
+      "status": "BLOCKED",
+      "evidence": [],
+      "reason": "Must be reported by the exact-SHA workflow; aggregate job success alone is insufficient."
+    },
+    {
+      "id": "PG-11",
+      "title": "Idempotency replay and conflict",
+      "status": "BLOCKED",
+      "evidence": [],
+      "reason": "Must be reported by the exact-SHA workflow; aggregate job success alone is insufficient."
+    },
+    {
+      "id": "PG-12",
+      "title": "Witness/outbox/idempotency graph reconciliation",
+      "status": "BLOCKED",
+      "evidence": [],
+      "reason": "Must be reported by the exact-SHA workflow; aggregate job success alone is insufficient."
+    },
+    {
+      "id": "PG-13",
+      "title": "Recovery and no duplicate movement",
+      "status": "BLOCKED",
+      "evidence": [],
+      "reason": "Must be reported by the exact-SHA workflow; aggregate job success alone is insufficient."
+    }
+  ]
+}
