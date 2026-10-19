@@ -251,8 +251,8 @@ def _run() -> dict:
         with _connect(base_url, drift_schema) as conn:
             conn.commit()
             repaired = apply_migrations(conn, MIGRATION_DIR)
-        if repaired != (15, 16):
-            raise AssertionError(f"state drift repair expected migrations 015 and 016, got {repaired}")
+        if repaired != (15, 16, 17):
+            raise AssertionError(f"state drift repair expected migrations 015, 016, and 017, got {repaired}")
         with _connect(base_url, drift_schema) as conn:
             checks = conn.execute("""
                 SELECT conname, convalidated, pg_get_constraintdef(oid)
