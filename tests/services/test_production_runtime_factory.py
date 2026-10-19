@@ -56,9 +56,18 @@ def test_factory_rejects_non_postgresql_engine() -> None:
 def test_factory_initialize_uses_canonical_migration_runner() -> None:
     engine = _postgres_engine()
     factory = ProductionRuntimeFactory(_config(), engine=engine)
-    with patch("services.gerchain_runtime_factory.initialize_canonical_postgres_schema") as initializer:
+    connection = Mock()
+    context = Mock()
+    context.__enter__ = Mock(return_value=connection)
+    context.__exit__ = Mock(return_value=False)
+    engine.connect.return_value = context
+    with (
+        patch("services.gerchain_runtime_factory.initialize_canonical_postgres_schema") as initializer,
+        patch("services.gerchain_runtime_factory.assert_canonical_production_schema") as schema_gate,
+    ):
         factory.initialize()
     initializer.assert_called_once_with(engine)
+    schema_gate.assert_called_once_with(connection)
 
 
 def test_schema_initializer_rejects_non_postgresql_engine() -> None:
