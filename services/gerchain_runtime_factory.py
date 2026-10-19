@@ -34,6 +34,44 @@ def initialize_canonical_postgres_schema(engine: Engine) -> None:
         apply_migrations(connection, migration_dir)
 
 
+def assert_canonical_production_schema(connection: Any) -> None:
+    """Fail closed unless the canonical durable tables and critical columns exist."""
+    from sqlalchemy import inspect
+
+    inspector = inspect(connection)
+    required = {
+        "gerchain_ledger_accounts": {"account_id", "currency", "balance", "version"},
+        "gerchain_ledger_movements": {
+            "transaction_id", "source", "destination", "amount", "currency",
+            "operation", "escrow_id", "integrity_hash",
+        },
+        "canonical_escrows": {
+            "id", "sender_address", "receiver_address", "amount", "state",
+            "refund_destination", "currency", "version",
+        },
+        "transaction_witnesses": {"transaction_id", "event_type"},
+        "outbox_events": {"event_id", "event_type", "aggregate_id", "state"},
+        "durable_idempotency": {"key", "fingerprint", "state"},
+    }
+    tables = set(inspector.get_table_names())
+    missing_tables = sorted(set(required) - tables)
+    if missing_tables:
+        raise RuntimeError(
+            "canonical production schema missing tables: " + ", ".join(missing_tables)
+        )
+    errors = []
+    for table, expected_columns in required.items():
+        actual = {column["name"] for column in inspector.get_columns(table)}
+        missing = sorted(expected_columns - actual)
+        if missing:
+            errors.append(f"{table}: {', '.join(missing)}")
+    if errors:
+        raise RuntimeError(
+            "canonical production schema missing required columns: " + "; ".join(errors)
+        )
+
+
+
 class ProductionRuntimeFactory:
     """Create a runtime whose authoritative value boundary is Canonical Ledger."""
 
@@ -78,4 +116,5 @@ __all__ = [
     "ProductionRuntimeConfig",
     "ProductionRuntimeFactory",
     "initialize_canonical_postgres_schema",
+    "assert_canonical_production_schema",
 ]
