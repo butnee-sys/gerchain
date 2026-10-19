@@ -47,6 +47,37 @@ def _has_unique_key(inspector: Any, table: str, columns: tuple[str, ...]) -> boo
     return primary_key.get("constrained_columns") == wanted
 
 
+def _constraint_definition_drift(
+    expected: dict[str, tuple[str, ...]],
+    actual: dict[str, str],
+) -> dict[str, dict[str, Any]]:
+    """Compare named PostgreSQL CHECK constraints against required semantic fragments.
+
+    This deliberately performs conservative fragment checks, not full SQL equivalence.
+    Missing or weakened definitions are reported as drift and must fail the startup gate.
+    """
+    import re
+
+    def normalize(value: str) -> str:
+        value = value.lower().replace('"', "").replace("'", "")
+        value = re.sub(r"::[a-z_][a-z_0-9]*(?:\[\])?", "", value)
+        value = re.sub(r"\s+", "", value)
+        value = value.replace("(", "").replace(")", "")
+        return value
+
+    drift: dict[str, dict[str, Any]] = {}
+    for name, fragments in expected.items():
+        definition = actual.get(name)
+        normalized = normalize(definition) if definition is not None else ""
+        missing = [fragment for fragment in fragments if normalize(fragment) not in normalized]
+        if definition is None or missing:
+            drift[name] = {
+                "actual": definition,
+                "missing_fragments": missing if definition is not None else list(fragments),
+            }
+    return drift
+
+
 def assert_canonical_production_schema(connection: Any) -> None:
     """Fail closed unless the canonical durable tables and critical columns exist."""
     from sqlalchemy import inspect
