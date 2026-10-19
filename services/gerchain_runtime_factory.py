@@ -34,6 +34,19 @@ def initialize_canonical_postgres_schema(engine: Engine) -> None:
         apply_migrations(connection, migration_dir)
 
 
+def _has_unique_key(inspector: Any, table: str, columns: tuple[str, ...]) -> bool:
+    """Return true only for an exact unique constraint, unique index, or primary key."""
+    wanted = list(columns)
+    for constraint in inspector.get_unique_constraints(table):
+        if constraint.get("column_names") == wanted:
+            return True
+    for index in inspector.get_indexes(table):
+        if index.get("unique") and index.get("column_names") == wanted:
+            return True
+    primary_key = inspector.get_pk_constraint(table)
+    return primary_key.get("constrained_columns") == wanted
+
+
 def assert_canonical_production_schema(connection: Any) -> None:
     """Fail closed unless the canonical durable tables and critical columns exist."""
     from sqlalchemy import inspect
@@ -69,6 +82,18 @@ def assert_canonical_production_schema(connection: Any) -> None:
         raise RuntimeError(
             "canonical production schema missing required columns: " + "; ".join(errors)
         )
+
+    unique_requirements = {
+        "gerchain_ledger_movements": ("transaction_id",),
+        "gerchain_outbox_events": ("event_id",),
+        "gerchain_transaction_witnesses": ("transaction_id",),
+        "gerchain_idempotency_records": ("key",),
+    }
+    for table, columns in unique_requirements.items():
+        if not _has_unique_key(inspector, table, columns):
+            raise RuntimeError(
+                f"{table} must enforce unique key on {', '.join(columns)}"
+            )
 
     # The migration runner owns schema evolution. Startup independently verifies
     # the two safety-critical catalog invariants before exposing a production runtime.
