@@ -11,6 +11,7 @@ on:
       - "scripts/verify_canonical_migrations.py"
       - ".github/workflows/canonical-migration-gate.yml"
       - "services/gerchain_runtime_factory.py"
+      - "production_entrypoint.py"
   push:
     paths:
       - "postgres/migrations/**"
@@ -20,6 +21,7 @@ on:
       - "scripts/verify_canonical_migrations.py"
       - ".github/workflows/canonical-migration-gate.yml"
       - "services/gerchain_runtime_factory.py"
+      - "production_entrypoint.py"
 
 permissions:
   contents: read
