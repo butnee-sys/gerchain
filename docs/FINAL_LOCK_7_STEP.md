@@ -68,3 +68,61 @@ The static runtime/import trace is complete and recorded. The step is **not** an
 
 **Status:** OPEN — next step.  
 Acceptance requires every identified legacy/alternate runtime or mutation path to map to one canonical replacement or an explicit deny/quarantine rule, with source path and test evidence. No legacy deletion is allowed before Step 5 dependency count is zero.
+
+
+## Step 2 — Replacement map
+
+**Step result:** REPLACEMENT MAP RECORDED; BYPASS FINDING OPEN  
+**Added to FINAL LOCK register:** YES  
+**Production lock:** NOT GRANTED
+
+### Source paths checked
+
+| Evidence | Repository path | Observed fact |
+|---|---|---|
+| E2-01 | `Dockerfile` (blob `b1996544b24233b7a295e59d9a4286f9468caaff`) | Container CMD is `python production_entrypoint.py`. |
+| E2-02 | `production_entrypoint.py` (blob `7d466b715af03d982efbd41306959dc758bb0542`) | Requires PostgreSQL URL and required configuration, constructs the factory, asserts canonical-ledger authority, and probes database reachability with `SELECT 1`. |
+| E2-03 | `services/gerchain_runtime_factory.py` (blob `b130c64f17d114efaef28d80173c026c98bd84c7`) | Applies versioned migrations, asserts canonical schema, and configures Canonical Ledger authority. |
+| E2-04 | `persistence/atomic_ledger.py` | Canonical value movement/account boundary. |
+| E2-05 | `persistence/canonical_ledger_read.py` | Canonical balance read boundary. |
+| E2-06 | `persistence/fund_escrow.py` | Canonical FUND. |
+| E2-07 | `persistence/lock_escrow.py` | Durable, state-only LOCK. |
+| E2-08 | `persistence/release_escrow.py` | Canonical RELEASE. |
+| E2-09 | `persistence/refund_escrow.py` | Canonical REFUND using authoritative refund destination. |
+| E2-10 | `persistence/cancel_escrow.py` | Canonical CANCEL and any required reversal. |
+| E2-11 | `persistence/settlement_coordinator.py` | Settlement orchestration over Canonical Ledger. |
+| E2-12 | `api/v1.py` (blob `09181c4651e15cd78030fad057db20ad865dab61`) | Legacy SQLite mutation guards raise HTTP 410. |
+| E2-13 | `node_cli.py` (blob `0784c11305e4b1e7feba6818f507a92c4cfea2be`) | Legacy in-memory NEFStateEngine + TransactionManager path remains in repository; not Docker CMD. |
+| E2-14 | `network/api_server.py` (blob `817e3aef598c73afceb8e480ccab106f909dd2b8`) | Alternate API server imports legacy in-memory NEF/TransactionManager runtime. |
+| E2-15 | `gerchain/web_ui.py` (blob `7722791fd5a7d7ee961829c250259f1d9c7bbaea`) | `/api/v1/escrow/transfer` mutates application-owned account balances and `/api/v1/evidence/verify-and-release` directly mutates balances after evidence verification. Both remain active in the inspected source. |
+
+### Replacement map
+
+| Existing path/capability | Canonical replacement or rule | Status |
+|---|---|---|
+| Docker production boot | `production_entrypoint.py → ProductionRuntimeFactory → PostgreSQL Canonical Ledger` | MAPPED; source trace only |
+| Account create / balance read | `PostgreSQLAtomicLedger` / `CanonicalLedgerRead` | MAPPED |
+| FUND | `fund_escrow_in_transaction → AtomicValueTransaction` | MAPPED |
+| LOCK | `lock_escrow_in_transaction` | MAPPED |
+| RELEASE | `release_escrow_in_transaction → AtomicValueTransaction` | MAPPED |
+| REFUND | `refund_escrow_in_transaction` | MAPPED |
+| CANCEL | `cancel_escrow_in_transaction` | MAPPED |
+| SETTLEMENT | `SettlementCoordinator → PostgreSQLAtomicLedger.transfer_in_transaction` | MAPPED |
+| Legacy SQLite API mutation | Deny with HTTP 410; valid requests must use controlled runtime boundary | Guard present; tests/re-performance still required |
+| `node_cli.py` / `network/api_server.py` | Canonical production runtime or explicit test-only quarantine | NOT QUARANTINED |
+| Web UI `/api/v1/escrow/transfer` | Controlled runtime request → validation/authorization → Canonical Ledger transaction | **ACTIVE BYPASS — OPEN** |
+| Web UI `/api/v1/evidence/verify-and-release` | Controlled RELEASE boundary; evidence alone must not mutate application-owned balances | **ACTIVE BYPASS — OPEN** |
+| Legacy `MoneyLedger`, `ReleaseAccount`, `AccountBalance`, SQLite stores | Canonical Ledger only; old stores read-only/non-authoritative | Freeze document exists; physical quarantine/removal not proven |
+
+### Quantified Step 2 result
+
+- Canonical operation families mapped: **7** (account/read, FUND, LOCK, RELEASE, REFUND, CANCEL, SETTLEMENT).
+- Runtime and persistence source paths reviewed for the map: **15**.
+- Legacy SQLite mutation guards observed: **2**.
+- Alternate in-memory runtime entrypoints identified: **2**.
+- Active application-owned financial mutation routes identified: **2**.
+- Known active bypasses still open: **2**.
+- Legacy paths proven physically removed: **0**.
+- Live PostgreSQL operation/reconciliation runs retained: **0 evidenced here**.
+
+**Acceptance:** MAP COMPLETE / LOCK BLOCKED. Step 3 must quarantine the two active Web UI bypasses and classify/quarantine alternate in-memory entrypoints. Do not delete legacy code before Step 5 dependency count is zero.
