@@ -29,6 +29,6 @@ def test_production_factory_constructs_canonical_ledger_runtime_path():
     source = (ROOT / "services" / "gerchain_runtime_factory.py").read_text(
         encoding="utf-8"
     )
-    assert "runtime.configure_canonical_ledger(self._session_factory())" in source
+    assert "runtime.configure_canonical_ledger(self.session_factory)" in source
     assert "runtime.require_canonical_ledger_authority()" in source
     assert "runtime.configure_postgres_release(self.session_factory)" not in source
