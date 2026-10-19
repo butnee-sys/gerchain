@@ -93,10 +93,10 @@ jobs:
               """).fetchall()
               with open("production-evidence/migration-history.json", "w", encoding="utf-8") as f:
                   json.dump({"commit_sha": os.environ["SOURCE_SHA"], "workflow_run_id": int(os.environ["RUN_ID"]), "workflow_run_attempt": int(os.environ["RUN_ATTEMPT"]), "history": [{"version": v, "checksum": h} for v,h in history]}, f, indent=2, sort_keys=True)
-                  f.write("\\n")
+                  f.write("\n")
               with open("production-evidence/postgres-constraints.json", "w", encoding="utf-8") as f:
                   json.dump({"commit_sha": os.environ["GITHUB_SHA"], "workflow_run_id": int(os.environ["GITHUB_RUN_ID"]), "constraints": [{"schema": s, "table": t, "name": n, "type": ty, "column": col} for s,t,n,ty,col in constraints]}, f, indent=2, sort_keys=True)
-                  f.write("\\n")
+                  f.write("\n")
           PY
       - name: Finalize production evidence manifest
         if: always()
@@ -128,12 +128,12 @@ jobs:
           }
           with open("production-evidence/production-gate-report.json", "w", encoding="utf-8") as f:
               json.dump(report, f, indent=2, sort_keys=True)
-              f.write("\\n")
+              f.write("\n")
           manifest_hash = hashlib.sha256((evidence_dir / "production-gate-report.json").read_bytes()).hexdigest()
-          (evidence_dir / "manifest.sha256").write_text(f"{manifest_hash}  production-gate-report.json\\n", encoding="utf-8")
+          (evidence_dir / "manifest.sha256").write_text(f"{manifest_hash}  production-gate-report.json\n", encoding="utf-8")
           with (evidence_dir / "manifest.sha256").open("a", encoding="utf-8") as f:
               for name, digest in report["evidence_files"].items():
-                  f.write(f"{digest}  {name}\\n")
+                  f.write(f"{digest}  {name}\n")
           print(json.dumps(report, indent=2, sort_keys=True))
           PY
       - name: Validate fail-closed master gate manifest
@@ -204,10 +204,10 @@ jobs:
           files = sorted(p for p in root.rglob("*") if p.is_file() and p.name not in {"SHA256SUMS", "MANIFEST.SHA256"})
           if not files:
               raise SystemExit("FAIL: no evidence files to checksum")
-          sums = "".join(f"{hashlib.sha256(p.read_bytes()).hexdigest()}  {p.relative_to(root).as_posix()}\\n" for p in files)
+          sums = "".join(f"{hashlib.sha256(p.read_bytes()).hexdigest()}  {p.relative_to(root).as_posix()}\n" for p in files)
           (root / "SHA256SUMS").write_text(sums, encoding="utf-8")
           manifest_hash = hashlib.sha256((root / "SHA256SUMS").read_bytes()).hexdigest()
-          (root / "MANIFEST.SHA256").write_text(f"{manifest_hash}  SHA256SUMS\\n", encoding="utf-8")
+          (root / "MANIFEST.SHA256").write_text(f"{manifest_hash}  SHA256SUMS\n", encoding="utf-8")
           for line in sums.splitlines():
               digest, name = line.split("  ", 1)
               if hashlib.sha256((root / name).read_bytes()).hexdigest() != digest:
