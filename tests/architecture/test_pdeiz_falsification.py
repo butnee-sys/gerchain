@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import base64
+
 import pytest
 
 from architecture.contracts import ActorType, BoundaryRequest
 from services.g3_core_handler import G3CoreRuntimeHandler
 from services.gerchain_runtime import GerchainRuntime
+from dee_security.root_of_trust import RootOfTrust
 
 
 def _handler() -> G3CoreRuntimeHandler:
@@ -43,7 +46,7 @@ def _valid_preconditions() -> dict:
         "escrow": {"escrow_id": "pdeiz-escrow"},
         "decision": {"status": "APPROVE"},
         "authorization": {"status": "AUTHORIZED"},
-        "_dee_context": {"root": object(), "owner_id": "owner-1"},
+        "_dee_context": {"root": RootOfTrust("owner-1", base64.b64encode(bytes(32)).decode("ascii")), "owner_id": "owner-1"},
         "destination": "beneficiary-1",
         "source": "pdeiz-escrow",
         "transaction_id": "tx-pdeiz-1",
