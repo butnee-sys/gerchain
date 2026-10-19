@@ -1,0 +1,104 @@
+name: Production PostgreSQL Boot Gate
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - feat/ea21-transaction-aware-ledger
+    paths:
+      - "production_entrypoint.py"
+      - "services/gerchain_runtime_factory.py"
+      - "services/gerchain_runtime.py"
+      - "persistence/**"
+      - "requirements-dee-security.txt"
+      - ".github/workflows/production-postgresql-boot.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  production-postgresql-boot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: gerchain_boot
+          POSTGRES_USER: gerchain
+          POSTGRES_PASSWORD: gerchain_test_only
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U gerchain -d gerchain_boot"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      GERCHAIN_DATABASE_URL: postgresql+psycopg://gerchain:gerchain_test_only@localhost:5432/gerchain_boot
+      GERCHAIN_ESCROW_ID: boot-gate-escrow
+      GERCHAIN_ESCROW_AMOUNT: "100"
+      GERCHAIN_CURRENCY: MNT
+      GERCHAIN_WITNESS_ID: boot-gate-witness
+      PIP_DISABLE_PIP_VERSION_CHECK: "1"
+    steps:
+      - name: Checkout exact workflow commit
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install runtime dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements-dee-security.txt
+          python -m pip install "psycopg[binary]"
+      - name: Verify entrypoint boot against real PostgreSQL
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import os
+          from sqlalchemy import create_engine, text
+          engine = create_engine(os.environ["GERCHAIN_DATABASE_URL"], pool_pre_ping=True)
+          with engine.connect() as connection:
+              assert connection.execute(text("SELECT 1")).scalar_one() == 1
+          engine.dispose()
+          print("POSTGRES_CONNECTIVITY=PASS")
+          PY
+          set +e
+          timeout --signal=TERM --kill-after=5s 8s python -u production_entrypoint.py > boot.log 2>&1
+          rc=$?
+          set -e
+          cat boot.log
+          if [ "$rc" -ne 124 ] && [ "$rc" -ne 143 ]; then
+            echo "Expected a healthy long-running entrypoint to be stopped by timeout; exit=$rc"
+            exit 1
+          fi
+          grep -F "GerChain production runtime initialized: escrow=boot-gate-escrow currency=MNT" boot.log
+          echo "PRODUCTION_ENTRYPOINT_BOOT=PASS"
+          echo "ENTRYPOINT_EXIT=$rc"
+      - name: Capture boot evidence
+        if: always()
+        run: |
+          mkdir -p evidence
+          {
+            echo "workflow=${GITHUB_WORKFLOW}"
+            echo "run_id=${GITHUB_RUN_ID}"
+            echo "run_attempt=${GITHUB_RUN_ATTEMPT}"
+            echo "commit_sha=${GITHUB_SHA}"
+            echo "ref=${GITHUB_REF}"
+            echo "event=${GITHUB_EVENT_NAME}"
+            echo "postgres_service=postgres:16"
+            echo "gate=production-postgresql-boot"
+          } > evidence/boot-manifest.txt
+          if [ -f boot.log ]; then cp boot.log evidence/boot.log; fi
+          sha256sum evidence/* > evidence/SHA256SUMS
+      - name: Upload boot evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-postgresql-boot-evidence-${{ github.sha }}
+          path: evidence/
+          if-no-files-found: error
+          retention-days: 90
