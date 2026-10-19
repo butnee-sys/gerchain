@@ -1,12 +1,16 @@
 from __future__ import annotations
 
 import os
+from pathlib import Path
+
+import psycopg
 import signal
 import time
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
+from postgres.migrations import apply_migrations
 from services.gerchain_runtime_factory import ProductionRuntimeConfig, ProductionRuntimeFactory
 
 _running = True
