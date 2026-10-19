@@ -262,6 +262,11 @@ def apply_migrations(connection: Connection, migration_dir: Path) -> tuple[int, 
                 )
                 """
             )
+            # The advisory lock is the primary serialization mechanism. Also
+            # take a transaction-scoped table lock before reading/publishing
+            # schema_version so legacy bootstrap paths and advisory-lock drift
+            # cannot race an INSERT for the same version.
+            connection.execute("LOCK TABLE schema_version IN ACCESS EXCLUSIVE MODE")
             # Reconcile legacy schema_version tables that predate the canonical
             # primary key. Identical duplicate publications are safe to collapse;
             # conflicting checksums for one version must fail closed.
