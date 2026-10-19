@@ -254,7 +254,7 @@ def test_v016_repairs_escrow_state_constraint_drift_after_v015_is_recorded(drift
             conn.commit()
 
         with _connect(schema) as conn:
-            assert apply_migrations(conn, MIGRATIONS) == (16,)
+            assert apply_migrations(conn, MIGRATIONS) == (16, 17)
 
         with _connect(schema) as conn:
             _assert_migration_015_constraints(conn)
