@@ -9,6 +9,15 @@
 
 The production target is the fundamental architecture and EAI (Escrow as Infrastructure), not CORE in isolation. Product-layer work remains outside this gate. No unverified architectural mutation may be applied automatically. The self-repair process may detect, isolate, hold, diagnose, reconcile, recover, verify, and audit; it must not rewrite architecture or authoritative truth without an approved change.
 
+## Step 1 — Fundamental architecture inventory / map
+
+**Disposition: CLOSED — INVENTORY / MAPPING DELIVERABLE COMPLETE.**  
+The inventory and authority map are recorded in [`MASTER_PRODUCTION_WORK_PLAN_STEP1_INVENTORY_MAP.md`](MASTER_PRODUCTION_WORK_PLAN_STEP1_INVENTORY_MAP.md).
+
+Step 1 records the frozen canonical layer path, authoritative owner for each foundational domain, production entrypoint/factory/migration registry, Canonical Ledger and durable Escrow boundaries, Witness/Outbox/Idempotency evidence paths, lifecycle operations, cross-store reconciliation graph, legacy/duplicate authorities, and residual release gates.
+
+**Closure boundary:** this closes the source-repository inventory/mapping task only. It does not certify runtime behavior, PostgreSQL migrations, production boot, full lifecycle, recovery, current-tip CI, organizational IAM/MFA, or independent re-performance. These remain explicit production release gates. Step 1 closure must not be interpreted as permission to skip Step 2 or to mark the overall architecture/EAI production-ready.
+
 ## Step 2 — Error / duplicate / excess review
 
 **Disposition: CLOSED — REVIEW AND CLASSIFICATION COMPLETE. Remediation and overall production lock remain separate, open gates.**
