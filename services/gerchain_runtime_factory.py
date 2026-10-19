@@ -45,13 +45,13 @@ def assert_canonical_production_schema(connection: Any) -> None:
             "transaction_id", "source", "destination", "amount", "currency",
             "operation", "escrow_id", "integrity_hash",
         },
-        "canonical_escrows": {
+        "escrows": {
             "id", "sender_address", "receiver_address", "amount", "state",
             "refund_destination", "currency", "version",
         },
-        "transaction_witnesses": {"transaction_id", "event_type"},
-        "outbox_events": {"event_id", "event_type", "aggregate_id", "state"},
-        "durable_idempotency": {"key", "fingerprint", "state"},
+        "gerchain_transaction_witnesses": {"transaction_id", "event_type"},
+        "gerchain_outbox_events": {"event_id", "event_type", "aggregate_id", "state"},
+        "gerchain_idempotency_records": {"key", "fingerprint", "state"},
     }
     tables = set(inspector.get_table_names())
     missing_tables = sorted(set(required) - tables)
