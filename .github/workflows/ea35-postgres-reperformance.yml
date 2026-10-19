@@ -225,7 +225,7 @@ jobs:
                   """)
                   connection.commit()
                   applied_015 = apply_migrations(connection, Path('postgres/migrations'))
-                  assert applied_015 == (15, 16), applied_015
+                  assert applied_015 == (15, 16, 17), applied_015
                   after = connection.execute('SELECT version, checksum, applied_at FROM schema_version ORDER BY version').fetchall()
                   assert [row[0] for row in after] == list(range(1, 18)), after
                   assert [(row[0], row[1]) for row in after[:14]] == before_checksums
