@@ -1,4 +1,5 @@
 import pytest
+from contextlib import nullcontext
 from sqlalchemy import create_engine
 
 from services.gerchain_runtime_factory import ProductionRuntimeConfig, ProductionRuntimeFactory
@@ -44,8 +45,11 @@ def test_production_factory_initializes_canonical_schema_once(monkeypatch):
 
     class FakeEngine:
         dialect = type("Dialect", (), {"name": "postgresql"})()
+        def connect(self):
+            return nullcontext(object())
 
     engine = FakeEngine()
+    monkeypatch.setattr(module, "assert_canonical_production_schema", lambda connection: None)
     factory = module.ProductionRuntimeFactory(_config(), engine=engine)
     factory.initialize()
 
@@ -64,8 +68,11 @@ def test_production_factory_creates_canonical_ledger_runtime_without_legacy_rele
 
     class FakeEngine:
         dialect = type("Dialect", (), {"name": "postgresql"})()
+        def connect(self):
+            return nullcontext(object())
 
-    factory = module.ProductionRuntimeFactory(_config(), engine=FakeEngine())
+    monkeypatch.setattr(module, "assert_canonical_production_schema", lambda connection: None)
+    factory = module.ProductionRuntimeFactory(_config(), engine=FakeEngine(), session_factory=lambda: None)
     runtime = factory.create()
 
     assert len(calls) == 1
