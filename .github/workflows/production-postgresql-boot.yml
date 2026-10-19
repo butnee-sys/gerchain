@@ -75,7 +75,7 @@ jobs:
             echo "Expected a healthy long-running entrypoint to be stopped by timeout; exit=$rc"
             exit 1
           fi
-          grep -F "GerChain production runtime initialized: escrow=boot-gate-escrow currency=MNT" boot.log
+          grep -F "GerChain production runtime initialized: mode=production-postgresql escrow=boot-gate-escrow currency=MNT canonical_ledger=authoritative" boot.log
           echo "PRODUCTION_ENTRYPOINT_BOOT=PASS"
           echo "ENTRYPOINT_EXIT=$rc"
       - name: Capture boot evidence
