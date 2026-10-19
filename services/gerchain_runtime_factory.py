@@ -98,7 +98,7 @@ def assert_canonical_production_schema(connection: Any) -> None:
         FROM pg_constraint
         WHERE conrelid = 'escrows'::regclass
           AND contype = 'c'
-          AND lower(pg_get_constraintdef(oid)) LIKE '%state%'
+          AND position('state' in lower(pg_get_constraintdef(oid))) > 0
         """
     ).all()
     if len(state_constraints) != 1:
