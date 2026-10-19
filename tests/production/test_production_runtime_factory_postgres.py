@@ -35,7 +35,7 @@ def test_production_factory_runs_canonical_migrations_and_boots_authoritative_ru
             versions = connection.execute(
                 text("SELECT version FROM schema_version ORDER BY version")
             ).scalars().all()
-            assert versions == list(range(1, 17))
+            assert versions == list(range(1, 18))
             connection.execute(text("SELECT 1"))
     finally:
         engine.dispose()
