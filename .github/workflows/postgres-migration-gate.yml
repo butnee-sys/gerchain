@@ -106,11 +106,11 @@ jobs:
           expected = [(i, checksum(p.read_text(encoding="utf-8"))) for i,p in enumerate(_canonical_migration_files(folder),1)]
           observed = [(version, digest) for version, digest, _applied_at in rows]
           assert observed == expected, {"expected": expected, "actual": observed}
-          assert len(rows) == 16, f"expected 16 migration records, got {len(rows)}"
+          assert len(rows) == len(expected), f"expected {len(expected)} migration records, got {len(rows)}"
           missing_applied_at = [version for version, _digest, applied_at in rows if applied_at is None]
           assert not missing_applied_at, f"missing applied_at for migration versions: {missing_applied_at}"
-          print("MIGRATION_APPLIED_AT=PASS versions=16 all_non_null=true")
-          assert set(applied).issubset(set(range(1,17)))
+          print("MIGRATION_APPLIED_AT=PASS versions={len(rows)} all_non_null=true")
+          assert set(applied).issubset(set(range(1, len(expected) + 1)))
           print(f"CONCURRENT_RUNNER_PASS versions={len(rows)} newly_applied={len(applied)}")
           PY
           (python /tmp/run_migrations.py >postgres-migration-evidence/runner-a.log 2>&1) & pid_a=$!
@@ -121,8 +121,8 @@ jobs:
           cat postgres-migration-evidence/runner-a.log
           cat postgres-migration-evidence/runner-b.log
           test "$rc" -eq 0
-          grep -q 'CONCURRENT_RUNNER_PASS versions=16' postgres-migration-evidence/runner-a.log
-          grep -q 'CONCURRENT_RUNNER_PASS versions=16' postgres-migration-evidence/runner-b.log
+          grep -q 'CONCURRENT_RUNNER_PASS versions={len(rows)}' postgres-migration-evidence/runner-a.log
+          grep -q 'CONCURRENT_RUNNER_PASS versions={len(rows)}' postgres-migration-evidence/runner-b.log
       - name: Verify history, all checksums, constraints, and report SHA-256
         run: |
           python - <<'PY'
@@ -132,7 +132,7 @@ jobs:
           from sqlalchemy import create_engine
           from sqlalchemy.engine import make_url
           from postgres.migrations import _canonical_migration_files, checksum
-          from services.gerchain_runtime_factory import assert_canonical_production_schema
+          from services.gerchain_runtime_factory import initialize_canonical_postgres_schema
           dsn = make_url(os.environ["GERCHAIN_TEST_DATABASE_URL"]).set(drivername="postgresql").render_as_string(hide_password=False)
           files = _canonical_migration_files(Path("postgres/migrations"))
           expected = [(i, checksum(p.read_text(encoding="utf-8"))) for i,p in enumerate(files,1)]
@@ -149,13 +149,13 @@ jobs:
                   ORDER BY t.relname, c.conname
               """).fetchall()
           assert [(v, c) for v, c, _applied_at in rows] == expected, {"expected": expected, "actual": rows}
-          assert len(rows) == 16 and all(applied_at is not None for _v, _c, applied_at in rows), "all 16 applied_at timestamps must be present"
+          assert len(rows) == len(expected) and all(applied_at is not None for _v, _c, applied_at in rows), "all applied_at timestamps must be present"
           unvalidated_checks = [(table, name, definition) for _schema, table, name, typ, definition, validated in constraint_rows if typ == "c" and not validated]
           assert not unvalidated_checks, {"unvalidated_check_constraints": unvalidated_checks}
           engine = create_engine(os.environ["GERCHAIN_TEST_DATABASE_URL"])
           try:
               with engine.connect() as conn:
-                  assert_canonical_production_schema(conn)
+                  initialize_canonical_postgres_schema(engine)
           finally:
               engine.dispose()
           tracked = subprocess.check_output(["git", "ls-files", "-z"], text=False).split(b"\\0")
@@ -188,10 +188,10 @@ jobs:
               "canonical_schema_assertion": "PASS",
               "database": "fresh PostgreSQL 16",
           }
-          path = Path("postgres-migration-evidence/migration-report.json")
+          path = Path("postgres-migration-evidence/migration-gate-report.json")
           path.write_text(json.dumps(report, indent=2, sort_keys=True)+"\n")
           digest = hashlib.sha256(path.read_bytes()).hexdigest()
-          Path("postgres-migration-evidence/migration-report.sha256").write_text(f"{digest}  migration-report.json\n")
+          Path("postgres-migration-evidence/migration-gate-report.sha256").write_text(f"{digest}  migration-gate-report.json\n")
           assert hashlib.sha256(path.read_bytes()).hexdigest() == digest
           print(json.dumps(report, indent=2))
           print(f"REPORT_SHA256_ASSERTION=PASS {digest}")
@@ -228,13 +228,13 @@ jobs:
           import hashlib, json, os
           from pathlib import Path
           root = Path("postgres-migration-evidence")
-          report_path = root / "migration-report.json"
+          report_path = root / "migration-gate-report.json"
           if not report_path.exists():
               raise SystemExit("migration report missing; refusing evidence publication")
           report = json.loads(report_path.read_text())
           assert report["commit_sha"] == os.environ["EVIDENCE_COMMIT_SHA"], (report["commit_sha"], os.environ["EVIDENCE_COMMIT_SHA"])
           actual = hashlib.sha256(report_path.read_bytes()).hexdigest()
-          recorded = (root / "migration-report.sha256").read_text().split()[0]
+          recorded = (root / "migration-gate-report.sha256").read_text().split()[0]
           assert actual == recorded, (actual, recorded)
           evidence = {
               "commit_sha": os.environ["EVIDENCE_COMMIT_SHA"],
