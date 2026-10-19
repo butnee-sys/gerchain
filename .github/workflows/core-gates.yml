@@ -100,7 +100,7 @@ jobs:
         env:
           GERCHAIN_MIGRATION_AUDIT_DATABASE_URL: postgresql://gerchain:gerchain@127.0.0.1:5432/gerchain_test
           REQUIRE_MIGRATION_HISTORY: "1"
-          MIGRATION_INVENTORY_REPORT: artifacts/canonical-postgres-evidence/migration-inventory-report.json
+          MIGRATION_INVENTORY_REPORT: artifacts/canonical-postgres-evidence/migration-gate-report.json
         run: |
           mkdir -p artifacts/canonical-postgres-evidence
           python scripts/audit_migration_inventory.py
@@ -108,7 +108,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: migration-inventory-${{ github.sha }}
-          path: artifacts/canonical-postgres-evidence/migration-inventory-report.json
+          name: migration-gate-report-${{ github.sha }}
+          path: artifacts/canonical-postgres-evidence/migration-gate-report.json
           if-no-files-found: warn
           retention-days: 90
