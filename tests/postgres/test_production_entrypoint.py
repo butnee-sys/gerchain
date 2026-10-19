@@ -39,7 +39,7 @@ def test_production_entrypoint_boots_canonical_postgres_schema(monkeypatch):
             versions = connection.execute(
                 text("SELECT version FROM schema_version ORDER BY version")
             ).scalars().all()
-            assert versions == list(range(1, 17))
+            assert versions == list(range(1, 18))
 
             inspector = inspect(connection)
             required = {
