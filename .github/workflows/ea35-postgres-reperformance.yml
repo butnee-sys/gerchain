@@ -643,6 +643,49 @@ jobs:
           print(f"SHA256SUMS_ENTRIES={len(entries)}")
           PY
 
+      - name: Verify bundle checksums and write top-level manifest digest
+        if: always()
+        run: |
+          python - <<'PY'
+          import hashlib
+          from pathlib import Path
+
+          root = Path("artifacts/ea35")
+          sums = root / "SHA256SUMS"
+          if not sums.exists():
+              raise SystemExit("FAIL: SHA256SUMS missing")
+          verified = 0
+          for line in sums.read_text(encoding="utf-8").splitlines():
+              digest, name = line.split("  ", 1)
+              path = root / name
+              if not path.is_file():
+                  raise SystemExit(f"FAIL: checksum target missing: {name}")
+              actual = hashlib.sha256(path.read_bytes()).hexdigest()
+              if actual != digest:
+                  raise SystemExit(f"FAIL: checksum mismatch: {name}")
+              verified += 1
+          if verified == 0:
+              raise SystemExit("FAIL: SHA256SUMS contains no entries")
+
+          # Separate top-level manifest avoids a circular checksum dependency.
+          # It binds the inventory and the commit/run evidence manifest.
+          manifest = root / "manifest.json"
+          if not manifest.exists():
+              raise SystemExit("FAIL: manifest.json missing")
+          top = root / "MANIFEST.SHA256"
+          top.write_text(
+              f"{hashlib.sha256(sums.read_bytes()).hexdigest()}  SHA256SUMS\n"
+              f"{hashlib.sha256(manifest.read_bytes()).hexdigest()}  manifest.json\n",
+              encoding="utf-8",
+          )
+          for line in top.read_text(encoding="utf-8").splitlines():
+              digest, name = line.split("  ", 1)
+              if hashlib.sha256((root / name).read_bytes()).hexdigest() != digest:
+                  raise SystemExit(f"FAIL: top-level manifest checksum mismatch: {name}")
+          print(f"SHA256SUMS_VERIFIED_ENTRIES={verified}")
+          print("MANIFEST_SHA256_VERIFICATION=PASS")
+          PY
+
       - name: Upload exact-SHA PostgreSQL evidence bundle
         if: always()
         uses: actions/upload-artifact@v4
