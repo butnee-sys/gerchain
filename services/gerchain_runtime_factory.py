@@ -70,6 +70,52 @@ def assert_canonical_production_schema(connection: Any) -> None:
             "canonical production schema missing required columns: " + "; ".join(errors)
         )
 
+    # The migration runner owns schema evolution. Startup independently verifies
+    # the two safety-critical catalog invariants before exposing a production runtime.
+    version_index = connection.exec_driver_sql(
+        """
+        SELECT EXISTS (
+            SELECT 1
+            FROM pg_index i
+            JOIN pg_class t ON t.oid = i.indrelid
+            JOIN pg_namespace n ON n.oid = t.relnamespace
+            JOIN pg_attribute a ON a.attrelid = t.oid AND a.attnum = i.indkey[0]
+            WHERE n.nspname = current_schema()
+              AND t.relname = 'schema_version'
+              AND i.indisunique
+              AND i.indpred IS NULL
+              AND i.indnkeyatts = 1
+              AND a.attname = 'version'
+        )
+        """
+    ).scalar_one()
+    if not version_index:
+        raise RuntimeError("schema_version.version must have a unique index")
+
+    state_constraints = connection.exec_driver_sql(
+        """
+        SELECT conname, pg_get_constraintdef(oid), convalidated
+        FROM pg_constraint
+        WHERE conrelid = 'escrows'::regclass
+          AND contype = 'c'
+          AND lower(pg_get_constraintdef(oid)) LIKE '%state%'
+        """
+    ).all()
+    if len(state_constraints) != 1:
+        raise RuntimeError(
+            "escrows.state must have exactly one canonical state CHECK constraint"
+        )
+    name, definition, validated = state_constraints[0]
+    required_states = ("CREATED", "FUNDED", "LOCKED", "RELEASED", "REFUNDED", "CANCELLED")
+    normalized_definition = str(definition).upper()
+    if (
+        name != "escrows_state_canonical_check"
+        or not validated
+        or any(state not in normalized_definition for state in required_states)
+    ):
+        raise RuntimeError(
+            "escrows.state canonical CHECK is missing, unvalidated, or incomplete"
+        )
 
 
 class ProductionRuntimeFactory:
@@ -98,6 +144,8 @@ class ProductionRuntimeFactory:
 
     def initialize(self) -> None:
         initialize_canonical_postgres_schema(self.engine)
+        with self.engine.connect() as connection:
+            assert_canonical_production_schema(connection)
 
     def create(self) -> GerchainRuntime:
         self.initialize()
