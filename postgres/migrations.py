@@ -1,3 +1,4 @@
+# EA-35.55: exact-commit CI re-performance requested after reviewing historical PostgreSQL duplicate-publication failure; source inspection is not runtime proof.
 # EA-35.54: trigger exact-SHA PostgreSQL re-performance for migration publication invariants; runtime evidence required.
 # EA-35.53: exact-branch re-performance after duplicate schema_version publication failure; source review is not runtime evidence.
 # EA-35.52: clarify the session-lock/transaction/publication contract after migration duplicate-history review.
