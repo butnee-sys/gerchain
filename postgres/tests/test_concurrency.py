@@ -187,6 +187,49 @@ def test_migrations_are_serialized_and_checksum_is_stable():
         assert all(len(row[1]) == 64 for row in rows)
 
 
+def test_migration_rerun_preserves_schema_and_history():
+    with connect() as conn:
+        apply_migrations(conn, MIGRATION_DIR)
+        before_history = conn.execute(
+            "SELECT version, checksum FROM schema_version ORDER BY version"
+        ).fetchall()
+        before_schema = conn.execute(
+            """
+            SELECT table_name, column_name, data_type, is_nullable
+            FROM information_schema.columns
+            WHERE table_schema = current_schema()
+            ORDER BY table_name, ordinal_position
+            """
+        ).fetchall()
+        before_pids = conn.execute(
+            "SELECT pg_backend_pid()"
+        ).fetchone()[0]
+
+    with connect() as second:
+        second_pid = second.execute("SELECT pg_backend_pid()").fetchone()[0]
+        assert second_pid != before_pids, "evidence requires two distinct PostgreSQL backends"
+
+    with connect() as conn:
+        applied_again = apply_migrations(conn, MIGRATION_DIR)
+        assert applied_again == ()
+        after_history = conn.execute(
+            "SELECT version, checksum FROM schema_version ORDER BY version"
+        ).fetchall()
+        after_schema = conn.execute(
+            """
+            SELECT table_name, column_name, data_type, is_nullable
+            FROM information_schema.columns
+            WHERE table_schema = current_schema()
+            ORDER BY table_name, ordinal_position
+            """
+        ).fetchall()
+
+    assert after_history == before_history
+    assert after_schema == before_schema
+    assert len({version for version, _ in after_history}) == len(after_history)
+    assert all(len(digest) == 64 for _, digest in after_history)
+
+
 def test_migration_checksum_mismatch_is_rejected(tmp_path):
     with connect() as conn:
         conn.execute("DROP TABLE IF EXISTS processed_events, outbox, audit_logs, escrows, schema_version CASCADE")
