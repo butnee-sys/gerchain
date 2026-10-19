@@ -38,7 +38,10 @@ def test_physical_historical_aliases_are_not_extra_active_migrations():
     physical = list(MIGRATION_DIR.glob("*.sql"))
     versions = [int(path.name.split("_", 1)[0]) for path in physical]
     duplicates = {version for version in versions if versions.count(version) > 1}
-    assert duplicates == {1, 2, 3, 4, 5}
+    # The canonical migration registry has one physical SQL file per version;
+    # historical aliases are not kept in the active migration directory.
+    assert duplicates == set()
+    assert len(physical) == 17
     assert len(_canonical_migration_files(MIGRATION_DIR)) == 17
 
 
