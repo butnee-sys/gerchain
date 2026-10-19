@@ -157,3 +157,27 @@ Therefore the honest current reporting is:
 - **Platform-wide PRODUCTION READY FINAL LOCK:** **not issued; global lock closure remains 0%** because mandatory release sign-off gates remain open. This is a lock-decision metric, not a claim that no engineering work has been completed.
 
 The master plan remains **FINAL-LOCK CANDIDATE / BLOCKED — NOT LOCKED** until evidence is collected and a weighted gate rubric is explicitly adopted.
+
+## 5. Progress accounting and anti-duplication control (mandatory)
+
+This plan is a FINAL-LOCK / EVIDENCE-CLOSURE plan, not a redesign, re-architecture, or rewrite plan. Design, canonical architecture, and implementation are prior work and must not be counted as newly remaining implementation tasks.
+
+### 5.1 No percentage without a fixed denominator
+- Never report a completion percentage unless it is calculated from a versioned, weighted checklist whose denominator and evidence references are retained.
+- Do not change the denominator, weights, or completion rules between status snapshots without recording a formal revision and recalculating all snapshots consistently.
+- A newly discovered issue does not automatically reduce completed work or increase the remaining-work percentage. First classify it as: (a) genuinely new defect, (b) already-known defect, (c) stale/duplicate alert, (d) environment/transient failure, or (e) evidence-only gap.
+- The previously reported 70% complete / 30% remaining and 53% complete / 47% remaining are historical estimates only until their item-level denominators and weights are recovered and reconciled. They must not be treated as validated measurements or silently replaced by a new percentage.
+
+### 5.2 Gate evidence is keyed by exact SHA + workflow run + job + conclusion
+- A successful workflow on an exact SHA remains retained evidence for that SHA; do not reopen it because another workflow reports a similar gate name.
+- A failure on the same SHA must be recorded separately with its exact run/job/failed step and classified before action. It does not erase unrelated successful evidence.
+- Re-run a failed gate only when the failure is actionable and not already superseded by a successful run on the same SHA with equivalent or stronger coverage. If re-run is necessary, record why and compare the evidence rather than creating another duplicate task.
+- A later commit is not automatically covered by evidence from an ancestor commit. For final lock, required checks must be tied to the exact final candidate SHA; inherited evidence can be reused only where code/configuration and coverage are demonstrably unchanged.
+
+### 5.3 No repeated repair loop
+For each confirmed defect, create one durable record with: defect ID, first evidence, root cause, fix commit, exact-SHA verification run, final disposition, and owner. Once verified, mark it CLOSED and link the evidence. Any recurrence must first be compared against that record; reopen only if a new exact-SHA result demonstrates a real regression.
+
+### 5.4 Current evidence snapshot (2026-10-19)
+The repository reports successful PostgreSQL production re-performance and runtime checks on execution SHA `890a78f36dcfe161e195da649b3cd124133d6535`, including runs `36317914217`, `36317914351`, `36317914313`, `36317914446`, `36317914344`, `36317914254`, and `36317914266`. The same SHA also has failed runs `36317914268` (PostgreSQL Concurrency: canonical production PostgreSQL value-truth gate) and `36317914284` (CORE Operating Reconciliation: operating reconciliation integration suite), while run `36317914283` (core-gates) and run `36317914237` (canonical-production-postgres) succeeded. These results are not interchangeable: inspect the failure logs and coverage before deciding whether the failed jobs are stale, flaky, or true gaps. Do not describe the whole SHA as universally green or universally failed based on a subset of runs.
+
+**Progress percentage disposition: NOT RE-CERTIFIED.** No new percentage is asserted by this document. First reconcile the previous item-level scoring sheet against the fixed FINAL LOCK checklist and retained exact-SHA evidence; then publish one auditable percentage and remaining-work list.
