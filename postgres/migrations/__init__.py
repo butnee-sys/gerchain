@@ -68,8 +68,11 @@ def _canonical_migration_files(migration_dir: Path) -> list[Path]:
         canonical = directory / canonical_name
         if not canonical.is_file():
             raise RuntimeError(f"missing canonical migration version {version}: {canonical_name}")
-        if len(candidates) > 1 and canonical not in candidates:
-            raise RuntimeError(f"ambiguous migration version {version}: {[p.name for p in candidates]}")
+        if len(candidates) != 1 or candidates[0] != canonical:
+            raise RuntimeError(
+                f"duplicate or non-canonical migration version {version}: "
+                f"{[p.name for p in candidates]}; expected exactly {canonical_name}"
+            )
         selected.append(canonical)
     unexpected = sorted(set(by_version) - set(range(1, len(_CANONICAL_FILES) + 1)))
     if unexpected:
