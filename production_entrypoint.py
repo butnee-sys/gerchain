@@ -4,7 +4,7 @@ import os
 import signal
 import time
 
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from services.gerchain_runtime_factory import ProductionRuntimeConfig, ProductionRuntimeFactory
@@ -46,7 +46,7 @@ def build_production_runtime():
         if engine.dialect.name != "postgresql":
             raise RuntimeError("production entrypoint requires a PostgreSQL engine")
         with engine.connect() as connection:
-            if connection.execute(text("SELECT 1")).scalar_one() != 1:
+            if connection.exec_driver_sql("SELECT 1").scalar() != 1:
                 raise RuntimeError("PostgreSQL readiness probe failed")
         session_factory = sessionmaker(bind=engine, expire_on_commit=False)
         factory = ProductionRuntimeFactory(
