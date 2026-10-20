@@ -47,7 +47,7 @@ def test_canonical_migration_registry_rejects_unexpected_version(tmp_path):
 def test_canonical_migration_registry_rejects_ambiguous_version(tmp_path):
     _write_chain(tmp_path, through=3)
     (tmp_path / "003_unapproved_alias.sql").write_text("SELECT 3;", encoding="utf-8")
-    with pytest.raises(RuntimeError, match="ambiguous migration version 3"):
+    with pytest.raises(RuntimeError, match="duplicate or non-canonical migration version 3"):
         _canonical_migration_files(tmp_path)
 
 
