@@ -4,10 +4,10 @@ import os
 import signal
 import time
 
-from services.gerchain_runtime_factory import ProductionRuntimeFactory
-
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
+
+from services.gerchain_runtime_factory import ProductionRuntimeConfig, ProductionRuntimeFactory
 
 _running = True
 
@@ -17,16 +17,17 @@ def _stop(*_args) -> None:
     _running = False
 
 
-def main() -> None:
+def build_production_runtime():
     database_url = os.environ.get("GERCHAIN_DATABASE_URL")
-    if not database_url or not database_url.startswith("postgresql"):
+    if not database_url or not database_url.startswith(
+        ("postgresql://", "postgresql+psycopg://", "postgresql+psycopg2://")
+    ):
         raise RuntimeError("production entrypoint requires GERCHAIN_DATABASE_URL pointing to PostgreSQL")
 
     escrow_id = os.environ.get("GERCHAIN_ESCROW_ID")
     currency = os.environ.get("GERCHAIN_CURRENCY")
     witness_id = os.environ.get("GERCHAIN_WITNESS_ID")
     amount_raw = os.environ.get("GERCHAIN_ESCROW_AMOUNT")
-
     if not all((escrow_id, currency, witness_id, amount_raw)):
         raise RuntimeError(
             "production entrypoint requires GERCHAIN_ESCROW_ID, "
@@ -35,35 +36,53 @@ def main() -> None:
 
     try:
         amount = int(amount_raw)
-    except ValueError as exc:
-        raise RuntimeError("GERCHAIN_ESCROW_AMOUNT must be an integer") from exc
+    except (TypeError, ValueError) as exc:
+        raise RuntimeError("GERCHAIN_ESCROW_AMOUNT must be a positive integer") from exc
+    if amount <= 0:
+        raise RuntimeError("GERCHAIN_ESCROW_AMOUNT must be a positive integer")
 
-    engine = create_engine(database_url, pool_pre_ping=True)
-    session_factory = sessionmaker(bind=engine, expire_on_commit=False)
+    engine = create_engine(database_url, pool_pre_ping=True, future=True)
+    try:
+        if engine.dialect.name != "postgresql":
+            raise RuntimeError("production entrypoint requires a PostgreSQL engine")
+        with engine.connect() as connection:
+            if connection.exec_driver_sql("SELECT 1").scalar() != 1:
+                raise RuntimeError("PostgreSQL readiness probe failed")
+        # Factory applies and verifies the canonical checksummed migration chain.
+        factory = ProductionRuntimeFactory(
+            ProductionRuntimeConfig(
+                database_url=database_url,
+                escrow_id=escrow_id,
+                amount=amount,
+                currency=currency,
+                witness_id=witness_id,
+            ),
+            engine=engine,
+        )
+        runtime = factory.create()
+        if not runtime.is_canonical_ledger_authoritative:
+            raise RuntimeError("canonical ledger authority was not established")
+        return runtime, engine
+    except Exception:
+        engine.dispose()
+        raise
 
-    runtime = ProductionRuntimeFactory.create(
-        escrow_id=escrow_id,
-        amount=amount,
-        currency=currency,
-        witness_id=witness_id,
-        engine=engine,
-        session_factory=session_factory,
-    )
 
-    if not runtime.is_canonical_ledger_authoritative:
-        raise RuntimeError("canonical ledger authority was not established")
-
+def main() -> None:
+    runtime, engine = build_production_runtime()
     print(
         "GerChain production runtime initialized: "
-        f"escrow={escrow_id} currency={currency}"
+        f"mode={runtime.runtime_mode} escrow={runtime.escrow_engine.escrow_id} "
+        f"currency={runtime.escrow_engine.currency} canonical_ledger=authoritative"
     )
-
+    global _running
     signal.signal(signal.SIGTERM, _stop)
     signal.signal(signal.SIGINT, _stop)
-    while _running:
-        time.sleep(1)
-
-    engine.dispose()
+    try:
+        while _running:
+            time.sleep(1)
+    finally:
+        engine.dispose()
 
 
 if __name__ == "__main__":

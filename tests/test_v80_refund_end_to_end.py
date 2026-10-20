@@ -23,6 +23,7 @@ Serialization
 Independent Verification
 """
 
+from dee_security.root_of_trust import RootOfTrust
 import json
 
 from escrow.engine import EscrowEngine
@@ -155,6 +156,12 @@ def test_v80_end_to_end_refund():
             "type": "REFUND_SETTLEMENT",
             "reference": "REFUND-SETTLE-001",
         },
+    
+        root=RootOfTrust("TEST-OWNER", "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8="),
+        owner_id="TEST-OWNER",
+        authorized=True,
+        evidence_verified=True,
+        trinity_proof={"trust": True, "transparency": True, "performance": True},
     )
 
     # Эскроу эцсийн төлөв
@@ -269,6 +276,12 @@ def test_v80_end_to_end_refund_report():
             "type": "REFUND_SETTLEMENT",
             "reference": "REFUND-SETTLE-002",
         },
+    
+        root=RootOfTrust("TEST-OWNER", "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8="),
+        owner_id="TEST-OWNER",
+        authorized=True,
+        evidence_verified=True,
+        trinity_proof={"trust": True, "transparency": True, "performance": True},
     )
 
     serialized = serialize_chain(

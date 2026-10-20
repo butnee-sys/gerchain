@@ -1,0 +1,84 @@
+name: PostgreSQL migration concurrency proof
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - feat/ea21-transaction-aware-ledger
+    paths:
+      - "tests/integration/test_postgres_migration_concurrency.py"
+      - "scripts/postgres_migration_runner.py"
+      - "postgres/**"
+      - "persistence/**"
+      - "production_entrypoint.py"
+      - "services/gerchain_runtime_factory.py"
+      - ".github/workflows/postgres-migration-proof.yml"
+
+jobs:
+  postgres-migration-proof:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: gerchain
+          POSTGRES_PASSWORD: gerchain_test
+          POSTGRES_DB: gerchain_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U gerchain -d gerchain_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      GERCHAIN_DATABASE_URL: postgresql://gerchain:gerchain_test@localhost:5432/gerchain_test
+      GERCHAIN_MIGRATION_TEST_DSN: postgresql://gerchain:gerchain_test@localhost:5432/gerchain_test
+      PYTHONUNBUFFERED: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install test dependencies
+        run: python -m pip install --upgrade pip -r requirements-dee-security.txt -r postgres/requirements-test.txt
+      - name: Record exact test identity
+        run: |
+          {
+            echo "GITHUB_SHA=$GITHUB_SHA"
+            python --version
+            python -m pip show psycopg
+            pytest --version
+            python -c "import psycopg; print('PSYCOPG_VERSION=' + psycopg.__version__)"
+            python -c "import psycopg, os; c=psycopg.connect(os.environ['GERCHAIN_DATABASE_URL']); print('POSTGRES_SERVER_VERSION=' + c.execute('SHOW server_version').fetchone()[0]); c.close()"
+            sha256sum scripts/postgres_migration_runner.py tests/integration/test_postgres_migration_concurrency.py
+          } | tee migration-proof-identity.log
+      - name: Run real PostgreSQL migration concurrency tests
+        run: |
+          set -o pipefail
+          pytest -vv -s tests/integration/test_postgres_migration_concurrency.py 2>&1 | tee migration-proof-test.log
+      - name: Record migration registry evidence scope
+        if: always()
+        run: |
+          python - <<'PY' | tee migration-proof-registry.log
+          import os
+          import psycopg
+          dsn = os.environ["GERCHAIN_MIGRATION_TEST_DSN"]
+          with psycopg.connect(dsn) as conn:
+              print("POSTGRES_SERVER_VERSION=" + conn.execute("SHOW server_version").fetchone()[0])
+              print("MIGRATION_TEST_MODEL=isolated-schema-per-scenario")
+              print("REGISTRY_ASSERTIONS=tests/integration/test_postgres_migration_concurrency.py")
+              print("REGISTRY_ASSERTIONS_INCLUDE=exact-version-rows,duplicate-publication,checksum-stability")
+              print("ROOT_SCHEMA_REGISTRY_CAPTURE=NOT_APPLICABLE")
+              print("REASON=tests create unique schemas and drop them during teardown; the root database is not the test registry")
+          PY
+      - name: Upload exact-SHA proof logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: postgres-migration-proof-${{ github.sha }}
+          path: |
+            migration-proof-identity.log
+            migration-proof-test.log
+            migration-proof-registry.log
+          if-no-files-found: warn

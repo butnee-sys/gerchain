@@ -41,7 +41,7 @@ database/db.py and gerchain/database.py expose SQLite stores. They are not produ
 
 ## Remaining hard checks
 
-1. Production entrypoint must instantiate ProductionRuntimeFactory / canonical runtime.
+1. Production entrypoint construction is implemented through ProductionRuntimeFactory and Canonical Ledger authority; verify it against the exact current candidate SHA and supported prior-schema upgrade path.
 2. No production path may instantiate MoneyLedger as value authority.
 3. No production path may use ReleaseAccount or AccountBalance as balance authority.
 4. No application-owned balance mutation may be reachable from production.
@@ -52,4 +52,195 @@ database/db.py and gerchain/database.py expose SQLite stores. They are not produ
 
 ## Current conclusion
 
-EA-34.11 is NOT LOCKED. Direct legacy mutation surfaces identified above are now fail-closed, but production entrypoint, durable escrow READ, full movement reconciliation, legacy-store freeze/removal, CI evidence, and independent re-performance remain open.
+EA-34.11 is NOT LOCKED. Production entrypoint and durable Escrow READ paths are implemented, and historical PostgreSQL production/EAI evidence is recorded for the exact SHAs listed below. Remaining open gates are existing-database upgrade proof, physical legacy-store archive/removal or independently verified write-disablement, current exact-SHA required CI, restart/recovery proof on that same SHA, organizational IAM/MFA and branch governance, and final independent re-performance.
+
+
+## EA-35.13 verification update — 2026-09-27
+
+### Exact PostgreSQL execution evidence
+
+The production runtime/value-authority gate was executed against a real PostgreSQL 16 service on exact execution SHA `890a78f36dcfe161e195da649b3cd124133d6535`.
+
+Successful workflow evidence includes:
+- PostgreSQL production re-performance — run `36317914217`
+- Production PostgreSQL Runtime — run `36317914351`
+- production-postgres-smoke — run `36317914313`
+- production-postgres-proof — run `36317914446`
+- production-postgresql-gate — run `36317914344`
+- PostgreSQL production verification — run `36317914254`
+- EAI PostgreSQL Reperformance — run `36317914266`
+
+All listed runs completed with conclusion `success`.
+
+### Verified boundary
+
+The exact execution verified:
+1. PostgreSQL migration/schema initialization.
+2. Canonical Ledger authority establishment.
+3. Production entrypoint boot.
+4. FUND / LOCK / RELEASE value-flow execution.
+5. REFUND / CANCEL re-performance.
+6. SETTLEMENT through the Canonical Ledger.
+7. Durable replay/idempotency.
+8. Deep value-truth reconciliation.
+9. EAI PostgreSQL re-performance.
+
+### Remaining closure gates
+
+EA-34 / EA-35 is still **VERIFIED / NOT LOCKED** because:
+- physical legacy-store removal/archive has not been independently closed;
+- organizational IAM/MFA evidence remains a CORE assurance gap;
+- branch/main governance evidence remains open;
+- final independent oracle/re-performance package remains a separate assurance step;
+- overall fundamental architecture lock requires reconciliation of these broader gates.
+
+## EA-35.13 — Production PostgreSQL re-performance gate
+
+Status: IN PROGRESS / NOT LOCKED
+
+The production factory now applies the canonical PostgreSQL migration history and requires the canonical schema guard before constructing the runtime. The production entrypoint constructs `ProductionRuntimeConfig` and an instance of `ProductionRuntimeFactory`, then requires Canonical Ledger authority.
+
+Required external evidence remains the GitHub Actions PostgreSQL re-performance gate on the exact branch tip. Local execution cannot substitute for that evidence in this environment because direct GitHub network access is unavailable.
+
+Hard evidence requirements:
+- PostgreSQL 16 service
+- migration history reaches version 11
+- canonical schema guard passes
+- Canonical Ledger authority is established
+- FUND/LOCK/RELEASE/REFUND/CANCEL/SETTLEMENT execute against PostgreSQL
+- deep value-truth reconciliation passes
+- replay/idempotency remains single-movement
+
+No production lock is declared until the exact branch-tip workflow evidence is retrieved and independently reviewed.
+
+## EA-35.13 — Exact PostgreSQL re-performance evidence update — 2026-10-02
+
+The branch produced exact GitHub Actions execution evidence for commit
+`f158316277d65234e355b6040a905884ee4f4adf`.
+
+Verified successful run:
+- Workflow: `PostgreSQL production re-performance`
+- Run: `37002917360`
+- Job: `production-postgresql`
+- Job conclusion: `success`
+- PostgreSQL: 16.x service
+- Python: 3.13.15
+- Production re-performance test: **1 passed in 0.71s**
+
+The successful test established:
+1. Real PostgreSQL connectivity.
+2. `ProductionRuntimeFactory` construction.
+3. `production-postgresql` runtime mode.
+4. `is_canonical_ledger_authoritative == True`.
+5. Presence of the canonical runtime tables:
+   - `gerchain_ledger_accounts`
+   - `gerchain_ledger_movements`
+   - `escrows`
+   - `gerchain_transaction_witnesses`
+   - `gerchain_outbox_events`
+   - `gerchain_idempotency_records`
+
+This is fresh **GREEN evidence for fresh PostgreSQL runtime construction**.
+
+It is **not yet migration-upgrade evidence for an existing production database**. The current schema file is additive, but the production factory's `create_all()` path does not by itself perform arbitrary ALTER migrations against an already-existing legacy schema. Therefore the existing-database migration gate remains OPEN.
+
+Current status:
+**EA-35 — IN PROGRESS / NOT LOCKED.**
+
+
+## EA-35.28 — Exact branch-tip production verification — 2026-10-06
+
+Branch tip verified:
+- Branch: `feat/ea21-transaction-aware-ledger`
+- Exact commit: `f11fcb6411f1458c7bb4696566a695a52141b0c3`
+
+Fresh GitHub Actions evidence attached to this exact commit:
+- `production-postgres` — run `37463305181` — SUCCESS
+- `production-postgresql-gate` — run `37463305107` — SUCCESS
+- `EAI PostgreSQL Production Proof` — run `37463304934` — SUCCESS
+- `independent-postgresql-evidence` — run `37463304855` — SUCCESS
+- `CORE Operating Reconciliation` — run `37463305050` — SUCCESS
+- `CodeQL Advanced` — run `37463304876` — SUCCESS
+
+Production PostgreSQL job `112267996297` completed successfully through:
+1. PostgreSQL migration and boot verification.
+2. Production PostgreSQL value-flow verification.
+3. Deep value-truth verification.
+
+Production PostgreSQL gate job `112268002110` completed successfully through:
+1. Exact evidence-commit recording.
+2. Python syntax gate.
+3. Canonical persistence verification.
+4. Production entrypoint boot against PostgreSQL.
+5. Deep reconciliation.
+6. EAI production re-performance.
+7. Real PostgreSQL production value-flow gate.
+
+Independent persisted-value verification job `112267995003` also completed successfully.
+
+### Evidence interpretation
+
+The previous failed executions on 2026-09-27 are historical failure evidence, not current branch-tip failures. They exposed migration publication/checksum, environment wiring, transaction-binding and reconciliation-test defects; subsequent commits corrected those paths.
+
+Current branch-tip PostgreSQL production evidence is therefore:
+**VERIFIED — exact branch tip, real PostgreSQL, production runtime, value flow, deep reconciliation, EAI proof, and independent persisted-value verification.**
+
+### Lock boundary
+
+This evidence is sufficient to close the **EA-35 PostgreSQL production verification gate**.
+
+It does not by itself close the broader fundamental-architecture lock. Remaining gates are:
+- current `core-gates` run `37463305121` is still in progress;
+- legacy value-store physical removal/archive;
+- organizational IAM/MFA assurance;
+- main-branch governance;
+- final independent architecture/oracle package.
+
+**EA-35 PostgreSQL gate: CLOSED / VERIFIED.**
+**Overall fundamental architecture: NOT LOCKED.**
+
+
+## EA-35.29 — Unified migration / restart-recovery / CI / external review evidence — 2026-10-18
+
+### Evidence anchor
+
+The latest previously documented branch-tip evidence anchor is:
+- Branch: `feat/ea21-transaction-aware-ledger`
+- Commit: `f11fcb6411f1458c7bb4696566a695a52141b0c3`
+
+GitHub combined commit status was queried for this exact SHA. The returned status includes:
+- `security/snyk (butnee-sys)` — `success`
+- Snyk result URL: https://app.snyk.io/org/butnee-sys/pr-checks/3a670071-fcff-452d-a369-61e777d8b72b
+
+This records the Snyk external security check as successful for that SHA. It is independent third-party scanning evidence; it is not a substitute for production migration, restart/recovery, or end-to-end transaction proof. The Snyk result should be retained with the release evidence package.
+
+### Gate matrix — do not collapse separate forms of proof
+
+| Gate | Available evidence | Current assessment |
+|---|---|---|
+| Fresh PostgreSQL schema/runtime boot | PostgreSQL 16 production runtime test; exact SHA/run evidence recorded in EA-35.28 | VERIFIED for the recorded execution SHA |
+| Versioned migration application | Successful production PostgreSQL gate and migration/boot steps recorded in EA-35.28 | VERIFIED for the recorded execution SHA; existing-database upgrade compatibility still requires confirmation against the actual production starting schema |
+| FUND / LOCK / RELEASE / REFUND / CANCEL / SETTLEMENT | Production PostgreSQL value-flow gate recorded in EA-35.28 | VERIFIED for the recorded execution SHA |
+| Deep value-truth reconciliation | Deep reconciliation step and independent persisted-value verification recorded in EA-35.28 | VERIFIED for the recorded execution SHA |
+| Restart / recovery / idempotent replay | Earlier durable recovery/idempotency tests and transaction-level evidence exist; this record does not prove a full process-kill + PostgreSQL restart + recovery run on the same exact SHA as all other gates | PARTIAL — same-SHA end-to-end closure NOT YET PROVEN |
+| GitHub CI | PostgreSQL production gate, independent PostgreSQL evidence, operating reconciliation and CodeQL successes are recorded for `f11fcb6411f1458c7bb4696566a695a52141b0c3`; the prior record says `core-gates` was still in progress | PARTIAL — do not infer every required workflow passed |
+| Snyk independent external security check | GitHub combined status `security/snyk (butnee-sys) = success` on `f11fcb6411f1458c7bb4696566a695a52141b0c3` | VERIFIED for that SHA; preserve the Snyk report/result link |
+| One exact SHA closes every migration, restart/recovery, CI, and independent review requirement | No evidence in this record demonstrates all of the above gates on one identical, current branch-tip SHA | OPEN |
+
+### Required closure evidence
+
+To close the unified gate, record one exact commit SHA and attach:
+1. Versioned migration run against a clean PostgreSQL database.
+2. Upgrade run from the supported prior schema, including migration-history and schema-guard output.
+3. Production boot/readiness and canonical-authority proof.
+4. FUND / LOCK / RELEASE / REFUND / CANCEL / SETTLEMENT plus deep value-truth reconciliation.
+5. Forced process interruption/restart, abandoned-operation recovery, and idempotent replay proving no duplicate value movement.
+6. All required GitHub Actions workflows completed successfully on that same SHA, including `core-gates` and the production PostgreSQL gate.
+7. Snyk result/report for the same SHA, with result URL and scan/retest timestamp retained.
+8. Independent re-performance record confirming the above artifacts correspond to the same source revision.
+
+### Status
+
+**Migration + restart/recovery + all CI + Snyk + independent re-performance as one same-SHA closure: OPEN / NOT LOCKED.**
+
+Snyk has successful external security-check evidence on the recorded SHA. PostgreSQL production verification also has successful historical exact-SHA evidence. Neither fact alone proves that every required gate has closed together on the current branch tip.

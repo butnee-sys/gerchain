@@ -6,7 +6,7 @@ import hashlib
 from enum import StrEnum
 from typing import Mapping
 
-from sqlalchemy import DateTime, Integer, String, select
+from sqlalchemy import BigInteger, DateTime, Integer, String, select
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
 
 from persistence.escrow_aggregate import EscrowState, transition_escrow
@@ -26,7 +26,7 @@ class TransactionWitness(WitnessBase):
     transaction_id: Mapped[str] = mapped_column(String(128), unique=True, nullable=False)
     event_type: Mapped[str] = mapped_column(String(64), nullable=False)
     escrow_id: Mapped[str] = mapped_column(String(255), nullable=False)
-    amount: Mapped[int] = mapped_column(Integer, nullable=False)
+    amount: Mapped[int] = mapped_column(BigInteger, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
 
@@ -108,7 +108,15 @@ class AtomicValueTransaction:
         if replay is not None:
             return {"replayed": True, "result": replay}
 
-        operation = event_type.removeprefix("GERCHAIN_").upper()
+        operation = {
+            "GERCHAIN_FUNDED": "FUND",
+            "GERCHAIN_RELEASED": "RELEASE",
+            "GERCHAIN_REFUNDED": "REFUND",
+            "GERCHAIN_CANCELLED": "CANCEL",
+            "GERCHAIN_SETTLED": "SETTLEMENT",
+        }.get(event_type)
+        if operation is None:
+            raise ValueError(f"unsupported value event type: {event_type}")
         integrity_material = json.dumps(
             {
                 "transaction_id": transaction_id,

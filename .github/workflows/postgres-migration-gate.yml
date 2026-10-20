@@ -1,0 +1,305 @@
+name: PostgreSQL migration gate
+
+on:
+  pull_request:
+    paths:
+      - "postgres/migrations/**"
+      - "services/gerchain_runtime_factory.py"
+      - "production_entrypoint.py"
+      - "tests/integration/test_postgres_migration_gate.py"
+      - "tests/postgres/**"
+      - ".github/workflows/postgres-migration-gate.yml"
+  push:
+    branches:
+      - main
+      - feat/ea21-transaction-aware-ledger
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  postgres-migration-gate:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: gerchain_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d gerchain_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      EVIDENCE_COMMIT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      GERCHAIN_TEST_DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/gerchain_test
+      GERCHAIN_TEST_POSTGRES_URL: postgresql://postgres:postgres@localhost:5432/gerchain_test
+      GERCHAIN_MIGRATION_TEST_DSN: postgresql://postgres:postgres@localhost:5432/gerchain_test
+      GERCHAIN_DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/gerchain_test
+      GERCHAIN_ESCROW_ID: migration-gate-escrow
+      GERCHAIN_ESCROW_AMOUNT: "100"
+      GERCHAIN_CURRENCY: MNT
+      GERCHAIN_WITNESS_ID: migration-gate-witness
+      PYTHONPATH: .
+      PYTHONUNBUFFERED: "1"
+    steps:
+      - name: Checkout exact tested commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Assert checkout matches evidence commit
+        env:
+          EVIDENCE_COMMIT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          python - <<'PY'
+          import os, subprocess
+          expected = os.environ['EVIDENCE_COMMIT_SHA']
+          actual = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
+          print(f'EVIDENCE_COMMIT_SHA={expected}')
+          print(f'CHECKED_OUT_HEAD_SHA={actual}')
+          if actual != expected:
+              raise SystemExit('FAIL: checkout HEAD differs from evidence commit')
+          PY
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+      - name: Install project dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dee-security.txt
+          pip install pytest "psycopg[binary]"
+      - name: Assert database is genuinely fresh
+        run: |
+          python - <<'PY'
+          import os, psycopg
+          from sqlalchemy.engine import make_url
+          url = make_url(os.environ["GERCHAIN_TEST_DATABASE_URL"]).set(drivername="postgresql").render_as_string(hide_password=False)
+          with psycopg.connect(url) as conn:
+              count = conn.execute("SELECT count(*) FROM information_schema.tables WHERE table_schema='public'").fetchone()[0]
+              assert count == 0, f"database is not fresh: {count} public tables already exist"
+          print("FRESH_DATABASE=PASS")
+          PY
+      - name: Run two independent migration runners concurrently
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p postgres-migration-evidence
+          cat >/tmp/run_migrations.py <<'PY'
+          import os
+          from pathlib import Path
+          import psycopg
+          from sqlalchemy.engine import make_url
+          from postgres.migrations import apply_migrations, _canonical_migration_files, checksum
+          dsn = make_url(os.environ["GERCHAIN_TEST_DATABASE_URL"]).set(drivername="postgresql").render_as_string(hide_password=False)
+          folder = Path("postgres/migrations")
+          with psycopg.connect(dsn) as conn:
+              applied = apply_migrations(conn, folder)
+          with psycopg.connect(dsn) as conn:
+              rows = conn.execute("SELECT version, checksum, applied_at FROM schema_version ORDER BY version").fetchall()
+          expected = [(i, checksum(p.read_text(encoding="utf-8"))) for i,p in enumerate(_canonical_migration_files(folder),1)]
+          observed = [(version, digest) for version, digest, _applied_at in rows]
+          assert observed == expected, {"expected": expected, "actual": observed}
+          assert len(rows) == len(expected), f"expected {len(expected)} migration records, got {len(rows)}"
+          missing_applied_at = [version for version, _digest, applied_at in rows if applied_at is None]
+          assert not missing_applied_at, f"missing applied_at for migration versions: {missing_applied_at}"
+          print(f"MIGRATION_APPLIED_AT=PASS versions={len(rows)} all_non_null=true")
+          assert set(applied).issubset(set(range(1, len(expected) + 1)))
+          print(f"CONCURRENT_RUNNER_PASS versions={len(rows)} newly_applied={len(applied)}")
+          PY
+          (python /tmp/run_migrations.py >postgres-migration-evidence/runner-a.log 2>&1) & pid_a=$!
+          (python /tmp/run_migrations.py >postgres-migration-evidence/runner-b.log 2>&1) & pid_b=$!
+          rc=0
+          wait "$pid_a" || rc=1
+          wait "$pid_b" || rc=1
+          cat postgres-migration-evidence/runner-a.log
+          cat postgres-migration-evidence/runner-b.log
+          test "$rc" -eq 0
+          grep -q 'CONCURRENT_RUNNER_PASS' postgres-migration-evidence/runner-a.log
+          grep -q 'CONCURRENT_RUNNER_PASS' postgres-migration-evidence/runner-b.log
+      - name: Verify history, all checksums, constraints, and report SHA-256
+        run: |
+          python - <<'PY'
+          import hashlib, json, os, subprocess
+          from pathlib import Path
+          import psycopg
+          from sqlalchemy import create_engine
+          from sqlalchemy.engine import make_url
+          from postgres.migrations import _canonical_migration_files, checksum
+          from services.gerchain_runtime_factory import initialize_canonical_postgres_schema
+          dsn = make_url(os.environ["GERCHAIN_TEST_DATABASE_URL"]).set(drivername="postgresql").render_as_string(hide_password=False)
+          files = _canonical_migration_files(Path("postgres/migrations"))
+          expected = [(i, checksum(p.read_text(encoding="utf-8"))) for i,p in enumerate(files,1)]
+          with psycopg.connect(dsn) as conn:
+              rows = conn.execute("SELECT version, checksum, applied_at FROM schema_version ORDER BY version").fetchall()
+              constraint_rows = conn.execute("""
+                  SELECT n.nspname AS schema_name, t.relname AS table_name,
+                         c.conname, c.contype, pg_get_constraintdef(c.oid) AS definition,
+                         c.convalidated
+                  FROM pg_constraint c
+                  JOIN pg_class t ON t.oid = c.conrelid
+                  JOIN pg_namespace n ON n.oid = t.relnamespace
+                  WHERE n.nspname = current_schema()
+                  ORDER BY t.relname, c.conname
+              """).fetchall()
+          assert [(v, c) for v, c, _applied_at in rows] == expected, {"expected": expected, "actual": rows}
+          assert len(rows) == len(expected) and all(applied_at is not None for _v, _c, applied_at in rows), "all applied_at timestamps must be present"
+          unvalidated_checks = [(table, name, definition) for _schema, table, name, typ, definition, validated in constraint_rows if typ == "c" and not validated]
+          assert not unvalidated_checks, {"unvalidated_check_constraints": unvalidated_checks}
+          engine = create_engine(os.environ["GERCHAIN_TEST_DATABASE_URL"])
+          try:
+              with engine.connect() as conn:
+                  initialize_canonical_postgres_schema(engine)
+          finally:
+              engine.dispose()
+          tracked = subprocess.check_output(["git", "ls-files", "-z"], text=False).split(b"\\0")
+          manifest_paths = sorted(
+              p.decode("utf-8") for p in tracked if p and b"manifest" in p.lower()
+          )
+          manifest_hashes = {
+              path: hashlib.sha256(Path(path).read_bytes()).hexdigest()
+              for path in manifest_paths if Path(path).is_file()
+          }
+          report = {
+              "commit_sha": os.environ["EVIDENCE_COMMIT_SHA"],
+              "migration_count": len(rows),
+              "schema_version_checksums": [{"version": v, "checksum": c, "applied_at": applied_at.isoformat()} for v,c,applied_at in rows],
+              "migration_applied_at_count": sum(1 for _v, _c, applied_at in rows if applied_at is not None),
+              "migration_applied_at_all_non_null": all(applied_at is not None for _v, _c, applied_at in rows),
+              "schema_history_sha256": hashlib.sha256(json.dumps([(v, digest, applied_at.isoformat()) for v, digest, applied_at in rows], separators=(",", ":")).encode()).hexdigest(),
+              "actual_constraint_definitions": [
+                  {"schema": s, "table": t, "name": name, "type": typ,
+                   "definition": definition, "validated": validated}
+                  for s,t,name,typ,definition,validated in constraint_rows
+              ],
+              "constraint_catalog_sha256": hashlib.sha256(
+                  json.dumps(
+                      [(s,t,name,typ,definition,validated) for s,t,name,typ,definition,validated in constraint_rows],
+                      separators=(",", ":"), sort_keys=False
+                  ).encode()
+              ).hexdigest(),
+              "manifest_sha256": manifest_hashes,
+              "canonical_schema_assertion": "PASS",
+              "database": "fresh PostgreSQL 16",
+          }
+          path = Path("postgres-migration-evidence/migration-gate-report.json")
+          path.write_text(json.dumps(report, indent=2, sort_keys=True)+"\n")
+          digest = hashlib.sha256(path.read_bytes()).hexdigest()
+          Path("postgres-migration-evidence/migration-gate-report.sha256").write_text(f"{digest}  migration-gate-report.json\n")
+          assert hashlib.sha256(path.read_bytes()).hexdigest() == digest
+          print(json.dumps(report, indent=2))
+          print(f"REPORT_SHA256_ASSERTION=PASS {digest}")
+          PY
+      - name: Run PostgreSQL migration and transaction evidence tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          pytest -vv -ra tests/integration/test_postgres_migration_gate.py tests/postgres/test_migration_runner_postgres_integration.py tests/postgres/test_migration_014_catalog_invariants.py tests/postgres/test_migration_reperformance.py tests/persistence/test_deep_value_reconciliation.py --junitxml=postgres-migration-evidence/postgres-migration-junit.xml 2>&1 | tee postgres-migration-evidence/postgres-migration.log
+      - name: Verify production runtime boot and restart
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import os
+          from production_entrypoint import build_production_runtime
+          runtime, engine = build_production_runtime()
+          assert runtime.is_canonical_ledger_authoritative
+          engine.dispose()
+          print("PRODUCTION_RUNTIME_BOOT_1=PASS")
+          PY
+          python - <<'PY'
+          import os
+          from production_entrypoint import build_production_runtime
+          runtime, engine = build_production_runtime()
+          assert runtime.is_canonical_ledger_authoritative
+          engine.dispose()
+          print("PRODUCTION_RUNTIME_RESTART=PASS")
+          PY
+      - name: Bind report SHA and results to exact commit
+        if: always()
+        run: |
+          python - <<'PY'
+          import hashlib, json, os
+          from pathlib import Path
+          root = Path("postgres-migration-evidence")
+          report_path = root / "migration-gate-report.json"
+          if not report_path.exists():
+              raise SystemExit("migration report missing; refusing evidence publication")
+          report = json.loads(report_path.read_text())
+          assert report["commit_sha"] == os.environ["EVIDENCE_COMMIT_SHA"], (report["commit_sha"], os.environ["EVIDENCE_COMMIT_SHA"])
+          actual = hashlib.sha256(report_path.read_bytes()).hexdigest()
+          recorded = (root / "migration-gate-report.sha256").read_text().split()[0]
+          assert actual == recorded, (actual, recorded)
+          evidence = {
+              "commit_sha": os.environ["EVIDENCE_COMMIT_SHA"],
+              "run_id": os.environ["GITHUB_RUN_ID"],
+              "run_attempt": os.environ["GITHUB_RUN_ATTEMPT"],
+              "report_sha256": actual,
+              "report_commit_match": True,
+              "report_hash_match": True,
+          }
+          (root / "exact-commit-evidence.json").write_text(json.dumps(evidence, indent=2, sort_keys=True)+"\n")
+          print(json.dumps(evidence, indent=2))
+          PY
+      - name: Build migration manifest and SHA256SUMS evidence bundle
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import hashlib, json, os, subprocess
+          from pathlib import Path
+          root = Path("postgres-migration-evidence")
+          root.mkdir(parents=True, exist_ok=True)
+          expected = os.environ["EVIDENCE_COMMIT_SHA"]
+          actual = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+          if actual != expected:
+              raise SystemExit(f"evidence SHA mismatch: expected={expected} actual={actual}")
+          migration_files = sorted(Path("postgres/migrations").glob("*.sql"))
+          workflow_path = Path(".github/workflows/postgres-migration-gate.yml")
+          manifest = {
+              "commit_sha": expected,
+              "checkout_head_sha": actual,
+              "workflow_sha256": hashlib.sha256(workflow_path.read_bytes()).hexdigest(),
+              "migration_files": [
+                  {"path": str(p), "sha256": hashlib.sha256(p.read_bytes()).hexdigest()}
+                  for p in migration_files
+              ],
+              "migration_gate_report_sha256": (
+                  hashlib.sha256((root / "migration-gate-report.json").read_bytes()).hexdigest()
+                  if (root / "migration-gate-report.json").is_file() else None
+              ),
+              "junit_sha256": (
+                  hashlib.sha256((root / "postgres-migration-junit.xml").read_bytes()).hexdigest()
+                  if (root / "postgres-migration-junit.xml").is_file() else None
+              ),
+          }
+          (root / "migration-manifest.json").write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\\n")
+          print(json.dumps(manifest, indent=2))
+          PY
+          files=()
+          for f in postgres-migration-evidence/migration-gate-report.json postgres-migration-evidence/migration-gate-report.sha256 postgres-migration-evidence/postgres-migration-junit.xml postgres-migration-evidence/postgres-migration.log postgres-migration-evidence/exact-commit-evidence.json postgres-migration-evidence/migration-manifest.json postgres-migration-evidence/runner-a.log postgres-migration-evidence/runner-b.log; do
+            if [[ -f "$f" ]]; then files+=("$f"); fi
+          done
+          if [[ ${#files[@]} -eq 0 ]]; then
+            echo "No evidence files available for checksumming" >&2
+            exit 1
+          fi
+          names=()
+          for f in "${files[@]}"; do names+=("${f#postgres-migration-evidence/}"); done
+          (cd postgres-migration-evidence && sha256sum "${names[@]}" > SHA256SUMS)
+          (cd postgres-migration-evidence && sha256sum -c SHA256SUMS)
+      - name: Upload exact-SHA migration evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: postgres-migration-evidence-${{ github.sha }}
+          path: postgres-migration-evidence/
+          if-no-files-found: warn
+          retention-days: 90

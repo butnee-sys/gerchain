@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import hashlib
+import json
 from typing import Any
 
-from sqlalchemy import DateTime, Integer, String, UniqueConstraint, select
+from sqlalchemy import BigInteger, DateTime, Integer, String, UniqueConstraint, select
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
 
 
@@ -16,7 +18,7 @@ class LedgerAccountModel(AtomicLedgerBase):
 
     account_id: Mapped[str] = mapped_column(String(128), primary_key=True)
     currency: Mapped[str] = mapped_column(String(16), nullable=False)
-    balance: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    balance: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
     version: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
@@ -29,9 +31,9 @@ class LedgerMovementModel(AtomicLedgerBase):
     transaction_id: Mapped[str] = mapped_column(String(128), nullable=False)
     source: Mapped[str] = mapped_column(String(128), nullable=False)
     destination: Mapped[str] = mapped_column(String(128), nullable=False)
-    amount: Mapped[int] = mapped_column(Integer, nullable=False)
+    amount: Mapped[int] = mapped_column(BigInteger, nullable=False)
     currency: Mapped[str] = mapped_column(String(16), nullable=False)
-    operation: Mapped[str] = mapped_column(String(32), nullable=False, default="TRANSFER")
+    operation: Mapped[str] = mapped_column(String(32), nullable=False, default="SETTLEMENT")
     escrow_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
     integrity_hash: Mapped[str | None] = mapped_column(String(128), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
@@ -91,7 +93,7 @@ class PostgreSQLAtomicLedger:
         destination: str,
         amount: int,
         currency: str,
-        operation: str = "TRANSFER",
+        operation: str = "SETTLEMENT",
         escrow_id: str | None = None,
         integrity_hash: str | None = None,
     ) -> dict[str, Any]:
@@ -99,26 +101,45 @@ class PostgreSQLAtomicLedger:
             raise ValueError("transaction_id is required")
         if not operation:
             raise ValueError("operation is required")
+        if integrity_hash is None:
+            integrity_material = json.dumps(
+                {
+                    "transaction_id": transaction_id,
+                    "operation": operation,
+                    "escrow_id": escrow_id,
+                    "source": source,
+                    "destination": destination,
+                    "amount": amount,
+                    "currency": currency,
+                },
+                sort_keys=True,
+                separators=(",", ":"),
+            )
+            integrity_hash = hashlib.sha256(integrity_material.encode("utf-8")).hexdigest()
+        if not isinstance(integrity_hash, str) or len(integrity_hash) != 64 or any(ch not in "0123456789abcdef" for ch in integrity_hash.lower()):
+            raise ValueError("integrity_hash must be a 64-character SHA-256 hex digest")
         if amount <= 0:
             raise ValueError("Transfer amount must be positive")
         if source == destination:
             raise ValueError("Source and destination must differ")
-
-        existing = session.execute(
-            select(LedgerMovementModel)
-            .where(LedgerMovementModel.transaction_id == transaction_id)
-            .with_for_update()
-        ).scalar_one_or_none()
-        if existing is not None:
-            if (existing.source, existing.destination, existing.amount, existing.currency, existing.operation, existing.escrow_id) != (source, destination, amount, currency, operation, escrow_id):
-                raise ValueError("Transaction ID was reused with different movement")
-            return {"transaction_id": transaction_id, "source": source, "destination": destination, "amount": amount, "currency": currency, "replayed": True}
 
         first, second = sorted((source, destination))
         first_row = session.execute(select(LedgerAccountModel).where(LedgerAccountModel.account_id == first).with_for_update()).scalar_one()
         second_row = session.execute(select(LedgerAccountModel).where(LedgerAccountModel.account_id == second).with_for_update()).scalar_one()
         source_row = first_row if first == source else second_row
         destination_row = first_row if first == destination else second_row
+
+        # Re-check after account locks so concurrent identical requests replay
+        # the committed movement instead of racing on the unique transaction_id.
+        existing = session.execute(
+            select(LedgerMovementModel)
+            .where(LedgerMovementModel.transaction_id == transaction_id)
+            .with_for_update()
+        ).scalar_one_or_none()
+        if existing is not None:
+            if (existing.source, existing.destination, existing.amount, existing.currency, existing.operation, existing.escrow_id, existing.integrity_hash) != (source, destination, amount, currency, operation, escrow_id, integrity_hash):
+                raise ValueError("Transaction ID was reused with different movement")
+            return {"transaction_id": transaction_id, "source": source, "destination": destination, "amount": amount, "currency": currency, "replayed": True}
 
         if source_row.currency != currency or destination_row.currency != currency:
             raise ValueError("Currency mismatch")

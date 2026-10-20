@@ -3,6 +3,7 @@ GerChain V80.3
 Unified Independent Verifier Tests.
 """
 
+from dee_security.root_of_trust import RootOfTrust
 import json
 
 from core.hashing import domain_hash
@@ -102,6 +103,12 @@ def build_valid_bundle():
         amount=100,
         timestamp="2026-09-03T10:02:00Z",
         evidence={"type": "settlement"},
+    
+        root=RootOfTrust("TEST-OWNER", "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8="),
+        owner_id="TEST-OWNER",
+        authorized=True,
+        evidence_verified=True,
+        trinity_proof={"trust": True, "transparency": True, "performance": True},
     )
 
     return json.loads(

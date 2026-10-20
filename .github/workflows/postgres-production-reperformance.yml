@@ -1,0 +1,219 @@
+name: PostgreSQL Production Re-performance
+
+on:
+  push:
+    branches:
+      - feat/ea21-transaction-aware-ledger
+  pull_request:
+    branches:
+      - main
+      - feat/ea21-transaction-aware-ledger
+  workflow_dispatch:
+
+jobs:
+  postgres-migration-concurrency:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: gerchain
+          POSTGRES_PASSWORD: gerchain_test
+          POSTGRES_DB: gerchain_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U gerchain -d gerchain_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      GERCHAIN_TEST_DATABASE_URL: postgresql+psycopg://gerchain:gerchain_test@localhost:5432/gerchain_test
+      GERCHAIN_DATABASE_URL: postgresql+psycopg://gerchain:gerchain_test@localhost:5432/gerchain_test
+      GERCHAIN_ESCROW_ID: production-gate-smoke-escrow
+      GERCHAIN_ESCROW_AMOUNT: "100"
+      GERCHAIN_CURRENCY: TST
+      GERCHAIN_WITNESS_ID: production-gate-smoke-witness
+    steps:
+      - name: Checkout exact tested commit
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install project and test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dee-security.txt
+          pip install pytest "psycopg[binary]"
+      - name: Record tested revision and PostgreSQL version
+        run: |
+          mkdir -p production-gate-evidence
+          git rev-parse HEAD | tee production-gate-evidence/tested-commit.txt
+          python --version | tee production-gate-evidence/python-version.txt
+          psql "postgresql://gerchain:gerchain_test@localhost:5432/gerchain_test" -Atc 'SELECT version();' | tee production-gate-evidence/postgres-version.txt
+      - name: Boot the real production entrypoint against PostgreSQL
+        run: |
+          set +e
+          timeout 15s python production_entrypoint.py > production-gate-evidence/production-boot.log 2>&1
+          rc=$?
+          set -e
+          cat production-gate-evidence/production-boot.log
+          if [ "$rc" -ne 0 ] && [ "$rc" -ne 124 ]; then
+            echo "Production entrypoint failed before completing graceful timeout; exit=$rc"
+            exit 1
+          fi
+          grep -F "GerChain production runtime initialized:" production-gate-evidence/production-boot.log
+          echo "PASS: PostgreSQL migrations, schema assertions, and canonical runtime boot" > production-gate-evidence/production-boot-status.txt
+      - name: Capture migration history, 16 source hashes, and validated constraints
+        env:
+          RUN_ID: ${{ github.run_id }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+          HEAD_SHA: ${{ github.sha }}
+        run: |
+          python - <<'PY'
+          import hashlib, json, os, pathlib, subprocess
+          from sqlalchemy import create_engine, text
+          root = pathlib.Path("postgres/migrations")
+          expected = [
+              "001_canonical_production.sql",
+              "002_canonical_production.sql",
+              "003_canonical_compatibility.sql",
+              "004_canonical_value_truth.sql",
+              "005_canonical_production.sql",
+              "006_canonical_movement_integrity.sql",
+              "007_canonical_production_reconciliation.sql",
+              "008_ea35_idempotency_compat.sql",
+              "009_canonical_movement_integrity_hardening.sql",
+              "010_canonical_evidence_constraints.sql",
+              "011_ea35_canonical_schema_finalization.sql",
+              "012_canonical_production.sql",
+              "013_ea35_canonical_schema_hardening.sql",
+              "014_canonical_escrow_state_constraint.sql",
+              "015_repair_escrow_state_constraint_drift.sql",
+              "016_reconcile_escrow_state_constraint.sql",
+              "017_ea35_created_witness_event.sql",
+          ]
+          hashes = []
+          for name in expected:
+              path = root / name
+              if not path.is_file():
+                  raise SystemExit(f"missing canonical migration: {name}")
+              hashes.append({"file": name, "sha256": hashlib.sha256(path.read_bytes()).hexdigest()})
+          engine = create_engine(os.environ["GERCHAIN_DATABASE_URL"], pool_pre_ping=True)
+          with engine.connect() as conn:
+              history = [dict(row._mapping) for row in conn.execute(text(
+                  "SELECT version, checksum, applied_at FROM schema_version ORDER BY version"
+              ))]
+              constraints = [dict(row._mapping) for row in conn.execute(text("""
+                  SELECT n.nspname AS schema_name, t.relname AS table_name,
+                         c.conname AS constraint_name, c.contype AS constraint_type,
+                         c.convalidated AS validated,
+                         pg_get_constraintdef(c.oid, true) AS definition
+                  FROM pg_constraint c
+                  JOIN pg_class t ON t.oid = c.conrelid
+                  JOIN pg_namespace n ON n.oid = t.relnamespace
+                  WHERE n.nspname = current_schema()
+                    AND t.relname = 'escrows'
+                  ORDER BY c.conname
+              """))]
+          engine.dispose()
+          payload = {
+              "workflow": "PostgreSQL Production Re-performance",
+              "run_id": os.environ["RUN_ID"],
+              "run_attempt": os.environ["RUN_ATTEMPT"],
+              "github_sha": os.environ["HEAD_SHA"],
+              "checked_out_sha": subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip(),
+              "canonical_migration_count": len(hashes),
+              "migration_files": hashes,
+              "migration_history": history,
+              "escrow_constraints": constraints,
+          }
+          if len(hashes) != 17:
+              raise SystemExit(f"expected 17 migration hashes, got {len(hashes)}")
+          if [row["version"] for row in history] != list(range(1, 18)):
+              raise SystemExit("migration history is not exactly versions 1..17")
+          if not constraints or any(not row["validated"] for row in constraints if row["constraint_type"] == "c"):
+              raise SystemExit("missing escrow constraints or an unvalidated CHECK constraint")
+          out = pathlib.Path("production-gate-evidence/migration-catalog-proof.json")
+          out.write_text(json.dumps(payload, indent=2, default=str), encoding="utf-8")
+          print(json.dumps(payload, indent=2, default=str))
+          PY
+      - name: Write standalone production database reconciliation report
+        run: |
+          python - <<'PY'
+          import json, os
+          from sqlalchemy import create_engine, text
+          from sqlalchemy.orm import sessionmaker
+          from persistence.deep_value_reconciliation import deep_reconcile_value_truth
+
+          engine = create_engine(os.environ["GERCHAIN_DATABASE_URL"], pool_pre_ping=True)
+          Session = sessionmaker(bind=engine, expire_on_commit=False)
+          with Session() as session:
+              report = deep_reconcile_value_truth(session)
+              versions = session.execute(text("SELECT version FROM schema_version ORDER BY version")).scalars().all()
+              result = {
+                  "scope": "fresh production-gate PostgreSQL database immediately after boot, before concurrency test",
+                  "tested_commit": os.popen("git rev-parse HEAD").read().strip(),
+                  "migration_versions": versions,
+                  "canonical_movement_count": report.canonical_movement_count,
+                  "witness_count": report.witness_count,
+                  "outbox_count": report.outbox_count,
+                  "idempotency_count": report.idempotency_count,
+                  "escrow_count": report.escrow_count,
+                  "matched": report.matched,
+                  "issues": [
+                      {"code": issue.code, "transaction_id": issue.transaction_id, "detail": issue.detail}
+                      for issue in report.issues
+                  ],
+                  "limitation": "This is an empty-baseline reconciliation; lifecycle evidence is supplied by automated tests and is not represented as a non-empty production transaction graph."
+              }
+              with open("production-gate-evidence/reconciliation-report.json", "w", encoding="utf-8") as output:
+                  json.dump(result, output, indent=2)
+              print(json.dumps(result, indent=2))
+              if not report.matched:
+                  raise SystemExit("production database deep reconciliation reported issues")
+          engine.dispose()
+          PY
+      - name: Test deep reconciliation and concurrent PostgreSQL ledger contention
+        run: |
+          set -o pipefail
+          pytest -q -vv \
+            tests/persistence/test_deep_value_reconciliation.py \
+            tests/persistence/test_postgres_concurrency_migration.py 2>&1 | tee production-gate-evidence/postgres-test.log
+      - name: Write gate evidence manifest
+        if: always()
+        env:
+          JOB_STATUS: ${{ job.status }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+          HEAD_SHA: ${{ github.sha }}
+        run: |
+          mkdir -p production-gate-evidence
+          python - <<'PY'
+          import json, os, pathlib, subprocess
+          root = pathlib.Path("production-gate-evidence")
+          manifest = {
+              "artifact": "production-gate-evidence",
+              "workflow": "PostgreSQL Production Re-performance",
+              "run_id": os.environ["RUN_ID"],
+              "run_attempt": os.environ["RUN_ATTEMPT"],
+              "github_sha": os.environ["HEAD_SHA"],
+              "checked_out_sha": subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip(),
+              "job_status_at_manifest_step": os.environ["JOB_STATUS"],
+              "production_boot_evidence_present": (root / "production-boot-status.txt").exists(),
+              "reconciliation_report_present": (root / "reconciliation-report.json").exists(),
+              "note": "Artifact presence does not itself mean the gate passed; inspect workflow conclusion and each report."
+          }
+          (root / "production-gate-evidence.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
+          print(json.dumps(manifest, indent=2))
+          PY
+      - name: Upload production gate evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-gate-evidence
+          path: production-gate-evidence/
+          if-no-files-found: error
+          retention-days: 30

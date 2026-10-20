@@ -1,0 +1,97 @@
+{
+  "manifest_version": "1.0",
+  "purpose": "Production lock evidence manifest for canonical PostgreSQL/EAI runtime",
+  "status": "IN_PROGRESS_NOT_LOCKED",
+  "branch": "feat/ea21-transaction-aware-ledger",
+  "commit_sha": null,
+  "rule": "A gate is PASS only when its evidence is tied to the same exact commit SHA as this manifest. Missing, stale, or unbound evidence is NOT_VERIFIED.",
+  "gates": {
+    "migration_concurrency": {
+      "status": "BLOCKED",
+      "required": [
+        "Run concurrent migration attempts against the same real PostgreSQL database",
+        "Prove schema_version has exactly one row per version and a database-enforced unique key",
+        "Prove both runners terminate without duplicate publications or migration corruption",
+        "Record the failing historical reproduction and successful fixed rerun"
+      ],
+      "workflow_run_id": null,
+      "artifact_name": null,
+      "artifact_sha256": null
+    },
+    "production_factory_entrypoint": {
+      "status": "NOT_VERIFIED",
+      "required": [
+        "Boot production_entrypoint.py against PostgreSQL 16",
+        "Confirm ProductionRuntimeFactory instance construction succeeds",
+        "Confirm canonical ledger authority guard passes",
+        "Confirm PostgreSQL connectivity and fail-closed invalid configuration tests"
+      ],
+      "workflow_run_id": null,
+      "artifact_name": null,
+      "artifact_sha256": null
+    },
+    "schema_completeness": {
+      "status": "NOT_VERIFIED",
+      "required": [
+        "Apply the complete versioned migration chain; create_all is not migration evidence",
+        "Assert migration history is contiguous and checksums match",
+        "Assert Escrow, Ledger accounts/movements, Witness, Outbox, and Idempotency tables, columns, constraints, and unique keys",
+        "Verify schema guard against a fresh database and a supported legacy upgrade"
+      ],
+      "workflow_run_id": null,
+      "artifact_name": null,
+      "artifact_sha256": null
+    },
+    "evidence_manifest": {
+      "status": "OPEN",
+      "required": [
+        "Generated report commit_sha equals checked_out_head_sha and the workflow run head_sha",
+        "JUnit totals are computed from actual testsuite nodes and tests > 0",
+        "Source-file SHA-256 inventory is complete and every listed file exists at the exact tested commit",
+        "Migration file hashes match the applied versioned migration registry",
+        "Record workflow run ID, completed conclusion, artifact name, and GitHub artifact SHA-256 digest in a detached evidence register",
+        "Reject evidence from any other commit SHA"
+      ],
+      "workflow_run_id": null,
+      "artifact_name": null,
+      "artifact_sha256": null
+    },
+    "security_governance": {
+      "status": "OPEN_EXTERNAL_EVIDENCE",
+      "required": [
+        "IAM role and identity inventory",
+        "MFA enforcement evidence for privileged identities",
+        "Dated privileged-access review with reviewer and outcome",
+        "Production deployment permission evidence and least-privilege review"
+      ],
+      "workflow_run_id": null,
+      "artifact_name": null,
+      "artifact_sha256": null
+    }
+  },
+  "lock_policy": {
+    "all_gates_must_pass": true,
+    "same_commit_required": true,
+    "missing_evidence_means_pass": false,
+    "security_governance_requires_external_evidence": true,
+    "production_lock_authorized": false
+  },
+  "manifest_mode": "source_template",
+  "evidence_binding": {
+    "runtime_generated_report": "artifacts/production-postgres/migration-lifecycle-report.json",
+    "rule": "The source manifest cannot contain its own final commit SHA without changing that SHA. Exact tested SHA, checked-out SHA, JUnit counts, source-file SHA-256 values, and migration checksums are emitted by the workflow as a run-bound artifact. Record run ID, conclusion, artifact name, and GitHub artifact digest in a detached evidence register after the run completes.",
+    "required_fields": [
+      "commit_sha",
+      "checked_out_head_sha",
+      "sha_match",
+      "workflow_run_id",
+      "workflow_conclusion",
+      "artifact_name",
+      "artifact_sha256",
+      "source_files",
+      "lifecycle_junit",
+      "migration_files",
+      "applied_migrations"
+    ]
+  }
+}

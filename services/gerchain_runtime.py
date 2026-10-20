@@ -1,4 +1,9 @@
-"""GerChain authoritative runtime boundary."""
+"""GerChain authoritative runtime boundary.
+
+    The default construction is a test-memory harness. Production construction
+    must explicitly attach the durable Canonical Ledger boundary; memory-backed
+    value movement is not a production fallback.
+    """
 from __future__ import annotations
 
 from typing import Any, Dict, Mapping, Optional, Callable
@@ -22,8 +27,9 @@ from witness.chain import WitnessChain
 class GerchainRuntime:
     """GerChain Core authoritative runtime.
 
-    The default construction is a test-memory harness. Production mode attaches
-    the Canonical Ledger boundary explicitly; MoneyLedger remains test-only.
+    The default construction is a test-memory harness. Production construction
+    must explicitly attach the durable Canonical Ledger boundary; memory-backed
+    value movement is not a production fallback.
     """
 
     def __init__(
@@ -125,11 +131,8 @@ class GerchainRuntime:
 
     @property
     def is_postgresql_authoritative(self) -> bool:
-        """Compatibility status for the legacy PostgreSQL release adapter.
-
-        This is deliberately distinct from Canonical Ledger authority.
-        """
-        return self.runtime_mode == "production-postgresql" and self._postgres_release is not None
+        """Legacy compatibility flag for the deprecated release adapter path."""
+        return self._postgres_release is not None
 
     def require_postgresql_authority(self) -> None:
         if not self.is_postgresql_authoritative:
@@ -158,9 +161,44 @@ class GerchainRuntime:
                 "Canonical Ledger authoritative runtime is required for production value flow"
             )
 
+    def _require_test_memory_fallback(self, operation: str) -> None:
+        """Prevent a configured production runtime from silently falling back to memory."""
+        if self.runtime_mode != "test-memory":
+            raise RuntimeError(
+                f"{operation} requires Canonical Ledger authority; refusing legacy/in-memory fallback"
+            )
+
     def _canonical_read(self) -> CanonicalLedgerRead:
         self.require_canonical_ledger_authority()
         return CanonicalLedgerRead(self._session_factory())
+
+    def create_escrow(
+        self,
+        *,
+        escrow_id: str,
+        sender: str,
+        beneficiary: str,
+        refund_destination: str,
+        amount: int,
+        currency: str,
+        condition: str | None = None,
+    ) -> dict[str, Any]:
+        """Create the authoritative durable escrow aggregate in production."""
+        self.require_canonical_ledger_authority()
+        from persistence.escrow_aggregate import create_escrow_in_transaction, escrow_to_dict
+        with self._session_factory() as session:
+            escrow = create_escrow_in_transaction(
+                session,
+                escrow_id=escrow_id,
+                sender=sender,
+                beneficiary=beneficiary,
+                refund_destination=refund_destination,
+                amount=amount,
+                currency=currency,
+                condition=condition,
+            )
+            session.commit()
+            return escrow_to_dict(escrow)
 
     def create_transaction(self, transaction_id: str) -> TransactionStateMachine:
         if not transaction_id:
@@ -206,6 +244,7 @@ class GerchainRuntime:
         if self.is_canonical_ledger_authoritative:
             balance = self.get_balance(account_id)
         else:
+            self._require_test_memory_fallback("CREATE_HOLD")
             balance = self.money_ledger.get_balance(account_id)
         available = self.holds.available(account_id, balance)
         return self.holds.create(
@@ -231,6 +270,7 @@ class GerchainRuntime:
                 initial_balance=initial_balance,
             )
             return
+        self._require_test_memory_fallback("CREATE_ACCOUNT")
         self.money_ledger.create_account(
             account_id=account_id,
             initial_balance=initial_balance,
@@ -268,10 +308,14 @@ class GerchainRuntime:
 
     def get_balance(self, account_id: str) -> int:
         if self.is_canonical_ledger_authoritative:
-            return self._canonical_read().get_balance(
-                account_id,
-                currency=self.escrow_engine.currency,
-            )
+            # Balance reads are short-lived and must not retain a pooled
+            # PostgreSQL session across runtime calls.
+            with self._session_factory() as session:
+                return CanonicalLedgerRead(session).get_balance(
+                    account_id,
+                    currency=self.escrow_engine.currency,
+                )
+        self._require_test_memory_fallback("BALANCE_READ")
         return self.money_ledger.get_balance(account_id)
 
     def get_escrow_state(self) -> Dict[str, Any]:
@@ -282,31 +326,19 @@ class GerchainRuntime:
                 return escrow_to_dict(
                     get_escrow(session, self.escrow_engine.escrow_id)
                 )
+        self._require_test_memory_fallback("ESCROW_READ")
         return self.escrow_service.get_state()
 
+    # EA-35.26: keep canonical FUND runtime syntax explicit for fresh merge verification.
     def fund(self, transaction_id: str, source: str, timestamp: str, evidence: Any):
         if self.is_canonical_ledger_authoritative:
             from persistence.fund_escrow import fund_escrow_in_transaction
-
             with self._session_factory() as session:
-                result = fund_escrow_in_transaction(
-                    session,
-                    transaction_id=transaction_id,
-                    escrow_id=self.escrow_engine.escrow_id,
-                    source=source,
-                    amount=self.escrow_engine.amount,
-                    currency=self.escrow_engine.currency,
-                    payload={"timestamp": timestamp, "evidence": evidence},
-                )
+                result = fund_escrow_in_transaction(session, transaction_id=transaction_id, escrow_id=self.escrow_engine.escrow_id, source=source, amount=self.escrow_engine.amount, currency=self.escrow_engine.currency, payload={"timestamp": timestamp, "evidence": evidence})
                 session.commit()
                 return result
-
-        return self.escrow_service.fund(
-            transaction_id=transaction_id,
-            source=source,
-            timestamp=timestamp,
-            evidence=evidence,
-        )
+        self._require_test_memory_fallback("FUND")
+        return self.escrow_service.fund(transaction_id=transaction_id, source=source, timestamp=timestamp, evidence=evidence)
 
     def lock(self, transaction_id: str, timestamp: str, evidence: Any):
         if self.is_canonical_ledger_authoritative:
@@ -322,6 +354,7 @@ class GerchainRuntime:
                 session.commit()
                 return result
 
+        self._require_test_memory_fallback("LOCK")
         return self.escrow_service.lock(
             transaction_id=transaction_id,
             timestamp=timestamp,
@@ -373,6 +406,7 @@ class GerchainRuntime:
                 session.commit()
                 return result
 
+        self._require_test_memory_fallback("RELEASE")
         return self.escrow_service.release(
             transaction_id=transaction_id,
             destination=destination,
@@ -428,6 +462,7 @@ class GerchainRuntime:
                 session.commit()
                 return result
 
+        self._require_test_memory_fallback("REFUND")
         return self.escrow_service.refund(
             transaction_id=transaction_id,
             destination=destination,
@@ -511,4 +546,4 @@ class GerchainRuntime:
         }
 
 
-__all__ = ["GerchainRuntime"]
+

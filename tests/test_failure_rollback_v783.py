@@ -1,3 +1,4 @@
+from dee_security.root_of_trust import RootOfTrust
 import copy
 
 import pytest
@@ -91,7 +92,13 @@ def test_failure_does_not_change_balances(settlement):
             amount=2000000,
             timestamp="2026-09-03T08:01:00Z",
             evidence={"type": "forced-failure"},
-        )
+        
+        root=RootOfTrust("TEST-OWNER", "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8="),
+        owner_id="TEST-OWNER",
+        authorized=True,
+        evidence_verified=True,
+        trinity_proof={"trust": True, "transparency": True, "performance": True},
+    )
 
     assert ledger.balances == old_balances
 
@@ -113,7 +120,13 @@ def test_failure_does_not_change_escrow_state(settlement):
             amount=2000000,
             timestamp="2026-09-03T08:02:00Z",
             evidence={"type": "forced-failure"},
-        )
+        
+        root=RootOfTrust("TEST-OWNER", "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8="),
+        owner_id="TEST-OWNER",
+        authorized=True,
+        evidence_verified=True,
+        trinity_proof={"trust": True, "transparency": True, "performance": True},
+    )
 
     assert escrow.get_state() == old_state
 
@@ -134,7 +147,13 @@ def test_failure_does_not_create_money_record(settlement):
             amount=2000000,
             timestamp="2026-09-03T08:03:00Z",
             evidence={"type": "forced-failure"},
-        )
+        
+        root=RootOfTrust("TEST-OWNER", "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8="),
+        owner_id="TEST-OWNER",
+        authorized=True,
+        evidence_verified=True,
+        trinity_proof={"trust": True, "transparency": True, "performance": True},
+    )
 
     assert len(money.records) == old_count
 
@@ -159,7 +178,13 @@ def test_invalid_target_preserves_everything(settlement):
             amount=1000000,
             timestamp="2026-09-03T08:04:00Z",
             evidence={"type": "invalid-target"},
-        )
+        
+        root=RootOfTrust("TEST-OWNER", "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8="),
+        owner_id="TEST-OWNER",
+        authorized=True,
+        evidence_verified=True,
+        trinity_proof={"trust": True, "transparency": True, "performance": True},
+    )
 
     assert escrow.get_state() == old_state
     assert ledger.balances == old_balances
@@ -185,7 +210,13 @@ def test_wrong_amount_preserves_everything(settlement):
             amount=500000,
             timestamp="2026-09-03T08:05:00Z",
             evidence={"type": "wrong-amount"},
-        )
+        
+        root=RootOfTrust("TEST-OWNER", "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8="),
+        owner_id="TEST-OWNER",
+        authorized=True,
+        evidence_verified=True,
+        trinity_proof={"trust": True, "transparency": True, "performance": True},
+    )
 
     assert escrow.get_state() == old_state
     assert ledger.balances == old_balances
@@ -223,7 +254,13 @@ def test_non_locked_escrow_preserves_money(settlement):
             amount=1000000,
             timestamp="2026-09-03T08:06:02Z",
             evidence={"type": "not-locked"},
-        )
+        
+        root=RootOfTrust("TEST-OWNER", "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8="),
+        owner_id="TEST-OWNER",
+        authorized=True,
+        evidence_verified=True,
+        trinity_proof={"trust": True, "transparency": True, "performance": True},
+    )
 
     assert ledger.balances == old_balances
     assert escrow.get_state() == old_state
@@ -245,7 +282,13 @@ def test_success_after_previous_failure_still_works(settlement):
             amount=2000000,
             timestamp="2026-09-03T08:07:00Z",
             evidence={"type": "forced-failure"},
-        )
+        
+        root=RootOfTrust("TEST-OWNER", "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8="),
+        owner_id="TEST-OWNER",
+        authorized=True,
+        evidence_verified=True,
+        trinity_proof={"trust": True, "transparency": True, "performance": True},
+    )
 
     record = money.atomic_settlement(
         transaction_id="SUCCESS-007",
@@ -255,6 +298,12 @@ def test_success_after_previous_failure_still_works(settlement):
         amount=1000000,
         timestamp="2026-09-03T08:07:01Z",
         evidence={"type": "valid-release"},
+    
+        root=RootOfTrust("TEST-OWNER", "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8="),
+        owner_id="TEST-OWNER",
+        authorized=True,
+        evidence_verified=True,
+        trinity_proof={"trust": True, "transparency": True, "performance": True},
     )
 
     assert record.amount == 1000000
@@ -282,7 +331,13 @@ def test_total_money_is_preserved_after_failure(
             amount=9999999,
             timestamp="2026-09-03T08:08:00Z",
             evidence={"type": "overflow"},
-        )
+        
+        root=RootOfTrust("TEST-OWNER", "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8="),
+        owner_id="TEST-OWNER",
+        authorized=True,
+        evidence_verified=True,
+        trinity_proof={"trust": True, "transparency": True, "performance": True},
+    )
 
     total_after = sum(ledger.balances.values())
 

@@ -12,7 +12,7 @@ RUN pip install --no-cache-dir \
     "sqlalchemy>=2,<3" \
     "psycopg[binary]>=3.2,<4" \
     "pydantic>=2,<3" \
-    "cryptography>=43,<47"
+    "cryptography>=46,<47"
 
 EXPOSE 8000
 

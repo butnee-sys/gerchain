@@ -8,6 +8,7 @@ Purpose:
 - Бие даасан шалгагч REJECT хийж байгааг баталгаажуулах.
 """
 
+from dee_security.root_of_trust import RootOfTrust
 import json
 
 from escrow.engine import EscrowEngine
@@ -95,6 +96,11 @@ def build_valid_bundle():
             "type": "SETTLEMENT",
             "reference": "NEG-SETTLE-001",
         },
+        root=RootOfTrust("TEST-OWNER", "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8="),
+        owner_id="TEST-OWNER",
+        authorized=True,
+        evidence_verified=True,
+        trinity_proof={"trust": True, "transparency": True, "performance": True},
     )
 
     serialized = serialize_chain(

@@ -2,7 +2,6 @@
 -- Expands the existing escrow aggregate in place. No value movement occurs.
 -- This migration is structural only and must be followed by reconciliation.
 
-BEGIN;
 
 ALTER TABLE escrows
     ADD COLUMN IF NOT EXISTS refund_destination TEXT;
@@ -27,4 +26,3 @@ ALTER TABLE escrows
 CREATE INDEX IF NOT EXISTS ix_escrows_state ON escrows (state);
 CREATE INDEX IF NOT EXISTS ix_escrows_updated_at ON escrows (updated_at);
 
-COMMIT;

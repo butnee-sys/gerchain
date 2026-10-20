@@ -114,3 +114,26 @@ def test_replay_requires_same_movement():
         session.rollback()
 
     engine.dispose()
+
+
+def test_transfer_rejects_malformed_integrity_hash():
+    engine, session_factory = _session_factory()
+    _seed(session_factory)
+    with session_factory() as session:
+        with pytest.raises(ValueError, match="64-character SHA-256"):
+            PostgreSQLAtomicLedger.transfer_in_transaction(
+                session,
+                "tx-bad-hash",
+                "source",
+                "destination",
+                10,
+                "USD",
+                operation="FUND",
+                escrow_id="escrow-1",
+                integrity_hash="not-a-sha256-digest",
+            )
+        session.rollback()
+    with session_factory() as session:
+        assert session.query(LedgerMovementModel).count() == 0
+        assert session.get(LedgerAccountModel, "source").balance == 100
+    engine.dispose()

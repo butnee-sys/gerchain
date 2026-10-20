@@ -1,4 +1,5 @@
 import os
+import uuid
 
 import pytest
 
@@ -32,9 +33,12 @@ def test_same_key_different_payload_is_denied(store):
 
 
 def test_expired_processing_lease_can_be_recovered(store):
-    payload = {"transaction_id": "TX-PG-003", "destination": "BENEFICIARY", "amount": 2_000_000}
-    assert store.begin("release", "release:TX-PG-003", payload) is None
+    token = uuid.uuid4().hex
+    key = f"release:TX-PG-003:{token}"
+    payload = {"transaction_id": token, "destination": "BENEFICIARY", "amount": 2_000_000}
+    assert store.begin("release", key, payload) is None
     import time
     time.sleep(1.1)
-    assert store.recover_expired() == 1
-    assert store.begin("release", "release:TX-PG-003", payload) is None
+    assert store.recover_expired() >= 1
+    # Recovery must make this same durable row claimable again, not create a duplicate.
+    assert store.begin("release", key, payload) is None

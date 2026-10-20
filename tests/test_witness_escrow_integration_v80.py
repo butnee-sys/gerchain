@@ -11,6 +11,7 @@ Purpose:
   баталгаажуулж чадах эсэхийг шалгах.
 """
 
+from dee_security.root_of_trust import RootOfTrust
 from escrow.engine import EscrowEngine
 from money.engine import MoneyEngine
 from money.ledger import MoneyLedger
@@ -98,6 +99,12 @@ def test_atomic_settlement_creates_witness_event():
         amount=1000000,
         timestamp="2026-09-03T09:01:00Z",
         evidence={"type": "delivery-confirmed"},
+    
+        root=RootOfTrust("TEST-OWNER", "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8="),
+        owner_id="TEST-OWNER",
+        authorized=True,
+        evidence_verified=True,
+        trinity_proof={"trust": True, "transparency": True, "performance": True},
     )
 
     assert len(witness_chain.entries) == before + 2
@@ -133,6 +140,12 @@ def test_settlement_event_contains_escrow_identity():
         amount=1000000,
         timestamp="2026-09-03T09:02:00Z",
         evidence={"type": "delivery-confirmed"},
+    
+        root=RootOfTrust("TEST-OWNER", "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8="),
+        owner_id="TEST-OWNER",
+        authorized=True,
+        evidence_verified=True,
+        trinity_proof={"trust": True, "transparency": True, "performance": True},
     )
 
     settlement_entry = witness_chain.entries[-2]
@@ -163,6 +176,12 @@ def test_independent_verifier_accepts_integrated_history():
         amount=1000000,
         timestamp="2026-09-03T09:03:00Z",
         evidence={"type": "delivery-confirmed"},
+    
+        root=RootOfTrust("TEST-OWNER", "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8="),
+        owner_id="TEST-OWNER",
+        authorized=True,
+        evidence_verified=True,
+        trinity_proof={"trust": True, "transparency": True, "performance": True},
     )
 
     from persistence.serializer import serialize_chain
@@ -195,6 +214,12 @@ def test_escrow_settlement_and_witness_tip_are_consistent():
         amount=1000000,
         timestamp="2026-09-03T09:04:00Z",
         evidence={"type": "delivery-confirmed"},
+    
+        root=RootOfTrust("TEST-OWNER", "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8="),
+        owner_id="TEST-OWNER",
+        authorized=True,
+        evidence_verified=True,
+        trinity_proof={"trust": True, "transparency": True, "performance": True},
     )
 
     assert escrow.get_state()["state"] == "RELEASED"

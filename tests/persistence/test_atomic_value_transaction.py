@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker
 
 from persistence.atomic_ledger import AtomicLedgerBase, LedgerAccountModel, PostgreSQLAtomicLedger
@@ -10,6 +10,7 @@ from persistence.atomic_value_transaction import (
     WitnessBase,
 )
 from persistence.escrow_aggregate import CanonicalEscrow, EscrowBase, EscrowState
+from persistence.durable_idempotency import IdempotencyBase
 from persistence.recovery_outbox import OutboxBase, OutboxEvent
 from persistence.transaction_coordinator import AtomicTransactionCoordinator
 
@@ -20,6 +21,7 @@ def test_coordinator_rolls_back_ledger_escrow_witness_and_outbox():
     EscrowBase.metadata.create_all(engine)
     WitnessBase.metadata.create_all(engine)
     OutboxBase.metadata.create_all(engine)
+    IdempotencyBase.metadata.create_all(engine)
     factory = sessionmaker(bind=engine, future=True)
 
     from datetime import datetime, timezone
@@ -54,8 +56,8 @@ def test_coordinator_rolls_back_ledger_escrow_witness_and_outbox():
         assert session.get(LedgerAccountModel, "A").balance == 1000
         assert session.get(LedgerAccountModel, "B").balance == 0
         assert session.get(CanonicalEscrow, "E1").state == EscrowState.LOCKED.value
-        assert session.execute(session.query(TransactionWitness)).first() is None
-        assert session.execute(session.query(OutboxEvent)).first() is None
+        assert session.execute(select(TransactionWitness)).first() is None
+        assert session.execute(select(OutboxEvent)).first() is None
 
 
 def test_coordinator_commits_all_components_once():
@@ -64,6 +66,7 @@ def test_coordinator_commits_all_components_once():
     EscrowBase.metadata.create_all(engine)
     WitnessBase.metadata.create_all(engine)
     OutboxBase.metadata.create_all(engine)
+    IdempotencyBase.metadata.create_all(engine)
     factory = sessionmaker(bind=engine, future=True)
 
     from datetime import datetime, timezone

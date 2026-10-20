@@ -49,9 +49,11 @@ def test_created_cancel_is_state_only():
 
     with factory() as session:
         assert session.get(CanonicalEscrow, "E1").state == EscrowState.CANCELLED.value
+        # State-only cancellation still requires durable execution evidence.
         assert session.query(LedgerMovementModel).count() == 0
-        assert session.query(TransactionWitness).count() == 0
-        assert session.query(OutboxEvent).count() == 0
+        assert session.query(TransactionWitness).count() == 1
+        assert session.query(OutboxEvent).count() == 1
+        assert session.query(DurableIdempotencyRecord).count() == 1
 
 
 def test_funded_cancel_reverses_to_original_sender():

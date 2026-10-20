@@ -27,6 +27,40 @@ class DurableIdempotencyRecord(IdempotencyBase):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
 
+def get_existing_in_transaction(
+    session: Session,
+    *,
+    key: str,
+    payload: Mapping[str, Any],
+) -> str | None:
+    """Return a completed result for replay, or None when no durable record exists.
+
+    Unlike begin_in_transaction(), this read-only gate never creates PROCESSING
+    state. It is used by lifecycle wrappers that must validate the current
+    aggregate state while still allowing a completed replay after a terminal
+    transition.
+    """
+    if not key:
+        raise ValueError("idempotency key is required")
+    fingerprint = IdempotencyEngine.fingerprint(payload)
+    existing = session.execute(
+        select(DurableIdempotencyRecord)
+        .where(DurableIdempotencyRecord.key == key)
+        .with_for_update()
+    ).scalar_one_or_none()
+    if existing is None:
+        return None
+    if existing.fingerprint != fingerprint:
+        raise IdempotencyConflictError(
+            f"idempotency key reused with different request: {key}"
+        )
+    if existing.state == "COMPLETED":
+        return existing.result_json
+    if existing.state == "PROCESSING":
+        raise RuntimeError(f"idempotency request already processing: {key}")
+    raise RuntimeError(f"unknown idempotency state: {existing.state}")
+
+
 def begin_in_transaction(
     session: Session,
     *,
@@ -108,5 +142,6 @@ def complete_in_transaction(
 __all__ = [
     "DurableIdempotencyRecord",
     "begin_in_transaction",
+    "get_existing_in_transaction",
     "complete_in_transaction",
 ]
