@@ -75,14 +75,31 @@ jobs:
           python - <<'PY'
           import json, os, subprocess
           from pathlib import Path
-          gates = (
+          postgres_gates = (
               'compile', 'regression', 'postgres_connection', 'migration_atomicity',
               'legacy_upgrade', 'lifecycle', 'migration_concurrency',
               'publication_integrity', 'entrypoint', 'production_boot',
               'migration_catalog', 'deep_reconciliation', 'manifest',
           )
+          # These 17 architecture-level gates require their own traceable,
+          # exact-SHA evidence. PostgreSQL success is not a proxy for them.
+          architecture_gates = (
+              'inventory_map', 'error_duplicate_excess',
+              'cross_store_reconciliation', 'authority_boundary',
+              'core_correctness', 'adapter_boundaries', 'eai_g3_governance',
+              'transaction_correctness', 'recovery', 'auditability',
+              'security_iam_mfa', 'observability', 'performance_stress',
+              'disaster_recovery', 'ci_release_governance',
+              'independent_reperformance', 'final_evidence_bundle',
+          )
           conclusion = os.environ.get('GATE_CONCLUSION', 'missing')
-          outcomes = {name: ('success' if conclusion == 'success' else conclusion) for name in gates}
+          outcomes = {
+              name: ('success' if conclusion == 'success' else conclusion)
+              for name in postgres_gates
+          }
+          # Fail closed, but make the absence explicit rather than relying on
+          # omitted keys that obscure why the master gate remains NOT_LOCKED.
+          outcomes.update({name: 'not_evidenced' for name in architecture_gates})
           output = Path('artifacts/ea35/production-gate-decision.json')
           output.parent.mkdir(parents=True, exist_ok=True)
           subprocess.run([
