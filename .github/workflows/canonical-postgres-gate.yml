@@ -373,7 +373,7 @@ jobs:
           out = root / "artifacts/ea35/architecture-gates.json"
           out.parent.mkdir(parents=True, exist_ok=True)
           bundle = {"commit_sha": sha, "gates": records}
-  out.write_text(json.dumps(bundle, indent=2, sort_keys=True) + chr(10), encoding="utf-8")
+          out.write_text(json.dumps(bundle, indent=2, sort_keys=True) + chr(10), encoding="utf-8")
           print(json.dumps({"commit_sha": sha, "architecture_gate_count": len(records),
                             "success": [k for k,v in records.items() if v["outcome"] == "success"],
                             "open": [k for k,v in records.items() if v["outcome"] == "open"]}, indent=2))
