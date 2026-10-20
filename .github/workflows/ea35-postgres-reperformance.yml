@@ -706,8 +706,8 @@ jobs:
           manifest = root / "manifest.json"
           top = root / "MANIFEST.SHA256"
           top.write_text(
-              f"{hashlib.sha256(sums.read_bytes()).hexdigest()}  SHA256SUMS\\n"
-              f"{hashlib.sha256(manifest.read_bytes()).hexdigest()}  manifest.json\\n",
+              f"{hashlib.sha256(sums.read_bytes()).hexdigest()}  SHA256SUMS\n"
+              f"{hashlib.sha256(manifest.read_bytes()).hexdigest()}  manifest.json\n",
               encoding="utf-8",
           )
           top_lines = top.read_text(encoding="utf-8").splitlines()
