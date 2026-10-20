@@ -247,6 +247,52 @@ jobs:
           (root / "exact-commit-evidence.json").write_text(json.dumps(evidence, indent=2, sort_keys=True)+"\n")
           print(json.dumps(evidence, indent=2))
           PY
+      - name: Build migration manifest and SHA256SUMS evidence bundle
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import hashlib, json, os, subprocess
+          from pathlib import Path
+          root = Path("postgres-migration-evidence")
+          root.mkdir(parents=True, exist_ok=True)
+          expected = os.environ["EVIDENCE_COMMIT_SHA"]
+          actual = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+          if actual != expected:
+              raise SystemExit(f"evidence SHA mismatch: expected={expected} actual={actual}")
+          migration_files = sorted(Path("postgres/migrations").glob("*.sql"))
+          workflow_path = Path(".github/workflows/postgres-migration-gate.yml")
+          manifest = {
+              "commit_sha": expected,
+              "checkout_head_sha": actual,
+              "workflow_sha256": hashlib.sha256(workflow_path.read_bytes()).hexdigest(),
+              "migration_files": [
+                  {"path": str(p), "sha256": hashlib.sha256(p.read_bytes()).hexdigest()}
+                  for p in migration_files
+              ],
+              "migration_gate_report_sha256": (
+                  hashlib.sha256((root / "migration-gate-report.json").read_bytes()).hexdigest()
+                  if (root / "migration-gate-report.json").is_file() else None
+              ),
+              "junit_sha256": (
+                  hashlib.sha256((root / "postgres-migration-junit.xml").read_bytes()).hexdigest()
+                  if (root / "postgres-migration-junit.xml").is_file() else None
+              ),
+          }
+          (root / "migration-manifest.json").write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\\n")
+          print(json.dumps(manifest, indent=2))
+          PY
+          files=()
+          for f in postgres-migration-evidence/migration-gate-report.json postgres-migration-evidence/migration-gate-report.sha256 postgres-migration-evidence/postgres-migration-junit.xml postgres-migration-evidence/postgres-migration.log postgres-migration-evidence/exact-commit-evidence.json postgres-migration-evidence/migration-manifest.json postgres-migration-evidence/runner-a.log postgres-migration-evidence/runner-b.log; do
+            if [[ -f "$f" ]]; then files+=("$f"); fi
+          done
+          if [[ ${#files[@]} -eq 0 ]]; then
+            echo "No evidence files available for checksumming" >&2
+            exit 1
+          fi
+          (cd postgres-migration-evidence && sha256sum "${files[@]/#postgres-migration-evidence\\//}" > SHA256SUMS)
+          (cd postgres-migration-evidence && sha256sum -c SHA256SUMS)
       - name: Upload exact-SHA migration evidence
         if: always()
         uses: actions/upload-artifact@v4
