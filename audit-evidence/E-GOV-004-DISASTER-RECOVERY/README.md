@@ -24,8 +24,8 @@ Status: **GREEN / CLOSED**
 ---
 
 ## 3. Active Evidence & Verification
-- **Backup Snapshot File:** [`/gerchain.db.bak_before_g04`](../../../gerchain.db.bak_before_g04)
-- **Database Restoration Service Script:** [`/run_db.py`](../../../run_db.py)
+- **Backup Snapshot File:** [gerchain.db.bak_before_g04](../../../gerchain.db.bak_before_g04)
+- **Database Restoration Service Script:** [run_db.py](../../../run_db.py)
 - **Evidence Review Date:** 2026-10-20
 
 ---
