@@ -66,3 +66,24 @@ These keys are required by `scripts/production_gate_controller.py` and are curre
 ## Decision
 
 **NOT LOCKED.** This register is a mapping/control artifact, not proof that every gate passed. No gate is upgraded to GREEN by this document. Final lock requires fresh exact-SHA workflow evidence and closure of every blocking organizational and technical requirement.
+
+
+## Exact-SHA assessment — 2026-10-20
+
+Assessment target at observation time: `313d280d3f95f680a5d0b4ab60529e85bb4cef10`.
+
+- [Master gate run](https://github.com/butnee-sys/gerchain/actions/runs/39384745495): **NOT_LOCKED**.
+- [Canonical PostgreSQL gate run](https://github.com/butnee-sys/gerchain/actions/runs/39384745461): **success**.
+- [Production PostgreSQL migration/boot job](https://github.com/butnee-sys/gerchain/actions/runs/39384745801/job/118501803823): **success**.
+- [PostgreSQL value-truth reconciliation job](https://github.com/butnee-sys/gerchain/actions/runs/39384745801/job/118501804081): **success**.
+- [Clean PostgreSQL audit](https://github.com/butnee-sys/gerchain/actions/runs/39384745643): **success**.
+- [PostgreSQL re-performance](https://github.com/butnee-sys/gerchain/actions/runs/39384745522): **success**.
+- [Migration concurrency re-performance](https://github.com/butnee-sys/gerchain/actions/runs/39384745647): **success**.
+
+The retained master decision artifact for this SHA reports all 17 architecture-level gate outcomes as `not_evidenced`; the PostgreSQL workflow conclusion was successful. This is an explicit fail-closed result, not a PostgreSQL failure. The artifact's 17 blockers are:
+
+`inventory_map`, `error_duplicate_excess`, `cross_store_reconciliation`, `authority_boundary`, `core_correctness`, `adapter_boundaries`, `eai_g3_governance`, `transaction_correctness`, `recovery`, `auditability`, `security_iam_mfa`, `observability`, `performance_stress`, `disaster_recovery`, `ci_release_governance`, `independent_reperformance`, `final_evidence_bundle`.
+
+### Evidence discipline
+
+A successful PostgreSQL run does not automatically close the architecture-level gates. Source and test links in the table above are candidate evidence pointers only until each is bound to an exact-SHA verifier/result. Organizational IAM/MFA, disaster recovery, observability, performance/stress, and independent re-performance remain **BLOCKED** until their own verifiable artifacts exist. The decision remains **NOT_LOCKED**.
