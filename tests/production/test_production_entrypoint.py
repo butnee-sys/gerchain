@@ -48,10 +48,9 @@ def test_build_production_runtime_uses_configured_factory_and_canonical_authorit
     captured = {}
 
     class Factory:
-        def __init__(self, config, *, engine, session_factory):
+        def __init__(self, config, *, engine):
             captured["config"] = config
             captured["engine"] = engine
-            captured["session_factory"] = session_factory
 
         def create(self):
             return FakeRuntime()
@@ -66,7 +65,6 @@ def test_build_production_runtime_uses_configured_factory_and_canonical_authorit
     assert captured["config"].amount == 100
     assert captured["config"].currency == "MNT"
     assert captured["config"].witness_id == "witness-1"
-    assert captured["session_factory"] is not None
 
 
 @pytest.mark.parametrize("url", ["", "sqlite:///unsafe.db", "postgres://bad/db"])
@@ -105,10 +103,9 @@ def test_build_production_runtime_disposes_engine_if_factory_fails(monkeypatch):
     monkeypatch.setattr(entrypoint, "create_engine", lambda *args, **kwargs: engine)
 
     class Factory:
-        def __init__(self, config, *, engine, session_factory):
+        def __init__(self, config, *, engine):
             assert config.database_url.startswith("postgresql")
             assert engine is not None
-            assert session_factory is not None
 
         def create(self):
             raise RuntimeError("schema initialization failed")
