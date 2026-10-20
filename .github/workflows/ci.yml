@@ -1,0 +1,40 @@
+name: CI Test Suite
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+on:
+  push:
+    branches: [ main, dev ]
+  pull_request:
+    branches: [ main, dev ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Check out repository code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements-dee-security.txt
+        pip install pytest fastapi
+        if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+
+    - name: Run pytest
+      run: |
+        python -m pytest -q \
+          tests/test_shuud_command_layer.py \
+          tests/test_shuud_command_api.py \
+          tests/persistence/test_atomic_ledger_transaction_boundary.py \
+          tests/persistence/test_deep_value_reconciliation.py \
+          tests/services/test_gerchain_runtime_refund_canonical.py \
+          tests/services/test_gerchain_runtime_cancel_canonical.py

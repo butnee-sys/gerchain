@@ -1,0 +1,6 @@
+# Canonical Architecture Ownership
+/docs/ARCHITECTURE_CANONICAL_V1.md @butnee-sys
+# Core architecture and assurance controls
+/docs/CORE_CONTROL_MATRIX.md @butnee-sys
+# Architecture governance itself
+/.github/CODEOWNERS @butnee-sys

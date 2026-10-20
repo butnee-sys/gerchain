@@ -26,6 +26,11 @@ def request() -> BoundaryRequest:
         actor_type=ActorType.COMPANY,
         actor_id="company-001",
         activity="digital-economic-activity",
+        payload={
+            "asset": {"asset_id": "asset-001"},
+            "condition_policy": {"policy_id": "policy-001"},
+            "escrow": {"escrow_id": "escrow-001"},
+        },
         correlation_id="corr-composition-001",
     )
 

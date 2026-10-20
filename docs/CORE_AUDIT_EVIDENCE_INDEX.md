@@ -2,7 +2,7 @@
 
 **Audit scope:** GerChain CORE
 **Frozen baseline:** `274f45c83ce088e2229a2628e3a80403a68503df`
-**Current technical baseline:** `62594d16e926aa084c73f326eb77445d57fd4267`
+**Current technical baseline:** `621e7e2acefe243d4c72e783970e1eb833c60b96`
 
 ## Evidence register
 
@@ -18,10 +18,10 @@
 | E-CORE-008 | CORE/SHUUD boundary | CORE-only PostgreSQL workflow + scope-boundary evidence; PR #67 | GREEN |
 | E-CORE-009 | CodeQL | `.github/workflows/codeql.yml` + successful run evidence | GREEN |
 | E-CORE-010 | PwC frozen baseline | Frozen SHA and prior PwC evidence set | FROZEN |
-| E-GOV-001 | IAM / MFA | `GC-IDM-001/002` evidence package | MISSING |
+| E-GOV-001 | IAM / MFA | `audit-evidence/E-GOV-001-IAM-MFA/README.md`; commit `159ad7079c95c91171ff34752d4fcb67ec5c8c3e` | DOCUMENTED — independent settings/screenshot re-performance OPEN |
 | E-GOV-002 | Privileged access review | Organizational access inventory/review records | MISSING |
 | E-GOV-003 | Main branch governance | Branch protection/ruleset evidence | UNVERIFIED |
-| E-CI-001 | Post-merge main CI | Merge commit `62594d16...` workflow association | UNVERIFIED |
+| E-CI-001 | Post-merge main CI | Main baseline `621e7e2...` workflow association | UNVERIFIED |
 
 ## Evidence retention rule
 
