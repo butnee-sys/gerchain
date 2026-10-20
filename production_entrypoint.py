@@ -52,7 +52,13 @@ def build_production_runtime():
         with engine.connect() as connection:
             if connection.exec_driver_sql("SELECT 1").scalar() != 1:
                 raise RuntimeError("PostgreSQL readiness probe failed")
-        session_factory = sessionmaker(bind=engine, expire_on_commit=False)
+        # Apply the canonical, checksummed migration chain before ORM bootstrap.
+        migration_url = database_url.replace("postgresql+psycopg://", "postgresql://", 1)
+        with psycopg.connect(migration_url) as migration_connection:
+            apply_migrations(
+                migration_connection,
+                Path(__file__).resolve().parent / "postgres" / "migrations",
+            )
         factory = ProductionRuntimeFactory(
             ProductionRuntimeConfig(
                 database_url=database_url,
@@ -62,7 +68,6 @@ def build_production_runtime():
                 witness_id=witness_id,
             ),
             engine=engine,
-            session_factory=session_factory,
         )
         runtime = factory.create()
         if not runtime.is_canonical_ledger_authoritative:
