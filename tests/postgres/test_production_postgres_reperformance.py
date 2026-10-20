@@ -25,8 +25,16 @@ from sqlalchemy import text
 
 
 @pytest.mark.postgres
+def _required_postgres_url() -> str:
+    """Accept either canonical CI DSN name; fail, never skip, if neither is configured."""
+    url = os.environ.get("GERCHAIN_DATABASE_URL") or os.environ.get("GERCHAIN_TEST_DATABASE_URL")
+    if not url:
+        pytest.fail("required PostgreSQL re-performance needs GERCHAIN_DATABASE_URL or GERCHAIN_TEST_DATABASE_URL")
+    return url
+
+
 def test_production_postgres_factory_and_canonical_value_flow():
-    url = os.environ["GERCHAIN_DATABASE_URL"]
+    url = _required_postgres_url()
     engine = create_engine(url, pool_pre_ping=True)
     factory = ProductionRuntimeFactory(
         ProductionRuntimeConfig(
@@ -143,7 +151,7 @@ def test_postgres_create_rollback_leaves_no_partial_canonical_evidence():
     """A failed caller transaction must roll back CREATE truth and every evidence row."""
     import uuid
 
-    url = os.environ["GERCHAIN_DATABASE_URL"]
+    url = _required_postgres_url()
     engine = create_engine(url, pool_pre_ping=True)
     factory = ProductionRuntimeFactory(
         ProductionRuntimeConfig(
