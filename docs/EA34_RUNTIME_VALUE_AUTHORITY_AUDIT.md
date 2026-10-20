@@ -41,7 +41,7 @@ database/db.py and gerchain/database.py expose SQLite stores. They are not produ
 
 ## Remaining hard checks
 
-1. Production entrypoint must instantiate ProductionRuntimeFactory / canonical runtime.
+1. Production entrypoint construction is implemented through ProductionRuntimeFactory and Canonical Ledger authority; verify it against the exact current candidate SHA and supported prior-schema upgrade path.
 2. No production path may instantiate MoneyLedger as value authority.
 3. No production path may use ReleaseAccount or AccountBalance as balance authority.
 4. No application-owned balance mutation may be reachable from production.
@@ -52,7 +52,7 @@ database/db.py and gerchain/database.py expose SQLite stores. They are not produ
 
 ## Current conclusion
 
-EA-34.11 is NOT LOCKED. Direct legacy mutation surfaces identified above are now fail-closed, but production entrypoint, durable escrow READ, full movement reconciliation, legacy-store freeze/removal, CI evidence, and independent re-performance remain open.
+EA-34.11 is NOT LOCKED. Production entrypoint and durable Escrow READ paths are implemented, and historical PostgreSQL production/EAI evidence is recorded for the exact SHAs listed below. Remaining open gates are existing-database upgrade proof, physical legacy-store archive/removal or independently verified write-disablement, current exact-SHA required CI, restart/recovery proof on that same SHA, organizational IAM/MFA and branch governance, and final independent re-performance.
 
 
 ## EA-35.13 verification update — 2026-09-27
