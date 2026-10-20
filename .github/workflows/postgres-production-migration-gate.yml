@@ -260,8 +260,11 @@ jobs:
               ],
           }
           output = Path("artifacts/production-postgres/migration-lifecycle-report.json")
-          output.write_text(json.dumps(report, indent=2, sort_keys=True) + "\\n", encoding="utf-8")
-          print(json.dumps(report, indent=2, sort_keys=True))
+          output.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+          serialized = json.dumps(report, indent=2, sort_keys=True) + "\n"
+          output.write_text(serialized, encoding="utf-8")
+          json.loads(output.read_text(encoding="utf-8"))
+          print(serialized)
           if not report["sha_match"]:
               raise SystemExit("commit SHA mismatch in lifecycle evidence")
           if tests <= 0:
