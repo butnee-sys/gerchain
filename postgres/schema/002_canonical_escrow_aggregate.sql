@@ -6,8 +6,6 @@
 -- RELEASED. The canonical aggregate requires the full lifecycle and metadata.
 -- Currency is intentionally NOT inferred: operators must backfill it from
 -- authoritative transaction evidence before enabling value-moving operations.
-BEGIN;
-
 ALTER TABLE escrows
     ADD COLUMN IF NOT EXISTS refund_destination TEXT,
     ADD COLUMN IF NOT EXISTS currency VARCHAR(16),
@@ -46,7 +44,6 @@ ALTER TABLE escrows
 CREATE INDEX IF NOT EXISTS ix_escrows_state_updated_at
     ON escrows (state, updated_at);
 
-COMMIT;
 
 -- POST-MIGRATION GATES (must be checked by deployment automation):
 -- 1. currency IS NOT NULL for every escrow eligible for value movement.
