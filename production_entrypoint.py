@@ -1,16 +1,12 @@
 from __future__ import annotations
 
 import os
-from pathlib import Path
-
-import psycopg
 import signal
 import time
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from postgres.migrations import apply_migrations
 from services.gerchain_runtime_factory import ProductionRuntimeConfig, ProductionRuntimeFactory
 
 _running = True
@@ -52,13 +48,7 @@ def build_production_runtime():
         with engine.connect() as connection:
             if connection.exec_driver_sql("SELECT 1").scalar() != 1:
                 raise RuntimeError("PostgreSQL readiness probe failed")
-        # Apply the canonical, checksummed migration chain before ORM bootstrap.
-        migration_url = database_url.replace("postgresql+psycopg://", "postgresql://", 1)
-        with psycopg.connect(migration_url) as migration_connection:
-            apply_migrations(
-                migration_connection,
-                Path(__file__).resolve().parent / "postgres" / "migrations",
-            )
+        # Factory applies and verifies the canonical checksummed migration chain.
         factory = ProductionRuntimeFactory(
             ProductionRuntimeConfig(
                 database_url=database_url,
