@@ -68,7 +68,10 @@ jobs:
                   cursor.execute("SELECT current_database(), version()")
                   database, version = cursor.fetchone()
                   assert database == "gerchain_test", database
-                  print(f"PASS: PostgreSQL connection: {database}; {version}")
+                  line = f"PASS: PostgreSQL connection: {database}; {version}"
+                  print(line)
+                  from pathlib import Path
+                  Path("artifacts/ea35/logs/postgres-connection-primary.log").write_text(line + "\\n", encoding="utf-8")
           PY
       - name: Validate checksum atomicity and duplicate migration publication
         run: set -o pipefail; pytest -vv -s postgres/tests/test_migration_checksum_atomicity.py tests/postgres/test_migration_runner_concurrency.py 2>&1 | tee artifacts/ea35/logs/checksum-atomicity-concurrency.log
@@ -134,6 +137,11 @@ jobs:
                   actual = set(inspect(connection).get_table_names())
                   missing = required - actual
                   assert not missing, f"missing canonical tables: {sorted(missing)}"
+                  identity = connection.execute(text("SELECT current_database(), current_user, version()")).one()
+                  line = f"PASS: runtime PostgreSQL connection: database={identity[0]}; user={identity[1]}; tables={len(actual)}; canonical_authority={runtime.is_canonical_ledger_authoritative}"
+                  print(line)
+                  from pathlib import Path
+                  Path("artifacts/ea35/logs/postgres-connection-runtime.log").write_text(line + "\\n", encoding="utf-8")
               print("PASS: real PostgreSQL boot and canonical authority verified")
           finally:
               engine.dispose()
@@ -321,7 +329,28 @@ jobs:
           out.mkdir(parents=True, exist_ok=True)
           (out / 'manifest.json').write_text(json.dumps(manifest, indent=2) + '\n', encoding='utf-8')
           (out / 'commit-sha.txt').write_text(manifest['commit_sha'] + '\n', encoding='utf-8')
-          # Bind the manifest and exact commit marker to a checksum list inside the artifact.
+          # Produce a human-readable migration history and test summary before sealing checksums.
+          migration_lines = [
+              '# PostgreSQL Migration History Summary', '',
+              f'- Exact commit SHA: {manifest["commit_sha"]}',
+              f'- Workflow run: {manifest["workflow_run_id"]} (attempt {manifest["workflow_run_attempt"]})',
+              f'- Canonical migrations: {len(canonical)} (expected versions 1..17)',
+              f'- Database schema_version rows: {len(database_rows)}',
+              f'- Every runner checksum equals the PostgreSQL-published checksum: {all(item["database_checksum_matches_runner"] is True for item in canonical)}',
+              '', '| Version | Migration | SHA-256 | DB checksum matches |', '|---:|---|---|---|'
+          ]
+          for item in canonical:
+              migration_lines.append(f'| {item["version"]} | {item["path"]} | {item["sha256"]} | {item["database_checksum_matches_runner"]} |')
+          (out / 'migration-history-summary.md').write_text('\\n'.join(migration_lines) + '\\n', encoding='utf-8')
+          test_lines = ['# PostgreSQL Test Report', '', f'- Exact commit SHA: {manifest["commit_sha"]}', f'- Workflow run: {manifest["workflow_run_id"]}', '', '## Test log summaries', '']
+          for log_path in sorted((out / 'logs').glob('*.log')):
+              lines = log_path.read_text(encoding='utf-8', errors='replace').splitlines()
+              signals = [line.strip() for line in lines if (' passed' in line or ' failed' in line or 'PASSED' in line or 'FAILED' in line or 'PASS:' in line or 'ERROR' in line)]
+              test_lines.append(f'### {log_path.name}')
+              test_lines.extend([f'- {line}' for line in (signals[-12:] or ['No summary markers; inspect the full log.'])])
+              test_lines.append('')
+          (out / 'test-report.md').write_text('\\n'.join(test_lines) + '\\n', encoding='utf-8')
+          # Bind the manifest, summaries, exact commit marker, and all logs into SHA256SUMS.
           checksum_targets = [out / 'manifest.json', out / 'commit-sha.txt'] + sorted((out / 'logs').glob('*'))
           sums = []
           for target in checksum_targets:
