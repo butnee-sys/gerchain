@@ -87,3 +87,18 @@ The retained master decision artifact for this SHA reports all 17 architecture-l
 ### Evidence discipline
 
 A successful PostgreSQL run does not automatically close the architecture-level gates. Source and test links in the table above are candidate evidence pointers only until each is bound to an exact-SHA verifier/result. Organizational IAM/MFA, disaster recovery, observability, performance/stress, and independent re-performance remain **BLOCKED** until their own verifiable artifacts exist. The decision remains **NOT_LOCKED**.
+
+
+## Follow-up exact-SHA check — 2026-10-20
+
+Assessment target: `37daa4b4d695f643a35a7b34cd9a5d39b7f8cbfd`.
+
+- Exact-SHA combined status observed: [security/snyk](https://app.snyk.io/org/butnee-sys/pr-checks/6d4072cd-53f2-48ce-8801-54e04cdac957) = success.
+- No exact-SHA canonical PostgreSQL workflow run was returned by the available commit status endpoint.
+- The previously observed successful canonical PostgreSQL run `39384745461` and migration/boot run `39384745801` are bound to `313d280d3f95f680a5d0b4ab60529e85bb4cef10`, **not** this assessment target. They remain useful historical evidence but cannot be promoted as proof for this SHA.
+- The master-gate run `39384745495` for the earlier SHA ended **NOT_LOCKED**: PostgreSQL workflow passed, but the 17 architecture-level gates were `not_evidenced`. The run's failure is the intended fail-closed LOCK assertion, not evidence that PostgreSQL migration failed.
+- PostgreSQL artifact `ea35-313d280d3f95f680a5d0b4ab60529e85bb4cef10` (artifact ID `12246034464`, SHA-256 `6212bd2c7aa3249a6f0f7a7b1e66585002c7339660d27a5fa12fa9dce5cbaf68`) is tied to the earlier SHA only.
+
+### Decision for this assessment
+
+**NOT LOCKED.** Exact-SHA PostgreSQL/migration/lifecycle/deep-reconciliation evidence must be rerun or otherwise verifiably bound to `37daa4b4d695f643a35a7b34cd9a5d39b7f8cbfd`. The 17 architecture-level gates still require individual evidence, exact-SHA binding, verifier, and retained artifact; IAM/MFA, observability, performance/stress, disaster recovery, and independent re-performance remain explicit blockers.
