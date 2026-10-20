@@ -83,69 +83,6 @@ jobs:
         run: set -o pipefail; python -m pytest -vv -s postgres/tests/test_concurrency.py 2>&1 | tee artifacts/ea35/logs/migration-concurrency.log
       - name: Re-perform duplicate publication and checksum fail-closed cases on PostgreSQL
         run: set -o pipefail; pytest -vv -s postgres/tests/test_migration_publication_integrity.py 2>&1 | tee artifacts/ea35/logs/migration-publication-integrity.log
-      - name: Test production entrypoint contract
-        run: set -o pipefail; pytest -vv -s tests/services/test_production_entrypoint.py 2>&1 | tee artifacts/ea35/logs/production-entrypoint.log
-      - name: Boot real PostgreSQL production runtime and validate schema
-        run: |
-          python - <<'PY'
-          from sqlalchemy import create_engine, inspect, text
-          from production_entrypoint import build_production_runtime
-          from services.gerchain_runtime_factory import initialize_canonical_postgres_schema
-          import os
-
-          # Production boot requires pre-existing authoritative escrow truth.
-          # Bootstrap schema first, then seed only the isolated CI database.
-          engine = create_engine(os.environ["GERCHAIN_DATABASE_URL"], pool_pre_ping=True)
-          initialize_canonical_postgres_schema(engine)
-          with engine.begin() as connection:
-              connection.execute(
-                  text("""
-                      INSERT INTO escrows
-                          (id, sender_address, receiver_address, amount, state,
-                           condition_desc, refund_destination, currency, version,
-                           created_at, updated_at)
-                      VALUES
-                          (:id, :sender, :receiver, :amount, 'CREATED',
-                           'CI production boot', :refund_destination, :currency, 0,
-                           now(), now())
-                      ON CONFLICT (id) DO NOTHING
-                  """),
-                  {
-                      "id": os.environ["GERCHAIN_ESCROW_ID"],
-                      "sender": "ci-source",
-                      "receiver": "ci-beneficiary",
-                      "amount": int(os.environ["GERCHAIN_ESCROW_AMOUNT"]),
-                      "refund_destination": "ci-source",
-                      "currency": os.environ["GERCHAIN_CURRENCY"],
-                  },
-              )
-          engine.dispose()
-
-          runtime, engine = build_production_runtime()
-          try:
-              assert runtime.is_canonical_ledger_authoritative
-              required = {
-                  "schema_version",
-                  "escrows",
-                  "gerchain_ledger_accounts",
-                  "gerchain_ledger_movements",
-                  "gerchain_transaction_witnesses",
-                  "gerchain_outbox_events",
-                  "gerchain_idempotency_records",
-              }
-              with engine.connect() as connection:
-                  actual = set(inspect(connection).get_table_names())
-                  missing = required - actual
-                  assert not missing, f"missing canonical tables: {sorted(missing)}"
-                  identity = connection.execute(text("SELECT current_database(), current_user, version()")).one()
-                  line = f"PASS: runtime PostgreSQL connection: database={identity[0]}; user={identity[1]}; tables={len(actual)}; canonical_authority={runtime.is_canonical_ledger_authoritative}"
-                  print(line)
-                  from pathlib import Path
-                  Path("artifacts/ea35/logs/postgres-connection-runtime.log").write_text(line + "\\n", encoding="utf-8")
-              print("PASS: real PostgreSQL boot and canonical authority verified")
-          finally:
-              engine.dispose()
-          PY
       - name: Bind all 17 migration checksums and validate canonical constraints from PostgreSQL catalog
         run: |
           python - <<'PY'
@@ -255,9 +192,6 @@ jobs:
               })
           PY
 
-      - name: Deep value-truth reconciliation tests on PostgreSQL
-        run: set -o pipefail; pytest -vv -s tests/persistence/test_deep_value_reconciliation_postgres.py 2>&1 | tee artifacts/ea35/logs/deep-value-reconciliation.log
-
       - name: Build canonical migration evidence manifest
         if: always()
         env:
@@ -289,6 +223,9 @@ jobs:
           if dsn:
               try:
                   with psycopg.connect(dsn) as conn:
+                      identity = conn.execute("SELECT current_database(), current_user, version()").fetchone()
+                      connection_line = f"PASS: PostgreSQL migration-evidence connection: database={identity[0]}; user={identity[1]}; server={identity[2]}"
+                      (root / 'artifacts/ea35/logs/postgres-connection-migration-evidence.log').write_text(connection_line + '\\n', encoding='utf-8')
                       exists = conn.execute("SELECT to_regclass('public.schema_version')").fetchone()[0]
                       if exists:
                           database_rows = [
@@ -415,3 +352,70 @@ jobs:
           path: artifacts/ea35/
           if-no-files-found: warn
           retention-days: 90
+
+      - name: Test production entrypoint contract
+        run: set -o pipefail; pytest -vv -s tests/services/test_production_entrypoint.py 2>&1 | tee artifacts/ea35/logs/production-entrypoint.log
+      - name: Boot real PostgreSQL production runtime and validate schema
+        run: |
+          python - <<'PY'
+          from sqlalchemy import create_engine, inspect, text
+          from production_entrypoint import build_production_runtime
+          from services.gerchain_runtime_factory import initialize_canonical_postgres_schema
+          import os
+
+          # Production boot requires pre-existing authoritative escrow truth.
+          # Bootstrap schema first, then seed only the isolated CI database.
+          engine = create_engine(os.environ["GERCHAIN_DATABASE_URL"], pool_pre_ping=True)
+          initialize_canonical_postgres_schema(engine)
+          with engine.begin() as connection:
+              connection.execute(
+                  text("""
+                      INSERT INTO escrows
+                          (id, sender_address, receiver_address, amount, state,
+                           condition_desc, refund_destination, currency, version,
+                           created_at, updated_at)
+                      VALUES
+                          (:id, :sender, :receiver, :amount, 'CREATED',
+                           'CI production boot', :refund_destination, :currency, 0,
+                           now(), now())
+                      ON CONFLICT (id) DO NOTHING
+                  """),
+                  {
+                      "id": os.environ["GERCHAIN_ESCROW_ID"],
+                      "sender": "ci-source",
+                      "receiver": "ci-beneficiary",
+                      "amount": int(os.environ["GERCHAIN_ESCROW_AMOUNT"]),
+                      "refund_destination": "ci-source",
+                      "currency": os.environ["GERCHAIN_CURRENCY"],
+                  },
+              )
+          engine.dispose()
+
+          runtime, engine = build_production_runtime()
+          try:
+              assert runtime.is_canonical_ledger_authoritative
+              required = {
+                  "schema_version",
+                  "escrows",
+                  "gerchain_ledger_accounts",
+                  "gerchain_ledger_movements",
+                  "gerchain_transaction_witnesses",
+                  "gerchain_outbox_events",
+                  "gerchain_idempotency_records",
+              }
+              with engine.connect() as connection:
+                  actual = set(inspect(connection).get_table_names())
+                  missing = required - actual
+                  assert not missing, f"missing canonical tables: {sorted(missing)}"
+                  identity = connection.execute(text("SELECT current_database(), current_user, version()")).one()
+                  line = f"PASS: runtime PostgreSQL connection: database={identity[0]}; user={identity[1]}; tables={len(actual)}; canonical_authority={runtime.is_canonical_ledger_authoritative}"
+                  print(line)
+                  from pathlib import Path
+                  Path("artifacts/ea35/logs/postgres-connection-runtime.log").write_text(line + "\\n", encoding="utf-8")
+              print("PASS: real PostgreSQL boot and canonical authority verified")
+          finally:
+              engine.dispose()
+          PY
+      - name: Deep value-truth reconciliation tests on PostgreSQL
+        run: set -o pipefail; pytest -vv -s tests/persistence/test_deep_value_reconciliation_postgres.py 2>&1 | tee artifacts/ea35/logs/deep-value-reconciliation.log
+
