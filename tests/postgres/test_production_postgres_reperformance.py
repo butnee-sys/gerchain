@@ -197,3 +197,84 @@ def test_postgres_create_rollback_leaves_no_partial_canonical_evidence():
             ).scalar_one_or_none() is None
     finally:
         engine.dispose()
+
+
+@pytest.mark.postgres
+def test_postgres_restart_recovery_preserves_canonical_truth_and_idempotency():
+    """A fresh runtime/engine after restart must recover state without duplicate movement."""
+    import uuid
+
+    url = os.environ["GERCHAIN_DATABASE_URL"]
+    suffix = uuid.uuid4().hex
+    escrow_id = f"pg-restart-escrow-{suffix}"
+    source_id = f"pg-restart-source-{suffix}"
+    tx_id = f"pg-restart-fund-{suffix}"
+    amount = 10
+
+    engine = create_engine(url, pool_pre_ping=True)
+    config = ProductionRuntimeConfig(
+        database_url=url,
+        escrow_id=escrow_id,
+        amount=amount,
+        currency="MNT",
+        witness_id=f"pg-restart-witness-{suffix}",
+    )
+    try:
+        runtime = ProductionRuntimeFactory(config, engine=engine).create()
+        assert runtime.is_canonical_ledger_authoritative
+        Session = sessionmaker(bind=engine, expire_on_commit=False)
+        with Session() as session:
+            now = datetime.now(timezone.utc)
+            session.add(LedgerAccountModel(
+                account_id=source_id, currency="MNT", balance=amount,
+                version=0, updated_at=now,
+            ))
+            session.commit()
+            create_escrow_in_transaction(
+                session,
+                transaction_id=f"pg-restart-create-{suffix}",
+                escrow_id=escrow_id,
+                source=source_id,
+                beneficiary=f"pg-restart-beneficiary-{suffix}",
+                refund_destination=source_id,
+                amount=amount,
+                currency="MNT",
+                condition="restart recovery proof",
+            )
+            session.commit()
+            fund_escrow_in_transaction(
+                session, transaction_id=tx_id, escrow_id=escrow_id,
+                source=source_id, amount=amount, currency="MNT",
+            )
+            session.commit()
+            assert session.get(CanonicalEscrow, escrow_id).state == EscrowState.FUNDED.value
+            before_movements = session.query(LedgerMovementModel).filter_by(transaction_id=tx_id).count()
+            assert before_movements == 1
+    finally:
+        engine.dispose()
+
+    # Simulate process restart: discard engine/session/runtime and rebuild them.
+    restarted_engine = create_engine(url, pool_pre_ping=True)
+    try:
+        restarted_runtime = ProductionRuntimeFactory(config, engine=restarted_engine).create()
+        assert restarted_runtime.is_canonical_ledger_authoritative
+        RestartedSession = sessionmaker(bind=restarted_engine, expire_on_commit=False)
+        with RestartedSession() as session:
+            recovered = session.get(CanonicalEscrow, escrow_id)
+            assert recovered is not None
+            assert recovered.state == EscrowState.FUNDED.value
+            assert session.get(LedgerAccountModel, source_id).balance == 0
+
+            replay = fund_escrow_in_transaction(
+                session, transaction_id=tx_id, escrow_id=escrow_id,
+                source=source_id, amount=amount, currency="MNT",
+            )
+            session.commit()
+            assert replay.get("idempotent_replay") is True or replay.get("replayed") is True
+
+            movement_count = session.query(LedgerMovementModel).filter_by(transaction_id=tx_id).count()
+            assert movement_count == 1
+            report = deep_reconcile_value_truth(session)
+            assert report.matched, report.issues
+    finally:
+        restarted_engine.dispose()
