@@ -93,13 +93,50 @@ jobs:
               'independent_reperformance', 'final_evidence_bundle',
           )
           conclusion = os.environ.get('GATE_CONCLUSION', 'missing')
-          outcomes = {
-              name: ('success' if conclusion == 'success' else conclusion)
-              for name in postgres_gates
-          }
-          # Fail closed, but make the absence explicit rather than relying on
-          # omitted keys that obscure why the master gate remains NOT_LOCKED.
-          outcomes.update({name: 'not_evidenced' for name in architecture_gates})
+          source_run_id = os.environ.get('SOURCE_RUN_ID', '')
+          target_sha = os.environ['GITHUB_SHA']
+          outcomes = {name: 'missing' for name in (*postgres_gates, *architecture_gates)}
+
+          # PostgreSQL outcomes are only accepted from a completed workflow run
+          # attached to the exact target SHA; its manifest is independently
+          # checked by production_gate_controller.py.
+          if conclusion == 'success' and source_run_id:
+              outcomes.update({name: 'success' for name in postgres_gates})
+          else:
+              outcomes.update({name: conclusion if conclusion else 'missing' for name in postgres_gates})
+
+          # Architecture gates must come from an explicit evidence file in the
+          # downloaded bundle. Never infer their success from PostgreSQL tests.
+          # Required shape:
+          # {"commit_sha":"<exact SHA>","gates":{"inventory_map":{"outcome":"success","evidence":"path-or-URI"}, ...}}
+          architecture_file = Path('artifacts/ea35/architecture-gates.json')
+          if architecture_file.is_file():
+              try:
+                  architecture_bundle = json.loads(architecture_file.read_text(encoding='utf-8'))
+                  if architecture_bundle.get('commit_sha') == target_sha:
+                      gate_records = architecture_bundle.get('gates', {})
+                      for name in architecture_gates:
+                          record = gate_records.get(name)
+                          if isinstance(record, dict):
+                              outcome = record.get('outcome')
+                              evidence = record.get('evidence')
+                              if outcome == 'success' and isinstance(evidence, str) and evidence.strip():
+                                  evidence_path = Path(evidence)
+                                  # Local evidence paths must resolve inside the downloaded artifact.
+                                  if evidence_path.is_absolute() or '..' in evidence_path.parts:
+                                      outcomes[name] = 'invalid_evidence_path'
+                                  elif (Path('artifacts/ea35') / evidence_path).is_file():
+                                      outcomes[name] = 'success'
+                                  elif evidence.startswith(('https://', 'urn:')):
+                                      outcomes[name] = 'success'
+                              elif isinstance(outcome, str):
+                                  outcomes[name] = outcome
+                  else:
+                      for name in architecture_gates:
+                          outcomes[name] = 'evidence_sha_mismatch'
+              except (OSError, json.JSONDecodeError, AttributeError, TypeError):
+                  for name in architecture_gates:
+                      outcomes[name] = 'evidence_bundle_invalid'
           output = Path('artifacts/ea35/production-gate-decision.json')
           output.parent.mkdir(parents=True, exist_ok=True)
           subprocess.run([
