@@ -233,10 +233,16 @@ def test_postgres_restart_recovery_preserves_canonical_truth_and_idempotency():
         Session = sessionmaker(bind=engine, expire_on_commit=False)
         with Session() as session:
             now = datetime.now(timezone.utc)
-            session.add(LedgerAccountModel(
-                account_id=source_id, currency="MNT", balance=amount,
-                version=0, updated_at=now,
-            ))
+            session.add_all([
+                LedgerAccountModel(
+                    account_id=source_id, currency="MNT", balance=amount,
+                    version=0, updated_at=now,
+                ),
+                LedgerAccountModel(
+                    account_id=escrow_id, currency="MNT", balance=0,
+                    version=0, updated_at=now,
+                ),
+            ])
             session.commit()
             create_escrow_in_transaction(
                 session,
