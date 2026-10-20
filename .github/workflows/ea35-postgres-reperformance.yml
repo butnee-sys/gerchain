@@ -649,6 +649,7 @@ jobs:
         run: |
           python - <<'PY'
           import hashlib
+          import json
           import xml.etree.ElementTree as ET
           from pathlib import Path
 
