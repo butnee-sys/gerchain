@@ -7,6 +7,14 @@ import pytest
 import production_entrypoint as entrypoint
 
 
+class FakeMigrationConnection:
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_args):
+        return False
+
+
 class FakeEngine:
     def __init__(self):
         self.disposed = False
@@ -34,6 +42,10 @@ class FakeRuntime:
 
 
 def set_required_env(monkeypatch, url="postgresql+psycopg://user:pass@localhost/db"):
+    # These are unit tests for entrypoint wiring. Real migration execution is
+    # covered by the PostgreSQL integration workflow, so never dial localhost.
+    monkeypatch.setattr(entrypoint.psycopg, "connect", lambda *args, **kwargs: FakeMigrationConnection())
+    monkeypatch.setattr(entrypoint, "apply_migrations", lambda connection, path: None)
     monkeypatch.setenv("GERCHAIN_DATABASE_URL", url)
     monkeypatch.setenv("GERCHAIN_ESCROW_ID", "escrow-1")
     monkeypatch.setenv("GERCHAIN_ESCROW_AMOUNT", "100")
@@ -122,10 +134,9 @@ def test_build_production_runtime_fails_closed_without_canonical_authority(monke
     monkeypatch.setattr(entrypoint, "create_engine", lambda *args, **kwargs: engine)
 
     class Factory:
-        def __init__(self, config, *, engine, session_factory):
+        def __init__(self, config, *, engine):
             assert config.database_url.startswith("postgresql")
             assert engine is not None
-            assert session_factory is not None
 
         def create(self):
             return SimpleNamespace(is_canonical_ledger_authoritative=False)
