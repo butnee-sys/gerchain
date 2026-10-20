@@ -45,10 +45,7 @@ def set_required_env(monkeypatch, url="postgresql+psycopg://user:pass@localhost/
 
 
 def _stub_postgres_boot(monkeypatch, engine):
-    from contextlib import nullcontext
     monkeypatch.setattr(entrypoint, "create_engine", lambda *args, **kwargs: engine)
-    monkeypatch.setattr(entrypoint.psycopg, "connect", lambda *args, **kwargs: nullcontext(object()))
-    monkeypatch.setattr(entrypoint, "apply_migrations", lambda *args, **kwargs: None)
 
 
 def test_build_production_runtime_uses_configured_factory_and_canonical_authority(monkeypatch):
