@@ -114,6 +114,15 @@ jobs:
           from datetime import datetime, timezone
           import hashlib, pathlib
           evidence_dir = pathlib.Path("production-evidence")
+          expected_evidence = ("migration-history.json", "postgres-constraints.json")
+          evidence_files = {}
+          missing_evidence = []
+          for name in expected_evidence:
+              path = evidence_dir / name
+              if path.is_file():
+                  evidence_files[name] = hashlib.sha256(path.read_bytes()).hexdigest()
+              else:
+                  missing_evidence.append(name)
           report = {
               "commit_sha": os.environ["SOURCE_SHA"],
               "workflow_run_id": int(os.environ["RUN_ID"]),
@@ -123,7 +132,9 @@ jobs:
               "job_name": "production-gate",
               "job_status": os.environ["JOB_STATUS"],
               "evidence_generated_at_utc": datetime.now(timezone.utc).isoformat(),
-              "evidence_files": {name: hashlib.sha256((evidence_dir / name).read_bytes()).hexdigest() for name in ("migration-history.json", "postgres-constraints.json")},
+              "evidence_files": evidence_files,
+              "missing_evidence_files": missing_evidence,
+              "evidence_status": "BLOCKED" if missing_evidence else "COLLECTED_PENDING_VERIFICATION",
               "scope": "Migration history and PostgreSQL constraints captured from the isolated PostgreSQL migration database; independently verify artifact and workflow metadata after completion."
           }
           with open("production-evidence/production-gate-report.json", "w", encoding="utf-8") as f:
