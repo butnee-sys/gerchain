@@ -340,6 +340,44 @@ jobs:
               raise SystemExit('database migration checksum differs from canonical manifest')
           print(json.dumps({'commit_sha': manifest['commit_sha'], 'checked_out_head_sha': head_sha, 'commit_sha_matches_head': manifest['commit_sha_matches_head'], 'canonical_migration_count': len(canonical), 'schema_version_rows': len(database_rows), 'sha256sums': str(out / 'SHA256SUMS'), 'manifest': str(out / 'manifest.json')}, indent=2))
           PY
+      - name: Build exact-SHA architecture gate evidence register
+        if: always()
+        env:
+          EVIDENCE_COMMIT_SHA: ${{ github.sha }}
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          sha = os.environ["EVIDENCE_COMMIT_SHA"]
+          repo = os.environ["GITHUB_REPOSITORY"]
+          root = Path.cwd()
+          gates = (
+              "inventory_map", "error_duplicate_excess",
+              "cross_store_reconciliation", "authority_boundary",
+              "core_correctness", "adapter_boundaries", "eai_g3_governance",
+              "transaction_correctness", "recovery", "auditability",
+              "security_iam_mfa", "observability", "performance_stress",
+              "disaster_recovery", "ci_release_governance",
+              "independent_reperformance", "final_evidence_bundle",
+          )
+          # A gate is green only when its own verifiable operational evidence exists.
+          # Documents alone do not prove IAM, DR, stress, recovery, or independent review.
+          records = {name: {"outcome": "open", "evidence": ""} for name in gates}
+          map_path = root / "docs/PRODUCTION_DATA_AUTHORITY_ADAPTER_MAP.md"
+          architecture_path = root / "docs/DEE_ARCHITECTURE_FREEZE.md"
+          if map_path.is_file() and architecture_path.is_file():
+              records["inventory_map"] = {
+                  "outcome": "success",
+                  "evidence": f"https://github.com/{repo}/blob/{sha}/docs/PRODUCTION_DATA_AUTHORITY_ADAPTER_MAP.md",
+              }
+          out = root / "artifacts/ea35/architecture-gates.json"
+          out.parent.mkdir(parents=True, exist_ok=True)
+          bundle = {"commit_sha": sha, "gates": records}
+          out.write_text(json.dumps(bundle, indent=2, sort_keys=True) + "\\n", encoding="utf-8")
+          print(json.dumps({"commit_sha": sha, "architecture_gate_count": len(records),
+                            "success": [k for k,v in records.items() if v["outcome"] == "success"],
+                            "open": [k for k,v in records.items() if v["outcome"] == "open"]}, indent=2))
+          PY
       - name: Upload canonical PostgreSQL evidence bundle
         if: always()
         uses: actions/upload-artifact@v4
