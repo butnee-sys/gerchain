@@ -291,7 +291,9 @@ jobs:
             echo "No evidence files available for checksumming" >&2
             exit 1
           fi
-          (cd postgres-migration-evidence && sha256sum "${files[@]/#postgres-migration-evidence\\//}" > SHA256SUMS)
+          names=()
+          for f in "${files[@]}"; do names+=("${f#postgres-migration-evidence/}"); done
+          (cd postgres-migration-evidence && sha256sum "${names[@]}" > SHA256SUMS)
           (cd postgres-migration-evidence && sha256sum -c SHA256SUMS)
       - name: Upload exact-SHA migration evidence
         if: always()
