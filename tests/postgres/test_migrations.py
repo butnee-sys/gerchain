@@ -133,3 +133,20 @@ def test_compatibility_runner_reexports_the_single_canonical_runner():
 
     assert migration_runner.apply_migrations is migrations.apply_migrations
     assert migration_runner.checksum is migrations.checksum
+
+
+def test_migration_002_003_have_non_overlapping_ownership():
+    """002 owns base persistence; 003 is index-only; 016 owns final state CHECK."""
+    migration_dir = Path(__file__).resolve().parents[2] / "postgres" / "migrations"
+    m002 = (migration_dir / "002_canonical_production.sql").read_text(encoding="utf-8").lower()
+    m003 = (migration_dir / "003_canonical_compatibility.sql").read_text(encoding="utf-8").lower()
+    m005 = (migration_dir / "005_canonical_production.sql").read_text(encoding="utf-8").lower()
+    m016 = (migration_dir / "016_reconcile_escrow_state_constraint.sql").read_text(encoding="utf-8").lower()
+
+    assert "create table if not exists gerchain_ledger_accounts" in m002
+    assert "create table if not exists gerchain_ledger_movements" in m002
+    assert "create index if not exists" in m003
+    assert "alter table escrows" not in m003
+    assert "escrows_state_check" in m005
+    assert "escrows_state_canonical_check" in m016
+    assert "validate constraint escrows_state_canonical_check" in m016
