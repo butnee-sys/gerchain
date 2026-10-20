@@ -5,6 +5,7 @@ from types import SimpleNamespace
 import pytest
 
 import production_entrypoint as entrypoint
+import services.gerchain_runtime_factory as factory_module
 
 
 class FakeMigrationConnection:
@@ -44,8 +45,8 @@ class FakeRuntime:
 def set_required_env(monkeypatch, url="postgresql+psycopg://user:pass@localhost/db"):
     # These are unit tests for entrypoint wiring. Real migration execution is
     # covered by the PostgreSQL integration workflow, so never dial localhost.
-    monkeypatch.setattr(entrypoint.psycopg, "connect", lambda *args, **kwargs: FakeMigrationConnection())
-    monkeypatch.setattr(entrypoint, "apply_migrations", lambda connection, path: None)
+    monkeypatch.setattr(factory_module.psycopg, "connect", lambda *args, **kwargs: FakeMigrationConnection())
+    monkeypatch.setattr(factory_module, "apply_migrations", lambda connection, path: None)
     monkeypatch.setenv("GERCHAIN_DATABASE_URL", url)
     monkeypatch.setenv("GERCHAIN_ESCROW_ID", "escrow-1")
     monkeypatch.setenv("GERCHAIN_ESCROW_AMOUNT", "100")
