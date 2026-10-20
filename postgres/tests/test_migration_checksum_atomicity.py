@@ -110,3 +110,48 @@ def test_checksum_mismatch_rolls_back_without_partial_schema_or_history(tmp_path
     finally:
         with psycopg.connect(admin_dsn, autocommit=True) as admin:
             admin.execute(sql.SQL("DROP DATABASE IF EXISTS {} WITH (FORCE)").format(sql.Identifier(database_name)))
+
+
+def test_failed_migration_ddl_rolls_back_schema_and_version_publication(tmp_path: Path):
+    """A deliberately failing migration must publish neither partial DDL nor history."""
+    admin_dsn = _dsn()
+    database_name = f"gerchain_ddl_rollback_{uuid.uuid4().hex[:12]}"
+    with psycopg.connect(admin_dsn, autocommit=True) as admin:
+        admin.execute(sql.SQL("CREATE DATABASE {}").format(sql.Identifier(database_name)))
+
+    dsn = make_conninfo(admin_dsn, dbname=database_name)
+    migration = tmp_path / "001_intentionally_failing.sql"
+    migration.write_text(
+        "CREATE TABLE should_not_survive (id INTEGER PRIMARY KEY);\n"
+        "THIS IS INTENTIONALLY INVALID SQL;\n",
+        encoding="utf-8",
+    )
+    try:
+        with psycopg.connect(dsn) as connection:
+            with pytest.raises(Exception):
+                apply_migrations(connection, tmp_path)
+
+        with psycopg.connect(dsn) as connection:
+            tables = {
+                row[0]
+                for row in connection.execute(
+                    "SELECT tablename FROM pg_tables WHERE schemaname = current_schema()"
+                ).fetchall()
+            }
+            registry_exists = connection.execute(
+                "SELECT to_regclass('public.schema_version')"
+            ).fetchone()[0] is not None
+            rows = (
+                connection.execute(
+                    "SELECT version, checksum FROM schema_version ORDER BY version"
+                ).fetchall()
+                if registry_exists
+                else []
+            )
+        assert "should_not_survive" not in tables, f"partial DDL survived failed migration: {tables!r}"
+        assert rows == [], f"failed migration published version history: {rows!r}"
+        print("FAILED_MIGRATION_DDL_ROLLBACK=PASS")
+        print("FAILED_MIGRATION_VERSION_PUBLICATION_ROLLBACK=PASS")
+    finally:
+        with psycopg.connect(admin_dsn, autocommit=True) as admin:
+            admin.execute(sql.SQL("DROP DATABASE IF EXISTS {} WITH (FORCE)").format(sql.Identifier(database_name)))

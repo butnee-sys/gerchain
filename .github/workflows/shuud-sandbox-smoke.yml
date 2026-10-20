@@ -5,11 +5,11 @@ concurrency:
 
 
 on:
-  # SHUUD is a separate project; do not include it in GERCHAIN EAI production gates.
   workflow_dispatch:
 
 jobs:
   smoke:
+    if: ${{ false }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

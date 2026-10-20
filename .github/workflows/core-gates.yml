@@ -86,15 +86,32 @@ jobs:
             tests/production/test_postgres_canonical_concurrency.py \
             tests/test_postgres_atomic_ledger.py \
             tests/test_production_runtime_factory.py \
-            tests/test_production_runtime_factory_postgres.py \
+            tests/production/test_production_runtime_factory_postgres.py \
+            tests/production/test_postgres_ten_movement_evidence.py \
             tests/production/test_production_entrypoint.py \
             tests/persistence/test_deep_value_reconciliation.py \
             tests/services/test_gerchain_runtime_fund_canonical.py \
             tests/services/test_gerchain_runtime_refund_canonical.py \
             tests/services/test_gerchain_runtime_cancel_canonical.py \
-            tests/services/test_gerchain_runtime_settlement_canonical.py \
+            tests/services/test_gerchain_runtime_settlement_canonical.py
       - name: Run full repository test suite on the same commit
         env:
           GERCHAIN_TEST_DATABASE_URL: postgresql+psycopg://gerchain:gerchain@127.0.0.1:5432/gerchain_test
           GERCHAIN_TEST_POSTGRES_URL: postgresql://gerchain:gerchain@127.0.0.1:5432/gerchain_test
         run: pytest -q --import-mode=importlib
+      - name: Audit canonical migration inventory and applied history
+        env:
+          GERCHAIN_MIGRATION_AUDIT_DATABASE_URL: postgresql://gerchain:gerchain@127.0.0.1:5432/gerchain_test
+          REQUIRE_MIGRATION_HISTORY: "1"
+          MIGRATION_INVENTORY_REPORT: artifacts/canonical-postgres-evidence/migration-gate-report.json
+        run: |
+          mkdir -p artifacts/canonical-postgres-evidence
+          python scripts/audit_migration_inventory.py
+      - name: Upload migration inventory evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: migration-gate-report-${{ github.sha }}
+          path: artifacts/canonical-postgres-evidence/migration-gate-report.json
+          if-no-files-found: warn
+          retention-days: 90

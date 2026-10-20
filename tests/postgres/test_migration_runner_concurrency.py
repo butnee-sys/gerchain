@@ -146,3 +146,71 @@ def test_concurrent_migrators_publish_one_version_record(postgres_schema):
         ).fetchall()
         assert rows == [(1, checksum(migration_sql))]
         assert conn.execute("SELECT COUNT(*) FROM migration_probe").fetchone()[0] == 0
+
+def _process_migrator(schema: str, migration_dir: str, start_event, result_queue) -> None:
+    """Independent OS process runner; synchronize both processes at first use."""
+    try:
+        start_event.wait(timeout=20)
+        with _connect_to_schema(schema) as conn:
+            apply_migrations(conn, Path(migration_dir))
+            conn.commit()
+        result_queue.put(("ok", os.getpid(), None))
+    except BaseException as exc:
+        result_queue.put(("error", os.getpid(), repr(exc)))
+
+
+def test_two_independent_processes_publish_one_schema_version(postgres_schema):
+    """Reproduce first-use migration concurrency with two OS processes."""
+    import multiprocessing
+
+    schema, migrations = postgres_schema
+    migration_sql = "CREATE TABLE migration_process_probe (id INTEGER PRIMARY KEY);"
+    (migrations / "001_process.sql").write_text(migration_sql, encoding="utf-8")
+
+    # Use spawn so each runner starts with an independent interpreter and DB connection.
+    ctx = multiprocessing.get_context("spawn")
+    start_event = ctx.Event()
+    result_queue = ctx.Queue()
+    processes = [
+        ctx.Process(
+            target=_process_migrator,
+            args=(schema, str(migrations), start_event, result_queue),
+        )
+        for _ in range(2)
+    ]
+    for process in processes:
+        process.start()
+    start_event.set()
+
+    results = []
+    try:
+        for _ in processes:
+            results.append(result_queue.get(timeout=45))
+        for process in processes:
+            process.join(timeout=10)
+        assert all(not process.is_alive() for process in processes), "migration process hung"
+        assert all(process.exitcode == 0 for process in processes), [
+            (process.pid, process.exitcode) for process in processes
+        ]
+        assert all(result[0] == "ok" for result in results), results
+        assert len({result[1] for result in results}) == 2, results
+
+        with _connect_to_schema(schema) as conn:
+            rows = conn.execute(
+                "SELECT version, checksum FROM schema_version WHERE version = 1"
+            ).fetchall()
+            assert rows == [(1, checksum(migration_sql))]
+            assert conn.execute(
+                "SELECT COUNT(*) FROM information_schema.tables "
+                "WHERE table_schema = %s AND table_name = 'migration_process_probe'",
+                (schema,),
+            ).fetchone()[0] == 1
+            assert conn.execute(
+                "SELECT COUNT(*) FROM schema_version WHERE version = 1"
+            ).fetchone()[0] == 1
+    finally:
+        for process in processes:
+            if process.is_alive():
+                process.terminate()
+            process.join(timeout=5)
+

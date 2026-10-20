@@ -41,7 +41,7 @@ database/db.py and gerchain/database.py expose SQLite stores. They are not produ
 
 ## Remaining hard checks
 
-1. Production entrypoint must instantiate ProductionRuntimeFactory / canonical runtime.
+1. Production entrypoint construction is implemented through ProductionRuntimeFactory and Canonical Ledger authority; verify it against the exact current candidate SHA and supported prior-schema upgrade path.
 2. No production path may instantiate MoneyLedger as value authority.
 3. No production path may use ReleaseAccount or AccountBalance as balance authority.
 4. No application-owned balance mutation may be reachable from production.
@@ -52,7 +52,7 @@ database/db.py and gerchain/database.py expose SQLite stores. They are not produ
 
 ## Current conclusion
 
-EA-34.11 is NOT LOCKED. Direct legacy mutation surfaces identified above are now fail-closed, but production entrypoint, durable escrow READ, full movement reconciliation, legacy-store freeze/removal, CI evidence, and independent re-performance remain open.
+EA-34.11 is NOT LOCKED. Production entrypoint and durable Escrow READ paths are implemented, and historical PostgreSQL production/EAI evidence is recorded for the exact SHAs listed below. Remaining open gates are existing-database upgrade proof, physical legacy-store archive/removal or independently verified write-disablement, current exact-SHA required CI, restart/recovery proof on that same SHA, organizational IAM/MFA and branch governance, and final independent re-performance.
 
 
 ## EA-35.13 verification update — 2026-09-27
@@ -198,3 +198,49 @@ It does not by itself close the broader fundamental-architecture lock. Remaining
 
 **EA-35 PostgreSQL gate: CLOSED / VERIFIED.**
 **Overall fundamental architecture: NOT LOCKED.**
+
+
+## EA-35.29 — Unified migration / restart-recovery / CI / external review evidence — 2026-10-18
+
+### Evidence anchor
+
+The latest previously documented branch-tip evidence anchor is:
+- Branch: `feat/ea21-transaction-aware-ledger`
+- Commit: `f11fcb6411f1458c7bb4696566a695a52141b0c3`
+
+GitHub combined commit status was queried for this exact SHA. The returned status includes:
+- `security/snyk (butnee-sys)` — `success`
+- Snyk result URL: https://app.snyk.io/org/butnee-sys/pr-checks/3a670071-fcff-452d-a369-61e777d8b72b
+
+This records the Snyk external security check as successful for that SHA. It is independent third-party scanning evidence; it is not a substitute for production migration, restart/recovery, or end-to-end transaction proof. The Snyk result should be retained with the release evidence package.
+
+### Gate matrix — do not collapse separate forms of proof
+
+| Gate | Available evidence | Current assessment |
+|---|---|---|
+| Fresh PostgreSQL schema/runtime boot | PostgreSQL 16 production runtime test; exact SHA/run evidence recorded in EA-35.28 | VERIFIED for the recorded execution SHA |
+| Versioned migration application | Successful production PostgreSQL gate and migration/boot steps recorded in EA-35.28 | VERIFIED for the recorded execution SHA; existing-database upgrade compatibility still requires confirmation against the actual production starting schema |
+| FUND / LOCK / RELEASE / REFUND / CANCEL / SETTLEMENT | Production PostgreSQL value-flow gate recorded in EA-35.28 | VERIFIED for the recorded execution SHA |
+| Deep value-truth reconciliation | Deep reconciliation step and independent persisted-value verification recorded in EA-35.28 | VERIFIED for the recorded execution SHA |
+| Restart / recovery / idempotent replay | Earlier durable recovery/idempotency tests and transaction-level evidence exist; this record does not prove a full process-kill + PostgreSQL restart + recovery run on the same exact SHA as all other gates | PARTIAL — same-SHA end-to-end closure NOT YET PROVEN |
+| GitHub CI | PostgreSQL production gate, independent PostgreSQL evidence, operating reconciliation and CodeQL successes are recorded for `f11fcb6411f1458c7bb4696566a695a52141b0c3`; the prior record says `core-gates` was still in progress | PARTIAL — do not infer every required workflow passed |
+| Snyk independent external security check | GitHub combined status `security/snyk (butnee-sys) = success` on `f11fcb6411f1458c7bb4696566a695a52141b0c3` | VERIFIED for that SHA; preserve the Snyk report/result link |
+| One exact SHA closes every migration, restart/recovery, CI, and independent review requirement | No evidence in this record demonstrates all of the above gates on one identical, current branch-tip SHA | OPEN |
+
+### Required closure evidence
+
+To close the unified gate, record one exact commit SHA and attach:
+1. Versioned migration run against a clean PostgreSQL database.
+2. Upgrade run from the supported prior schema, including migration-history and schema-guard output.
+3. Production boot/readiness and canonical-authority proof.
+4. FUND / LOCK / RELEASE / REFUND / CANCEL / SETTLEMENT plus deep value-truth reconciliation.
+5. Forced process interruption/restart, abandoned-operation recovery, and idempotent replay proving no duplicate value movement.
+6. All required GitHub Actions workflows completed successfully on that same SHA, including `core-gates` and the production PostgreSQL gate.
+7. Snyk result/report for the same SHA, with result URL and scan/retest timestamp retained.
+8. Independent re-performance record confirming the above artifacts correspond to the same source revision.
+
+### Status
+
+**Migration + restart/recovery + all CI + Snyk + independent re-performance as one same-SHA closure: OPEN / NOT LOCKED.**
+
+Snyk has successful external security-check evidence on the recorded SHA. PostgreSQL production verification also has successful historical exact-SHA evidence. Neither fact alone proves that every required gate has closed together on the current branch tip.

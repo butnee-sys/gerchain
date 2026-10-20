@@ -56,7 +56,7 @@ def test_eai_postgresql_canonical_value_lifecycle_and_reconciliation():
         assert runtime.is_canonical_ledger_authoritative
 
         with factory() as session:
-            for account in ("SRC", "BENEFICIARY", "REFUND", "CANCEL-SRC", "SETTLE"):
+            for account in ("SRC", "BENEFICIARY", "REFUND", "CANCEL-SRC", "SETTLE", "eai-release", "eai-refund", "eai-cancel"):
                 PostgreSQLAtomicLedger.create_account_in_transaction(
                     session, account, "MNT", 1000 if account in ("SRC", "CANCEL-SRC", "SETTLE") else 0
                 )

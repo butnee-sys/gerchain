@@ -53,9 +53,51 @@ jobs:
         run: python -m compileall -q .
       - name: Collect the complete test suite (fail closed)
         run: python -m pytest --import-mode=importlib --collect-only -q
-      - name: Run complete test suite
-        run: python -m pytest --import-mode=importlib -q
+      - name: Run complete test suite and emit JUnit evidence
+        run: |
+          mkdir -p production-evidence
+          python -m pytest --import-mode=importlib -q --junitxml=production-evidence/junit.xml
 
+      - name: Apply canonical migrations and capture PostgreSQL evidence
+        env:
+          GERCHAIN_MIGRATION_TEST_DSN: postgresql://gerchain:gerchain@localhost:5432/gerchain_migration_test
+          SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+        run: |
+          mkdir -p production-evidence
+          python - <<'PY'
+          import json, os
+          import psycopg
+          from postgres.migrations import apply_migrations
+          dsn = os.environ["GERCHAIN_MIGRATION_TEST_DSN"]
+          with psycopg.connect(dsn) as conn:
+              apply_migrations(conn, "postgres/migrations")
+              history = conn.execute("SELECT version, checksum FROM schema_version ORDER BY version").fetchall()
+              if len(history) != 17:
+                  raise SystemExit(f"FAIL: expected 17 applied migrations, found {len(history)}")
+              versions = [row[0] for row in history]
+              if len(set(versions)) != 17:
+                  raise SystemExit("FAIL: duplicate migration version in schema_version")
+              constraints = conn.execute("""
+                  SELECT tc.table_schema, tc.table_name, tc.constraint_name,
+                         tc.constraint_type, COALESCE(kcu.column_name, '') AS column_name
+                  FROM information_schema.table_constraints tc
+                  LEFT JOIN information_schema.key_column_usage kcu
+                    ON tc.constraint_catalog = kcu.constraint_catalog
+                   AND tc.constraint_schema = kcu.constraint_schema
+                   AND tc.constraint_name = kcu.constraint_name
+                   AND tc.table_name = kcu.table_name
+                  WHERE tc.table_schema = current_schema()
+                  ORDER BY tc.table_name, tc.constraint_name, column_name
+              """).fetchall()
+              with open("production-evidence/migration-history.json", "w", encoding="utf-8") as f:
+                  json.dump({"commit_sha": os.environ["SOURCE_SHA"], "workflow_run_id": int(os.environ["RUN_ID"]), "workflow_run_attempt": int(os.environ["RUN_ATTEMPT"]), "history": [{"version": v, "checksum": h} for v,h in history]}, f, indent=2, sort_keys=True)
+                  f.write("\n")
+              with open("production-evidence/postgres-constraints.json", "w", encoding="utf-8") as f:
+                  json.dump({"commit_sha": os.environ["GITHUB_SHA"], "workflow_run_id": int(os.environ["GITHUB_RUN_ID"]), "constraints": [{"schema": s, "table": t, "name": n, "type": ty, "column": col} for s,t,n,ty,col in constraints]}, f, indent=2, sort_keys=True)
+                  f.write("\n")
+          PY
       - name: Finalize production evidence manifest
         if: always()
         env:
@@ -70,6 +112,17 @@ jobs:
           python - <<'PY'
           import json, os
           from datetime import datetime, timezone
+          import hashlib, pathlib
+          evidence_dir = pathlib.Path("production-evidence")
+          expected_evidence = ("migration-history.json", "postgres-constraints.json")
+          evidence_files = {}
+          missing_evidence = []
+          for name in expected_evidence:
+              path = evidence_dir / name
+              if path.is_file():
+                  evidence_files[name] = hashlib.sha256(path.read_bytes()).hexdigest()
+              else:
+                  missing_evidence.append(name)
           report = {
               "commit_sha": os.environ["SOURCE_SHA"],
               "workflow_run_id": int(os.environ["RUN_ID"]),
@@ -79,18 +132,108 @@ jobs:
               "job_name": "production-gate",
               "job_status": os.environ["JOB_STATUS"],
               "evidence_generated_at_utc": datetime.now(timezone.utc).isoformat(),
-              "scope": "GitHub Actions job metadata only; workflow conclusion and artifact integrity must be independently checked via GitHub API after run completion."
+              "evidence_files": evidence_files,
+              "missing_evidence_files": missing_evidence,
+              "evidence_status": "BLOCKED" if missing_evidence else "COLLECTED_PENDING_VERIFICATION",
+              "scope": "Migration history and PostgreSQL constraints captured from the isolated PostgreSQL migration database; independently verify artifact and workflow metadata after completion."
           }
           with open("production-evidence/production-gate-report.json", "w", encoding="utf-8") as f:
               json.dump(report, f, indent=2, sort_keys=True)
-              f.write("\\n")
+              f.write("\n")
+          manifest_hash = hashlib.sha256((evidence_dir / "production-gate-report.json").read_bytes()).hexdigest()
+          (evidence_dir / "manifest.sha256").write_text(f"{manifest_hash}  production-gate-report.json\n", encoding="utf-8")
+          with (evidence_dir / "manifest.sha256").open("a", encoding="utf-8") as f:
+              for name, digest in report["evidence_files"].items():
+                  f.write(f"{digest}  {name}\n")
           print(json.dumps(report, indent=2, sort_keys=True))
+          PY
+      - name: Validate fail-closed master gate manifest
+        if: always()
+        env:
+          SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+          JOB_STATUS: ${{ job.status }}
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          manifest_path = Path("docs/production-master-gate-manifest.json")
+          manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+          assert manifest.get("policy") == "FAIL_CLOSED"
+          assert len(manifest.get("architecture_criteria", [])) == 17
+          assert len(manifest.get("postgres_checks", [])) == 13
+          for group in ("architecture_criteria", "postgres_checks"):
+              ids = [item["id"] for item in manifest[group]]
+              assert len(ids) == len(set(ids)), f"duplicate criterion ID in {group}"
+          # This first revision deliberately does not infer per-criterion PASS
+          # from aggregate job success. Criteria remain BLOCKED until each has
+          # a verifier and exact-SHA evidence binding.
+          decision = {
+              "schema_version": "1.0",
+              "gate": "PRODUCTION_MASTER_GATE",
+              "policy": "FAIL_CLOSED",
+              "commit_sha": os.environ["SOURCE_SHA"],
+              "checked_out_sha": os.popen("git rev-parse HEAD").read().strip(),
+              "workflow_run_id": int(os.environ["RUN_ID"]),
+              "workflow_run_attempt": int(os.environ["RUN_ATTEMPT"]),
+              "job_status_at_manifest_step": os.environ["JOB_STATUS"],
+              "architecture_criteria": [
+                  {"id": x["id"], "status": "BLOCKED", "evidence": [],
+                   "reason": "Per-criterion exact-SHA evidence verifier not yet wired."}
+                  for x in manifest["architecture_criteria"]
+              ],
+              "postgres_checks": [
+                  {"id": x["id"], "status": "BLOCKED", "evidence": [],
+                   "reason": "Per-check exact-SHA result binding not yet wired."}
+                  for x in manifest["postgres_checks"]
+              ],
+              "overall_status": "BLOCKED",
+              "lock_authorized": False
+          }
+          Path("production-evidence").mkdir(exist_ok=True)
+          out = Path("production-evidence/master-gate-decision.json")
+          out.write_text(json.dumps(decision, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+          print(json.dumps({"overall_status": decision["overall_status"],
+                            "lock_authorized": decision["lock_authorized"],
+                            "architecture_criteria": len(decision["architecture_criteria"]),
+                            "postgres_checks": len(decision["postgres_checks"])}, indent=2))
+          if decision["commit_sha"] != decision["checked_out_sha"]:
+              raise SystemExit("FAIL: evidence SHA does not match checked-out HEAD")
+          if decision["overall_status"] != "PASS" or not decision["lock_authorized"]:
+              raise SystemExit("FAIL-CLOSED: master gate remains BLOCKED; production lock prohibited")
+          PY
+      - name: Generate and verify SHA256SUMS and MANIFEST.SHA256
+        if: always()
+        run: |
+          python - <<'PY'
+          import hashlib
+          from pathlib import Path
+          root = Path("production-evidence")
+          if not root.exists():
+              raise SystemExit("FAIL: production-evidence directory missing")
+          files = sorted(p for p in root.rglob("*") if p.is_file() and p.name not in {"SHA256SUMS", "MANIFEST.SHA256"})
+          if not files:
+              raise SystemExit("FAIL: no evidence files to checksum")
+          sums = "".join(f"{hashlib.sha256(p.read_bytes()).hexdigest()}  {p.relative_to(root).as_posix()}\n" for p in files)
+          (root / "SHA256SUMS").write_text(sums, encoding="utf-8")
+          manifest_hash = hashlib.sha256((root / "SHA256SUMS").read_bytes()).hexdigest()
+          (root / "MANIFEST.SHA256").write_text(f"{manifest_hash}  SHA256SUMS\n", encoding="utf-8")
+          for line in sums.splitlines():
+              digest, name = line.split("  ", 1)
+              if hashlib.sha256((root / name).read_bytes()).hexdigest() != digest:
+                  raise SystemExit(f"FAIL: checksum mismatch: {name}")
+          if hashlib.sha256((root / "SHA256SUMS").read_bytes()).hexdigest() != manifest_hash:
+              raise SystemExit("FAIL: MANIFEST.SHA256 mismatch")
+          print(f"Verified {len(files)} evidence files; SHA256SUMS and MANIFEST.SHA256 valid.")
           PY
       - name: Upload production evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: production-gate-evidence
-          path: production-evidence/production-gate-report.json
+          path: |
+            production-evidence/*
+            docs/production-master-gate-manifest.json
           if-no-files-found: error
           retention-days: 30

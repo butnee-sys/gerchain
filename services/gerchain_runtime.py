@@ -27,12 +27,9 @@ from witness.chain import WitnessChain
 class GerchainRuntime:
     """GerChain Core authoritative runtime.
 
-Production syntax gate: this module must remain importable before runtime construction.
-
-    Production construction must use the Canonical Ledger boundary.
-
-    The default construction is a test-memory harness. Production mode attaches
-    the Canonical Ledger boundary explicitly; MoneyLedger remains test-only.
+    The default construction is a test-memory harness. Production construction
+    must explicitly attach the durable Canonical Ledger boundary; memory-backed
+    value movement is not a production fallback.
     """
 
     def __init__(
@@ -336,26 +333,12 @@ Production syntax gate: this module must remain importable before runtime constr
     def fund(self, transaction_id: str, source: str, timestamp: str, evidence: Any):
         if self.is_canonical_ledger_authoritative:
             from persistence.fund_escrow import fund_escrow_in_transaction
-
             with self._session_factory() as session:
-                result = fund_escrow_in_transaction(
-                    session,
-                    transaction_id=transaction_id,
-                    escrow_id=self.escrow_engine.escrow_id,
-                    source=source,
-                    amount=self.escrow_engine.amount,
-                    currency=self.escrow_engine.currency,
-                    payload={"timestamp": timestamp, "evidence": evidence},
-                )
+                result = fund_escrow_in_transaction(session, transaction_id=transaction_id, escrow_id=self.escrow_engine.escrow_id, source=source, amount=self.escrow_engine.amount, currency=self.escrow_engine.currency, payload={"timestamp": timestamp, "evidence": evidence})
                 session.commit()
                 return result
-
-        return self.escrow_service.fund(
-            transaction_id=transaction_id,
-            source=source,
-            timestamp=timestamp,
-            evidence=evidence,
-        )
+        self._require_test_memory_fallback("FUND")
+        return self.escrow_service.fund(transaction_id=transaction_id, source=source, timestamp=timestamp, evidence=evidence)
 
     def lock(self, transaction_id: str, timestamp: str, evidence: Any):
         if self.is_canonical_ledger_authoritative:

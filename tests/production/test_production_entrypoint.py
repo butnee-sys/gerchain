@@ -1,122 +1,148 @@
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import pytest
 
 import production_entrypoint as entrypoint
+import services.gerchain_runtime_factory as factory_module
 
 
-class _FakeEngine:
+class FakeMigrationConnection:
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_args):
+        return False
+
+
+class FakeEngine:
     def __init__(self):
         self.disposed = False
+        # Match the SQLAlchemy Engine contract used by the production boot guard.
+        self.dialect = SimpleNamespace(name="postgresql")
+
+    def connect(self):
+        class Connection:
+            def __enter__(self):
+                return self
+            def __exit__(self, *_args):
+                return False
+            def exec_driver_sql(self, statement):
+                assert statement == "SELECT 1"
+                return SimpleNamespace(scalar=lambda: 1)
+        return Connection()
 
     def dispose(self):
         self.disposed = True
 
 
-class _FakeRuntime:
+class FakeRuntime:
+    runtime_mode = "production-postgresql"
     is_canonical_ledger_authoritative = True
 
 
-def _set_required_env(monkeypatch):
-    monkeypatch.setenv("GERCHAIN_DATABASE_URL", "postgresql+psycopg://user:pass@localhost/db")
+def set_required_env(monkeypatch, url="postgresql+psycopg://user:pass@localhost/db"):
+    # These are unit tests for entrypoint wiring. Real migration execution is
+    # covered by the PostgreSQL integration workflow, so never dial localhost.
+    monkeypatch.setattr(factory_module.psycopg, "connect", lambda *args, **kwargs: FakeMigrationConnection())
+    monkeypatch.setattr(factory_module, "apply_migrations", lambda connection, path: None)
+    monkeypatch.setenv("GERCHAIN_DATABASE_URL", url)
     monkeypatch.setenv("GERCHAIN_ESCROW_ID", "escrow-1")
     monkeypatch.setenv("GERCHAIN_ESCROW_AMOUNT", "100")
     monkeypatch.setenv("GERCHAIN_CURRENCY", "MNT")
     monkeypatch.setenv("GERCHAIN_WITNESS_ID", "witness-1")
 
 
-def test_entrypoint_builds_instance_factory_and_requires_canonical_authority(monkeypatch):
-    _set_required_env(monkeypatch)
-    engine = _FakeEngine()
+def test_build_production_runtime_uses_configured_factory_and_canonical_authority(monkeypatch):
+    set_required_env(monkeypatch)
+    engine = FakeEngine()
     monkeypatch.setattr(entrypoint, "create_engine", lambda *args, **kwargs: engine)
-
-    seen = {}
+    captured = {}
 
     class Factory:
         def __init__(self, config, *, engine):
-            seen["config"] = config
-            seen["engine"] = engine
+            captured["config"] = config
+            captured["engine"] = engine
 
         def create(self):
-            return _FakeRuntime()
+            return FakeRuntime()
 
     monkeypatch.setattr(entrypoint, "ProductionRuntimeFactory", Factory)
-    runtime, returned_engine = entrypoint.build_production_runtime()
-
+    runtime, actual_engine = entrypoint.build_production_runtime()
     assert runtime.is_canonical_ledger_authoritative is True
-    assert returned_engine is engine
-    assert seen["engine"] is engine
-    assert seen["config"].database_url == "postgresql+psycopg://user:pass@localhost/db"
-    assert seen["config"].escrow_id == "escrow-1"
-    assert seen["config"].amount == 100
-    assert seen["config"].currency == "MNT"
-    assert seen["config"].witness_id == "witness-1"
+    assert actual_engine is engine
+    assert captured["engine"] is engine
+    assert captured["config"].database_url == "postgresql+psycopg://user:pass@localhost/db"
+    assert captured["config"].escrow_id == "escrow-1"
+    assert captured["config"].amount == 100
+    assert captured["config"].currency == "MNT"
+    assert captured["config"].witness_id == "witness-1"
 
 
-@pytest.mark.parametrize("database_url", ["", "sqlite:///unsafe.db", "postgres://not-an-accepted-prefix"])
-def test_entrypoint_rejects_non_postgresql_url_before_engine_creation(monkeypatch, database_url):
-    monkeypatch.setenv("GERCHAIN_DATABASE_URL", database_url)
-    monkeypatch.setenv("GERCHAIN_ESCROW_ID", "escrow-1")
-    monkeypatch.setenv("GERCHAIN_ESCROW_AMOUNT", "100")
-    monkeypatch.setenv("GERCHAIN_CURRENCY", "MNT")
-    monkeypatch.setenv("GERCHAIN_WITNESS_ID", "witness-1")
+@pytest.mark.parametrize("url", ["", "sqlite:///unsafe.db", "postgres://bad/db"])
+def test_build_production_runtime_rejects_non_postgresql_url(monkeypatch, url):
+    set_required_env(monkeypatch, url)
     monkeypatch.setattr(
-        entrypoint,
-        "create_engine",
-        lambda *args, **kwargs: pytest.fail("engine must not be created for invalid URL"),
+        entrypoint, "create_engine",
+        lambda *args, **kwargs: pytest.fail("engine must not be created"),
     )
-
     with pytest.raises(RuntimeError, match="pointing to PostgreSQL"):
         entrypoint.build_production_runtime()
 
 
-@pytest.mark.parametrize("amount", ["0", "-1"])
-def test_entrypoint_rejects_nonpositive_amount(monkeypatch, amount):
-    _set_required_env(monkeypatch)
-    monkeypatch.setenv("GERCHAIN_ESCROW_AMOUNT", amount)
-    monkeypatch.setattr(
-        entrypoint,
-        "create_engine",
-        lambda *args, **kwargs: pytest.fail("engine must not be created for invalid amount"),
-    )
-
-    with pytest.raises(RuntimeError, match="must be positive"):
+def test_build_production_runtime_requires_all_identity(monkeypatch):
+    set_required_env(monkeypatch)
+    monkeypatch.delenv("GERCHAIN_ESCROW_ID")
+    with pytest.raises(RuntimeError, match="GERCHAIN_ESCROW_ID"):
         entrypoint.build_production_runtime()
 
 
-def test_entrypoint_disposes_engine_when_factory_fails(monkeypatch):
-    _set_required_env(monkeypatch)
-    engine = _FakeEngine()
+@pytest.mark.parametrize("amount", ["0", "-1", "bad"])
+def test_build_production_runtime_rejects_invalid_amount(monkeypatch, amount):
+    set_required_env(monkeypatch)
+    monkeypatch.setenv("GERCHAIN_ESCROW_AMOUNT", amount)
+    monkeypatch.setattr(
+        entrypoint, "create_engine",
+        lambda *args, **kwargs: pytest.fail("engine must not be created"),
+    )
+    with pytest.raises(RuntimeError):
+        entrypoint.build_production_runtime()
+
+
+def test_build_production_runtime_disposes_engine_if_factory_fails(monkeypatch):
+    set_required_env(monkeypatch)
+    engine = FakeEngine()
     monkeypatch.setattr(entrypoint, "create_engine", lambda *args, **kwargs: engine)
 
     class Factory:
         def __init__(self, config, *, engine):
-            pass
+            assert config.database_url.startswith("postgresql")
+            assert engine is not None
 
         def create(self):
-            raise RuntimeError("schema migration failed")
+            raise RuntimeError("schema initialization failed")
 
     monkeypatch.setattr(entrypoint, "ProductionRuntimeFactory", Factory)
-
-    with pytest.raises(RuntimeError, match="schema migration failed"):
+    with pytest.raises(RuntimeError, match="schema initialization failed"):
         entrypoint.build_production_runtime()
     assert engine.disposed is True
 
 
-def test_entrypoint_fails_closed_if_factory_does_not_establish_canonical_authority(monkeypatch):
-    _set_required_env(monkeypatch)
-    engine = _FakeEngine()
+def test_build_production_runtime_fails_closed_without_canonical_authority(monkeypatch):
+    set_required_env(monkeypatch)
+    engine = FakeEngine()
     monkeypatch.setattr(entrypoint, "create_engine", lambda *args, **kwargs: engine)
 
     class Factory:
         def __init__(self, config, *, engine):
-            pass
+            assert config.database_url.startswith("postgresql")
+            assert engine is not None
 
         def create(self):
-            return type("Runtime", (), {"is_canonical_ledger_authoritative": False})()
+            return SimpleNamespace(is_canonical_ledger_authoritative=False)
 
     monkeypatch.setattr(entrypoint, "ProductionRuntimeFactory", Factory)
-
     with pytest.raises(RuntimeError, match="authority was not established"):
         entrypoint.build_production_runtime()
     assert engine.disposed is True

@@ -61,3 +61,32 @@ full escrow lifecycle, restart recovery, or independent re-performance.
 Release evidence must bind each passing run to the exact tested commit SHA, run ID, job ID,
 job log URL, artifact identifier or explicit `none`, and conclusion. Never promote a
 historical run to current-candidate evidence.
+
+
+## Fresh exact-SHA evidence — 2026-10-18
+
+**Verified code SHA:** `f7106b2c55596f8f0da1cc5ebf5e9667df68e62f`  
+**Branch:** `feat/ea21-transaction-aware-ledger`
+
+The following GitHub Actions runs were queried directly and their run metadata reports the same `head_sha` shown above:
+
+| Gate | Run ID | Conclusion | Evidence |
+|---|---:|---|---|
+| EA-35 PostgreSQL Re-performance | 39108696490 | SUCCESS | https://github.com/butnee-sys/gerchain/actions/runs/39108696490 |
+| EAI PostgreSQL Re-performance | 39108696508 | SUCCESS | https://github.com/butnee-sys/gerchain/actions/runs/39108696508 |
+| PostgreSQL Production Re-performance | 39108696581 | SUCCESS | https://github.com/butnee-sys/gerchain/actions/runs/39108696581 |
+| Independent Production Audit | 39108696491 | SUCCESS | https://github.com/butnee-sys/gerchain/actions/runs/39108696491 |
+| core-gates / full repository suite | 39108696657 | IN PROGRESS at evidence review | https://github.com/butnee-sys/gerchain/actions/runs/39108696657 |
+
+The EA-35 PostgreSQL run uploaded artifact `ea35-postgres-evidence-f7106b2c55596f8f0da1cc5ebf5e9667df68e62f`; the EAI run uploaded `eai-postgres-reperformance-f7106b2c55596f8f0da1cc5ebf5e9667df68e62f`; the independent audit uploaded `eai-production-audit-f7106b2c55596f8f0da1cc5ebf5e9667df68e62f-39108696491`. Artifact downloads are available from each run page.
+
+### Evidence decision
+
+- PostgreSQL re-performance: **PASS for the exact SHA above**.
+- EAI PostgreSQL re-performance: **PASS for the exact SHA above**.
+- Independent production audit workflow: **PASS for the exact SHA above**.
+- Full repository suite: **PENDING**; run 39108696657 was still in progress when queried.
+- Historical `FINAL_EXACT_SHA_FULL_SUITE_LOCK_EVIDENCE.md` records SHA `90f8cef1a2f27a198a3d80e13f0c4c65106a455d` only. It does **not** authorize a lock for `f7106b2c55596f8f0da1cc5ebf5e9667df68e62f`.
+- Production lock: **NOT AUTHORIZED** until the full-suite run completes successfully, all required exact-SHA gates are reconciled, and remaining external governance evidence is resolved.
+
+This register update is documentation-only. Its commit must not be represented as the tested code SHA; the evidence above remains bound to `f7106b2c55596f8f0da1cc5ebf5e9667df68e62f`.

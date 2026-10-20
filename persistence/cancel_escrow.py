@@ -6,13 +6,14 @@ from typing import Any, Mapping
 from sqlalchemy.orm import Session
 
 from persistence.atomic_ledger import PostgreSQLAtomicLedger
-from persistence.atomic_value_transaction import AtomicValueTransaction
+from persistence.atomic_value_transaction import AtomicValueTransaction, record_witness_in_transaction
 from persistence.durable_idempotency import (
     begin_in_transaction,
     complete_in_transaction,
     get_existing_in_transaction,
 )
 from persistence.escrow_aggregate import EscrowState
+from persistence.transactional_outbox import deterministic_event_id, enqueue_in_transaction
 
 
 def cancel_escrow_in_transaction(
@@ -85,6 +86,30 @@ def cancel_escrow_in_transaction(
             session, escrow_id, EscrowState.CREATED, EscrowState.CANCELLED
         )
         result = {"status": "CANCELLED", "value_movement": False, "amount": 0}
+        record_witness_in_transaction(
+            session,
+            transaction_id=transaction_id,
+            event_type="GERCHAIN_CANCELLED",
+            escrow_id=escrow_id,
+            amount=0,
+        )
+        enqueue_in_transaction(
+            session,
+            event_id=deterministic_event_id("GERCHAIN_CANCELLED", transaction_id),
+            event_type="GERCHAIN_CANCELLED",
+            aggregate_id=escrow_id,
+            payload={
+                "transaction_id": transaction_id,
+                "escrow_id": escrow_id,
+                "operation": "CANCEL",
+                "value_movement": False,
+                "source": None,
+                "destination": None,
+                "amount": 0,
+                "currency": escrow.currency,
+                **dict(payload or {}),
+            },
+        )
         complete_in_transaction(
             session,
             key=transaction_id,

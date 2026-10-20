@@ -39,6 +39,8 @@ jobs:
     steps:
       - name: Checkout exact commit
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -155,5 +157,128 @@ jobs:
       - name: Re-perform canonical PostgreSQL value lifecycle
         run: >-
           python -m pytest -vv -s
+          --junitxml=artifacts/postgres-lifecycle-junit.xml
           tests/postgres/test_production_postgres_reperformance.py
           tests/persistence/test_deep_value_reconciliation_postgres.py
+
+      - name: Write SHA-bound PostgreSQL migration and lifecycle evidence
+        if: always()
+        env:
+          EVIDENCE_COMMIT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          mkdir -p artifacts/production-postgres
+          python - <<'PY'
+          import hashlib, json, os, subprocess, xml.etree.ElementTree as ET
+          from pathlib import Path
+          import psycopg
+          from postgres.migrations import _canonical_migration_files
+
+          head = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+          expected_sha = os.environ["EVIDENCE_COMMIT_SHA"]
+          migration_dir = Path("postgres/migrations")
+          migrations = []
+          for path in _canonical_migration_files(migration_dir):
+              migrations.append({"path": str(path), "sha256": hashlib.sha256(path.read_bytes()).hexdigest()})
+          dsn = os.environ["GERCHAIN_MIGRATION_TEST_DATABASE_URL"]
+          chain_dsn = dsn.rsplit("/", 1)[0] + "/gerchain_migration_chain"
+          applied = []
+          migration_error = None
+          try:
+              with psycopg.connect(chain_dsn) as conn:
+                  rows = conn.execute("SELECT version, checksum FROM schema_version ORDER BY version").fetchall()
+                  applied = [{"version": row[0], "checksum": row[1]} for row in rows]
+          except Exception as exc:
+              migration_error = f"{type(exc).__name__}: {exc}"
+          junit = []
+          junit_path = Path("artifacts/postgres-lifecycle-junit.xml")
+          if junit_path.exists():
+              try:
+                  root = ET.parse(junit_path).getroot()
+                  # pytest commonly emits a <testsuites> root without aggregate
+                  # attributes. Sum actual <testsuite> nodes; never report a
+                  # false zero merely because the root has no counters.
+                  suites = [root] if root.tag == "testsuite" else list(root.iter("testsuite"))
+                  if not suites:
+                      raise ValueError(f"JUnit XML contains no testsuite nodes: root={root.tag!r}")
+                  junit = [{
+                      "tests": sum(int(s.attrib.get("tests", 0)) for s in suites),
+                      "failures": sum(int(s.attrib.get("failures", 0)) for s in suites),
+                      "errors": sum(int(s.attrib.get("errors", 0)) for s in suites),
+                      "skipped": sum(int(s.attrib.get("skipped", 0)) for s in suites),
+                      "suite_count": len(suites),
+                  }]
+                  if junit[0]["tests"] <= 0:
+                      raise ValueError("JUnit report contains zero tests")
+              except Exception as exc:
+                  junit = [{"parse_error": f"{type(exc).__name__}: {exc}"}]
+          expected_by_version = {
+              int(item["path"].split("/")[-1].split("_", 1)[0]): item["sha256"]
+              for item in migrations
+          }
+          applied_by_version = {int(item["version"]): str(item["checksum"]) for item in applied}
+          checksum_match = (
+              len(applied) == len(expected_by_version)
+              and applied_by_version == expected_by_version
+              and len(applied_by_version) == len(applied)
+          )
+          source_paths = [
+              "production_entrypoint.py",
+              "services/gerchain_runtime_factory.py",
+              "services/gerchain_runtime.py",
+              "persistence/atomic_ledger.py",
+              "persistence/escrow_aggregate.py",
+              "persistence/atomic_value_transaction.py",
+              "persistence/durable_idempotency.py",
+              "persistence/recovery_outbox.py",
+              "persistence/deep_value_reconciliation.py",
+              "postgres/migrations.py",
+              "tests/production/test_production_runtime_entrypoint.py",
+              "tests/postgres/test_production_postgres_reperformance.py",
+              "tests/persistence/test_deep_value_reconciliation_postgres.py",
+          ]
+          source_files = []
+          source_missing = []
+          for name in source_paths:
+              path = Path(name)
+              if not path.is_file():
+                  source_missing.append(name)
+              else:
+                  source_files.append({"path": name, "sha256": hashlib.sha256(path.read_bytes()).hexdigest()})
+          report = {
+              "commit_sha": expected_sha,
+              "checked_out_head_sha": head,
+              "sha_match": expected_sha == head,
+              "source_files": source_files,
+              "source_file_count": len(source_files),
+              "source_missing": source_missing,
+              "source_hashes_complete": not source_missing and len(source_files) == len(source_paths),
+              "migration_files": migrations,
+              "applied_migrations": applied,
+              "migration_file_count": len(migrations),
+              "applied_migration_count": len(applied),
+              "migration_checksums_sha256_valid": bool(applied) and all(len(str(x["checksum"])) == 64 for x in applied),
+              "migration_checksums_match_files": checksum_match,
+              "migration_history_versions_exact": sorted(applied_by_version) == list(range(1, len(expected_by_version) + 1)),
+              "migration_read_error": migration_error,
+              "lifecycle_junit": junit,
+              "evidence_status": "PASS_CANDIDATE" if expected_sha == head and not migration_error and len(applied) == len(migrations) and checksum_match and sorted(applied_by_version) == list(range(1, len(expected_by_version) + 1)) and source_files and not source_missing and junit and all(x.get("tests", 0) > 0 and x.get("failures", 0) == 0 and x.get("errors", 0) == 0 for x in junit) else "INCOMPLETE_OR_FAILED",
+          }
+          out = Path("artifacts/production-postgres/migration-lifecycle-report.json")
+          out.write_text(json.dumps(report, indent=2, sort_keys=True) + "\\n", encoding="utf-8")
+          print(json.dumps({k: report[k] for k in ("commit_sha", "checked_out_head_sha", "sha_match", "source_file_count", "source_hashes_complete", "source_missing", "migration_file_count", "applied_migration_count", "migration_checksums_match_files", "migration_history_versions_exact", "lifecycle_junit", "evidence_status")}, indent=2))
+          if not report["sha_match"]:
+              raise SystemExit("commit_sha does not match checked_out_head_sha")
+          PY
+          sha256sum artifacts/production-postgres/migration-lifecycle-report.json > artifacts/production-postgres/migration-lifecycle-report.json.sha256
+
+      - name: Upload PostgreSQL production evidence bundle
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-postgres-evidence-${{ github.sha }}
+          path: |
+            artifacts/production-postgres/
+            artifacts/postgres-lifecycle-junit.xml
+            artifacts/segmented-tests/
+          if-no-files-found: warn
+          retention-days: 90

@@ -532,3 +532,211 @@ def test_production_runtime_factory_boots_against_postgresql_when_configured() -
     }.issubset(tables)
 
     factory.engine.dispose()
+
+
+
+def test_restart_recovery_evidence_bundle_preserves_value_truth(tmp_path):
+    """Restart/recovery must preserve balances and the canonical evidence graph."""
+    from datetime import timedelta
+    from sqlalchemy import func
+    from persistence.recovery_outbox import PostgreSQLOutbox
+
+    database_url = f"sqlite+pysqlite:///{tmp_path / 'restart-recovery.sqlite'}"
+    engine = create_engine(database_url, pool_pre_ping=True)
+    AtomicLedgerBase.metadata.create_all(engine)
+    EscrowBase.metadata.create_all(engine)
+    OutboxBase.metadata.create_all(engine)
+    IdempotencyBase.metadata.create_all(engine)
+    TransactionWitness.metadata.create_all(engine)
+    factory = sessionmaker(bind=engine, expire_on_commit=False)
+
+    with factory() as session:
+        _seed_clean(session)
+        now = datetime.now(timezone.utc)
+        session.add_all([
+            LedgerAccountModel(account_id="esc-1", currency="USD", balance=0, version=1, updated_at=now),
+            LedgerAccountModel(account_id="DST", currency="USD", balance=10, version=1, updated_at=now),
+        ])
+        event = session.query(OutboxEvent).filter_by(event_id="gerchain_release:tx-1").one()
+        event.state = "PROCESSING"
+        event.attempts = 1
+        event.lease_until = now - timedelta(seconds=5)
+        event.updated_at = now
+        session.commit()
+
+        before = {
+            "balances": sorted((r.account_id, r.currency, r.balance, r.version)
+                               for r in session.query(LedgerAccountModel).all()),
+            "movements": session.query(func.count(LedgerMovementModel.id)).scalar(),
+            "witnesses": session.query(func.count(TransactionWitness.id)).scalar(),
+            "outbox": session.query(func.count(OutboxEvent.id)).scalar(),
+            "idempotency": session.query(func.count(DurableIdempotencyRecord.key)).scalar(),
+        }
+        assert before == {
+            "balances": [("DST", "USD", 10, 1), ("esc-1", "USD", 0, 1)],
+            "movements": 1, "witnesses": 1, "outbox": 1, "idempotency": 1,
+        }
+
+    engine.dispose()
+
+    # Simulate process restart: create a fresh engine/session factory over the same durable file.
+    restarted_engine = create_engine(database_url, pool_pre_ping=True)
+    restarted_factory = sessionmaker(bind=restarted_engine, expire_on_commit=False)
+    outbox = PostgreSQLOutbox(restarted_factory, lease_seconds=1)
+    assert outbox.recover_expired() == 1
+    first_claim = outbox.claim(limit=10)
+    assert len(first_claim) == 1
+    assert first_claim[0].attempts == 2
+
+    # Simulate another crash after claim; expire the lease, recover, and claim again.
+    with restarted_factory() as session:
+        event = session.query(OutboxEvent).filter_by(event_id="gerchain_release:tx-1").one()
+        event.lease_until = datetime.now(timezone.utc) - timedelta(seconds=5)
+        session.commit()
+    assert outbox.recover_expired() == 1
+    second_claim = outbox.claim(limit=10)
+    assert len(second_claim) == 1
+    assert second_claim[0].attempts == 3
+
+    with restarted_factory() as session:
+        after = {
+            "balances": sorted((r.account_id, r.currency, r.balance, r.version)
+                               for r in session.query(LedgerAccountModel).all()),
+            "movements": session.query(func.count(LedgerMovementModel.id)).scalar(),
+            "witnesses": session.query(func.count(TransactionWitness.id)).scalar(),
+            "outbox": session.query(func.count(OutboxEvent.id)).scalar(),
+            "idempotency": session.query(func.count(DurableIdempotencyRecord.key)).scalar(),
+        }
+        report = deep_reconcile_value_truth(session)
+        assert after == before, {"before": before, "after": after}
+        assert report.matched is True, report.issues
+
+    restarted_engine.dispose()
+
+
+
+def test_canonical_create_is_atomic_state_only_and_replay_safe():
+    from persistence.create_escrow import create_escrow_in_transaction
+
+    engine, factory = _session_factory()
+    with factory() as session:
+        first = create_escrow_in_transaction(
+            session,
+            transaction_id="create-tx-1",
+            escrow_id="create-escrow-1",
+            source="create-source",
+            beneficiary="create-beneficiary",
+            refund_destination="create-source",
+            amount=25,
+            currency="MNT",
+            condition="CREATE gate",
+        )
+        session.commit()
+        assert first["state"] == "CREATED"
+        assert first["value_movement"] is False
+        assert first["replayed"] is False
+
+    with factory() as session:
+        replay = create_escrow_in_transaction(
+            session,
+            transaction_id="create-tx-1",
+            escrow_id="create-escrow-1",
+            source="create-source",
+            beneficiary="create-beneficiary",
+            refund_destination="create-source",
+            amount=25,
+            currency="MNT",
+            condition="CREATE gate",
+        )
+        assert replay["replayed"] is True
+        assert session.query(LedgerMovementModel).count() == 0
+        assert session.query(TransactionWitness).filter_by(transaction_id="create-tx-1").count() == 1
+        assert session.query(OutboxEvent).filter_by(event_type="GERCHAIN_CREATED").count() == 1
+        assert session.query(DurableIdempotencyRecord).filter_by(key="create-tx-1", state="COMPLETED").count() == 1
+        report = deep_reconcile_value_truth(session)
+        assert report.matched, report.issues
+    engine.dispose()
+
+
+def test_canonical_create_rollback_leaves_no_partial_evidence():
+    from persistence.create_escrow import create_escrow_in_transaction
+
+    engine, factory = _session_factory()
+    with factory() as session:
+        create_escrow_in_transaction(
+            session,
+            transaction_id="create-rollback-tx",
+            escrow_id="create-rollback-escrow",
+            source="rollback-source",
+            beneficiary="rollback-beneficiary",
+            refund_destination="rollback-source",
+            amount=7,
+            currency="MNT",
+        )
+        session.rollback()
+
+    with factory() as session:
+        assert session.query(CanonicalEscrow).filter_by(id="create-rollback-escrow").count() == 0
+        assert session.query(TransactionWitness).filter_by(transaction_id="create-rollback-tx").count() == 0
+        assert session.query(OutboxEvent).filter(OutboxEvent.event_id.like("%create-rollback-tx")).count() == 0
+        assert session.query(DurableIdempotencyRecord).filter_by(key="create-rollback-tx").count() == 0
+        assert session.query(LedgerMovementModel).count() == 0
+    engine.dispose()
+
+
+def test_deep_reconciliation_detects_incomplete_state_only_lock_evidence():
+    engine, factory = _session_factory()
+    with factory() as session:
+        now = datetime.now(timezone.utc)
+        session.add(CanonicalEscrow(
+            id="lock-escrow", sender_address="SRC", receiver_address="DST",
+            amount=5, state="LOCKED", condition_desc="lock test",
+            refund_destination="SRC", currency="MNT", version=2,
+            created_at=now, updated_at=now,
+        ))
+        session.add(TransactionWitness(
+            transaction_id="lock-tx", event_type="GERCHAIN_LOCKED",
+            escrow_id="lock-escrow", amount=0, created_at=now,
+        ))
+        session.commit()
+
+        report = deep_reconcile_value_truth(session)
+        codes = {issue.code for issue in report.issues}
+        assert "STATE_ONLY_OUTBOX_MISSING" in codes
+        assert "STATE_ONLY_IDEMPOTENCY_MISSING" in codes
+        assert report.matched is False
+    engine.dispose()
+
+
+def test_deep_reconciliation_accepts_complete_state_only_lock_evidence():
+    engine, factory = _session_factory()
+    with factory() as session:
+        now = datetime.now(timezone.utc)
+        session.add(CanonicalEscrow(
+            id="lock-escrow", sender_address="SRC", receiver_address="DST",
+            amount=5, state="LOCKED", condition_desc="lock test",
+            refund_destination="SRC", currency="MNT", version=2,
+            created_at=now, updated_at=now,
+        ))
+        session.add(TransactionWitness(
+            transaction_id="lock-tx", event_type="GERCHAIN_LOCKED",
+            escrow_id="lock-escrow", amount=0, created_at=now,
+        ))
+        session.add(OutboxEvent(
+            event_id="gerchain_locked:lock-tx", event_type="GERCHAIN_LOCKED",
+            aggregate_id="lock-escrow", payload_json='{"transaction_id":"lock-tx","escrow_id":"lock-escrow"}',
+            state="PENDING", attempts=0, lease_until=None,
+            created_at=now, updated_at=now,
+        ))
+        payload = {"escrow_id": "lock-escrow", "operation": "LOCK"}
+        session.add(DurableIdempotencyRecord(
+            key="lock-tx", fingerprint=IdempotencyEngine.fingerprint(payload),
+            result_json='{"status":"LOCKED","value_movement":false}',
+            state="COMPLETED", created_at=now, updated_at=now,
+        ))
+        session.commit()
+
+        report = deep_reconcile_value_truth(session)
+        assert report.matched, report.issues
+        assert report.canonical_movement_count == 0
+    engine.dispose()

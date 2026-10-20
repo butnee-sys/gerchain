@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import os
+
+import psycopg
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -22,7 +24,8 @@ def test_production_factory_and_canonical_runtime_postgresql():
 
     engine = create_engine(DATABASE_URL, pool_pre_ping=True)
     try:
-        with engine.connect() as conn:
+        raw_url = DATABASE_URL.replace("postgresql+psycopg://", "postgresql://", 1)
+        with psycopg.connect(raw_url) as conn:
             apply_migrations(conn, MIGRATION_DIR)
 
         factory = ProductionRuntimeFactory(

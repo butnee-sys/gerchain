@@ -33,8 +33,25 @@ jobs:
       GERCHAIN_WITNESS_ID: ea35-reperformance-witness
       PYTHONPATH: .
     steps:
-      - name: Checkout exact revision
+      - name: Checkout exact tested revision
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Assert checkout matches requested evidence SHA
+        env:
+          EXPECTED_COMMIT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          python - <<'PY'
+          import os, subprocess
+          expected = os.environ['EXPECTED_COMMIT_SHA']
+          actual = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
+          print(f'EXPECTED_COMMIT_SHA={expected}')
+          print(f'CHECKED_OUT_HEAD_SHA={actual}')
+          if actual != expected:
+              raise SystemExit('FAIL: checkout HEAD differs from evidence SHA')
+          print('CHECKOUT_SHA_MATCH=PASS')
+          PY
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -60,6 +77,10 @@ jobs:
           PGPASSWORD=gerchain psql -h localhost -U gerchain -d gerchain_reperformance -c "SELECT current_database();"
           PGPASSWORD=gerchain psql -h localhost -U gerchain -d gerchain_upgrade -c "SELECT current_database();"
 
+      - name: Prepare test evidence directory
+        if: always()
+        run: mkdir -p artifacts/ea35
+
       - name: Run exact CORE fundamental-architecture gates (only after compileall passes)
         env:
           GERCHAIN_DATABASE_URL: postgresql+psycopg://gerchain:gerchain@localhost:5432/gerchain_reperformance
@@ -82,7 +103,8 @@ jobs:
             tests/production/test_postgres_canonical_concurrency.py \
             tests/test_postgres_atomic_ledger.py \
             postgres/tests/test_concurrency.py \
-            tests/test_production_runtime_factory.py
+            tests/test_production_runtime_factory.py \
+            --junitxml=artifacts/ea35/junit.xml
 
       - name: Verify PostgreSQL connection
         run: |
@@ -125,7 +147,7 @@ jobs:
               rows_first = connection.execute(
                   "SELECT version, checksum, applied_at::text FROM schema_version ORDER BY version"
               ).fetchall()
-              assert [row[0] for row in rows_first] == list(range(1, 17)), rows_first
+              assert [row[0] for row in rows_first] == list(range(1, 18)), rows_first
               assert all(row[1] for row in rows_first), rows_first
               constraints_first = connection.execute("""
                   SELECT conname, contype, convalidated, pg_get_constraintdef(oid)
@@ -174,7 +196,7 @@ jobs:
           print(f"MIGRATION_REGISTRY_AFTER_SHA256_INPUT={[(row[0], row[1]) for row in rows]!r}")
           PY
 
-      - name: Re-perform upgrade from canonical migrations 001-014 through 016
+      - name: Re-perform upgrade from canonical migrations 001-014 through 017
         run: |
           python - <<'PY'
           import os, tempfile
@@ -203,9 +225,9 @@ jobs:
                   """)
                   connection.commit()
                   applied_015 = apply_migrations(connection, Path('postgres/migrations'))
-                  assert applied_015 == (15, 16), applied_015
+                  assert applied_015 == (15, 16, 17), applied_015
                   after = connection.execute('SELECT version, checksum, applied_at FROM schema_version ORDER BY version').fetchall()
-                  assert [row[0] for row in after] == list(range(1, 17)), after
+                  assert [row[0] for row in after] == list(range(1, 18)), after
                   assert [(row[0], row[1]) for row in after[:14]] == before_checksums
                   state_constraints = connection.execute("""
                       SELECT conname, convalidated, pg_get_constraintdef(oid)
@@ -231,9 +253,9 @@ jobs:
                   print('UPGRADE_RERUN_IDEMPOTENCY=PASS')
           PY
 
-      - name: Capture schema snapshot and exact 16-migration manifest
+      - name: Capture schema snapshot and exact 17-migration manifest
         env:
-          EVIDENCE_COMMIT_SHA: ${{ github.sha }}
+          EVIDENCE_COMMIT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
           EVIDENCE_RUN_ID: ${{ github.run_id }}
           EVIDENCE_RUN_ATTEMPT: ${{ github.run_attempt }}
         run: |
@@ -280,7 +302,7 @@ jobs:
           expected = [(item["version"], item["sha256"]) for item in manifest_rows]
           actual = [(row[0], row[1]) for row in applied]
           assert actual == expected, {
-              "reason": "database migration registry does not match the canonical 16-file manifest",
+              "reason": "database migration registry does not match the canonical 17-file manifest",
               "expected": expected,
               "actual": actual,
           }
@@ -327,11 +349,11 @@ jobs:
                   json.dumps(schema, sort_keys=True, separators=(",", ":")).encode("utf-8")
               ).hexdigest(),
           }
-          assert len(manifest_rows) == 16
+          assert len(manifest_rows) == 17
           (out / "migration-manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
           (out / "postgres-schema-snapshot.json").write_text(json.dumps(schema, indent=2) + "\n", encoding="utf-8")
           (out / "commit-sha.txt").write_text(os.environ["EVIDENCE_COMMIT_SHA"] + "\n", encoding="utf-8")
-          print("MIGRATION_MANIFEST=16/16")
+          print("MIGRATION_MANIFEST=17/17")
           print("SCHEMA_VERSION_MATCHES_MANIFEST=PASS")
           print(f"POSTGRES_VERSION={pg_version}")
           print(f"SCHEMA_SNAPSHOT_SHA256={manifest['schema_snapshot_sha256']}")
@@ -340,35 +362,35 @@ jobs:
 
       - name: Verify canonical migration runner compatibility and migration contracts
         run: |
-          pytest -q tests/postgres/test_migrations.py
-          pytest -q postgres/tests/test_schema_version_bootstrap_contract.py
+          pytest -q tests/postgres/test_migrations.py --junitxml=artifacts/ea35/junit-migrations.xml
+          pytest -q postgres/tests/test_schema_version_bootstrap_contract.py --junitxml=artifacts/ea35/junit-schema-bootstrap.xml
 
       - name: Verify checksum mismatch fails without partial schema or history changes
         run: |
           set -o pipefail
-          pytest -vv -s postgres/tests/test_migration_checksum_atomicity.py 2>&1 | tee artifacts/ea35/checksum-runner.log
+          pytest -vv -s postgres/tests/test_migration_checksum_atomicity.py --junitxml=artifacts/ea35/junit-checksum-atomicity.xml 2>&1 | tee artifacts/ea35/checksum-runner.log
 
       - name: Re-perform concurrent migration publication on fresh PostgreSQL database
         run: |
           set -o pipefail
-          pytest -vv -s postgres/tests/test_concurrency.py 2>&1 | tee artifacts/ea35/concurrency-runner.log
+          pytest -vv -s postgres/tests/test_concurrency.py --junitxml=artifacts/ea35/junit-concurrency.xml 2>&1 | tee artifacts/ea35/concurrency-runner.log
 
       - name: Confirm isolated PostgreSQL test database remains available
         run: PGPASSWORD=gerchain psql -h localhost -U gerchain -d gerchain_reperformance -c "SELECT current_database();"
 
       - name: Re-perform durable value-truth test suite on PostgreSQL
         run: |
-          pytest -q tests/persistence/test_deep_value_reconciliation_postgres.py
+          pytest -q tests/persistence/test_deep_value_reconciliation_postgres.py --junitxml=artifacts/ea35/junit-value-reconciliation-postgres.xml
 
       - name: Re-perform CREATE/FUND/LOCK/RELEASE/REFUND/CANCEL/SETTLEMENT on PostgreSQL
         env:
           GERCHAIN_TEST_DATABASE_URL: postgresql+psycopg://gerchain:gerchain@localhost:5432/gerchain_reperformance
         run: |
-          pytest -q -s tests/persistence/test_canonical_lifecycle_postgres.py
+          pytest -q -s tests/persistence/test_canonical_lifecycle_postgres.py --junitxml=artifacts/ea35/junit-canonical-lifecycle-postgres.xml
 
       - name: Re-perform canonical atomic lifecycle, rollback, and replay tests on PostgreSQL
         run: |
-          pytest -q -s tests/persistence/test_deep_value_reconciliation.py
+          pytest -q -s tests/persistence/test_deep_value_reconciliation.py --junitxml=artifacts/ea35/junit-deep-value-reconciliation.xml
 
       - name: Verify production factory boots with canonical Ledger authority
         run: |
@@ -453,66 +475,254 @@ jobs:
                   stdout = stdout.decode("utf-8", errors="replace")
               if isinstance(stderr, bytes):
                   stderr = stderr.decode("utf-8", errors="replace")
-              output = stdout + "\\n" + stderr
+              output = stdout + "\n" + stderr
               assert "GerChain production runtime initialized:" in output, output
               print("PRODUCTION_ENTRYPOINT_BOOT=PASS")
               print("PRODUCTION_ENTRYPOINT_REMAINS_ALIVE=PASS")
           else:
-              output = completed.stdout + "\\n" + completed.stderr
+              output = completed.stdout + "\n" + completed.stderr
               assert completed.returncode == 0, output
               assert "GerChain production runtime initialized:" in output, output
               print("PRODUCTION_ENTRYPOINT_BOOT=PASS")
               print("PRODUCTION_ENTRYPOINT_EXITED_CLEANLY=PASS")
           PY
 
+      - name: Run independent-process migration concurrency regression
+        if: always()
+        env:
+          GERCHAIN_TEST_DATABASE_URL: postgresql+psycopg://gerchain:gerchain@localhost:5432/gerchain_reperformance
+          PYTHONPATH: .
+        run: |
+          set -o pipefail
+          pytest -q tests/postgres/test_migration_runner_concurrency.py \
+            --junitxml=artifacts/ea35/junit-migration-process-concurrency.xml \
+            2>&1 | tee artifacts/ea35/migration-process-concurrency.log
+
       - name: Finalize exact-SHA evidence report
         if: always()
         env:
-          EVIDENCE_COMMIT_SHA: ${{ github.sha }}
+          EVIDENCE_COMMIT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
           EVIDENCE_RUN_ID: ${{ github.run_id }}
           EVIDENCE_RUN_ATTEMPT: ${{ github.run_attempt }}
           EVIDENCE_JOB_STATUS: ${{ job.status }}
+          EVIDENCE_WORKFLOW: ${{ github.workflow }}
+          EVIDENCE_REPOSITORY: ${{ github.repository }}
         run: |
           python - <<'PY'
-          import json, os
+          import hashlib, json, os, subprocess
           from pathlib import Path
+          import xml.etree.ElementTree as ET
+
           root = Path("artifacts/ea35")
           root.mkdir(parents=True, exist_ok=True)
-          expected = [
-              "commit-sha.txt",
-              "migration-manifest.json",
-              "postgres-schema-snapshot.json",
-              "migration-registry-before.json",
-              "migration-registry-after.json",
-              "pg-constraints-after-first-run.json",
-              "pg-constraints-after-second-run.json",
-              "checksum-runner.log",
-              "concurrency-runner.log",
-          ]
-          present = sorted(path.name for path in root.iterdir() if path.is_file())
-          missing = [name for name in expected if name not in present]
-          report = {
-              "repository": os.environ.get("GITHUB_REPOSITORY"),
-              "commit_sha": os.environ["EVIDENCE_COMMIT_SHA"],
-              "workflow": os.environ.get("GITHUB_WORKFLOW"),
-              "workflow_run_id": os.environ["EVIDENCE_RUN_ID"],
-              "workflow_run_attempt": int(os.environ["EVIDENCE_RUN_ATTEMPT"]),
-              "job_status_at_finalization": os.environ["EVIDENCE_JOB_STATUS"],
-              "expected_evidence_files": expected,
-              "present_evidence_files": present,
-              "missing_evidence_files": missing,
-              "evidence_complete": not missing,
-          }
-          (root / "final-evidence-report.json").write_text(
-              json.dumps(report, indent=2) + "\n", encoding="utf-8"
+          expected_sha = os.environ["EVIDENCE_COMMIT_SHA"]
+          checked_out_head = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+          junit_paths = sorted(root.glob("junit*.xml"))
+          junit_generated_by_pytest = bool(junit_paths) and all(
+              path.stat().st_size > 0 for path in junit_paths
           )
-          print("FINAL_EVIDENCE_REPORT=" + json.dumps(report, sort_keys=True))
-          if os.environ["EVIDENCE_JOB_STATUS"] != "success":
-              print("EVIDENCE_CLOSEOUT=BLOCKED_JOB_NOT_SUCCESS")
-          elif missing:
-              print("EVIDENCE_CLOSEOUT=BLOCKED_MISSING_FILES")
-          else:
-              print("EVIDENCE_CLOSEOUT=EVIDENCE_COMPLETE_JOB_SUCCESS")
+          if not junit_paths:
+              (root / "junit.xml").write_text(
+                  '<?xml version="1.0" encoding="UTF-8"?>\n'
+                  '<testsuites tests="0" failures="0" errors="0" skipped="0">'
+                  '<testsuite name="pytest-not-run" tests="0" failures="0" errors="0" skipped="0">'
+                  '<system-out>pytest did not produce JUnit XML; this is a placeholder, not passing test evidence.</system-out>'
+                  '</testsuite></testsuites>\n',
+                  encoding="utf-8",
+              )
+              junit_paths = [root / "junit.xml"]
+          counts = {key: 0 for key in ("tests", "failures", "errors", "skipped")}
+          junit_files = []
+          for path in junit_paths:
+              xml_root = ET.parse(path).getroot()
+              suites = [xml_root] if xml_root.tag == "testsuite" else list(xml_root.iter("testsuite"))
+              file_counts = {key: 0 for key in counts}
+              for suite in suites:
+                  for key in counts:
+                      file_counts[key] += int(suite.attrib.get(key, "0"))
+                      counts[key] += int(suite.attrib.get(key, "0"))
+              junit_files.append({
+                  "path": str(path),
+                  "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+                  **file_counts,
+              })
+          aggregate_xml = root / "junit.xml"
+          if aggregate_xml not in junit_paths:
+              aggregate_xml.write_text(
+                  '<?xml version="1.0" encoding="UTF-8"?>\n'
+                  f'<testsuites tests="{counts["tests"]}" failures="{counts["failures"]}" errors="{counts["errors"]}" skipped="{counts["skipped"]}">\n'
+                  + "".join(
+                      ET.tostring(ET.parse(path).getroot(), encoding="unicode")
+                      for path in junit_paths
+                  )
+                  + '</testsuites>\n',
+                  encoding="utf-8",
+              )
+          junit_path = aggregate_xml
+          junit_sha256 = hashlib.sha256(junit_path.read_bytes()).hexdigest()
+          manifest_migration = root / "migration-manifest.json"
+          migration_data = json.loads(manifest_migration.read_text(encoding="utf-8")) if manifest_migration.exists() else {}
+          manifest_commit = migration_data.get("commit_sha")
+          commit_matches = checked_out_head == expected_sha and (manifest_commit is None or manifest_commit == expected_sha)
+          value_flow_path = root / "postgres-value-flow-evidence.json"
+          value_flow = json.loads(value_flow_path.read_text(encoding="utf-8")) if value_flow_path.exists() else {}
+          required_value_flow_keys = {
+              "commit_sha", "migration_history", "opening_balances", "closing_balances",
+              "movement_count", "witness_count", "outbox_count", "idempotency_count",
+              "reconciliation",
+          }
+          value_flow_complete = (
+              required_value_flow_keys.issubset(value_flow)
+              and value_flow.get("status") == "PASS"
+              and value_flow.get("commit_sha") == expected_sha
+              and len(value_flow.get("migration_history", [])) == 17
+              and value_flow.get("movement_count") == 7
+              and value_flow.get("witness_count") == 10
+              and value_flow.get("outbox_count") == 10
+              and value_flow.get("idempotency_count") == 10
+              and value_flow.get("reconciliation", {}).get("matched") is True
+              and not value_flow.get("reconciliation", {}).get("issues")
+          )
+          report = {
+              "repository": os.environ["EVIDENCE_REPOSITORY"],
+              "workflow": os.environ["EVIDENCE_WORKFLOW"],
+              "commit_sha": expected_sha,
+              "checked_out_head_sha": checked_out_head,
+              "migration_manifest_commit_sha": manifest_commit,
+              "run_id": int(os.environ["EVIDENCE_RUN_ID"]),
+              "run_attempt": int(os.environ["EVIDENCE_RUN_ATTEMPT"]),
+              "job_status_at_finalization": os.environ["EVIDENCE_JOB_STATUS"],
+              "junit": {
+                  "path": "artifacts/ea35/junit.xml",
+                  "sha256": junit_sha256,
+                  "generated_by_pytest": junit_generated_by_pytest,
+                  "files": junit_files,
+                  **counts,
+              },
+              "commit_sha_matches_checkout_and_migration_manifest": commit_matches,
+              "value_flow_evidence": {
+                  "path": "artifacts/ea35/postgres-value-flow-evidence.json" if value_flow_path.exists() else None,
+                  "complete": value_flow_complete,
+                  "movement_count": value_flow.get("movement_count"),
+                  "witness_count": value_flow.get("witness_count"),
+                  "outbox_count": value_flow.get("outbox_count"),
+                  "idempotency_count": value_flow.get("idempotency_count"),
+                  "reconciliation_matched": value_flow.get("reconciliation", {}).get("matched"),
+              },
+              "evidence_complete": bool(commit_matches and junit_generated_by_pytest and counts["failures"] == 0 and counts["errors"] == 0 and value_flow_complete),
+          }
+          (root / "manifest.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+
+          if not commit_matches:
+              print("EVIDENCE_CLOSEOUT=BLOCKED_SHA_MISMATCH")
+              raise SystemExit("FAIL: commit SHA differs between workflow, checkout, and migration manifest")
+          print("JUNIT_XML_SHA256=" + junit_sha256)
+          print("JUNIT_XML_COUNTS=" + json.dumps(counts, sort_keys=True))
+          print("EVIDENCE_RUN_ID=" + report["run_id"].__str__())
+          print("EVIDENCE_RUN_ATTEMPT=" + report["run_attempt"].__str__())
+          print("JUNIT_GENERATED_BY_PYTEST=" + str(junit_generated_by_pytest))
+          print("VALUE_FLOW_EVIDENCE_COMPLETE=" + str(value_flow_complete))
+          print("EVIDENCE_COMPLETE=" + str(report["evidence_complete"]))
+          if not report["evidence_complete"]:
+              raise SystemExit("FAIL: commit-bound PostgreSQL value-flow evidence bundle is incomplete")
+          PY
+
+      - name: Generate SHA256SUMS for evidence bundle
+        if: always()
+        run: |
+          python - <<'PY'
+          import hashlib, json
+          import xml.etree.ElementTree as ET
+          from pathlib import Path
+          root = Path("artifacts/ea35")
+          target = root / "SHA256SUMS"
+          entries = []
+          for path in sorted(root.iterdir()):
+              if path.is_file() and path.name != target.name:
+                  entries.append(f"{hashlib.sha256(path.read_bytes()).hexdigest()}  {path.name}")
+          target.write_text("\n".join(entries) + "\n", encoding="utf-8")
+          print(f"SHA256SUMS_ENTRIES={len(entries)}")
+          PY
+
+      - name: Verify bundle checksums and write top-level manifest digest
+        if: always()
+        run: |
+          python - <<'PY'
+          import hashlib
+          import json
+          import xml.etree.ElementTree as ET
+          from pathlib import Path
+
+          root = Path("artifacts/ea35")
+          required = {
+              "migration-manifest.json",
+              "junit.xml",
+              "manifest.json",
+              "postgres-value-flow-evidence.json",
+              "SHA256SUMS",
+          }
+          missing = sorted(name for name in required if not (root / name).is_file() or (root / name).stat().st_size == 0)
+          if missing:
+              raise SystemExit(f"FAIL: required evidence artifact missing/empty: {missing}")
+
+          # Validate the JUnit evidence itself; a non-empty placeholder is not evidence.
+          junit = ET.parse(root / "junit.xml").getroot()
+          suites = [junit] if junit.tag == "testsuite" else list(junit.iter("testsuite"))
+          junit_counts = {key: sum(int(s.attrib.get(key, "0")) for s in suites)
+                          for key in ("tests", "failures", "errors", "skipped")}
+          evidence = json.loads((root / "manifest.json").read_text(encoding="utf-8"))
+          bound_junit = evidence.get("junit", {})
+          if not bound_junit.get("generated_by_pytest"):
+              raise SystemExit("FAIL: aggregate JUnit was not generated by actual pytest output")
+          if not bound_junit.get("sha256") or hashlib.sha256((root / "junit.xml").read_bytes()).hexdigest() != bound_junit["sha256"]:
+              raise SystemExit("FAIL: JUnit checksum does not match exact-SHA evidence manifest")
+          if junit_counts["tests"] <= 0 or junit_counts["failures"] != 0 or junit_counts["errors"] != 0:
+              raise SystemExit(f"FAIL: JUnit results are not a non-empty clean test run: {junit_counts}")
+
+          sums = root / "SHA256SUMS"
+          verified_names = set()
+          verified = 0
+          for line in sums.read_text(encoding="utf-8").splitlines():
+              try:
+                  digest, name = line.split("  ", 1)
+              except ValueError as exc:
+                  raise SystemExit(f"FAIL: malformed SHA256SUMS line: {line!r}") from exc
+              if name in verified_names:
+                  raise SystemExit(f"FAIL: duplicate checksum entry: {name}")
+              verified_names.add(name)
+              path = root / name
+              if not path.is_file():
+                  raise SystemExit(f"FAIL: checksum target missing: {name}")
+              if hashlib.sha256(path.read_bytes()).hexdigest() != digest:
+                  raise SystemExit(f"FAIL: checksum mismatch: {name}")
+              verified += 1
+          if verified == 0:
+              raise SystemExit("FAIL: SHA256SUMS contains no entries")
+          required_in_sums = required - {"SHA256SUMS"}
+          if not required_in_sums.issubset(verified_names):
+              raise SystemExit(f"FAIL: SHA256SUMS omits required evidence: {sorted(required_in_sums - verified_names)}")
+
+          # MANIFEST.SHA256 is a detached checksum file to avoid self-hash recursion.
+          manifest = root / "manifest.json"
+          top = root / "MANIFEST.SHA256"
+          top.write_text(
+              f"{hashlib.sha256(sums.read_bytes()).hexdigest()}  SHA256SUMS\n"
+              f"{hashlib.sha256(manifest.read_bytes()).hexdigest()}  manifest.json\n",
+              encoding="utf-8",
+          )
+          top_lines = top.read_text(encoding="utf-8").splitlines()
+          if len(top_lines) != 2 or {line.split("  ", 1)[1] for line in top_lines} != {"SHA256SUMS", "manifest.json"}:
+              raise SystemExit("FAIL: MANIFEST.SHA256 is malformed or incomplete")
+          for line in top_lines:
+              digest, name = line.split("  ", 1)
+              if len(digest) != 64 or hashlib.sha256((root / name).read_bytes()).hexdigest() != digest:
+                  raise SystemExit(f"FAIL: top-level manifest checksum mismatch: {name}")
+          if not top.is_file() or top.stat().st_size == 0:
+              raise SystemExit("FAIL: MANIFEST.SHA256 missing or empty")
+          print(f"SHA256SUMS_VERIFIED_ENTRIES={verified}")
+          print("REQUIRED_ARTIFACTS=PASS")
+          print("JUNIT_CONTENT_AND_BINDING=PASS")
+          print("MANIFEST_SHA256_VERIFICATION=PASS")
           PY
 
       - name: Upload exact-SHA PostgreSQL evidence bundle

@@ -1,3 +1,7 @@
+# EA-35.55: exact-commit CI re-performance requested after reviewing historical PostgreSQL duplicate-publication failure; source inspection is not runtime proof.
+# EA-35.54: trigger exact-SHA PostgreSQL re-performance for migration publication invariants; runtime evidence required.
+# EA-35.53: exact-branch re-performance after duplicate schema_version publication failure; source review is not runtime evidence.
+# EA-35.52: clarify the session-lock/transaction/publication contract after migration duplicate-history review.
 # EA-35.50: fresh exact-SHA re-performance required after reviewing historical schema_version duplicate-publication failure logs; do not treat prior run as current evidence.
 # EA-35.48: exact-SHA PostgreSQL migration race re-performance trigger; prior failed runs are historical only.
 # EA-35.47: exact-branch re-performance after reviewing concurrent schema_version duplicate-publication evidence.
@@ -26,7 +30,7 @@
 from __future__ import annotations
 
 import hashlib
-from contextlib import contextmanager, nullcontext
+from contextlib import contextmanager
 from pathlib import Path
 
 import psycopg.sql
@@ -34,6 +38,26 @@ from sqlalchemy import text
 
 
 MIGRATION_LOCK_KEY = 73546501
+
+CANONICAL_MIGRATION_NAMES = {
+    1: "001_canonical_production.sql",
+    2: "002_canonical_production.sql",
+    3: "003_canonical_compatibility.sql",
+    4: "004_canonical_value_truth.sql",
+    5: "005_canonical_production.sql",
+    6: "006_canonical_movement_integrity.sql",
+    7: "007_canonical_production_reconciliation.sql",
+    8: "008_ea35_idempotency_compat.sql",
+    9: "009_canonical_movement_integrity_hardening.sql",
+    10: "010_canonical_evidence_constraints.sql",
+    11: "011_ea35_canonical_schema_finalization.sql",
+    12: "012_canonical_production.sql",
+    13: "013_ea35_canonical_schema_hardening.sql",
+    14: "014_canonical_escrow_state_constraint.sql",
+    15: "015_repair_escrow_state_constraint_drift.sql",
+    16: "016_reconcile_escrow_state_constraint.sql",
+    17: "017_ea35_created_witness_event.sql",
+}
 
 # Version 004 previously shipped with explicit BEGIN/COMMIT wrappers. Keep its
 # historical checksum accepted so existing databases can migrate to the
@@ -99,37 +123,43 @@ def checksum(sql: str) -> str:
 
 @contextmanager
 def _migration_transaction(conn):
-    """Serialize the complete migration batch in one PostgreSQL transaction.
+    """Serialize the complete migration batch with a PostgreSQL session lock.
 
-    The runner strips historical BEGIN/COMMIT wrappers from migration files,
-    so no migration is permitted to commit independently. A transaction-scoped
-    advisory lock therefore protects the full read/DDL/publication sequence and
-    is released atomically by commit or rollback. This avoids the session-lock
-    acquire/unlock lifecycle, which can leave a connection holding a lock after
-    an interrupted or partially failed migration runner.
+    A transaction-scoped advisory lock is insufficient if any legacy migration
+    script or driver path commits while the batch is running: that commit releases
+    the lock and permits another runner to publish the same version. A session
+    lock survives transaction boundaries. It is always released in finally;
+    migration DDL and schema_version publication remain transactionally committed
+    or rolled back by the existing runner.
     """
     if _connection_in_transaction(conn):
         raise RuntimeError("migration runner requires a clean transaction")
 
     is_sqlalchemy = hasattr(conn, "exec_driver_sql")
 
-    def execute(sql, params=()):
+    def execute(statement, params=()):
         if is_sqlalchemy:
-            return conn.exec_driver_sql(sql, params)
-        return conn.execute(sql, params)
+            return conn.exec_driver_sql(statement, params)
+        return conn.execute(statement, params)
 
+    acquired = False
     try:
-        execute("SELECT pg_advisory_xact_lock(%s)", (MIGRATION_LOCK_KEY,))
+        execute("SELECT pg_advisory_lock(%s)", (MIGRATION_LOCK_KEY,))
+        acquired = True
         yield
         conn.commit()
     except Exception:
         conn.rollback()
         raise
+    finally:
+        if acquired:
+            try:
+                execute("SELECT pg_advisory_unlock(%s)", (MIGRATION_LOCK_KEY,))
+                conn.commit()
+            except Exception:
+                conn.rollback()
+                raise
 
-
-def _connection_in_transaction(conn) -> bool:
-    value = getattr(conn, "in_transaction", False)
-    return value() if callable(value) else bool(value)
 
 def _execute(conn, sql: str, params=None):
     # Non-parameterized DDL/PLpgSQL may contain literal percent signs.
@@ -175,22 +205,7 @@ def _canonical_migration_files(path: Path) -> list[Path]:
         # Prefer the explicitly frozen canonical filename when present.
         # This avoids relying on substring matching when historical aliases
         # share the same numeric migration version.
-        preferred_name = {
-            1: "001_canonical_production.sql",
-            2: "002_canonical_production.sql",
-            3: "003_canonical_compatibility.sql",
-            4: "004_canonical_value_truth.sql",
-            5: "005_canonical_production.sql",
-            6: "006_canonical_production.sql",
-            7: "007_canonical_production.sql",
-            8: "008_ea35_idempotency_compat.sql",
-            9: "009_canonical_movement_integrity_hardening.sql",
-            10: "010_canonical_evidence_constraints.sql",
-            11: "011_ea35_canonical_schema_finalization.sql",
-            12: "012_canonical_production.sql",
-            13: "013_ea35_canonical_schema_hardening.sql",
-        14: "014_canonical_escrow_state_constraint.sql",
-        }.get(version)
+        preferred_name = CANONICAL_MIGRATION_NAMES.get(version)
         if preferred_name:
             preferred_path = next((p for p in candidates if p.name == preferred_name), None)
             if preferred_path is not None:
@@ -219,23 +234,6 @@ def apply_migrations(conn, migration_dir: str | Path) -> None:
     # historical aliases: one deterministic file is applied on a fresh
     # database, while an already-applied checksum from any alias remains
     # accepted.
-    preferred_names = {
-        1: "001_canonical_production.sql",
-        2: "002_canonical_production.sql",
-        3: "003_canonical_compatibility.sql",
-        4: "004_canonical_value_truth.sql",
-        5: "005_canonical_production.sql",
-        6: "006_canonical_production.sql",
-        7: "007_canonical_production.sql",
-        8: "008_ea35_idempotency_compat.sql",
-        9: "009_canonical_movement_integrity_hardening.sql",
-        10: "010_canonical_evidence_constraints.sql",
-        11: "011_ea35_canonical_schema_finalization.sql",
-        12: "012_canonical_production.sql",
-        13: "013_ea35_canonical_schema_hardening.sql",
-        14: "014_canonical_escrow_state_constraint.sql",
-        15: "015_repair_escrow_state_constraint_drift.sql",
-    }
     versions: dict[int, list[Path]] = {}
     for migration in files:
         version = int(migration.name.split("_", 1)[0])
@@ -243,7 +241,7 @@ def apply_migrations(conn, migration_dir: str | Path) -> None:
 
     preferred: dict[int, Path] = {}
     for version, candidates in versions.items():
-        preferred_name = preferred_names.get(version)
+        preferred_name = CANONICAL_MIGRATION_NAMES.get(version)
         if preferred_name:
             selected = next((p for p in candidates if p.name == preferred_name), None)
             if selected is not None:
@@ -266,7 +264,8 @@ def apply_migrations(conn, migration_dir: str | Path) -> None:
                 + ", ".join(p.name for p in candidates)
             )
 
-    # EA-35.51: one transaction-scoped lock serializes migration DDL and version publication.
+    # Session advisory lock serializes the full batch; DDL and version publication
+    # commit or roll back together in the migration transaction.
     migration_context = _migration_transaction(conn)
     applied_now: list[int] = []
     try:
@@ -409,7 +408,7 @@ def apply_migrations(conn, migration_dir: str | Path) -> None:
                 # Concurrent runners must never publish duplicate schema history.
                 # The unique version key is a final publication barrier even if
                 # an older runner reaches this point after the advisory lock path.
-                # The transaction-scoped advisory lock serializes compliant runners;
+                # The session-scoped advisory lock serializes compliant runners;
                 # ON CONFLICT remains a second-line idempotency barrier for legacy
                 # or differently-versioned bootstrap callers.
                 # Publish the version/checksum as one conflict-safe statement.

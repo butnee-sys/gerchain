@@ -93,7 +93,7 @@ def test_postgres_upgrade_from_014_preserves_frozen_history_and_repairs_state_co
             conn.commit()
         with _connect(schema) as conn:
             applied = apply_migrations(conn, MIGRATIONS)
-            assert applied == (15, 16)
+            assert applied == (15, 16, 17)
         with _connect(schema) as conn:
             after = conn.execute(
                 "SELECT version, checksum, applied_at FROM schema_version ORDER BY version"
@@ -101,6 +101,7 @@ def test_postgres_upgrade_from_014_preserves_frozen_history_and_repairs_state_co
             assert after[:14] == before
             assert after[14][0] == 15
             assert after[15][0] == 16
+            assert after[16][0] == 17
             _assert_migration_015_constraints(conn)
 
         with _connect(schema) as conn:
@@ -120,12 +121,12 @@ def test_postgres_clean_apply_rerun_and_history_stability():
     try:
         with _connect(schema) as conn:
             first = apply_migrations(conn, MIGRATIONS)
-            assert first == tuple(range(1, 17))
+            assert first == tuple(range(1, 18))
         with _connect(schema) as conn:
             before = conn.execute(
                 "SELECT version, checksum, applied_at FROM schema_version ORDER BY version"
             ).fetchall()
-            assert [row[0] for row in before] == list(range(1, 17))
+            assert [row[0] for row in before] == list(range(1, 18))
             _assert_migration_015_constraints(conn)
 
         engine = create_engine(DSN, connect_args={"options": f"-c search_path={schema}"})
@@ -162,9 +163,9 @@ def test_postgres_two_concurrent_runners_publish_each_version_once():
             rows = conn.execute(
                 "SELECT version, COUNT(*) FROM schema_version GROUP BY version ORDER BY version"
             ).fetchall()
-        assert [row[0] for row in rows] == list(range(1, 17))
+        assert [row[0] for row in rows] == list(range(1, 18))
         assert all(row[1] == 1 for row in rows)
-        assert sorted(len(result) for result in results) == [0, 16]
+        assert sorted(len(result) for result in results) == [0, 17]
         with _connect(schema) as conn:
             _assert_migration_015_constraints(conn)
     finally:
@@ -253,7 +254,7 @@ def test_v016_repairs_escrow_state_constraint_drift_after_v015_is_recorded(drift
             conn.commit()
 
         with _connect(schema) as conn:
-            assert apply_migrations(conn, MIGRATIONS) == (16,)
+            assert apply_migrations(conn, MIGRATIONS) == (16, 17)
 
         with _connect(schema) as conn:
             _assert_migration_015_constraints(conn)
@@ -270,7 +271,7 @@ def test_v016_repairs_escrow_state_constraint_drift_after_v015_is_recorded(drift
             versions = conn.execute(
                 "SELECT version FROM schema_version ORDER BY version"
             ).fetchall()
-            assert [row[0] for row in versions] == list(range(1, 17))
+            assert [row[0] for row in versions] == list(range(1, 18))
             # The SELECT above opens a transaction in psycopg; the migration
             # runner deliberately requires a clean connection on entry.
             conn.commit()

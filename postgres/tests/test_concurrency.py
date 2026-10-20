@@ -19,7 +19,25 @@ from persistence.atomic_ledger import (
     PostgreSQLAtomicLedger,
 )
 
-from postgres.migrations import apply_migrations
+from postgres.migrations import (
+    CANONICAL_MIGRATION_NAMES,
+    _canonical_migration_files,
+    apply_migrations,
+)
+
+
+
+def test_canonical_migration_inventory_has_one_authoritative_filename_per_version():
+    """Prevent selection-map drift from repeatedly reviving duplicate migration paths."""
+    migration_dir = Path(__file__).resolve().parents[1] / "migrations"
+    selected = _canonical_migration_files(migration_dir)
+    versions = [int(path.name.split("_", 1)[0]) for path in selected]
+    assert versions == list(range(1, len(CANONICAL_MIGRATION_NAMES) + 1))
+    assert len(versions) == len(set(versions)), f"duplicate selected migration versions: {versions}"
+    assert {
+        int(path.name.split("_", 1)[0]): path.name for path in selected
+    } == CANONICAL_MIGRATION_NAMES
+    assert all((migration_dir / name).is_file() for name in CANONICAL_MIGRATION_NAMES.values())
 
 
 def _dsn() -> str:
@@ -164,14 +182,25 @@ def test_migrations_are_serialized_and_checksum_is_stable(monkeypatch):
             f"duplicate schema_version publication: rows={rows!r}"
         )
         assert versions
-        assert versions == list(range(1, 17)), f"schema_version history has gaps or unexpected versions: {versions}"
+        assert versions == list(range(1, len(CANONICAL_MIGRATION_NAMES) + 1)), f"schema_version history has gaps or unexpected versions: {versions}"
         assert max(versions) >= 16
-        assert all(checksum for _, checksum in rows)
+        # Every published digest must be a full SHA-256 hex string; truthy-but-invalid
+        # checksums are not sufficient evidence for a canonical migration history.
+        assert all(
+            len(digest) == 64 and all(ch in "0123456789abcdef" for ch in digest)
+            for _, digest in rows
+        ), f"invalid schema_version SHA-256 checksum(s): {rows!r}"
 
         # Re-run the publisher and prove both the version set and each checksum
         # are unchanged after a second complete migration pass.
         rerun_result = _run_migrations("RERUN")
         print(f"MIGRATION_RERUN_RESULT result={rerun_result!r}", flush=True)
+        # The rerun connection itself must observe the exact same version/checksum
+        # history, and the persisted history must remain byte-for-byte stable.
+        assert rerun_result["rows"] == rows, (
+            f"rerun observed changed migration history: {rerun_result['rows']!r} "
+            f"versus original {rows!r}"
+        )
         with psycopg.connect(fresh_dsn) as conn:
             rows_after = conn.execute(
                 "SELECT version, checksum FROM schema_version ORDER BY version"
@@ -245,6 +274,62 @@ def test_checksum_failure_rolls_back_prior_migration_ddl_and_history(monkeypatch
                     sql.Identifier(database_name)
                 )
             )
+
+
+def test_modified_applied_migration_is_rejected_by_checksum(monkeypatch, tmp_path):
+    """Changing a migration file after publication must fail closed."""
+    admin_dsn = _dsn()
+    database_name = f"gerchain_checksum_mutation_{uuid.uuid4().hex[:12]}"
+    with psycopg.connect(admin_dsn, autocommit=True) as admin:
+        admin.execute(sql.SQL("CREATE DATABASE {}").format(sql.Identifier(database_name)))
+
+    fresh_dsn = make_conninfo(admin_dsn, dbname=database_name)
+    migration_dir = tmp_path / "checksum_mutation_bundle"
+    migration_dir.mkdir()
+    migration = migration_dir / "001_create_probe.sql"
+    migration.write_text(
+        "CREATE TABLE checksum_probe (id INTEGER);", encoding="utf-8"
+    )
+    try:
+        with psycopg.connect(fresh_dsn) as conn:
+            apply_migrations(conn, migration_dir)
+            original = conn.execute(
+                "SELECT version, checksum FROM schema_version ORDER BY version"
+            ).fetchall()
+            assert len(original) == 1
+            assert original[0][0] == 1
+            conn.commit()
+
+            migration.write_text(
+                "CREATE TABLE checksum_probe (id INTEGER, changed TEXT);",
+                encoding="utf-8",
+            )
+            with pytest.raises(
+                RuntimeError, match="Migration checksum mismatch for version 1"
+            ):
+                apply_migrations(conn, migration_dir)
+
+            history = conn.execute(
+                "SELECT version, checksum FROM schema_version ORDER BY version"
+            ).fetchall()
+            columns = conn.execute(
+                """
+                SELECT column_name FROM information_schema.columns
+                WHERE table_schema = current_schema()
+                  AND table_name = 'checksum_probe'
+                ORDER BY ordinal_position
+                """
+            ).fetchall()
+            assert history == original
+            assert [row[0] for row in columns] == ["id"]
+    finally:
+        with psycopg.connect(admin_dsn, autocommit=True) as admin:
+            admin.execute(
+                sql.SQL("DROP DATABASE IF EXISTS {} WITH (FORCE)").format(
+                    sql.Identifier(database_name)
+                )
+            )
+
 
 def test_postgres_interruption_and_retry_moves_value_exactly_once(monkeypatch):
     """A rolled-back attempt moves no value; a retry and replay move it once."""

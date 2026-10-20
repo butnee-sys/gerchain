@@ -42,11 +42,83 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install -r requirements-dee-security.txt pytest
+      - name: Prepare evidence directory
+        if: always()
+        run: mkdir -p artifacts/ea35-postgres-proof/logs
+
       - name: Prove concurrent migration publication
-        run: pytest -q tests/postgres/test_migration_concurrency.py
+        run: set -o pipefail; pytest -q tests/postgres/test_migration_concurrency.py 2>&1 | tee artifacts/ea35-postgres-proof/logs/migration-concurrency.log
       - name: Prove migration rollback
-        run: pytest -q tests/postgres/test_migration_rollback.py
+        run: set -o pipefail; pytest -q tests/postgres/test_migration_rollback.py 2>&1 | tee artifacts/ea35-postgres-proof/logs/migration-rollback.log
       - name: Prove production runtime boot and canonical schema
-        run: pytest -q tests/services/test_production_runtime_factory_postgres.py
+        run: set -o pipefail; pytest -q tests/services/test_production_runtime_factory_postgres.py 2>&1 | tee artifacts/ea35-postgres-proof/logs/production-runtime-boot.log
       - name: Prove deep value-truth reconciliation, rollback, and replay
-        run: pytest -q tests/persistence/test_deep_value_reconciliation.py
+        run: set -o pipefail; pytest -q tests/persistence/test_deep_value_reconciliation.py 2>&1 | tee artifacts/ea35-postgres-proof/logs/deep-value-reconciliation.log
+
+      - name: Build and verify exact-SHA evidence manifest
+        if: always()
+        env:
+          EVIDENCE_COMMIT_SHA: ${{ github.sha }}
+          EVIDENCE_RUN_ID: ${{ github.run_id }}
+          EVIDENCE_RUN_ATTEMPT: ${{ github.run_attempt }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, os, platform, subprocess
+          from pathlib import Path
+          root = Path.cwd()
+          files = [
+              Path(".github/workflows/postgres-proof.yml"),
+              Path("production_entrypoint.py"),
+              Path("services/gerchain_runtime_factory.py"),
+              Path("services/gerchain_runtime.py"),
+              Path("persistence/deep_value_reconciliation.py"),
+              Path("tests/postgres/test_migration_concurrency.py"),
+              Path("tests/postgres/test_migration_rollback.py"),
+              Path("tests/services/test_production_runtime_factory_postgres.py"),
+              Path("tests/persistence/test_deep_value_reconciliation.py"),
+          ]
+          files += sorted(Path("postgres/migrations").glob("*.sql"))
+          missing = [str(p) for p in files if not p.is_file()]
+          if missing:
+              raise SystemExit(f"required evidence source missing: {missing}")
+          out = root / "artifacts/ea35-postgres-proof"
+          out.mkdir(parents=True, exist_ok=True)
+          sha_lines = subprocess.run(
+              ["sha256sum", *[str(p) for p in files]],
+              check=True, capture_output=True, text=True
+          ).stdout
+          (out / "SHA256SUMS").write_text(sha_lines, encoding="utf-8")
+          manifest = {
+              "repository": os.environ.get("GITHUB_REPOSITORY"),
+              "commit_sha": os.environ["EVIDENCE_COMMIT_SHA"],
+              "workflow_run_id": os.environ["EVIDENCE_RUN_ID"],
+              "workflow_run_attempt": os.environ["EVIDENCE_RUN_ATTEMPT"],
+              "python_version": platform.python_version(),
+              "source_files": [str(p) for p in files],
+              "sha256_manifest": "SHA256SUMS",
+              "git_status_porcelain": subprocess.run(
+                  ["git", "status", "--porcelain"], check=True,
+                  capture_output=True, text=True
+              ).stdout.splitlines(),
+          }
+          (out / "manifest.json").write_text(
+              json.dumps(manifest, indent=2) + "\n", encoding="utf-8"
+          )
+          (out / "commit-sha.txt").write_text(
+              manifest["commit_sha"] + "\n", encoding="utf-8"
+          )
+          print(json.dumps(manifest, indent=2))
+          PY
+          sha256sum -c artifacts/ea35-postgres-proof/SHA256SUMS
+          printf '%s  %s\n' "$(sha256sum artifacts/ea35-postgres-proof/manifest.json | cut -d' ' -f1)" "manifest.json" > artifacts/ea35-postgres-proof/MANIFEST.SHA256
+          (cd artifacts/ea35-postgres-proof && sha256sum -c MANIFEST.SHA256)
+
+      - name: Upload exact-SHA PostgreSQL evidence bundle
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ea35-postgres-proof-${{ github.sha }}-run-${{ github.run_id }}
+          path: artifacts/ea35-postgres-proof/
+          if-no-files-found: error
+          retention-days: 90

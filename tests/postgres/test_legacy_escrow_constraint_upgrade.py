@@ -25,7 +25,7 @@ def _admin_dsn() -> str:
 
 
 @pytest.mark.postgres
-def test_full_16_migration_chain_repairs_legacy_constraint_without_losing_escrows():
+def test_full_17_migration_chain_repairs_legacy_constraint_without_losing_escrows():
     admin_dsn = _admin_dsn()
     database_name = f"gerchain_legacy_upgrade_{uuid.uuid4().hex[:12]}"
     with psycopg.connect(admin_dsn, autocommit=True) as admin:
@@ -88,7 +88,7 @@ def test_full_16_migration_chain_repairs_legacy_constraint_without_losing_escrow
             versions = conn.execute(
                 "SELECT version FROM schema_version ORDER BY version"
             ).fetchall()
-            assert [row[0] for row in versions] == list(range(1, 17))
+            assert [row[0] for row in versions] == list(range(1, 18))
 
             state_constraints = conn.execute("""
                 SELECT conname, pg_get_constraintdef(oid), convalidated
@@ -130,7 +130,7 @@ def test_full_16_migration_chain_repairs_legacy_constraint_without_losing_escrow
                 "SELECT version FROM schema_version ORDER BY version"
             ).fetchall()
             assert rerun_rows == actual_rows
-            assert [row[0] for row in rerun_versions] == list(range(1, 17))
+            assert [row[0] for row in rerun_versions] == list(range(1, 18))
             assert conn.execute(
                 "SELECT COUNT(*) FROM pg_constraint WHERE conrelid='escrows'::regclass "
                 "AND conname='legacy_escrow_state_check'"

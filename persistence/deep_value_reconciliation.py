@@ -53,6 +53,21 @@ def _expected_integrity_hash(movement: LedgerMovementModel) -> str:
     return hashlib.sha256(material.encode("utf-8")).hexdigest()
 
 
+def _is_state_only_cancel_payload(payload_json: str) -> bool:
+    """Return True only when an outbox payload explicitly declares no value movement."""
+    try:
+        payload = json.loads(payload_json)
+    except (TypeError, json.JSONDecodeError):
+        return False
+    return (
+        isinstance(payload, dict)
+        and payload.get("operation") == "CANCEL"
+        and payload.get("value_movement") is False
+        and payload.get("amount") == 0
+        and payload.get("destination") is None
+    )
+
+
 def deep_reconcile_value_truth(session: Session) -> DeepValueTruthReport:
     """Read-only two-way reconciliation of canonical transaction evidence.
 
@@ -157,8 +172,61 @@ def deep_reconcile_value_truth(session: Session) -> DeepValueTruthReport:
         elif movement.integrity_hash != _expected_integrity_hash(movement):
             issue("INTEGRITY_HASH_MISMATCH", tx, "movement integrity hash does not match canonical fields")
 
-    # Witness and outbox also represent state-only operations (for example
-    # LOCK), so reverse orphan checks apply only to value-moving event types.
+    # State-only operations must still form a complete evidence graph.
+    # They have no Ledger movement by design, but must bind to one escrow,
+    # one matching witness, one matching outbox event, and completed idempotency.
+    state_only_types = {
+        "GERCHAIN_CREATED": "CREATE",
+        "GERCHAIN_LOCKED": "LOCK",
+        "GERCHAIN_CANCELLED": "CANCEL",
+    }
+    for witness in witnesses:
+        operation = state_only_types.get(witness.event_type)
+        if operation is None or witness.transaction_id in movement_by_tx:
+            continue
+        tx = witness.transaction_id
+        if witness.amount != 0:
+            issue("STATE_ONLY_WITNESS_AMOUNT", tx, f"{operation} state-only witness must have zero amount")
+        if witness.escrow_id not in escrow_by_id:
+            issue("STATE_ONLY_ESCROW_MISSING", tx, f"{operation} state-only witness references a missing escrow")
+        matching = [
+            event for event in outbox_by_tx.get(tx, [])
+            if event.event_type == witness.event_type and event.aggregate_id == witness.escrow_id
+        ]
+        if not matching:
+            issue("STATE_ONLY_OUTBOX_MISSING", tx, f"{operation} state-only witness has no matching outbox event")
+        idem = idem_by_key.get(tx)
+        if idem is None or idem.state != "COMPLETED":
+            issue("STATE_ONLY_IDEMPOTENCY_MISSING", tx, f"{operation} state-only witness has no completed idempotency record")
+
+    # Outbox-side checks prevent a state-only event from appearing authoritative
+    # without its matching witness and completed idempotency record.
+    for event in outboxes:
+        operation = state_only_types.get(event.event_type)
+        if operation is None:
+            continue
+        parts = event.event_id.split(":", 1)
+        tx = parts[1] if len(parts) == 2 else None
+        if tx is None or tx in movement_by_tx:
+            continue
+        witness = witness_by_tx.get(tx)
+        idem = idem_by_key.get(tx)
+        if (
+            witness is None
+            or witness.event_type != event.event_type
+            or witness.escrow_id != event.aggregate_id
+            or witness.amount != 0
+            or event.aggregate_id not in escrow_by_id
+            or idem is None
+            or idem.state != "COMPLETED"
+        ):
+            issue("STATE_ONLY_OUTBOX_MISMATCH", tx, f"{operation} state-only outbox does not match escrow, witness and completed idempotency")
+        if operation == "CANCEL" and not _is_state_only_cancel_payload(event.payload_json):
+            issue("STATE_ONLY_CANCEL_PAYLOAD_INVALID", tx, "state-only CANCEL outbox must explicitly declare zero value movement")
+
+    # Value-moving evidence must bind to a Ledger movement. State-only CREATE,
+    # LOCK and CREATED cancellation instead require a matching aggregate and
+    # their own durable witness/outbox/idempotency evidence.
     value_event_types = {
         "GERCHAIN_FUNDED",
         "GERCHAIN_RELEASED",
@@ -168,9 +236,24 @@ def deep_reconcile_value_truth(session: Session) -> DeepValueTruthReport:
     }
 
     for witness in witnesses:
+        if witness.event_type == "GERCHAIN_CREATED":
+            if witness.amount != 0 or witness.escrow_id not in escrow_by_id:
+                issue("CREATE_WITNESS_MISMATCH", witness.transaction_id, "CREATE witness must bind to an existing escrow with zero value movement")
+            create_outbox = [e for e in outbox_by_tx.get(witness.transaction_id, []) if e.event_type == "GERCHAIN_CREATED" and e.aggregate_id == witness.escrow_id]
+            if not create_outbox:
+                issue("CREATE_OUTBOX_MISSING", witness.transaction_id, "CREATE witness has no matching CREATE outbox event")
+            idem = idem_by_key.get(witness.transaction_id)
+            if idem is None or idem.state != "COMPLETED":
+                issue("CREATE_IDEMPOTENCY_MISSING", witness.transaction_id, "CREATE witness has no completed idempotency evidence")
+        state_only_cancel = (
+            witness.event_type == "GERCHAIN_CANCELLED"
+            and witness.amount == 0
+            and witness.transaction_id not in movement_by_tx
+        )
         if (
             witness.event_type in value_event_types
             and witness.transaction_id not in movement_by_tx
+            and not state_only_cancel
         ):
             issue(
                 "ORPHAN_WITNESS",
@@ -179,11 +262,45 @@ def deep_reconcile_value_truth(session: Session) -> DeepValueTruthReport:
             )
 
     for event in outboxes:
+        if event.event_type == "GERCHAIN_CREATED":
+            parts = event.event_id.split(":", 1)
+            tx = parts[1] if len(parts) == 2 else None
+            payload_is_state_only_create = False
+            try:
+                payload = json.loads(event.payload_json)
+                payload_is_state_only_create = (
+                    isinstance(payload, dict)
+                    and payload.get("operation") == "CREATE"
+                    and payload.get("value_movement") is False
+                    and payload.get("amount") == 0
+                    and payload.get("destination") is None
+                )
+            except (TypeError, json.JSONDecodeError):
+                pass
+            witness = witness_by_tx.get(tx) if tx else None
+            idem = idem_by_key.get(tx) if tx else None
+            if (
+                tx is None
+                or witness is None
+                or witness.event_type != "GERCHAIN_CREATED"
+                or witness.escrow_id != event.aggregate_id
+                or event.aggregate_id not in escrow_by_id
+                or not payload_is_state_only_create
+                or idem is None
+                or idem.state != "COMPLETED"
+            ):
+                issue("CREATE_OUTBOX_MISMATCH", tx, "CREATE outbox must match aggregate, state-only payload, witness and completed idempotency")
+            continue
         if event.event_type not in value_event_types:
             continue
         parts = event.event_id.split(":", 1)
         tx = parts[1] if len(parts) == 2 else None
-        if tx is None or tx not in movement_by_tx:
+        state_only_cancel = (
+            event.event_type == "GERCHAIN_CANCELLED"
+            and event.aggregate_id in escrow_by_id
+            and _is_state_only_cancel_payload(event.payload_json)
+        )
+        if (tx is None or tx not in movement_by_tx) and not state_only_cancel:
             issue("ORPHAN_OUTBOX", tx, "value-moving outbox event has no canonical movement")
 
     # Idempotency is also used by state-only operations. A completed record

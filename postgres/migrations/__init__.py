@@ -1,6 +1,6 @@
 """Serialized, checksummed PostgreSQL migration runner.
 
-The 16-file canonical chain is explicit because historical aliases coexist in
+The 17-file canonical chain is explicit because historical aliases coexist in
 this directory. Schema DDL, checksum verification, and schema_version publication run in one
 transaction while a session-level advisory lock serializes competing migration
 processes. The lock is explicitly released after commit or rollback.
@@ -31,7 +31,11 @@ _CANONICAL_FILES = (
     "014_canonical_escrow_state_constraint.sql",
     "015_repair_escrow_state_constraint_drift.sql",
     "016_reconcile_escrow_state_constraint.sql",
+    "017_ea35_created_witness_event.sql",
 )
+
+
+CANONICAL_MIGRATION_NAMES = {version: name for version, name in enumerate(_CANONICAL_FILES, start=1)}
 
 
 def checksum(source: str) -> str:
@@ -64,8 +68,11 @@ def _canonical_migration_files(migration_dir: Path) -> list[Path]:
         canonical = directory / canonical_name
         if not canonical.is_file():
             raise RuntimeError(f"missing canonical migration version {version}: {canonical_name}")
-        if len(candidates) > 1 and canonical not in candidates:
-            raise RuntimeError(f"ambiguous migration version {version}: {[p.name for p in candidates]}")
+        if len(candidates) != 1 or candidates[0] != canonical:
+            raise RuntimeError(
+                f"duplicate or non-canonical migration version {version}: "
+                f"{[p.name for p in candidates]}; expected exactly {canonical_name}"
+            )
         selected.append(canonical)
     unexpected = sorted(set(by_version) - set(range(1, len(_CANONICAL_FILES) + 1)))
     if unexpected:
@@ -255,6 +262,11 @@ def apply_migrations(connection: Connection, migration_dir: Path) -> tuple[int, 
                 )
                 """
             )
+            # The advisory lock is the primary serialization mechanism. Also
+            # take a transaction-scoped table lock before reading/publishing
+            # schema_version so legacy bootstrap paths and advisory-lock drift
+            # cannot race an INSERT for the same version.
+            connection.execute("LOCK TABLE schema_version IN ACCESS EXCLUSIVE MODE")
             # Reconcile legacy schema_version tables that predate the canonical
             # primary key. Identical duplicate publications are safe to collapse;
             # conflicting checksums for one version must fail closed.
@@ -380,4 +392,4 @@ def apply_migrations(connection: Connection, migration_dir: Path) -> tuple[int, 
     return tuple(applied_now)
 
 
-__all__ = ["apply_migrations", "checksum", "_canonical_migration_files", "_split_sql_statements"]
+__all__ = ["apply_migrations", "checksum", "CANONICAL_MIGRATION_NAMES", "_canonical_migration_files", "_split_sql_statements"]

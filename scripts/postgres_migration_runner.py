@@ -24,7 +24,12 @@ def apply_migration(dsn: str, migration_path: Path) -> str:
     `migration_path` must identify a member of the canonical migration directory.
     Standalone SQL migrations are rejected to prevent a second schema authority.
     """
-    if not dsn or not dsn.startswith(("postgresql://", "postgres://")):
+    if not dsn:
+        raise ValueError("PostgreSQL DSN is required")
+    # Accept SQLAlchemy deployment URLs but normalize to psycopg DSN syntax.
+    dsn = dsn.replace("postgresql+psycopg://", "postgresql://", 1)
+    dsn = dsn.replace("postgresql+psycopg2://", "postgresql://", 1)
+    if not dsn.startswith(("postgresql://", "postgres://")):
         raise ValueError("PostgreSQL DSN is required")
     selected = migration_path.resolve()
     canonical_dir = CANONICAL_MIGRATION_DIR.resolve()

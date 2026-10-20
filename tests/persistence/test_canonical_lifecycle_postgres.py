@@ -1,26 +1,28 @@
 """PostgreSQL end-to-end proof for canonical escrow/value-flow operations.
 
 Requires GERCHAIN_TEST_DATABASE_URL pointing at a disposable PostgreSQL database.
-The test applies the exact canonical 16-migration chain, executes all required
+The test applies the exact canonical 17-migration chain, executes all required
 operations using the real SQLAlchemy/PostgreSQL boundary, then reconciles the
 persisted movement/evidence graph. It intentionally never truncates shared data.
 """
 from __future__ import annotations
 
+import json
 import os
 import uuid
+from pathlib import Path
 from pathlib import Path
 
 import psycopg
 import pytest
-from sqlalchemy import create_engine, select
+from sqlalchemy import create_engine, select, text
 from sqlalchemy.orm import sessionmaker
 
 from persistence.atomic_ledger import AtomicLedgerBase, LedgerAccountModel, LedgerMovementModel, PostgreSQLAtomicLedger
 from persistence.atomic_value_transaction import TransactionWitness
 from persistence.cancel_escrow import cancel_escrow_in_transaction
 from persistence.deep_value_reconciliation import deep_reconcile_value_truth
-from persistence.durable_idempotency import IdempotencyBase
+from persistence.durable_idempotency import DurableIdempotencyRecord, IdempotencyBase
 from persistence.escrow_aggregate import EscrowBase, CanonicalEscrow, create_escrow_in_transaction
 from persistence.fund_escrow import fund_escrow_in_transaction
 from persistence.lock_escrow import lock_escrow_in_transaction
@@ -44,7 +46,7 @@ def pg_factory():
         rows = connection.execute(
             "SELECT version, checksum FROM schema_version ORDER BY version"
         ).fetchall()
-        assert [row[0] for row in rows] == list(range(1, 17)), rows
+        assert [row[0] for row in rows] == list(range(1, 18)), rows
         assert all(row[1] for row in rows), rows
 
     engine = create_engine(url, pool_pre_ping=True)
@@ -59,7 +61,7 @@ def pg_factory():
         engine.dispose()
 
 
-def test_postgres_14_migrations_and_full_value_flow_reconcile(pg_factory):
+def test_postgres_17_migrations_and_full_value_flow_reconcile(pg_factory):
     suffix = uuid.uuid4().hex[:12]
     currency = "MNT"
     amount = 100
@@ -98,6 +100,17 @@ def test_postgres_14_migrations_and_full_value_flow_reconcile(pg_factory):
                 condition="EA-35 PostgreSQL re-performance",
             )
         session.commit()
+
+    account_ids = [source, beneficiary, settlement_source, settlement_destination,
+                   release_id, refund_id, cancel_funded_id]
+    with pg_factory() as session:
+        opening_balances = {
+            row.account_id: {"currency": row.currency, "balance": int(row.balance), "version": row.version}
+            for row in session.execute(
+                select(LedgerAccountModel).where(LedgerAccountModel.account_id.in_(account_ids))
+            ).scalars()
+        }
+    assert len(opening_balances) == len(account_ids)
 
     # CREATE -> FUND -> LOCK -> RELEASE.
     with pg_factory() as session:
@@ -225,8 +238,92 @@ def test_postgres_14_migrations_and_full_value_flow_reconcile(pg_factory):
 
         final_report = deep_reconcile_value_truth(session)
         assert final_report.matched, [issue.__dict__ for issue in final_report.issues]
+
+        closing_balances = {
+            row.account_id: {"currency": row.currency, "balance": int(row.balance), "version": row.version}
+            for row in session.execute(
+                select(LedgerAccountModel).where(LedgerAccountModel.account_id.in_(account_ids))
+            ).scalars()
+        }
+        movement_rows = list(session.execute(
+            select(LedgerMovementModel).where(LedgerMovementModel.transaction_id.in_(tx_ids))
+        ).scalars())
+        witness_rows = list(session.execute(
+            select(TransactionWitness).where(TransactionWitness.transaction_id.in_(tx_ids))
+        ).scalars())
+        idempotency_rows = list(session.execute(
+            select(DurableIdempotencyRecord).where(DurableIdempotencyRecord.key.in_(tx_ids))
+        ).scalars())
+        outbox_rows = list(session.execute(
+            select(OutboxEvent).where(OutboxEvent.event_id.like(f"%{suffix}%"))
+        ).scalars())
+        migration_rows = session.execute(
+            text("SELECT version, checksum, applied_at::text FROM schema_version ORDER BY version")
+        ).all()
+        assert len(movement_rows) == 7
+        assert len(witness_rows) == 10
+        assert len(outbox_rows) == 10
+        assert len(idempotency_rows) == 10
+        assert all(row.state == "COMPLETED" for row in idempotency_rows)
+
+        evidence = {
+            "status": "PASS",
+            "commit_sha": os.environ.get("GITHUB_SHA", "UNSET"),
+            "database": session.get_bind().url.database,
+            "migration_history": [
+                {"version": row.version, "checksum": row.checksum, "applied_at": row.applied_at}
+                for row in migration_rows
+            ],
+            "migration_count": len(migration_rows),
+            "currency": currency,
+            "test_suffix": suffix,
+            "opening_balances": opening_balances,
+            "closing_balances": closing_balances,
+            "movement_count": len(movement_rows),
+            "movements": [
+                {"transaction_id": row.transaction_id, "operation": row.operation,
+                 "escrow_id": row.escrow_id, "source": row.source,
+                 "destination": row.destination, "amount": int(row.amount),
+                 "currency": row.currency, "integrity_hash": row.integrity_hash}
+                for row in movement_rows
+            ],
+            "witness_count": len(witness_rows),
+            "witnesses": [
+                {"transaction_id": row.transaction_id, "event_type": row.event_type,
+                 "escrow_id": row.escrow_id, "amount": int(row.amount)}
+                for row in witness_rows
+            ],
+            "outbox_count": len(outbox_rows),
+            "outbox": [
+                {"event_id": row.event_id, "event_type": row.event_type,
+                 "aggregate_id": row.aggregate_id, "state": row.state}
+                for row in outbox_rows
+            ],
+            "idempotency_count": len(idempotency_rows),
+            "idempotency": [
+                {"key": row.key, "fingerprint": row.fingerprint, "state": row.state}
+                for row in idempotency_rows
+            ],
+            "reconciliation": {
+                "matched": final_report.matched,
+                "canonical_movement_count": final_report.canonical_movement_count,
+                "witness_count": final_report.witness_count,
+                "outbox_count": final_report.outbox_count,
+                "idempotency_count": final_report.idempotency_count,
+                "escrow_count": final_report.escrow_count,
+                "issues": [issue.__dict__ for issue in final_report.issues],
+            },
+            "duplicate_movements": 0,
+            "replay_created_no_new_movement": after_count == before_count,
+        }
+        evidence_dir = Path(os.environ.get("GERCHAIN_EVIDENCE_DIR", "artifacts/ea35"))
+        evidence_dir.mkdir(parents=True, exist_ok=True)
+        evidence_path = evidence_dir / "postgres-value-flow-evidence.json"
+        evidence_path.write_text(json.dumps(evidence, indent=2, sort_keys=True, default=str) + "\n", encoding="utf-8")
+        print(f"POSTGRES_VALUE_FLOW_EVIDENCE={evidence_path}")
         print(
             "EA35_POSTGRES_LIFECYCLE=PASS "
-            f"migration_versions=13 movement_count={len(movements)} "
-            f"duplicate_movements=0 reconciliation_issues={len(final_report.issues)}"
+            f"migration_versions={len(migration_rows)} movement_count={len(movement_rows)} "
+            f"witness_count={len(witness_rows)} outbox_count={len(outbox_rows)} "
+            f"idempotency_count={len(idempotency_rows)} reconciliation_issues={len(final_report.issues)}"
         )

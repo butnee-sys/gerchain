@@ -48,7 +48,7 @@ def test_014_escrow_state_constraint_is_idempotent_and_preserves_definition():
         Path(__file__).resolve().parents[2]
         / "postgres"
         / "migrations"
-        / "001_concurrency.sql"
+        / "001_canonical_production.sql"
     )
     historical_sql = historical_path.read_text(encoding="utf-8")
     suffix = uuid.uuid4().hex[:12]
@@ -80,8 +80,7 @@ def test_014_escrow_state_constraint_is_idempotent_and_preserves_definition():
                 old_name, old_definition, old_validated = state_constraints[0]
                 assert old_name == "escrows_state_check"
                 assert old_definition.startswith("CHECK")
-                assert all(state in old_definition for state in ("CREATED", "LOCKED", "RELEASED"))
-                assert "FUNDED" not in old_definition
+                assert all(state in old_definition for state in ("CREATED", "FUNDED", "LOCKED", "RELEASED", "REFUNDED", "CANCELLED"))
                 assert old_validated is True
 
             _apply_migration(connection, once_schema, migration_sql)

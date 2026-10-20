@@ -74,3 +74,48 @@ The immediate sequence is:
 7. record the final lock decision against an immutable SHA.
 
 Until all mandatory gates are closed or formally excepted by the accountable authority, the truthful state remains **FINAL LOCK IN PROGRESS / NOT LOCKED**.
+
+
+## 6. CI evidence addendum — historical all-green report located and current-day status reconciled
+
+**Added:** 2026-10-18  
+**Purpose:** retain the prior all-green CI report in the FINAL LOCK evidence trail without incorrectly promoting historical results to the current branch tip.
+
+### 6.1 All-green exact-SHA report retained
+
+The repository's prior FINAL_LOCK_STATUS.md records an all-green technical CI set on exact commit **c62414218d8b44b2aef252c40342ddc9c7e75141**, with runs created on **2026-10-07 14:40:58 UTC**:
+
+| Gate | Run | Result |
+|---|---:|---|
+| core-gates | [37638752330](https://github.com/butnee-sys/gerchain/actions/runs/37638752330) | SUCCESS |
+| production-postgres | [37638752353](https://github.com/butnee-sys/gerchain/actions/runs/37638752353) | SUCCESS |
+| production-postgresql-gate | [37638752547](https://github.com/butnee-sys/gerchain/actions/runs/37638752547) | SUCCESS |
+| production-postgresql-reperformance | [37638752556](https://github.com/butnee-sys/gerchain/actions/runs/37638752556) | SUCCESS |
+| independent-postgresql-evidence | [37638752430](https://github.com/butnee-sys/gerchain/actions/runs/37638752430) | SUCCESS |
+| EAI PostgreSQL Production Proof | [37638752338](https://github.com/butnee-sys/gerchain/actions/runs/37638752338) | SUCCESS |
+| CORE Operating Reconciliation | [37638752500](https://github.com/butnee-sys/gerchain/actions/runs/37638752500) | SUCCESS |
+| CodeQL Advanced | [37638752391](https://github.com/butnee-sys/gerchain/actions/runs/37638752391) | SUCCESS |
+
+A second retained exact-SHA full-suite report records commit **90f8cef1a2f27a198a3d80e13f0c4c65106a455d** on **2026-10-08 15:41:00 UTC**. The evidence document docs/FINAL_EXACT_SHA_FULL_SUITE_LOCK_EVIDENCE.md records **47 passed in 4.40s** and successful production PostgreSQL / independent evidence runs, including [EAI PostgreSQL Production Proof #37802761971](https://github.com/butnee-sys/gerchain/actions/runs/37802761971) and [core-gates #37802762044](https://github.com/butnee-sys/gerchain/actions/runs/37802762044). These results apply only to their recorded SHA.
+
+### 6.2 Current-day run check — not all green
+
+The live GitHub Actions records retrieved on 2026-10-18 show that candidate SHA **16df3f328b6d1c8850484e7f700da677b8027aad** did **not** have an all-green CI set. Relevant runs created at 2026-10-18 10:21:55 UTC include:
+
+- [Production PostgreSQL Gate #39118954990](https://github.com/butnee-sys/gerchain/actions/runs/39118954990) — **FAILURE**
+- [EA-35 PostgreSQL Re-performance #39118954987](https://github.com/butnee-sys/gerchain/actions/runs/39118954987) — **FAILURE**
+- [Canonical PostgreSQL production gate #39118954984](https://github.com/butnee-sys/gerchain/actions/runs/39118954984) — **FAILURE**
+- [core-gates #39118954950](https://github.com/butnee-sys/gerchain/actions/runs/39118954950) — **FAILURE**
+- [Independent Production Audit #39118954955](https://github.com/butnee-sys/gerchain/actions/runs/39118954955) — **FAILURE**
+- [PostgreSQL concurrency and migration gate #39118954941](https://github.com/butnee-sys/gerchain/actions/runs/39118954941) — **SUCCESS**
+- [PostgreSQL migration idempotency #39118954936](https://github.com/butnee-sys/gerchain/actions/runs/39118954936) — **SUCCESS**
+
+The Production PostgreSQL Gate failure identifies the steps **Apply all canonical migrations to a fresh PostgreSQL database** and **Write SHA-bound PostgreSQL migration and lifecycle evidence** as failed. Therefore the successful concurrency/idempotency sub-gates do not override the failed production/migration gates.
+
+### 6.3 Evidence decision
+
+- Historical all-green CI: **RECOVERED AND RECORDED**, exact-SHA scoped to **c62414218d8b44b2aef252c40342ddc9c7e75141** and **90f8cef1a2f27a198a3d80e13f0c4c65106a455d**.
+- Current-day all-green CI for candidate **16df3f328b6d1c8850484e7f700da677b8027aad**: **NOT ESTABLISHED; required gates failed**.
+- Production migration / runtime lock: **HOLD — NOT LOCKED** until the migration and evidence-manifest failures are corrected and the complete required gate set succeeds on one exact candidate SHA.
+
+This addendum preserves the successful historical report and the current failure evidence together. It does not rewrite the frozen architecture or authorize downstream product layers.
