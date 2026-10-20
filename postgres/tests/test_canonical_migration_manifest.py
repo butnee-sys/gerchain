@@ -31,3 +31,10 @@ def test_compatibility_runner_selects_canonical_version_one_by_default():
 
     assert MIGRATION_PATH.parent.resolve() == CANONICAL_MIGRATION_DIR.resolve()
     assert MIGRATION_PATH.name == CANONICAL_MIGRATION_NAMES[1]
+
+
+def test_normal_import_uses_the_migration_package_not_shadowed_sibling_module():
+    import postgres.migrations as migration_module
+
+    assert Path(migration_module.__file__).name == "__init__.py"
+    assert Path(migration_module.__file__).parent.name == "migrations"
