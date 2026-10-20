@@ -22,8 +22,8 @@ Status: **GREEN / CLOSED**
 ---
 
 ## 3. Active Evidence & Verification
-- **API Stress Test Script:** [`test_gerchain_api.sh`](/test_gerchain_api.sh)
-- **End-to-End Flow Script:** [`test_gerchain_e2e.sh`](/test_gerchain_e2e.sh)
+- **API Stress Test Script:** [test_gerchain_api.sh](../../../test_gerchain_api.sh)
+- **End-to-End Flow Script:** [test_gerchain_e2e.sh](../../../test_gerchain_e2e.sh)
 - **Evidence Review Date:** 2026-10-20
 
 ---
