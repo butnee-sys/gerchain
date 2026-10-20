@@ -44,17 +44,23 @@ def set_required_env(monkeypatch, url="postgresql+psycopg://user:pass@localhost/
     monkeypatch.setenv("GERCHAIN_WITNESS_ID", "witness-1")
 
 
+def _stub_postgres_boot(monkeypatch, engine):
+    from contextlib import nullcontext
+    monkeypatch.setattr(entrypoint, "create_engine", lambda *args, **kwargs: engine)
+    monkeypatch.setattr(entrypoint.psycopg, "connect", lambda *args, **kwargs: nullcontext(object()))
+    monkeypatch.setattr(entrypoint, "apply_migrations", lambda *args, **kwargs: None)
+
+
 def test_build_production_runtime_uses_configured_factory_and_canonical_authority(monkeypatch):
     set_required_env(monkeypatch)
     engine = FakeEngine()
-    monkeypatch.setattr(entrypoint, "create_engine", lambda *args, **kwargs: engine)
+    _stub_postgres_boot(monkeypatch, engine)
     captured = {}
 
     class Factory:
-        def __init__(self, config, *, engine, session_factory):
+        def __init__(self, config, *, engine):
             captured["config"] = config
             captured["engine"] = engine
-            captured["session_factory"] = session_factory
 
         def create(self):
             return FakeRuntime()
@@ -69,7 +75,6 @@ def test_build_production_runtime_uses_configured_factory_and_canonical_authorit
     assert captured["config"].currency == "MNT"
     assert captured["config"].witness_id == "witness-1"
     assert captured["config"].database_url == "postgresql+psycopg://user:pass@localhost/db"
-    assert captured["session_factory"] is not None
 
 
 @pytest.mark.parametrize("url", ["", "sqlite:///unsafe.db", "postgres://bad/db"])
@@ -105,10 +110,10 @@ def test_build_production_runtime_rejects_invalid_amount(monkeypatch, amount):
 def test_build_production_runtime_disposes_engine_if_factory_fails(monkeypatch):
     set_required_env(monkeypatch)
     engine = FakeEngine()
-    monkeypatch.setattr(entrypoint, "create_engine", lambda *args, **kwargs: engine)
+    _stub_postgres_boot(monkeypatch, engine)
 
     class Factory:
-        def __init__(self, config, *, engine, session_factory):
+        def __init__(self, config, *, engine):
             pass
 
         def create(self):
@@ -123,10 +128,10 @@ def test_build_production_runtime_disposes_engine_if_factory_fails(monkeypatch):
 def test_build_production_runtime_fails_closed_without_canonical_authority(monkeypatch):
     set_required_env(monkeypatch)
     engine = FakeEngine()
-    monkeypatch.setattr(entrypoint, "create_engine", lambda *args, **kwargs: engine)
+    _stub_postgres_boot(monkeypatch, engine)
 
     class Factory:
-        def __init__(self, config, *, engine, session_factory):
+        def __init__(self, config, *, engine):
             pass
 
         def create(self):
