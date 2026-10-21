@@ -1,9 +1,78 @@
 {
   "schema_version": 2,
-  "source_commit_sha": "cf2e5a341aef3caad12ae24a5ab7f71775d35169",
-  "commit_sha": "cf2e5a341aef3caad12ae24a5ab7f71775d35169",
-  "checked_out_head_sha": "685d5f788bbc495c40f07ea157a12c908251da5d",
+  "source_commit_sha": "559b950338622c8303f84132895ea81373307525",
+  "commit_sha": "559b950338622c8303f84132895ea81373307525",
+  "checked_out_head_sha": "559b950338622c8303f84132895ea81373307525",
   "commit_sha_matches_head": true,
   "status": "PASS",
-  "migrations": []
+  "migrations": [
+    {
+      "name": "001_canonical_production.sql",
+      "runner_checksum": "dc502a930cc23f8bf501f9200d092218d43f3462d6bf56b38c409480b498193b"
+    },
+    {
+      "name": "002_canonical_production.sql",
+      "runner_checksum": "1dad432b63dec39434d72ec929b135b1ef19e38a642a513750f37deb9de0cca2"
+    },
+    {
+      "name": "003_canonical_compatibility.sql",
+      "runner_checksum": "11100743bf446be372cfb372a27792e477261acd6ec2d0cf20c06d4b14883f5d"
+    },
+    {
+      "name": "004_canonical_value_truth.sql",
+      "runner_checksum": "0d5d063a1d35fbb79bef3023e8b02e06e76776c0af5da41b843fb702b702cf57"
+    },
+    {
+      "name": "005_canonical_production.sql",
+      "runner_checksum": "ecfc4306afb3b7ccde65902487f0702a6697ac343bced4534f624d134984effb"
+    },
+    {
+      "name": "006_canonical_movement_integrity.sql",
+      "runner_checksum": "40d271147de5ada9ff233895fbe166f72cac4e562258ddc6414e7f7059ba79ff"
+    },
+    {
+      "name": "007_canonical_production_reconciliation.sql",
+      "runner_checksum": "d62f3ff8a423bcfffb6d63c38c4aeeff70b481b8355d7b4ca7c80a9a50051e2e"
+    },
+    {
+      "name": "008_ea35_idempotency_compat.sql",
+      "runner_checksum": "ffee1c1cedaa59d7b40c75b67fe035a11e4f3cdfd9c9079a62c78a8016c2abe3"
+    },
+    {
+      "name": "009_canonical_movement_integrity_hardening.sql",
+      "runner_checksum": "ff2c383cddc8e9d6b5d399e2ce043cdf629de7864c8ba8cafb5a5160e947a28a"
+    },
+    {
+      "name": "010_canonical_evidence_constraints.sql",
+      "runner_checksum": "2866ce1e85021a1860f0b4a7ef44f57a30db86a3862c2afef3a15c7fa1674414"
+    },
+    {
+      "name": "011_ea35_canonical_schema_finalization.sql",
+      "runner_checksum": "c909762e5dfe758e11340eefbca5f25080e617de143fa83e55af78789ac81600"
+    },
+    {
+      "name": "012_canonical_production.sql",
+      "runner_checksum": "0d5a08e6fbe30a885b4aca9666b323ab6dee163195de3762e6d52ce210ff3422"
+    },
+    {
+      "name": "013_ea35_canonical_schema_hardening.sql",
+      "runner_checksum": "4788add812f36fdb08c79b6a194c4f1bf0c9101c9819e707f75b435d9bf7cda8"
+    },
+    {
+      "name": "014_canonical_escrow_state_constraint.sql",
+      "runner_checksum": "26dd142518010da5cf6c0c678c8e018301055af6ad096b4080f61fa913e84240"
+    },
+    {
+      "name": "015_repair_escrow_state_constraint_drift.sql",
+      "runner_checksum": "848118b7dd2d4bff1744bce5ce9f4eb3c98b6be70907856c7f340882d27bdce3"
+    },
+    {
+      "name": "016_reconcile_escrow_state_constraint.sql",
+      "runner_checksum": "2261f9bb4a9d82224389eca9475f3f8e152de74cfd250365bf84a9a7c78437d4"
+    },
+    {
+      "name": "017_ea35_created_witness_event.sql",
+      "runner_checksum": "6f8bf1a7c7d97e74c5a4fd1f86db068b6cf953d803b1a305a24e88f66cf0b8f8"
+    }
+  ]
 }
