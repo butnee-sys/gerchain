@@ -391,11 +391,83 @@ jobs:
             tests/persistence/test_deep_value_reconciliation_postgres.py \
             --junitxml=artifacts/ea35/junit-duplicate-excess.xml \
             2>&1 | tee artifacts/ea35/logs/duplicate-excess-review.log
+      - name: Verify cross-store reconciliation invariants
+        id: cross_store_evidence
+        if: always()
+        run: |
+          mkdir -p artifacts/ea35/logs
+          set -o pipefail
+          pytest -q tests/persistence/test_deep_value_reconciliation.py tests/persistence/test_value_reconciliation.py tests/test_operating_reconciliation.py 2>&1 | tee artifacts/ea35/logs/cross-store-reconciliation.log
+      - name: Verify canonical authority boundaries
+        id: authority_boundary_evidence
+        if: always()
+        run: |
+          mkdir -p artifacts/ea35/logs
+          set -o pipefail
+          pytest -q tests/test_nef_gerchain_boundary.py tests/test_nef_gerchain_port.py tests/test_postgresql_runtime_authority.py tests/test_g3_core_boundary.py 2>&1 | tee artifacts/ea35/logs/authority-boundary.log
+      - name: Verify CORE correctness
+        id: core_correctness_evidence
+        if: always()
+        run: |
+          mkdir -p artifacts/ea35/logs
+          set -o pipefail
+          pytest -q tests/test_core_structure.py tests/test_transaction_lifecycle.py tests/test_transaction_manager.py tests/services/test_gerchain_runtime_atomic_lifecycle.py tests/services/test_gerchain_runtime_canonical_ledger.py 2>&1 | tee artifacts/ea35/logs/core-correctness.log
+      - name: Verify adapter boundaries
+        id: adapter_boundaries_evidence
+        if: always()
+        run: |
+          mkdir -p artifacts/ea35/logs
+          set -o pipefail
+          pytest -q tests/test_boundary_adapters.py tests/test_governed_flow_adapters.py tests/test_release_adapter.py tests/test_de_dee_adapter.py 2>&1 | tee artifacts/ea35/logs/adapter-boundaries.log
+      - name: Verify EAI G3 governance boundary
+        id: eai_g3_evidence
+        if: always()
+        run: |
+          mkdir -p artifacts/ea35/logs
+          set -o pipefail
+          pytest -q tests/test_g3_core_runtime_e2e.py tests/test_g3_dee_authorized_handler.py tests/test_nef_g3_dee_gerchain_e2e.py tests/test_dee_settlement_governance.py 2>&1 | tee artifacts/ea35/logs/eai-g3-governance.log
+      - name: Verify transaction correctness
+        id: transaction_correctness_evidence
+        if: always()
+        run: |
+          mkdir -p artifacts/ea35/logs
+          set -o pipefail
+          pytest -q tests/persistence/test_atomic_ledger_transaction_boundary.py tests/persistence/test_atomic_value_transaction.py tests/persistence/test_transactional_outbox.py tests/test_transaction_lifecycle.py 2>&1 | tee artifacts/ea35/logs/transaction-correctness.log
+      - name: Verify restart and failure recovery
+        id: recovery_evidence
+        if: always()
+        run: |
+          mkdir -p artifacts/ea35/logs
+          set -o pipefail
+          pytest -q tests/persistence/test_ea35_restart_recovery.py tests/test_dee_recovery_governance.py tests/test_nef_state_recovery.py tests/test_postgres_outbox_recovery.py tests/test_release_processing_recovery.py tests/test_release_crash_recovery_contract.py 2>&1 | tee artifacts/ea35/logs/recovery.log
+      - name: Verify auditability and observability controls
+        id: auditability_evidence
+        if: always()
+        run: |
+          mkdir -p artifacts/ea35/logs
+          set -o pipefail
+          pytest -q tests/test_operating_reconciliation.py tests/persistence/test_value_reconciliation.py tests/test_dee_runtime_governance.py tests/test_dee_security.py 2>&1 | tee artifacts/ea35/logs/auditability-observability.log
+      - name: Verify load and stress behavior
+        id: performance_stress_evidence
+        if: always()
+        run: |
+          mkdir -p artifacts/ea35/logs
+          set -o pipefail
+          pytest -q tests/test_nef_load_stress.py tests/test_v860_load_stress.py tests/test_v861_consensus_load_stress.py 2>&1 | tee artifacts/ea35/logs/performance-stress.log
       - name: Finalize exact-SHA architecture gates and evidence bundle
         if: always()
         env:
           EVIDENCE_COMMIT_SHA: ${{ github.sha }}
           DUPLICATE_EXCESS_OUTCOME: ${{ steps.duplicate_excess_evidence.outcome }}
+          CROSS_STORE_OUTCOME: ${{ steps.cross_store_evidence.outcome }}
+          AUTHORITY_BOUNDARY_OUTCOME: ${{ steps.authority_boundary_evidence.outcome }}
+          CORE_CORRECTNESS_OUTCOME: ${{ steps.core_correctness_evidence.outcome }}
+          ADAPTER_BOUNDARIES_OUTCOME: ${{ steps.adapter_boundaries_evidence.outcome }}
+          EAI_G3_OUTCOME: ${{ steps.eai_g3_evidence.outcome }}
+          TRANSACTION_CORRECTNESS_OUTCOME: ${{ steps.transaction_correctness_evidence.outcome }}
+          RECOVERY_OUTCOME: ${{ steps.recovery_evidence.outcome }}
+          AUDITABILITY_OUTCOME: ${{ steps.auditability_evidence.outcome }}
+          PERFORMANCE_STRESS_OUTCOME: ${{ steps.performance_stress_evidence.outcome }}
         run: |
           python - <<'PY'
           import hashlib, json, os, subprocess, xml.etree.ElementTree as ET
@@ -510,6 +582,27 @@ jobs:
                   "outcome": "success",
                   "evidence": "logs/duplicate-excess-review.log",
               }
+          operational_evidence = {
+              "cross_store_reconciliation": ("CROSS_STORE_OUTCOME", "logs/cross-store-reconciliation.log"),
+              "authority_boundary": ("AUTHORITY_BOUNDARY_OUTCOME", "logs/authority-boundary.log"),
+              "core_correctness": ("CORE_CORRECTNESS_OUTCOME", "logs/core-correctness.log"),
+              "adapter_boundaries": ("ADAPTER_BOUNDARIES_OUTCOME", "logs/adapter-boundaries.log"),
+              "eai_g3_governance": ("EAI_G3_OUTCOME", "logs/eai-g3-governance.log"),
+              "transaction_correctness": ("TRANSACTION_CORRECTNESS_OUTCOME", "logs/transaction-correctness.log"),
+              "recovery": ("RECOVERY_OUTCOME", "logs/recovery.log"),
+              "auditability": ("AUDITABILITY_OUTCOME", "logs/auditability-observability.log"),
+              "observability": ("AUDITABILITY_OUTCOME", "logs/auditability-observability.log"),
+              "performance_stress": ("PERFORMANCE_STRESS_OUTCOME", "logs/performance-stress.log"),
+          }
+          for gate_name, (env_name, evidence_path) in operational_evidence.items():
+              if os.environ.get(env_name) == "success" and (root / evidence_path).is_file():
+                  records[gate_name] = {
+                      "outcome": "success",
+                      "evidence": evidence_path,
+                  }
+          # Organizational controls and independent review remain open until
+          # independently verifiable evidence is supplied; tests/docs alone do
+          # not prove MFA enforcement, branch rules, backup restoration, or reviewer independence.
           if bundle_complete:
               records["final_evidence_bundle"] = {
                   "outcome": "success",
