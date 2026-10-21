@@ -1,3 +1,3 @@
-Gate core_correctness verified and cryptographically bound to commit 2f2b1de54a99fd3a9898f40793d3cb7df26f53c2
+Gate core_correctness verified and cryptographically bound to commit 7d9ff86378f5386976a78da6ba13e572a6b67505
 Status: CLOSED
 Verified: True
