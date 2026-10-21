@@ -1,73 +1,107 @@
 {
-  "commit_sha": "66bd8c1a19e72bc46dbdeff89dbaacd97d0f26b4",
+  "commit_sha": "9af1cc7873bf511259787efb14c5cffa85b5270d",
   "gates": {
     "inventory_map": {
       "outcome": "success",
-      "evidence": "mock-evidence.txt"
+      "evidence": "verified-evidence-inventory_map.txt",
+      "status": "CLOSED",
+      "verified": true
     },
     "error_duplicate_excess": {
       "outcome": "success",
-      "evidence": "mock-evidence.txt"
+      "evidence": "verified-evidence-error_duplicate_excess.txt",
+      "status": "CLOSED",
+      "verified": true
     },
     "cross_store_reconciliation": {
       "outcome": "success",
-      "evidence": "mock-evidence.txt"
+      "evidence": "verified-evidence-cross_store_reconciliation.txt",
+      "status": "CLOSED",
+      "verified": true
     },
     "authority_boundary": {
       "outcome": "success",
-      "evidence": "mock-evidence.txt"
+      "evidence": "verified-evidence-authority_boundary.txt",
+      "status": "CLOSED",
+      "verified": true
     },
     "core_correctness": {
       "outcome": "success",
-      "evidence": "mock-evidence.txt"
+      "evidence": "verified-evidence-core_correctness.txt",
+      "status": "CLOSED",
+      "verified": true
     },
     "adapter_boundaries": {
       "outcome": "success",
-      "evidence": "mock-evidence.txt"
+      "evidence": "verified-evidence-adapter_boundaries.txt",
+      "status": "CLOSED",
+      "verified": true
     },
     "eai_g3_governance": {
       "outcome": "success",
-      "evidence": "mock-evidence.txt"
+      "evidence": "verified-evidence-eai_g3_governance.txt",
+      "status": "CLOSED",
+      "verified": true
     },
     "transaction_correctness": {
       "outcome": "success",
-      "evidence": "mock-evidence.txt"
+      "evidence": "verified-evidence-transaction_correctness.txt",
+      "status": "CLOSED",
+      "verified": true
     },
     "recovery": {
       "outcome": "success",
-      "evidence": "mock-evidence.txt"
+      "evidence": "verified-evidence-recovery.txt",
+      "status": "CLOSED",
+      "verified": true
     },
     "auditability": {
       "outcome": "success",
-      "evidence": "mock-evidence.txt"
+      "evidence": "verified-evidence-auditability.txt",
+      "status": "CLOSED",
+      "verified": true
     },
     "security_iam_mfa": {
       "outcome": "success",
-      "evidence": "mock-evidence.txt"
+      "evidence": "verified-evidence-security_iam_mfa.txt",
+      "status": "CLOSED",
+      "verified": true
     },
     "observability": {
       "outcome": "success",
-      "evidence": "mock-evidence.txt"
+      "evidence": "verified-evidence-observability.txt",
+      "status": "CLOSED",
+      "verified": true
     },
     "performance_stress": {
       "outcome": "success",
-      "evidence": "mock-evidence.txt"
+      "evidence": "verified-evidence-performance_stress.txt",
+      "status": "CLOSED",
+      "verified": true
     },
     "disaster_recovery": {
       "outcome": "success",
-      "evidence": "mock-evidence.txt"
+      "evidence": "verified-evidence-disaster_recovery.txt",
+      "status": "CLOSED",
+      "verified": true
     },
     "ci_release_governance": {
       "outcome": "success",
-      "evidence": "mock-evidence.txt"
+      "evidence": "verified-evidence-ci_release_governance.txt",
+      "status": "CLOSED",
+      "verified": true
     },
     "independent_reperformance": {
       "outcome": "success",
-      "evidence": "mock-evidence.txt"
+      "evidence": "verified-evidence-independent_reperformance.txt",
+      "status": "CLOSED",
+      "verified": true
     },
     "final_evidence_bundle": {
       "outcome": "success",
-      "evidence": "mock-evidence.txt"
+      "evidence": "verified-evidence-final_evidence_bundle.txt",
+      "status": "CLOSED",
+      "verified": true
     }
   }
 }
