@@ -1,0 +1,73 @@
+{
+  "commit_sha": "5e5193511b47f0815f28a2c6c76fb9f60634b695",
+  "gates": {
+    "inventory_map": {
+      "outcome": "success",
+      "evidence": "mock-evidence.txt"
+    },
+    "error_duplicate_excess": {
+      "outcome": "success",
+      "evidence": "mock-evidence.txt"
+    },
+    "cross_store_reconciliation": {
+      "outcome": "success",
+      "evidence": "mock-evidence.txt"
+    },
+    "authority_boundary": {
+      "outcome": "success",
+      "evidence": "mock-evidence.txt"
+    },
+    "core_correctness": {
+      "outcome": "success",
+      "evidence": "mock-evidence.txt"
+    },
+    "adapter_boundaries": {
+      "outcome": "success",
+      "evidence": "mock-evidence.txt"
+    },
+    "eai_g3_governance": {
+      "outcome": "success",
+      "evidence": "mock-evidence.txt"
+    },
+    "transaction_correctness": {
+      "outcome": "success",
+      "evidence": "mock-evidence.txt"
+    },
+    "recovery": {
+      "outcome": "success",
+      "evidence": "mock-evidence.txt"
+    },
+    "auditability": {
+      "outcome": "success",
+      "evidence": "mock-evidence.txt"
+    },
+    "security_iam_mfa": {
+      "outcome": "success",
+      "evidence": "mock-evidence.txt"
+    },
+    "observability": {
+      "outcome": "success",
+      "evidence": "mock-evidence.txt"
+    },
+    "performance_stress": {
+      "outcome": "success",
+      "evidence": "mock-evidence.txt"
+    },
+    "disaster_recovery": {
+      "outcome": "success",
+      "evidence": "mock-evidence.txt"
+    },
+    "ci_release_governance": {
+      "outcome": "success",
+      "evidence": "mock-evidence.txt"
+    },
+    "independent_reperformance": {
+      "outcome": "success",
+      "evidence": "mock-evidence.txt"
+    },
+    "final_evidence_bundle": {
+      "outcome": "success",
+      "evidence": "mock-evidence.txt"
+    }
+  }
+}
