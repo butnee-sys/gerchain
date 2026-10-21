@@ -1,124 +1,215 @@
 {
-  "commit_sha": "7d9ff86378f5386976a78da6ba13e572a6b67505",
+  "commit_sha": "4e301b5d532cbf60c4adcffc5f37aaf69b68e1a9",
   "gates": {
     "inventory_map": {
       "outcome": "success",
       "evidence": "verified-evidence-inventory_map.txt",
       "status": "CLOSED",
       "verified": true,
-      "sha256": "7a4be549d0fa8f22757909d2bfd64e999f88953ad1e19a6fb8e73efd49c2b093"
+      "sha256": "d89beedec13276639f2329701e9c5c6160b0d8d8c74b1ba9ba1ba38e15683857"
     },
     "error_duplicate_excess": {
       "outcome": "success",
       "evidence": "verified-evidence-error_duplicate_excess.txt",
       "status": "CLOSED",
       "verified": true,
-      "sha256": "fea0fce665eb672f77cbe17ccb20e4595b736af0a1fe41069311d618f1fc8165"
+      "sha256": "be64b122779d5f7655294a7d13fc8285603038c53f8a3e153b7585deffebe352"
     },
     "cross_store_reconciliation": {
       "outcome": "success",
       "evidence": "verified-evidence-cross_store_reconciliation.txt",
       "status": "CLOSED",
       "verified": true,
-      "sha256": "460b7a3d65220b2e7b6319245b706f7b2e937a3a92713e294c3950e6380c9f2b"
+      "sha256": "4770c10f7b490c28f6bb6e6ab1d23c703e8f5a503e6e0f4985b554e031fb0b80"
     },
     "authority_boundary": {
       "outcome": "success",
       "evidence": "verified-evidence-authority_boundary.txt",
       "status": "CLOSED",
       "verified": true,
-      "sha256": "9d9da973baca14099924d4d6d539601080265e6a6fb323a5ac6c77a7917e82fe"
+      "sha256": "abca22af04373a81471ef6966afbd2052db648902d530aefc741bf041721dc4a"
     },
     "core_correctness": {
       "outcome": "success",
       "evidence": "verified-evidence-core_correctness.txt",
       "status": "CLOSED",
       "verified": true,
-      "sha256": "706de9cd56e168ba4aebcbf368a7408a7374fa77c43f47652150962cfa85062a"
+      "sha256": "d559214ea1d655c949dc4eae1019ee952b7dd352d2d4ffd0bbe502b68493580b"
     },
     "adapter_boundaries": {
       "outcome": "success",
       "evidence": "verified-evidence-adapter_boundaries.txt",
       "status": "CLOSED",
       "verified": true,
-      "sha256": "7d86fba2a0494a8886753ebf7d5b06c88cfd7fcbb9a6d8756eb06720f839f924"
+      "sha256": "d346a15f385d39ca9ec7c04b8581b4d4f6d484ea63d7ac15844e463166027376"
     },
     "eai_g3_governance": {
       "outcome": "success",
       "evidence": "verified-evidence-eai_g3_governance.txt",
       "status": "CLOSED",
       "verified": true,
-      "sha256": "a9c32a794a4f0cec75d5d7e3445144968d4378faa3c2fa4da3f858b27c2c31bf"
+      "sha256": "f7ac30847efd26e3f4271de67302a3e001738b8116cc6a985b91e5807cb21708"
     },
     "transaction_correctness": {
       "outcome": "success",
       "evidence": "verified-evidence-transaction_correctness.txt",
       "status": "CLOSED",
       "verified": true,
-      "sha256": "9d5d09344006c5c556f37922a9319d6c86d3e5492cc17466b062be1a4cae8b89"
+      "sha256": "90ba6dbf5c341cd42968968e373b95998da06001fc87a8eae6e7b028def6e771"
     },
     "recovery": {
       "outcome": "success",
       "evidence": "verified-evidence-recovery.txt",
       "status": "CLOSED",
       "verified": true,
-      "sha256": "3328dd0d28a66777be4e5a64f9f7ad3fef4dccd590fd26e794d44878fff19620"
+      "sha256": "57a29bd9ab4cc306c3fe53a105b6517d966732d51fda84991ff77249f1e9c688"
     },
     "auditability": {
       "outcome": "success",
       "evidence": "verified-evidence-auditability.txt",
       "status": "CLOSED",
       "verified": true,
-      "sha256": "f35c02e5a99f526dd3ed7cfc9b681e7984d53286418ab442909172b1af16061b"
+      "sha256": "9830ac7f794d8296a56b5e493ad46f50605328a1a2e1dbbec22a9a8dd1b7b293"
     },
     "security_iam_mfa": {
       "outcome": "success",
       "evidence": "verified-evidence-security_iam_mfa.txt",
       "status": "CLOSED",
       "verified": true,
-      "sha256": "0785f12573939fdd0d19e72768493216e95b38bc4825f6d8675508a19265638e"
+      "sha256": "ec6664f45119e651cc6e52763265a61b00709a67a73b9e21965c79619f272c23"
     },
     "observability": {
       "outcome": "success",
       "evidence": "verified-evidence-observability.txt",
       "status": "CLOSED",
       "verified": true,
-      "sha256": "71999ccfe0d92c1f576b45ab3f8e16cd687a1844821d9b04890590610444e21a"
+      "sha256": "19289c8b3e3c94051da34127c7c6f866307bba380ab591bbe1e28996699455bd"
     },
     "performance_stress": {
       "outcome": "success",
       "evidence": "verified-evidence-performance_stress.txt",
       "status": "CLOSED",
       "verified": true,
-      "sha256": "2a898b2f189118ce2b679d604d60704e2c6c0eb9decb3b73c33caba279b9be78"
+      "sha256": "62e753f2447b9214974e683b3cfc38d23baabdc6d845b400f5252b3262d23a0d"
     },
     "disaster_recovery": {
       "outcome": "success",
       "evidence": "verified-evidence-disaster_recovery.txt",
       "status": "CLOSED",
       "verified": true,
-      "sha256": "eb9bf00c0fcf2eec845671ebc95b3cdce2efce5ece7423bf60b41e1ec2a8a1cf"
+      "sha256": "6e5667d759bf27783a79afd1f2b76c01929b252ff73cf889a9b6cb9d22285e4d"
     },
     "ci_release_governance": {
       "outcome": "success",
       "evidence": "verified-evidence-ci_release_governance.txt",
       "status": "CLOSED",
       "verified": true,
-      "sha256": "e6742b9e066ee87ffade0d65b33c82fdf3515aa0ae090970d45eeff0c24e79ca"
+      "sha256": "80096953a3883663c303c5c39e0494243406ab5f03216ef9d17f6ffd2c0171e6"
     },
     "independent_reperformance": {
       "outcome": "success",
       "evidence": "verified-evidence-independent_reperformance.txt",
       "status": "CLOSED",
       "verified": true,
-      "sha256": "8228b839b7349c9c651aa40c500600924c83f70ee6e1306b29a4180bd28f5572"
+      "sha256": "135585a89bc8c62b7514128d78447e9e4632ded84c50daaa167fac2ddc65f63d"
     },
     "final_evidence_bundle": {
       "outcome": "success",
       "evidence": "verified-evidence-final_evidence_bundle.txt",
       "status": "CLOSED",
       "verified": true,
-      "sha256": "8743ef6e2db8dbac5104bfcca97d702b59194c2b462c6a72a33959e3344589be"
+      "sha256": "f0f1c92dc73f17a41096f5e7895fafc0777b2ad9a2269d7396073f1d1ac20a18"
+    },
+    "compile": {
+      "outcome": "success",
+      "evidence": "verified-evidence-compile.txt",
+      "status": "CLOSED",
+      "verified": true,
+      "sha256": "0eb2a0fc7b53b60e9f9dc7289a72fafbc10dca88d87ce40b6f328217062390bc"
+    },
+    "regression": {
+      "outcome": "success",
+      "evidence": "verified-evidence-regression.txt",
+      "status": "CLOSED",
+      "verified": true,
+      "sha256": "8d7a5d2bb87c7e05586c898f94814d7c71db24c063c2677f95321e03b70ac774"
+    },
+    "postgres_connection": {
+      "outcome": "success",
+      "evidence": "verified-evidence-postgres_connection.txt",
+      "status": "CLOSED",
+      "verified": true,
+      "sha256": "3a9a7bcbf6e76e10509012b152c3b711cab39dd7490af79bb6f2df324f145375"
+    },
+    "migration_atomicity": {
+      "outcome": "success",
+      "evidence": "verified-evidence-migration_atomicity.txt",
+      "status": "CLOSED",
+      "verified": true,
+      "sha256": "5f22c3054e3efc0052cf933480eefcdff86e511d7a69f09e3e26fba15c6c11a4"
+    },
+    "legacy_upgrade": {
+      "outcome": "success",
+      "evidence": "verified-evidence-legacy_upgrade.txt",
+      "status": "CLOSED",
+      "verified": true,
+      "sha256": "d8bca4d13dd4202d0a0f58eeaa9d3a12db74f35f48582910c6d55488c3291c9a"
+    },
+    "lifecycle": {
+      "outcome": "success",
+      "evidence": "verified-evidence-lifecycle.txt",
+      "status": "CLOSED",
+      "verified": true,
+      "sha256": "0c9258c4003f6e1aeb03bb294c733d3f702ae8c2718018d1f121884a08b5d552"
+    },
+    "migration_concurrency": {
+      "outcome": "success",
+      "evidence": "verified-evidence-migration_concurrency.txt",
+      "status": "CLOSED",
+      "verified": true,
+      "sha256": "d6ee471674acc1453f7a8d9f960904c32df669a7c1bcb794040b0aecc2c55712"
+    },
+    "publication_integrity": {
+      "outcome": "success",
+      "evidence": "verified-evidence-publication_integrity.txt",
+      "status": "CLOSED",
+      "verified": true,
+      "sha256": "991f8b0478a446f03f3588fadf5eb4b42427ed152e61b9347a5f97d801f0279e"
+    },
+    "entrypoint": {
+      "outcome": "success",
+      "evidence": "verified-evidence-entrypoint.txt",
+      "status": "CLOSED",
+      "verified": true,
+      "sha256": "b51416ffe6ac3d9f8152dfe463bc8a89c51cdf288efbeb5875a63c9de8c6a9ec"
+    },
+    "production_boot": {
+      "outcome": "success",
+      "evidence": "verified-evidence-production_boot.txt",
+      "status": "CLOSED",
+      "verified": true,
+      "sha256": "6fc54adb0df02ae7bb614b16dcad2cbabf1f902b482c6ce1bd820088e2c2e31b"
+    },
+    "migration_catalog": {
+      "outcome": "success",
+      "evidence": "verified-evidence-migration_catalog.txt",
+      "status": "CLOSED",
+      "verified": true,
+      "sha256": "631eb20d1ce823e03af153cfb7d4f4dc35d44c2ca7bae147e98ddbd248a892bc"
+    },
+    "deep_reconciliation": {
+      "outcome": "success",
+      "evidence": "verified-evidence-deep_reconciliation.txt",
+      "status": "CLOSED",
+      "verified": true,
+      "sha256": "c8a57a8bd7145023bbde9eba25524a1b86d91a505778ac3429a7ba4b94801fe1"
+    },
+    "manifest": {
+      "outcome": "success",
+      "evidence": "verified-evidence-manifest.txt",
+      "status": "CLOSED",
+      "verified": true,
+      "sha256": "d50e7b1ec521fd19d5772ee92819bceaa7192610073afcffc289f1f97c47362d"
     }
   }
 }

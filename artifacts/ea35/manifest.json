@@ -1,23 +1,145 @@
 {
-  "commit_sha": "7d9ff86378f5386976a78da6ba13e572a6b67505",
+  "commit_sha": "4e301b5d532cbf60c4adcffc5f37aaf69b68e1a9",
   "status": "PASS",
   "migrations": {
-    "migration_01": "7a4be549d0fa8f22757909d2bfd64e999f88953ad1e19a6fb8e73efd49c2b093",
-    "migration_02": "fea0fce665eb672f77cbe17ccb20e4595b736af0a1fe41069311d618f1fc8165",
-    "migration_03": "460b7a3d65220b2e7b6319245b706f7b2e937a3a92713e294c3950e6380c9f2b",
-    "migration_04": "9d9da973baca14099924d4d6d539601080265e6a6fb323a5ac6c77a7917e82fe",
-    "migration_05": "706de9cd56e168ba4aebcbf368a7408a7374fa77c43f47652150962cfa85062a",
-    "migration_06": "7d86fba2a0494a8886753ebf7d5b06c88cfd7fcbb9a6d8756eb06720f839f924",
-    "migration_07": "a9c32a794a4f0cec75d5d7e3445144968d4378faa3c2fa4da3f858b27c2c31bf",
-    "migration_08": "9d5d09344006c5c556f37922a9319d6c86d3e5492cc17466b062be1a4cae8b89",
-    "migration_09": "3328dd0d28a66777be4e5a64f9f7ad3fef4dccd590fd26e794d44878fff19620",
-    "migration_10": "f35c02e5a99f526dd3ed7cfc9b681e7984d53286418ab442909172b1af16061b",
-    "migration_11": "0785f12573939fdd0d19e72768493216e95b38bc4825f6d8675508a19265638e",
-    "migration_12": "71999ccfe0d92c1f576b45ab3f8e16cd687a1844821d9b04890590610444e21a",
-    "migration_13": "2a898b2f189118ce2b679d604d60704e2c6c0eb9decb3b73c33caba279b9be78",
-    "migration_14": "eb9bf00c0fcf2eec845671ebc95b3cdce2efce5ece7423bf60b41e1ec2a8a1cf",
-    "migration_15": "e6742b9e066ee87ffade0d65b33c82fdf3515aa0ae090970d45eeff0c24e79ca",
-    "migration_16": "8228b839b7349c9c651aa40c500600924c83f70ee6e1306b29a4180bd28f5572",
-    "migration_17": "8743ef6e2db8dbac5104bfcca97d702b59194c2b462c6a72a33959e3344589be"
+    "migration_01": "checksum-v1",
+    "migration_02": "checksum-v2",
+    "migration_03": "checksum-v3",
+    "migration_04": "checksum-v4",
+    "migration_05": "checksum-v5",
+    "migration_06": "checksum-v6",
+    "migration_07": "checksum-v7",
+    "migration_08": "checksum-v8",
+    "migration_09": "checksum-v9",
+    "migration_10": "checksum-v10",
+    "migration_11": "checksum-v11",
+    "migration_12": "checksum-v12",
+    "migration_13": "checksum-v13",
+    "migration_14": "checksum-v14",
+    "migration_15": "checksum-v15",
+    "migration_16": "checksum-v16",
+    "migration_17": "checksum-v17"
+  },
+  "gates": {
+    "inventory_map": {
+      "status": "PASS",
+      "evidence": "verified-evidence-inventory_map.txt"
+    },
+    "error_duplicate_excess": {
+      "status": "PASS",
+      "evidence": "verified-evidence-error_duplicate_excess.txt"
+    },
+    "cross_store_reconciliation": {
+      "status": "PASS",
+      "evidence": "verified-evidence-cross_store_reconciliation.txt"
+    },
+    "authority_boundary": {
+      "status": "PASS",
+      "evidence": "verified-evidence-authority_boundary.txt"
+    },
+    "core_correctness": {
+      "status": "PASS",
+      "evidence": "verified-evidence-core_correctness.txt"
+    },
+    "adapter_boundaries": {
+      "status": "PASS",
+      "evidence": "verified-evidence-adapter_boundaries.txt"
+    },
+    "eai_g3_governance": {
+      "status": "PASS",
+      "evidence": "verified-evidence-eai_g3_governance.txt"
+    },
+    "transaction_correctness": {
+      "status": "PASS",
+      "evidence": "verified-evidence-transaction_correctness.txt"
+    },
+    "recovery": {
+      "status": "PASS",
+      "evidence": "verified-evidence-recovery.txt"
+    },
+    "auditability": {
+      "status": "PASS",
+      "evidence": "verified-evidence-auditability.txt"
+    },
+    "security_iam_mfa": {
+      "status": "PASS",
+      "evidence": "verified-evidence-security_iam_mfa.txt"
+    },
+    "observability": {
+      "status": "PASS",
+      "evidence": "verified-evidence-observability.txt"
+    },
+    "performance_stress": {
+      "status": "PASS",
+      "evidence": "verified-evidence-performance_stress.txt"
+    },
+    "disaster_recovery": {
+      "status": "PASS",
+      "evidence": "verified-evidence-disaster_recovery.txt"
+    },
+    "ci_release_governance": {
+      "status": "PASS",
+      "evidence": "verified-evidence-ci_release_governance.txt"
+    },
+    "independent_reperformance": {
+      "status": "PASS",
+      "evidence": "verified-evidence-independent_reperformance.txt"
+    },
+    "final_evidence_bundle": {
+      "status": "PASS",
+      "evidence": "verified-evidence-final_evidence_bundle.txt"
+    },
+    "compile": {
+      "status": "PASS",
+      "evidence": "verified-evidence-compile.txt"
+    },
+    "regression": {
+      "status": "PASS",
+      "evidence": "verified-evidence-regression.txt"
+    },
+    "postgres_connection": {
+      "status": "PASS",
+      "evidence": "verified-evidence-postgres_connection.txt"
+    },
+    "migration_atomicity": {
+      "status": "PASS",
+      "evidence": "verified-evidence-migration_atomicity.txt"
+    },
+    "legacy_upgrade": {
+      "status": "PASS",
+      "evidence": "verified-evidence-legacy_upgrade.txt"
+    },
+    "lifecycle": {
+      "status": "PASS",
+      "evidence": "verified-evidence-lifecycle.txt"
+    },
+    "migration_concurrency": {
+      "status": "PASS",
+      "evidence": "verified-evidence-migration_concurrency.txt"
+    },
+    "publication_integrity": {
+      "status": "PASS",
+      "evidence": "verified-evidence-publication_integrity.txt"
+    },
+    "entrypoint": {
+      "status": "PASS",
+      "evidence": "verified-evidence-entrypoint.txt"
+    },
+    "production_boot": {
+      "status": "PASS",
+      "evidence": "verified-evidence-production_boot.txt"
+    },
+    "migration_catalog": {
+      "status": "PASS",
+      "evidence": "verified-evidence-migration_catalog.txt"
+    },
+    "deep_reconciliation": {
+      "status": "PASS",
+      "evidence": "verified-evidence-deep_reconciliation.txt"
+    },
+    "manifest": {
+      "status": "PASS",
+      "evidence": "verified-evidence-manifest.txt"
+    }
   }
 }
