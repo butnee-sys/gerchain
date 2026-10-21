@@ -1,5 +1,5 @@
 {
-  "commit_sha": "16946fd5be481369888c0eaa591517514aaeec03",
+  "commit_sha": "0de4db1acd3cd595a7397457d560c19bef903491",
   "gates": {
     "inventory_map": {
       "outcome": "success",
