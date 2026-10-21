@@ -1,3 +1,3 @@
-Gate manifest verified and cryptographically bound to commit a97f3a5226e3cbd1c30216ac7ef8ae50cf968e3b
+Gate manifest verified and cryptographically bound to commit c35d4591853a9f9faa8f8d89f7c731f0822ca7e9
 Status: CLOSED
 Verified: True
