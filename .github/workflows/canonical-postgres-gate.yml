@@ -408,8 +408,10 @@ jobs:
           repo = os.environ["GITHUB_REPOSITORY"]
           required = [
               root / "manifest.json",
-              root / "migration-manifest.json",
               root / "commit-sha.txt",
+              root / "migration-history-summary.md",
+              root / "test-report.md",
+              root / "SHA256SUMS",
               root / "logs" / "duplicate-excess-review.log",
               root / "junit-duplicate-excess.xml",
           ]
@@ -419,15 +421,20 @@ jobs:
           if (root / "manifest.json").is_file():
               try: manifest = json.loads((root / "manifest.json").read_text(encoding="utf-8"))
               except (OSError, json.JSONDecodeError): manifest = {}
-          if (root / "migration-manifest.json").is_file():
-              try: migration = json.loads((root / "migration-manifest.json").read_text(encoding="utf-8"))
-              except (OSError, json.JSONDecodeError): migration = {}
+          # Canonical migration evidence is intentionally embedded in manifest.json.
+          # Avoid a second migration-manifest authority that the workflow does not emit.
+          migration = manifest
           sha_bound = (
               head == expected
               and manifest.get("commit_sha") == expected
               and manifest.get("checked_out_head_sha") == expected
               and manifest.get("commit_sha_matches_head") is True
               and migration.get("commit_sha") == expected
+              and migration.get("canonical_migration_count") == 17
+              and len(migration.get("canonical_migrations", [])) == 17
+              and len(migration.get("schema_version_rows", [])) == 17
+              and all(item.get("database_checksum_matches_runner") is True
+                      for item in migration.get("canonical_migrations", []))
               and (root / "commit-sha.txt").is_file()
               and (root / "commit-sha.txt").read_text(encoding="utf-8").strip() == expected
           )
