@@ -1,0 +1,147 @@
+{
+  "commit_sha": "5e5193511b47f0815f28a2c6c76fb9f60634b695",
+  "checked_out_head_sha": "5e5193511b47f0815f28a2c6c76fb9f60634b695",
+  "commit_sha_matches_head": true,
+  "canonical_migration_count": 17,
+  "canonical_migrations": [
+    {
+      "version": 1,
+      "runner_checksum": "sha256-mock-1"
+    },
+    {
+      "version": 2,
+      "runner_checksum": "sha256-mock-2"
+    },
+    {
+      "version": 3,
+      "runner_checksum": "sha256-mock-3"
+    },
+    {
+      "version": 4,
+      "runner_checksum": "sha256-mock-4"
+    },
+    {
+      "version": 5,
+      "runner_checksum": "sha256-mock-5"
+    },
+    {
+      "version": 6,
+      "runner_checksum": "sha256-mock-6"
+    },
+    {
+      "version": 7,
+      "runner_checksum": "sha256-mock-7"
+    },
+    {
+      "version": 8,
+      "runner_checksum": "sha256-mock-8"
+    },
+    {
+      "version": 9,
+      "runner_checksum": "sha256-mock-9"
+    },
+    {
+      "version": 10,
+      "runner_checksum": "sha256-mock-10"
+    },
+    {
+      "version": 11,
+      "runner_checksum": "sha256-mock-11"
+    },
+    {
+      "version": 12,
+      "runner_checksum": "sha256-mock-12"
+    },
+    {
+      "version": 13,
+      "runner_checksum": "sha256-mock-13"
+    },
+    {
+      "version": 14,
+      "runner_checksum": "sha256-mock-14"
+    },
+    {
+      "version": 15,
+      "runner_checksum": "sha256-mock-15"
+    },
+    {
+      "version": 16,
+      "runner_checksum": "sha256-mock-16"
+    },
+    {
+      "version": 17,
+      "runner_checksum": "sha256-mock-17"
+    }
+  ],
+  "schema_version_rows": [
+    {
+      "version": 1,
+      "checksum": "sha256-mock-1"
+    },
+    {
+      "version": 2,
+      "checksum": "sha256-mock-2"
+    },
+    {
+      "version": 3,
+      "checksum": "sha256-mock-3"
+    },
+    {
+      "version": 4,
+      "checksum": "sha256-mock-4"
+    },
+    {
+      "version": 5,
+      "checksum": "sha256-mock-5"
+    },
+    {
+      "version": 6,
+      "checksum": "sha256-mock-6"
+    },
+    {
+      "version": 7,
+      "checksum": "sha256-mock-7"
+    },
+    {
+      "version": 8,
+      "checksum": "sha256-mock-8"
+    },
+    {
+      "version": 9,
+      "checksum": "sha256-mock-9"
+    },
+    {
+      "version": 10,
+      "checksum": "sha256-mock-10"
+    },
+    {
+      "version": 11,
+      "checksum": "sha256-mock-11"
+    },
+    {
+      "version": 12,
+      "checksum": "sha256-mock-12"
+    },
+    {
+      "version": 13,
+      "checksum": "sha256-mock-13"
+    },
+    {
+      "version": 14,
+      "checksum": "sha256-mock-14"
+    },
+    {
+      "version": 15,
+      "checksum": "sha256-mock-15"
+    },
+    {
+      "version": 16,
+      "checksum": "sha256-mock-16"
+    },
+    {
+      "version": 17,
+      "checksum": "sha256-mock-17"
+    }
+  ],
+  "database_manifest_error": null
+}
