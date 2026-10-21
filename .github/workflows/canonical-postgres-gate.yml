@@ -370,6 +370,42 @@ jobs:
           finally:
               engine.dispose()
           PY
+      - name: Re-perform PostgreSQL backup and restore on isolated database
+        id: disaster_recovery_evidence
+        if: always()
+        env:
+          PGPASSWORD: postgres
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/ea35/logs
+          export PGPASSWORD=postgres
+          SOURCE_DSN="postgresql://postgres:postgres@localhost:5432/gerchain_test"
+          RESTORE_DSN="postgresql://postgres:postgres@localhost:5432/gerchain_restore_test"
+          pg_dump --format=custom --no-owner --no-privileges --file artifacts/ea35/postgres-backup.dump "$SOURCE_DSN"
+          test -s artifacts/ea35/postgres-backup.dump
+          dropdb --if-exists --host=localhost --username=postgres gerchain_restore_test
+          createdb --host=localhost --username=postgres gerchain_restore_test
+          pg_restore --no-owner --no-privileges --dbname="$RESTORE_DSN" artifacts/ea35/postgres-backup.dump
+          python - <<'PY' | tee artifacts/ea35/logs/disaster-recovery-restore.log
+          from sqlalchemy import create_engine, inspect, text
+          url = "postgresql+psycopg://postgres:postgres@localhost:5432/gerchain_restore_test"
+          engine = create_engine(url, pool_pre_ping=True)
+          try:
+              with engine.connect() as conn:
+                  versions = conn.execute(text("SELECT version FROM schema_version ORDER BY version")).scalars().all()
+                  assert versions == list(range(1, 18)), f"restored schema history mismatch: {versions}"
+                  tables = set(inspect(conn).get_table_names())
+                  required = {
+                      "escrows", "gerchain_ledger_accounts", "gerchain_ledger_movements",
+                      "gerchain_transaction_witnesses", "gerchain_outbox_events",
+                      "gerchain_idempotency_records",
+                  }
+                  missing = required - tables
+                  assert not missing, f"restored canonical tables missing: {sorted(missing)}"
+                  print(f"PASS: PostgreSQL backup/restore; restored migration versions={len(versions)}; canonical tables={len(required)}; missing={sorted(missing)}")
+          finally:
+              engine.dispose()
+          PY
       - name: Deep value-truth reconciliation tests on PostgreSQL
         run: set -o pipefail; pytest -vv -s tests/persistence/test_deep_value_reconciliation_postgres.py 2>&1 | tee artifacts/ea35/logs/deep-value-reconciliation.log
 
@@ -468,6 +504,7 @@ jobs:
           RECOVERY_OUTCOME: ${{ steps.recovery_evidence.outcome }}
           AUDITABILITY_OUTCOME: ${{ steps.auditability_evidence.outcome }}
           PERFORMANCE_STRESS_OUTCOME: ${{ steps.performance_stress_evidence.outcome }}
+          DISASTER_RECOVERY_OUTCOME: ${{ steps.disaster_recovery_evidence.outcome }}
         run: |
           python - <<'PY'
           import hashlib, json, os, subprocess, xml.etree.ElementTree as ET
@@ -593,6 +630,7 @@ jobs:
               "auditability": ("AUDITABILITY_OUTCOME", "logs/auditability-observability.log"),
               "observability": ("AUDITABILITY_OUTCOME", "logs/auditability-observability.log"),
               "performance_stress": ("PERFORMANCE_STRESS_OUTCOME", "logs/performance-stress.log"),
+              "disaster_recovery": ("DISASTER_RECOVERY_OUTCOME", "logs/disaster-recovery-restore.log"),
           }
           for gate_name, (env_name, evidence_path) in operational_evidence.items():
               if os.environ.get(env_name) == "success" and (root / evidence_path).is_file():
