@@ -1,13 +1,13 @@
 """Fail-closed decision controller for the canonical production evidence gate.
 
-This controller does not run infrastructure tests itself. It consumes the exact
-workflow step outcomes and the PostgreSQL evidence manifest produced by the
-master workflow, binds them to the checked-out commit, and emits one decision.
-Missing evidence, unknown outcomes, stale SHAs, or any failed gate => NOT_LOCKED.
+Consumes exact workflow outcomes and the PostgreSQL evidence manifest, binds them
+to the checked-out commit, and independently rechecks all canonical migration file
+hashes and runner checksums. Missing or stale evidence => NOT_LOCKED.
 """
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import subprocess
@@ -15,9 +15,8 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-# Architecture-level release gates are mandatory in addition to the
-# PostgreSQL execution suite. They require explicit evidence from their own
-# checks; success of the database workflow must never be used as a proxy.
+from postgres.migrations import _canonical_migration_files, checksum
+
 REQUIRED_GATES = (
     "inventory_map",
     "error_duplicate_excess",
@@ -58,6 +57,52 @@ def _head_sha() -> str:
     ).strip()
 
 
+def _verify_migrations(migrations: object, rows: object, failures: list[str]) -> None:
+    if not isinstance(migrations, list) or len(migrations) != 17:
+        failures.append("CANONICAL_MIGRATION_CHAIN_NOT_EXACTLY_17")
+        return
+    if not isinstance(rows, list) or [r.get("version") for r in rows if isinstance(r, dict)] != list(range(1, 18)):
+        failures.append("DATABASE_SCHEMA_VERSION_ROWS_NOT_EXACTLY_1_TO_17")
+        return
+
+    try:
+        actual_files = _canonical_migration_files(Path("postgres/migrations"))
+    except Exception as exc:
+        failures.append(f"CANONICAL_MIGRATION_FILES_UNREADABLE_{type(exc).__name__}")
+        return
+
+    if len(actual_files) != 17:
+        failures.append("CHECKED_OUT_MIGRATION_CHAIN_NOT_EXACTLY_17")
+        return
+
+    rows_by_version = {row["version"]: row for row in rows}
+    for expected_version, (item, path) in enumerate(zip(migrations, actual_files), start=1):
+        if not isinstance(item, dict):
+            failures.append(f"MIGRATION_RECORD_INVALID_VERSION_{expected_version}")
+            continue
+        if int(path.name.split("_", 1)[0]) != expected_version:
+            failures.append(f"CHECKED_OUT_MIGRATION_ORDER_MISMATCH_VERSION_{expected_version}")
+            continue
+        relative_path = path.as_posix()
+        if item.get("version") != expected_version or item.get("path") != relative_path:
+            failures.append(f"MIGRATION_PATH_OR_VERSION_MISMATCH_VERSION_{expected_version}")
+        actual_sha256 = hashlib.sha256(path.read_bytes()).hexdigest()
+        if item.get("sha256") != actual_sha256:
+            failures.append(f"MIGRATION_FILE_SHA256_MISMATCH_VERSION_{expected_version}")
+        actual_runner_checksum = checksum(path.read_text(encoding="utf-8"))
+        if item.get("runner_checksum") != actual_runner_checksum:
+            failures.append(f"MIGRATION_RUNNER_CHECKSUM_MISMATCH_VERSION_{expected_version}")
+        row = rows_by_version[expected_version]
+        if item.get("runner_checksum") != row.get("checksum"):
+            failures.append(f"MIGRATION_CHECKSUM_MISMATCH_VERSION_{expected_version}")
+        if item.get("database_checksum") != row.get("checksum"):
+            failures.append(f"MIGRATION_DATABASE_CHECKSUM_FIELD_MISMATCH_VERSION_{expected_version}")
+        if item.get("database_checksum_matches_runner") is not True:
+            failures.append(f"MIGRATION_DATABASE_CHECKSUM_FLAG_NOT_TRUE_VERSION_{expected_version}")
+        if row.get("applied_at") is None:
+            failures.append(f"MIGRATION_APPLIED_AT_MISSING_VERSION_{expected_version}")
+
+
 def decide(manifest_path: Path, expected_sha: str, outcomes: dict[str, str]) -> dict:
     failures: list[str] = []
     head_sha = _head_sha()
@@ -69,10 +114,10 @@ def decide(manifest_path: Path, expected_sha: str, outcomes: dict[str, str]) -> 
         if outcome != "success":
             failures.append(f"GATE_{gate.upper()}_{(outcome or 'MISSING').upper()}")
 
-    manifest = None
     try:
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
+        manifest = None
         failures.append(f"MANIFEST_UNREADABLE_{type(exc).__name__}")
 
     if manifest is not None:
@@ -82,18 +127,13 @@ def decide(manifest_path: Path, expected_sha: str, outcomes: dict[str, str]) -> 
             failures.append("MANIFEST_HEAD_MISMATCH")
         if manifest.get("commit_sha_matches_head") is not True:
             failures.append("MANIFEST_SHA_BINDING_NOT_TRUE")
-        migrations = manifest.get("canonical_migrations")
-        rows = manifest.get("schema_version_rows")
-        if manifest.get("canonical_migration_count") != 17 or not isinstance(migrations, list) or len(migrations) != 17:
-            failures.append("CANONICAL_MIGRATION_CHAIN_NOT_EXACTLY_17")
-        if not isinstance(rows, list) or [r.get("version") for r in rows] != list(range(1, 18)):
-            failures.append("DATABASE_SCHEMA_VERSION_ROWS_NOT_EXACTLY_1_TO_17")
-        if isinstance(migrations, list) and isinstance(rows, list) and len(migrations) == len(rows) == 17:
-            row_checksums = {r.get("version"): r.get("checksum") for r in rows}
-            for item in migrations:
-                version = item.get("version")
-                if item.get("runner_checksum") != row_checksums.get(version):
-                    failures.append(f"MIGRATION_CHECKSUM_MISMATCH_VERSION_{version}")
+        if manifest.get("canonical_migration_count") != 17:
+            failures.append("MANIFEST_CANONICAL_MIGRATION_COUNT_INVALID")
+        _verify_migrations(
+            manifest.get("canonical_migrations"),
+            manifest.get("schema_version_rows"),
+            failures,
+        )
         if manifest.get("database_manifest_error"):
             failures.append("DATABASE_MANIFEST_ERROR_PRESENT")
 
