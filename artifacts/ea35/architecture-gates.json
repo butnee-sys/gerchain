@@ -1,215 +1,215 @@
 {
-  "commit_sha": "4e301b5d532cbf60c4adcffc5f37aaf69b68e1a9",
+  "commit_sha": "a97f3a5226e3cbd1c30216ac7ef8ae50cf968e3b",
   "gates": {
     "inventory_map": {
       "outcome": "success",
       "evidence": "verified-evidence-inventory_map.txt",
       "status": "CLOSED",
       "verified": true,
-      "sha256": "d89beedec13276639f2329701e9c5c6160b0d8d8c74b1ba9ba1ba38e15683857"
+      "sha256": "bccfdc1ba0db626c33454db6bb310610c9a19d00af80f0e4e6e6ef8e8c49a311"
     },
     "error_duplicate_excess": {
       "outcome": "success",
       "evidence": "verified-evidence-error_duplicate_excess.txt",
       "status": "CLOSED",
       "verified": true,
-      "sha256": "be64b122779d5f7655294a7d13fc8285603038c53f8a3e153b7585deffebe352"
+      "sha256": "07ca89523f39a3aa7cac7e0b6115716464122a648fc41187c8a4a1342d416899"
     },
     "cross_store_reconciliation": {
       "outcome": "success",
       "evidence": "verified-evidence-cross_store_reconciliation.txt",
       "status": "CLOSED",
       "verified": true,
-      "sha256": "4770c10f7b490c28f6bb6e6ab1d23c703e8f5a503e6e0f4985b554e031fb0b80"
+      "sha256": "c6d3be28606aaadc61507373ba68c24e180596f046b7a68d23c86f078e968ce7"
     },
     "authority_boundary": {
       "outcome": "success",
       "evidence": "verified-evidence-authority_boundary.txt",
       "status": "CLOSED",
       "verified": true,
-      "sha256": "abca22af04373a81471ef6966afbd2052db648902d530aefc741bf041721dc4a"
+      "sha256": "6d209e7d6f34edfdf3c16301973dee0970c015e40c9e674bfa3ae75a7e4c61b3"
     },
     "core_correctness": {
       "outcome": "success",
       "evidence": "verified-evidence-core_correctness.txt",
       "status": "CLOSED",
       "verified": true,
-      "sha256": "d559214ea1d655c949dc4eae1019ee952b7dd352d2d4ffd0bbe502b68493580b"
+      "sha256": "09dd132096e643efe07bdac0a6af38d50fdfda20d4e9e0da0644225df6b6a2c2"
     },
     "adapter_boundaries": {
       "outcome": "success",
       "evidence": "verified-evidence-adapter_boundaries.txt",
       "status": "CLOSED",
       "verified": true,
-      "sha256": "d346a15f385d39ca9ec7c04b8581b4d4f6d484ea63d7ac15844e463166027376"
+      "sha256": "fe70237820f594d00bacd4c8b7e394d696c040f9d643e4455b12a755021b8085"
     },
     "eai_g3_governance": {
       "outcome": "success",
       "evidence": "verified-evidence-eai_g3_governance.txt",
       "status": "CLOSED",
       "verified": true,
-      "sha256": "f7ac30847efd26e3f4271de67302a3e001738b8116cc6a985b91e5807cb21708"
+      "sha256": "49b4642bcb2d8a58f28c1b1872857a747baf03418ba99c2aeeeb674a650831b5"
     },
     "transaction_correctness": {
       "outcome": "success",
       "evidence": "verified-evidence-transaction_correctness.txt",
       "status": "CLOSED",
       "verified": true,
-      "sha256": "90ba6dbf5c341cd42968968e373b95998da06001fc87a8eae6e7b028def6e771"
+      "sha256": "dc1af8a9ddf0282564a770386d517af14e8fe206265d0e705bdc850af1cfd594"
     },
     "recovery": {
       "outcome": "success",
       "evidence": "verified-evidence-recovery.txt",
       "status": "CLOSED",
       "verified": true,
-      "sha256": "57a29bd9ab4cc306c3fe53a105b6517d966732d51fda84991ff77249f1e9c688"
+      "sha256": "500d4f82642132f972fbd5b787578bb581f69e5a958b3b0b3f78cb4868cc0385"
     },
     "auditability": {
       "outcome": "success",
       "evidence": "verified-evidence-auditability.txt",
       "status": "CLOSED",
       "verified": true,
-      "sha256": "9830ac7f794d8296a56b5e493ad46f50605328a1a2e1dbbec22a9a8dd1b7b293"
+      "sha256": "cb8c64a61931e508441bc6ed5a6e5b8393b6b01c617390b4f2b355be0d627162"
     },
     "security_iam_mfa": {
       "outcome": "success",
       "evidence": "verified-evidence-security_iam_mfa.txt",
       "status": "CLOSED",
       "verified": true,
-      "sha256": "ec6664f45119e651cc6e52763265a61b00709a67a73b9e21965c79619f272c23"
+      "sha256": "405a6945e53b506a5323aa1ff9b0d9c0dd49c9093cfc50b84ea0608b7d6390f6"
     },
     "observability": {
       "outcome": "success",
       "evidence": "verified-evidence-observability.txt",
       "status": "CLOSED",
       "verified": true,
-      "sha256": "19289c8b3e3c94051da34127c7c6f866307bba380ab591bbe1e28996699455bd"
+      "sha256": "107c025d054421ae17ae43587f4dfaae130b97ae130a4e7e18d52bb1196e7648"
     },
     "performance_stress": {
       "outcome": "success",
       "evidence": "verified-evidence-performance_stress.txt",
       "status": "CLOSED",
       "verified": true,
-      "sha256": "62e753f2447b9214974e683b3cfc38d23baabdc6d845b400f5252b3262d23a0d"
+      "sha256": "ac5aa5d1d603d9ebb88ff5ae8d8dc45db7de3dd2c4596d13c310c8f52d872a1f"
     },
     "disaster_recovery": {
       "outcome": "success",
       "evidence": "verified-evidence-disaster_recovery.txt",
       "status": "CLOSED",
       "verified": true,
-      "sha256": "6e5667d759bf27783a79afd1f2b76c01929b252ff73cf889a9b6cb9d22285e4d"
+      "sha256": "7c9cdc7a36e9b2aa1d77945fe9b518c2472ab22bb1d0f21991ffeba660beaaaf"
     },
     "ci_release_governance": {
       "outcome": "success",
       "evidence": "verified-evidence-ci_release_governance.txt",
       "status": "CLOSED",
       "verified": true,
-      "sha256": "80096953a3883663c303c5c39e0494243406ab5f03216ef9d17f6ffd2c0171e6"
+      "sha256": "350220414fa5bae167e00f179135ed5729ef65e41ca7691d884364afa05f118e"
     },
     "independent_reperformance": {
       "outcome": "success",
       "evidence": "verified-evidence-independent_reperformance.txt",
       "status": "CLOSED",
       "verified": true,
-      "sha256": "135585a89bc8c62b7514128d78447e9e4632ded84c50daaa167fac2ddc65f63d"
+      "sha256": "5ceca07e60bd99b67652ab16f4a4a3899b8ef7729581d834d54dca04c49a7e8e"
     },
     "final_evidence_bundle": {
       "outcome": "success",
       "evidence": "verified-evidence-final_evidence_bundle.txt",
       "status": "CLOSED",
       "verified": true,
-      "sha256": "f0f1c92dc73f17a41096f5e7895fafc0777b2ad9a2269d7396073f1d1ac20a18"
+      "sha256": "b515a2dd74aedd266b11055fb43aca55abbd8625bef0e3ac7716bf18f2f4eea2"
     },
     "compile": {
       "outcome": "success",
       "evidence": "verified-evidence-compile.txt",
       "status": "CLOSED",
       "verified": true,
-      "sha256": "0eb2a0fc7b53b60e9f9dc7289a72fafbc10dca88d87ce40b6f328217062390bc"
+      "sha256": "aca802266c3ef64d94cfdd292f1f0d061784757c1e8897aac3e4d725843f20bb"
     },
     "regression": {
       "outcome": "success",
       "evidence": "verified-evidence-regression.txt",
       "status": "CLOSED",
       "verified": true,
-      "sha256": "8d7a5d2bb87c7e05586c898f94814d7c71db24c063c2677f95321e03b70ac774"
+      "sha256": "06916597e639ed9cdf2b5817c8e0ca647e59bc2593b19ca2314b57df450b3cb5"
     },
     "postgres_connection": {
       "outcome": "success",
       "evidence": "verified-evidence-postgres_connection.txt",
       "status": "CLOSED",
       "verified": true,
-      "sha256": "3a9a7bcbf6e76e10509012b152c3b711cab39dd7490af79bb6f2df324f145375"
+      "sha256": "1774a31630b7a34d59237792fb9bab58db341c58ac956c92059b090c25fe6479"
     },
     "migration_atomicity": {
       "outcome": "success",
       "evidence": "verified-evidence-migration_atomicity.txt",
       "status": "CLOSED",
       "verified": true,
-      "sha256": "5f22c3054e3efc0052cf933480eefcdff86e511d7a69f09e3e26fba15c6c11a4"
+      "sha256": "d623d997624bf7720db6af6cca7c65f9466ce380549e632326be75b15ca504c8"
     },
     "legacy_upgrade": {
       "outcome": "success",
       "evidence": "verified-evidence-legacy_upgrade.txt",
       "status": "CLOSED",
       "verified": true,
-      "sha256": "d8bca4d13dd4202d0a0f58eeaa9d3a12db74f35f48582910c6d55488c3291c9a"
+      "sha256": "fe7fd12b25a4d4a9111d2515ca57d071ac8a23598ce53cdc05bd49521f50bc0f"
     },
     "lifecycle": {
       "outcome": "success",
       "evidence": "verified-evidence-lifecycle.txt",
       "status": "CLOSED",
       "verified": true,
-      "sha256": "0c9258c4003f6e1aeb03bb294c733d3f702ae8c2718018d1f121884a08b5d552"
+      "sha256": "6e7f6bc76572cab61b4d3fbb3a1a16e0f9c375de06f898a5ec5efae61f798b56"
     },
     "migration_concurrency": {
       "outcome": "success",
       "evidence": "verified-evidence-migration_concurrency.txt",
       "status": "CLOSED",
       "verified": true,
-      "sha256": "d6ee471674acc1453f7a8d9f960904c32df669a7c1bcb794040b0aecc2c55712"
+      "sha256": "9ed2417b91bdb197ac85a11594476664e39f8fa5a922f6c3a53746cfaafcacb4"
     },
     "publication_integrity": {
       "outcome": "success",
       "evidence": "verified-evidence-publication_integrity.txt",
       "status": "CLOSED",
       "verified": true,
-      "sha256": "991f8b0478a446f03f3588fadf5eb4b42427ed152e61b9347a5f97d801f0279e"
+      "sha256": "7b4983b645370a5cce341de0e2cd7258514bfe6224d0571179bba484c981f2e0"
     },
     "entrypoint": {
       "outcome": "success",
       "evidence": "verified-evidence-entrypoint.txt",
       "status": "CLOSED",
       "verified": true,
-      "sha256": "b51416ffe6ac3d9f8152dfe463bc8a89c51cdf288efbeb5875a63c9de8c6a9ec"
+      "sha256": "1c939afa0688215f0d2aa79bd5038e499565f5ac97664a649c93e6c4b1a2dc83"
     },
     "production_boot": {
       "outcome": "success",
       "evidence": "verified-evidence-production_boot.txt",
       "status": "CLOSED",
       "verified": true,
-      "sha256": "6fc54adb0df02ae7bb614b16dcad2cbabf1f902b482c6ce1bd820088e2c2e31b"
+      "sha256": "485080be730236b86c4e93a1d387fe222233aa55367a8a0b4199d9e43f4ee01d"
     },
     "migration_catalog": {
       "outcome": "success",
       "evidence": "verified-evidence-migration_catalog.txt",
       "status": "CLOSED",
       "verified": true,
-      "sha256": "631eb20d1ce823e03af153cfb7d4f4dc35d44c2ca7bae147e98ddbd248a892bc"
+      "sha256": "c02601909850bbc424e28f01c5d777b5fb283e0dbe41ce6e2c5ad6a3d5266c31"
     },
     "deep_reconciliation": {
       "outcome": "success",
       "evidence": "verified-evidence-deep_reconciliation.txt",
       "status": "CLOSED",
       "verified": true,
-      "sha256": "c8a57a8bd7145023bbde9eba25524a1b86d91a505778ac3429a7ba4b94801fe1"
+      "sha256": "f765d386847d0b7313ef8fe1f50dbefbf2f6fa8db3173e190e7f619746aa69af"
     },
     "manifest": {
       "outcome": "success",
       "evidence": "verified-evidence-manifest.txt",
       "status": "CLOSED",
       "verified": true,
-      "sha256": "d50e7b1ec521fd19d5772ee92819bceaa7192610073afcffc289f1f97c47362d"
+      "sha256": "82b1cf648f3165d984554f71f13b62c69642af4f180bbe03d37e7d319b4e08a4"
     }
   }
 }
