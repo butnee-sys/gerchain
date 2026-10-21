@@ -306,52 +306,6 @@ jobs:
               raise SystemExit('database migration checksum differs from canonical manifest')
           print(json.dumps({'commit_sha': manifest['commit_sha'], 'checked_out_head_sha': head_sha, 'commit_sha_matches_head': manifest['commit_sha_matches_head'], 'canonical_migration_count': len(canonical), 'schema_version_rows': len(database_rows), 'sha256sums': str(out / 'SHA256SUMS'), 'manifest': str(out / 'manifest.json')}, indent=2))
           PY
-      - name: Build exact-SHA architecture gate evidence register
-        if: always()
-        env:
-          EVIDENCE_COMMIT_SHA: ${{ github.sha }}
-        run: |
-          python - <<'PY'
-          import json, os
-          from pathlib import Path
-          sha = os.environ["EVIDENCE_COMMIT_SHA"]
-          repo = os.environ["GITHUB_REPOSITORY"]
-          root = Path.cwd()
-          gates = (
-              "inventory_map", "error_duplicate_excess",
-              "cross_store_reconciliation", "authority_boundary",
-              "core_correctness", "adapter_boundaries", "eai_g3_governance",
-              "transaction_correctness", "recovery", "auditability",
-              "security_iam_mfa", "observability", "performance_stress",
-              "disaster_recovery", "ci_release_governance",
-              "independent_reperformance", "final_evidence_bundle",
-          )
-          # A gate is green only when its own verifiable operational evidence exists.
-          # Documents alone do not prove IAM, DR, stress, recovery, or independent review.
-          records = {name: {"outcome": "open", "evidence": ""} for name in gates}
-          map_path = root / "docs/PRODUCTION_DATA_AUTHORITY_ADAPTER_MAP.md"
-          architecture_path = root / "docs/DEE_ARCHITECTURE_FREEZE.md"
-          if map_path.is_file() and architecture_path.is_file():
-              records["inventory_map"] = {
-                  "outcome": "success",
-                  "evidence": f"https://github.com/{repo}/blob/{sha}/docs/PRODUCTION_DATA_AUTHORITY_ADAPTER_MAP.md",
-              }
-          out = root / "artifacts/ea35/architecture-gates.json"
-          out.parent.mkdir(parents=True, exist_ok=True)
-          bundle = {"commit_sha": sha, "gates": records}
-          out.write_text(json.dumps(bundle, indent=2, sort_keys=True) + chr(10), encoding="utf-8")
-          print(json.dumps({"commit_sha": sha, "architecture_gate_count": len(records),
-                            "success": [k for k,v in records.items() if v["outcome"] == "success"],
-                            "open": [k for k,v in records.items() if v["outcome"] == "open"]}, indent=2))
-          PY
-      - name: Upload canonical PostgreSQL evidence bundle
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: ea35-${{ github.sha }}
-          path: artifacts/ea35/
-          if-no-files-found: warn
-          retention-days: 90
 
       - name: Test production entrypoint contract
         run: set -o pipefail; pytest -vv -s tests/services/test_production_entrypoint.py 2>&1 | tee artifacts/ea35/logs/production-entrypoint.log
@@ -419,3 +373,183 @@ jobs:
       - name: Deep value-truth reconciliation tests on PostgreSQL
         run: set -o pipefail; pytest -vv -s tests/persistence/test_deep_value_reconciliation_postgres.py 2>&1 | tee artifacts/ea35/logs/deep-value-reconciliation.log
 
+      - name: Verify error duplicate excess invariants on exact SHA
+        id: duplicate_excess_evidence
+        if: always()
+        run: |
+          mkdir -p artifacts/ea35/logs
+          set -o pipefail
+          pytest -q \
+            tests/test_core_structure.py \
+            tests/test_core_final_lock_contract.py \
+            tests/test_boundary_adapters.py \
+            tests/test_composition_root.py \
+            tests/test_governed_flow_adapters.py \
+            tests/test_nef_gerchain_boundary.py \
+            tests/test_nef_gerchain_port.py \
+            tests/test_postgres_atomic_ledger.py \
+            tests/persistence/test_deep_value_reconciliation_postgres.py \
+            --junitxml=artifacts/ea35/junit-duplicate-excess.xml \
+            2>&1 | tee artifacts/ea35/logs/duplicate-excess-review.log
+      - name: Finalize exact-SHA architecture gates and evidence bundle
+        if: always()
+        env:
+          EVIDENCE_COMMIT_SHA: ${{ github.sha }}
+          DUPLICATE_EXCESS_OUTCOME: ${{ steps.duplicate_excess_evidence.outcome }}
+        run: |
+          python - <<'PY'
+          import hashlib, json, os, subprocess, xml.etree.ElementTree as ET
+          from pathlib import Path
+
+          root = Path("artifacts/ea35")
+          root.mkdir(parents=True, exist_ok=True)
+          expected = os.environ["EVIDENCE_COMMIT_SHA"]
+          head = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+          repo = os.environ["GITHUB_REPOSITORY"]
+          required = [
+              root / "manifest.json",
+              root / "migration-manifest.json",
+              root / "commit-sha.txt",
+              root / "logs" / "duplicate-excess-review.log",
+              root / "junit-duplicate-excess.xml",
+          ]
+          base_files_exist = all(p.is_file() and p.stat().st_size > 0 for p in required)
+          manifest = {}
+          migration = {}
+          if (root / "manifest.json").is_file():
+              try: manifest = json.loads((root / "manifest.json").read_text(encoding="utf-8"))
+              except (OSError, json.JSONDecodeError): manifest = {}
+          if (root / "migration-manifest.json").is_file():
+              try: migration = json.loads((root / "migration-manifest.json").read_text(encoding="utf-8"))
+              except (OSError, json.JSONDecodeError): migration = {}
+          sha_bound = (
+              head == expected
+              and manifest.get("commit_sha") == expected
+              and manifest.get("checked_out_head_sha") == expected
+              and manifest.get("commit_sha_matches_head") is True
+              and migration.get("commit_sha") == expected
+              and (root / "commit-sha.txt").is_file()
+              and (root / "commit-sha.txt").read_text(encoding="utf-8").strip() == expected
+          )
+          junit_ok = False
+          junit_counts = {"tests": 0, "failures": 0, "errors": 0, "skipped": 0}
+          junit = root / "junit-duplicate-excess.xml"
+          if junit.is_file():
+              try:
+                  xml = ET.parse(junit).getroot()
+                  suites = [xml] if xml.tag == "testsuite" else list(xml.iter("testsuite"))
+                  junit_counts = {k: sum(int(s.attrib.get(k, "0")) for s in suites)
+                                  for k in junit_counts}
+                  junit_ok = junit_counts["tests"] > 0 and junit_counts["failures"] == 0 and junit_counts["errors"] == 0
+              except (ET.ParseError, ValueError):
+                  junit_ok = False
+          review_doc = Path("docs/MASTER_PRODUCTION_WORK_PLAN_STEP2_ERROR_DUPLICATE_EXCESS.md")
+          duplicate_pass = (
+              os.environ.get("DUPLICATE_EXCESS_OUTCOME") == "success"
+              and review_doc.is_file()
+              and base_files_exist
+              and sha_bound
+              and junit_ok
+          )
+          # Build a machine-verifiable bundle index from real files only.
+          evidence_files = []
+          for p in sorted(root.rglob("*")):
+              if p.is_file() and p.name not in {
+                  "architecture-gates.json", "final-evidence-bundle.json",
+                  "SHA256SUMS", "MANIFEST.SHA256"
+              }:
+                  evidence_files.append({
+                      "path": p.relative_to(root).as_posix(),
+                      "sha256": hashlib.sha256(p.read_bytes()).hexdigest(),
+                      "size_bytes": p.stat().st_size,
+                  })
+          bundle_complete = bool(base_files_exist and sha_bound and junit_ok and evidence_files)
+          bundle_report = {
+              "schema_version": "1.0",
+              "commit_sha": expected,
+              "checked_out_head_sha": head,
+              "commit_sha_matches_head": head == expected,
+              "status": "PASS" if bundle_complete else "BLOCKED",
+              "duplicate_excess_junit": junit_counts,
+              "evidence_files": evidence_files,
+              "verification": {
+                  "required_files_present": base_files_exist,
+                  "exact_sha_binding": sha_bound,
+                  "duplicate_excess_tests_passed": junit_ok,
+                  "duplicate_excess_step_outcome": os.environ.get("DUPLICATE_EXCESS_OUTCOME"),
+              },
+          }
+          (root / "final-evidence-bundle.json").write_text(
+              json.dumps(bundle_report, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+          )
+
+          gates = (
+              "inventory_map", "error_duplicate_excess", "cross_store_reconciliation",
+              "authority_boundary", "core_correctness", "adapter_boundaries",
+              "eai_g3_governance", "transaction_correctness", "recovery",
+              "auditability", "security_iam_mfa", "observability",
+              "performance_stress", "disaster_recovery", "ci_release_governance",
+              "independent_reperformance", "final_evidence_bundle",
+          )
+          records = {name: {"outcome": "open", "evidence": ""} for name in gates}
+          if (Path("docs/PRODUCTION_DATA_AUTHORITY_ADAPTER_MAP.md").is_file()
+              and Path("docs/DEE_ARCHITECTURE_FREEZE.md").is_file()):
+              records["inventory_map"] = {
+                  "outcome": "success",
+                  "evidence": f"https://github.com/{repo}/blob/{expected}/docs/PRODUCTION_DATA_AUTHORITY_ADAPTER_MAP.md",
+              }
+          if duplicate_pass:
+              records["error_duplicate_excess"] = {
+                  "outcome": "success",
+                  "evidence": "logs/duplicate-excess-review.log",
+              }
+          if bundle_complete:
+              records["final_evidence_bundle"] = {
+                  "outcome": "success",
+                  "evidence": "final-evidence-bundle.json",
+              }
+          (root / "architecture-gates.json").write_text(
+              json.dumps({"commit_sha": expected, "gates": records}, indent=2, sort_keys=True) + "\n",
+              encoding="utf-8",
+          )
+
+          # Final checksum index includes both architecture-gates.json and the
+          # bundle report. The index itself is separately bound by MANIFEST.SHA256.
+          sums_path = root / "SHA256SUMS"
+          files = sorted(p for p in root.rglob("*") if p.is_file()
+                         and p.name not in {"SHA256SUMS", "MANIFEST.SHA256"})
+          sums_path.write_text(
+              "".join(f"{hashlib.sha256(p.read_bytes()).hexdigest()}  {p.relative_to(root).as_posix()}\n" for p in files),
+              encoding="utf-8",
+          )
+          sums_valid = True
+          for line in sums_path.read_text(encoding="utf-8").splitlines():
+              digest, name = line.split("  ", 1)
+              if hashlib.sha256((root / name).read_bytes()).hexdigest() != digest:
+                  sums_valid = False
+                  break
+          sums_hash = hashlib.sha256(sums_path.read_bytes()).hexdigest()
+          (root / "MANIFEST.SHA256").write_text(f"{sums_hash}  SHA256SUMS\n", encoding="utf-8")
+          sums_valid = sums_valid and hashlib.sha256(sums_path.read_bytes()).hexdigest() == sums_hash
+          print(json.dumps({
+              "commit_sha": expected,
+              "checked_out_head_sha": head,
+              "sha_bound": sha_bound,
+              "duplicate_excess_step": os.environ.get("DUPLICATE_EXCESS_OUTCOME"),
+              "duplicate_excess_junit": junit_counts,
+              "error_duplicate_excess": records["error_duplicate_excess"]["outcome"],
+              "final_evidence_bundle": records["final_evidence_bundle"]["outcome"],
+              "sha256sums_valid": sums_valid,
+              "open_architecture_gates": [k for k,v in records.items() if v["outcome"] != "success"],
+          }, indent=2))
+          if not sums_valid:
+              raise SystemExit("FAIL: final evidence bundle checksum verification failed")
+          PY
+      - name: Upload final exact-SHA PostgreSQL evidence bundle
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ea35-${{ github.sha }}
+          path: artifacts/ea35/
+          if-no-files-found: error
+          retention-days: 90
