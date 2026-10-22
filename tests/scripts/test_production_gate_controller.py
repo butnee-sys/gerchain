@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import json
+import sys
 from pathlib import Path
 from unittest.mock import patch
 
-from scripts.production_gate_controller import REQUIRED_GATES, decide
+from scripts.production_gate_controller import REQUIRED_GATES, decide, main
 
 
 def _manifest(sha: str) -> dict:
@@ -110,3 +111,47 @@ def test_controller_rejects_manifest_head_flag_not_confirmed(tmp_path: Path) -> 
         report = decide(manifest, "abc123", _outcomes())
     assert report["decision"] == "NOT_LOCKED"
     assert "MANIFEST_COMMIT_HEAD_MATCH_NOT_CONFIRMED" in report["failures"]
+
+
+def test_invalid_outcomes_json_overwrites_stale_locked_report(tmp_path: Path) -> None:
+    output = tmp_path / "decision.json"
+    output.write_text(json.dumps({"decision": "LOCKED", "failures": []}), encoding="utf-8")
+    argv = [
+        "production_gate_controller.py",
+        "--expected-sha",
+        "abc123",
+        "--output",
+        str(output),
+        "--outcomes-json",
+        "{invalid",
+    ]
+    with patch("sys.argv", argv), patch(
+        "scripts.production_gate_controller._head_sha", return_value="abc123"
+    ):
+        exit_code = main()
+    report = json.loads(output.read_text(encoding="utf-8"))
+    assert exit_code == 1
+    assert report["decision"] == "NOT_LOCKED"
+    assert report["failures"] == ["OUTCOMES_JSON_INVALID"]
+
+
+def test_non_object_outcomes_json_overwrites_stale_locked_report(tmp_path: Path) -> None:
+    output = tmp_path / "decision.json"
+    output.write_text(json.dumps({"decision": "LOCKED", "failures": []}), encoding="utf-8")
+    argv = [
+        "production_gate_controller.py",
+        "--expected-sha",
+        "abc123",
+        "--output",
+        str(output),
+        "--outcomes-json",
+        '["success"]',
+    ]
+    with patch("sys.argv", argv), patch(
+        "scripts.production_gate_controller._head_sha", return_value="abc123"
+    ):
+        exit_code = main()
+    report = json.loads(output.read_text(encoding="utf-8"))
+    assert exit_code == 1
+    assert report["decision"] == "NOT_LOCKED"
+    assert report["failures"] == ["OUTCOMES_JSON_INVALID_SHAPE"]
