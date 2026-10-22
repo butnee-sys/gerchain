@@ -205,6 +205,15 @@ jobs:
               })
           PY
 
+      - name: Remove stale precomputed gate-closure markers
+        if: always()
+        run: |
+          # These tracked snapshots refer to historical SHAs and are not evidence
+          # for the commit being tested. Remove them before constructing/uploading
+          # the fresh exact-SHA evidence bundle. Gate closure must come from this
+          # run's observed outcomes or independently verifiable current evidence.
+          rm -f artifacts/ea35/verified-evidence-*.txt
+
       - name: Build canonical migration evidence manifest
         id: manifest_evidence
         if: always()
