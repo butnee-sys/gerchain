@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from validate_dataset import DATA, validate
+from research.deeti.validate_dataset import DATA, validate
 
 
 def test_schema_only_dataset_is_valid(capsys):

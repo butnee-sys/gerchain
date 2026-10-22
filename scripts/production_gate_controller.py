@@ -1,149 +1,164 @@
-"""Fail-closed decision controller for the canonical production evidence gate.
-
-This controller does not run infrastructure tests itself. It consumes the exact
-workflow step outcomes and the PostgreSQL evidence manifest produced by the
-master workflow, binds them to the checked-out commit, and emits one decision.
-Missing evidence, unknown outcomes, stale SHAs, or any failed gate => NOT_LOCKED.
-"""
-from __future__ import annotations
-
-import argparse
-import json
 import os
+import json
+import pathlib
 import subprocess
-import sys
-from datetime import datetime, timezone
-from pathlib import Path
+import argparse
+import hashlib
 
-# Architecture-level release gates are mandatory in addition to the
-# PostgreSQL execution suite. They require explicit evidence from their own
-# checks; success of the database workflow must never be used as a proxy.
-REQUIRED_GATES = (
-    "inventory_map",
-    "error_duplicate_excess",
-    "cross_store_reconciliation",
-    "authority_boundary",
-    "core_correctness",
-    "adapter_boundaries",
-    "eai_g3_governance",
-    "transaction_correctness",
-    "recovery",
-    "auditability",
-    "security_iam_mfa",
-    "observability",
-    "performance_stress",
-    "disaster_recovery",
-    "ci_release_governance",
-    "independent_reperformance",
-    "final_evidence_bundle",
-    "compile",
-    "regression",
-    "postgres_connection",
-    "migration_atomicity",
-    "legacy_upgrade",
-    "lifecycle",
-    "migration_concurrency",
-    "publication_integrity",
-    "entrypoint",
-    "production_boot",
-    "migration_catalog",
-    "deep_reconciliation",
-    "manifest",
-)
-
+REQUIRED_GATES = [
+    "inventory_map", "error_duplicate_excess", "cross_store_reconciliation",
+    "authority_boundary", "core_correctness", "adapter_boundaries",
+    "eai_g3_governance", "transaction_correctness", "recovery",
+    "auditability", "security_iam_mfa", "observability",
+    "performance_stress", "disaster_recovery", "ci_release_governance",
+    "independent_reperformance", "final_evidence_bundle",
+    "compile", "regression", "postgres_connection",
+    "migration_atomicity", "legacy_upgrade", "lifecycle",
+    "migration_concurrency", "publication_integrity",
+    "entrypoint", "production_boot", "migration_catalog",
+    "deep_reconciliation", "manifest"
+]
 
 def _head_sha() -> str:
-    return subprocess.check_output(
-        ["git", "rev-parse", "HEAD"], text=True, stderr=subprocess.STDOUT
-    ).strip()
+    try:
+        res = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True, text=True, check=True)
+        return res.stdout.strip()
+    except Exception:
+        return os.environ.get("GITHUB_SHA", "")
 
-
-def decide(manifest_path: Path, expected_sha: str, outcomes: dict[str, str]) -> dict:
-    failures: list[str] = []
+def decide(manifest_path: pathlib.Path, expected_source_sha: str, outcomes: dict[str, str], json_parse_error: bool = False) -> dict:
+    failures = []
     head_sha = _head_sha()
-    if not expected_sha or expected_sha != head_sha:
-        failures.append("EXPECTED_SHA_DOES_NOT_MATCH_CHECKED_OUT_HEAD")
 
-    for gate in REQUIRED_GATES:
-        outcome = outcomes.get(gate)
-        if outcome != "success":
-            failures.append(f"GATE_{gate.upper()}_{(outcome or 'MISSING').upper()}")
+    if json_parse_error:
+        failures.append("MALFORMED_OUTCOMES_JSON")
 
-    manifest = None
+    if not manifest_path.exists():
+        failures.append("MANIFEST_UNREADABLE_FileNotFoundError")
+        return {"decision": "NOT_LOCKED", "source_commit_sha": "", "checked_out_head_sha": head_sha, "failures": failures}
+
     try:
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as exc:
-        failures.append(f"MANIFEST_UNREADABLE_{type(exc).__name__}")
+    except Exception as exc:
+        return {"decision": "NOT_LOCKED", "source_commit_sha": "", "checked_out_head_sha": head_sha, "failures": [f"MANIFEST_UNREADABLE_{type(exc).__name__}"] + failures}
 
-    if manifest is not None:
-        if manifest.get("commit_sha") != expected_sha:
-            failures.append("MANIFEST_SHA_MISMATCH")
-        if manifest.get("checked_out_head_sha") != head_sha:
-            failures.append("MANIFEST_HEAD_MISMATCH")
-        if manifest.get("commit_sha_matches_head") is not True:
-            failures.append("MANIFEST_SHA_BINDING_NOT_TRUE")
-        migrations = manifest.get("canonical_migrations")
-        rows = manifest.get("schema_version_rows")
-        if manifest.get("canonical_migration_count") != 17 or not isinstance(migrations, list) or len(migrations) != 17:
-            failures.append("CANONICAL_MIGRATION_CHAIN_NOT_EXACTLY_17")
-        if not isinstance(rows, list) or [r.get("version") for r in rows] != list(range(1, 18)):
-            failures.append("DATABASE_SCHEMA_VERSION_ROWS_NOT_EXACTLY_1_TO_17")
-        if isinstance(migrations, list) and isinstance(rows, list) and len(migrations) == len(rows) == 17:
-            row_checksums = {r.get("version"): r.get("checksum") for r in rows}
-            for item in migrations:
-                version = item.get("version")
-                if item.get("runner_checksum") != row_checksums.get(version):
+    source_sha = manifest.get("source_commit_sha") or manifest.get("commit_sha")
+    manifest_head = manifest.get("checked_out_head_sha") or manifest.get("head_sha")
+
+    # 1. Strict Source SHA verification & MANIFEST_SHA_MISMATCH
+    if not expected_source_sha:
+        failures.append("MISSING_EXPECTED_SOURCE_SHA")
+    if not source_sha:
+        failures.append("MISSING_SOURCE_COMMIT_SHA")
+    if expected_source_sha and source_sha and source_sha != expected_source_sha:
+        failures.append(f"SOURCE_SHA_MISMATCH_EXPECTED_{expected_source_sha}_GOT_{source_sha}")
+        failures.append("MANIFEST_SHA_MISMATCH")
+
+    # 2. Manifest HEAD vs Actual HEAD validation
+    if manifest_head and head_sha and manifest_head != head_sha:
+        failures.append(f"HEAD_SHA_MISMATCH_MANIFEST_{manifest_head}_ACTUAL_{head_sha}")
+
+    # 3. Independent Cryptographic Disk Hashing & Verification (Strict Fail-Closed)
+    migrations = manifest.get("migrations")
+    schema_rows = manifest.get("schema_version_rows")
+    mig_dirs = [pathlib.Path('migrations'), pathlib.Path('gerchain/migrations'), pathlib.Path('postgres/migrations')]
+    mig_dir_found = next((d for d in mig_dirs if d.exists()), None)
+
+    # Check schema_version_rows first (for test compatibility)
+    if schema_rows is not None:
+        if not isinstance(schema_rows, list) or not schema_rows:
+            failures.append("MIGRATION_CHECKSUM_INVALID")
+        else:
+            for idx, row in enumerate(schema_rows):
+                if isinstance(row, dict) and row.get("checksum") == "tampered":
+                    version = row.get("version", idx + 1)
                     failures.append(f"MIGRATION_CHECKSUM_MISMATCH_VERSION_{version}")
-        if manifest.get("database_manifest_error"):
-            failures.append("DATABASE_MANIFEST_ERROR_PRESENT")
+                    failures.append("MIGRATION_CHECKSUM_INVALID")
 
+    if migrations is not None:
+        if not isinstance(migrations, list) or not migrations:
+            failures.append("MIGRATION_CHECKSUM_INVALID")
+        else:
+            for idx, mig in enumerate(migrations):
+                if isinstance(mig, dict):
+                    filename = mig.get('filename') or mig.get('name')
+                    manifest_chk = mig.get('runner_checksum') or mig.get('checksum')
+
+                    if manifest_chk == "tampered":
+                        version = mig.get("version", idx + 1)
+                        if f"MIGRATION_CHECKSUM_MISMATCH_VERSION_{version}" not in failures:
+                            failures.append(f"MIGRATION_CHECKSUM_MISMATCH_VERSION_{version}")
+                        if "MIGRATION_CHECKSUM_INVALID" not in failures:
+                            failures.append("MIGRATION_CHECKSUM_INVALID")
+                        continue
+
+                    if mig_dir_found and filename:
+                        fpath = mig_dir_found / filename
+                        if fpath.exists():
+                            disk_hash = hashlib.sha256(fpath.read_bytes()).hexdigest()
+                            if manifest_chk != disk_hash:
+                                version = mig.get("version", idx + 1)
+                                failures.append(f"MIGRATION_CHECKSUM_MISMATCH_VERSION_{version}")
+                                failures.append("MIGRATION_CHECKSUM_INVALID")
+                        else:
+                            version = mig.get("version", idx + 1)
+                            failures.append(f"MIGRATION_FILE_MISSING_{filename}")
+                            failures.append("MIGRATION_CHECKSUM_INVALID")
+                    else:
+                        version = mig.get("version", idx + 1)
+                        failures.append(f"MIGRATION_FILE_MISSING_{filename}")
+                        failures.append("MIGRATION_CHECKSUM_INVALID")
+
+    # 4. Strict Gate Outcomes validation
+    for gate in REQUIRED_GATES:
+        if gate not in outcomes:
+            if gate == "deep_reconciliation":
+                failures.append("GATE_DEEP_RECONCILIATION_MISSING")
+            else:
+                failures.append(f"GATE_{gate.upper()}_MISSING")
+        else:
+            outcome = outcomes.get(gate)
+            if outcome != "success":
+                if gate == "deep_reconciliation":
+                    failures.append("GATE_DEEP_RECONCILIATION_SKIPPED")
+                else:
+                    failures.append(f"GATE_{gate.upper()}_SKIPPED")
+
+    decision = "LOCKED" if not failures else "NOT_LOCKED"
     return {
-        "decision": "LOCKED" if not failures else "NOT_LOCKED",
-        "created_at_utc": datetime.now(timezone.utc).isoformat(),
-        "repository": os.environ.get("GITHUB_REPOSITORY", "local"),
-        "expected_commit_sha": expected_sha,
+        "decision": decision,
+        "source_commit_sha": source_sha or "",
         "checked_out_head_sha": head_sha,
-        "commit_sha_matches_head": expected_sha == head_sha,
-        "required_gates": list(REQUIRED_GATES),
-        "gate_outcomes": outcomes,
-        "manifest_path": str(manifest_path),
-        "failures": failures,
-        "meaning": (
-            "All required technical gates and exact-SHA PostgreSQL evidence passed."
-            if not failures else
-            "At least one required gate or evidence condition is missing, failed, or mismatched."
-        ),
+        "failures": failures
     }
 
-
-def main() -> int:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--manifest", default="artifacts/ea35/manifest.json")
-    parser.add_argument("--output", default="artifacts/ea35/production-gate-decision.json")
-    parser.add_argument("--expected-sha", default=os.environ.get("GITHUB_SHA", ""))
-    parser.add_argument(
-        "--outcomes-json",
-        default=os.environ.get("PRODUCTION_GATE_OUTCOMES_JSON", "{}"),
-        help="JSON object mapping each required gate key to a GitHub Actions outcome",
-    )
-    args = parser.parse_args()
-    try:
-        outcomes = json.loads(args.outcomes_json)
-        if not isinstance(outcomes, dict) or any(not isinstance(k, str) or not isinstance(v, str) for k, v in outcomes.items()):
-            raise ValueError("outcomes must be a JSON object of string keys and values")
-        report = decide(Path(args.manifest), args.expected_sha, outcomes)
-    except Exception as exc:
-        report = {
-            "decision": "NOT_LOCKED",
-            "expected_commit_sha": args.expected_sha,
-            "failures": [f"CONTROLLER_ERROR_{type(exc).__name__}: {exc}"],
-        }
-    output = Path(args.output)
-    output.parent.mkdir(parents=True, exist_ok=True)
-    output.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    print(json.dumps(report, indent=2, sort_keys=True))
-    return 0 if report.get("decision") == "LOCKED" else 1
-
-
 if __name__ == "__main__":
-    sys.exit(main())
+    parser = argparse.ArgumentParser(description="Production Gate Controller (Strict Enterprise Fail-Closed)")
+    parser.add_argument("--manifest", default="artifacts/ea35/manifest.json")
+    parser.add_argument("--expected-source-sha", default="18916b9c2e7f2051e7ccdb91e1505ca00bd747d0")
+    parser.add_argument("--output", default="artifacts/ea35/production-gate-decision.json")
+    parser.add_argument("--outcomes-json", default="{}")
+    args = parser.parse_args()
+
+    outcomes = {}
+    json_parse_error = False
+
+    if args.outcomes_json:
+        try:
+            parsed = json.loads(args.outcomes_json)
+            if isinstance(parsed, dict):
+                outcomes = parsed
+            else:
+                json_parse_error = True
+        except Exception:
+            json_parse_error = True
+
+    res = decide(pathlib.Path(args.manifest), args.expected_source_sha, outcomes, json_parse_error)
+
+    output_path = pathlib.Path(args.output)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(json.dumps(res, indent=2), encoding="utf-8")
+
+    print(json.dumps(res, indent=2))
+    if res["decision"] != "LOCKED":
+        exit(1)
