@@ -232,7 +232,7 @@ jobs:
               "persistence/recovery_outbox.py",
               "persistence/deep_value_reconciliation.py",
               "postgres/migrations.py",
-              "tests/production/test_production_runtime_entrypoint.py",
+              "tests/production/test_production_entrypoint.py",
               "tests/postgres/test_production_postgres_reperformance.py",
               "tests/persistence/test_deep_value_reconciliation_postgres.py",
           ]
