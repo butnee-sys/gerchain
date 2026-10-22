@@ -39,19 +39,8 @@ for i in {1..5}; do
     CURRENT_SHA=$(git rev-parse HEAD)
     echo "-> Iteration $i: Current HEAD SHA is $CURRENT_SHA"
     
-    # Sync exact HEAD SHA into artifacts
-    python -c "
-    import json, pathlib
-    head = '$CURRENT_SHA'
-    for p in [pathlib.Path('artifacts/ea35/manifest.json'), pathlib.Path('artifacts/ea35/production-gate-decision.json')]:
-        if p.exists():
-            data = json.loads(p.read_text(encoding='utf-8'))
-            if 'checked_out_head_sha' in data:
-                data['checked_out_head_sha'] = head
-            if 'head_sha' in data:
-                data['head_sha'] = head
-            p.write_text(json.dumps(data, indent=2), encoding='utf-8')
-    "
+    # Sync exact HEAD SHA into artifacts using a flat, unindented script string
+    python -c "import json, pathlib; head = '$CURRENT_SHA'; [p.write_text(json.dumps({**json.loads(p.read_text(encoding='utf-8')), 'checked_out_head_sha': head, 'head_sha': head}, indent=2), encoding='utf-8') for p in [pathlib.Path('artifacts/ea35/manifest.json'), pathlib.Path('artifacts/ea35/production-gate-decision.json')] if p.exists()]"
     
     # Run controller to generate matching decision file under this SHA
     python scripts/production_gate_controller.py \
