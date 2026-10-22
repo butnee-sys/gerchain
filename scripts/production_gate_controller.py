@@ -4,6 +4,21 @@ import pathlib
 import subprocess
 import argparse
 
+# Module-level exported canonical gates required for import compatibility in tests
+REQUIRED_GATES = [
+    "inventory_map", "error_duplicate_excess", "cross_store_reconciliation",
+    "authority_boundary", "core_correctness", "adapter_boundaries",
+    "eai_g3_governance", "transaction_correctness", "recovery",
+    "auditability", "security_iam_mfa", "observability",
+    "performance_stress", "disaster_recovery", "ci_release_governance",
+    "independent_reperformance", "final_evidence_bundle",
+    "compile", "regression", "postgres_connection",
+    "migration_atomicity", "legacy_upgrade", "lifecycle",
+    "migration_concurrency", "publication_integrity",
+    "entrypoint", "production_boot", "migration_catalog",
+    "deep_reconciliation", "manifest"
+]
+
 def _head_sha() -> str:
     try:
         res = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True, text=True, check=True)
@@ -36,22 +51,8 @@ def decide(manifest_path: pathlib.Path, expected_source_sha: str, outcomes: dict
     if expected_source_sha and source_sha and source_sha != expected_source_sha:
         failures.append(f"SOURCE_SHA_MISMATCH_EXPECTED_{expected_source_sha}_GOT_{source_sha}")
 
-    # Full canonical gate scope (17+ required production gates)
-    required_gates = [
-        "inventory_map", "error_duplicate_excess", "cross_store_reconciliation",
-        "authority_boundary", "core_correctness", "adapter_boundaries",
-        "eai_g3_governance", "transaction_correctness", "recovery",
-        "auditability", "security_iam_mfa", "observability",
-        "performance_stress", "disaster_recovery", "ci_release_governance",
-        "independent_reperformance", "final_evidence_bundle",
-        "compile", "regression", "postgres_connection",
-        "migration_atomicity", "legacy_upgrade", "lifecycle",
-        "migration_concurrency", "publication_integrity",
-        "entrypoint", "production_boot", "migration_catalog",
-        "deep_reconciliation", "manifest"
-    ]
-
-    for gate in required_gates:
+    # Full canonical gate scope verification using module-level REQUIRED_GATES
+    for gate in REQUIRED_GATES:
         outcome = outcomes.get(gate)
         if outcome != "success":
             failures.append(f"GATE_NOT_SUCCESS_{gate.upper()}")
@@ -65,7 +66,7 @@ def decide(manifest_path: pathlib.Path, expected_source_sha: str, outcomes: dict
     }
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Production Gate Controller (Full Scope Strict)")
+    parser = argparse.ArgumentParser(description="Production Gate Controller (Full Scope Strict & Exported Gates)")
     parser.add_argument("--manifest", default="artifacts/ea35/manifest.json")
     parser.add_argument("--expected-source-sha", default="18916b9c2e7f2051e7ccdb91e1505ca00bd747d0")
     parser.add_argument("--output", default="artifacts/ea35/production-gate-decision.json")
