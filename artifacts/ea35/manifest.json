@@ -2,77 +2,94 @@
   "schema_version": 2,
   "source_commit_sha": "18916b9c2e7f2051e7ccdb91e1505ca00bd747d0",
   "commit_sha": "18916b9c2e7f2051e7ccdb91e1505ca00bd747d0",
-  "checked_out_head_sha": "f741185c5b1948fcddcfe45cb8e677bc4928a8e4",
+  "checked_out_head_sha": "74652a640afa365c18796049f4a923043e02890b",
   "commit_sha_matches_head": true,
   "status": "PASS",
   "migrations": [
     {
       "name": "001_canonical_production.sql",
-      "runner_checksum": "dc502a930cc23f8bf501f9200d092218d43f3462d6bf56b38c409480b498193b"
+      "runner_checksum": "5a0bac08e2f499b6148607a68a0afea5f1a36cf8710576dd00033c819152db60",
+      "checksum": "5a0bac08e2f499b6148607a68a0afea5f1a36cf8710576dd00033c819152db60"
     },
     {
       "name": "002_canonical_production.sql",
-      "runner_checksum": "1dad432b63dec39434d72ec929b135b1ef19e38a642a513750f37deb9de0cca2"
+      "runner_checksum": "32e6d40eafa633b7b66262b028470485e8ec159341f36b0103ca1f3073932c97",
+      "checksum": "32e6d40eafa633b7b66262b028470485e8ec159341f36b0103ca1f3073932c97"
     },
     {
       "name": "003_canonical_compatibility.sql",
-      "runner_checksum": "11100743bf446be372cfb372a27792e477261acd6ec2d0cf20c06d4b14883f5d"
+      "runner_checksum": "2e5a854cb31bf84fdcf5eb341b367e9bc8ee628870659739ab93b13eb9fcd2f0",
+      "checksum": "2e5a854cb31bf84fdcf5eb341b367e9bc8ee628870659739ab93b13eb9fcd2f0"
     },
     {
       "name": "004_canonical_value_truth.sql",
-      "runner_checksum": "0d5d063a1d35fbb79bef3023e8b02e06e76776c0af5da41b843fb702b702cf57"
+      "runner_checksum": "fa491c1c8c360754b9d3e47d56737f7503912c9e3dcd16e666ef318ea63cade5",
+      "checksum": "fa491c1c8c360754b9d3e47d56737f7503912c9e3dcd16e666ef318ea63cade5"
     },
     {
       "name": "005_canonical_production.sql",
-      "runner_checksum": "ecfc4306afb3b7ccde65902487f0702a6697ac343bced4534f624d134984effb"
+      "runner_checksum": "6d5c67f13ea8d6091684eaf487371f52c16118d92dec842e1e8f1b508f6a8559",
+      "checksum": "6d5c67f13ea8d6091684eaf487371f52c16118d92dec842e1e8f1b508f6a8559"
     },
     {
       "name": "006_canonical_movement_integrity.sql",
-      "runner_checksum": "40d271147de5ada9ff233895fbe166f72cac4e562258ddc6414e7f7059ba79ff"
+      "runner_checksum": "7cc8019d510ea290645eda20cb1ec507b12d205b6f4da8a194a88d52f89d899a",
+      "checksum": "7cc8019d510ea290645eda20cb1ec507b12d205b6f4da8a194a88d52f89d899a"
     },
     {
       "name": "007_canonical_production_reconciliation.sql",
-      "runner_checksum": "d62f3ff8a423bcfffb6d63c38c4aeeff70b481b8355d7b4ca7c80a9a50051e2e"
+      "runner_checksum": "d2c44091f4fd0996066ac7dc62979301c2ee4a4c55c663b25bf408a906755b2f",
+      "checksum": "d2c44091f4fd0996066ac7dc62979301c2ee4a4c55c663b25bf408a906755b2f"
     },
     {
       "name": "008_ea35_idempotency_compat.sql",
-      "runner_checksum": "ffee1c1cedaa59d7b40c75b67fe035a11e4f3cdfd9c9079a62c78a8016c2abe3"
+      "runner_checksum": "85d56489486c98472b6e91de0aa4c343440355e235acf673f4c578dcc4e5db19",
+      "checksum": "85d56489486c98472b6e91de0aa4c343440355e235acf673f4c578dcc4e5db19"
     },
     {
       "name": "009_canonical_movement_integrity_hardening.sql",
-      "runner_checksum": "ff2c383cddc8e9d6b5d399e2ce043cdf629de7864c8ba8cafb5a5160e947a28a"
+      "runner_checksum": "03a3240945fa0aa9b51c67e6bcab45564324671be9c79dddd271d63b3a4264ea",
+      "checksum": "03a3240945fa0aa9b51c67e6bcab45564324671be9c79dddd271d63b3a4264ea"
     },
     {
       "name": "010_canonical_evidence_constraints.sql",
-      "runner_checksum": "2866ce1e85021a1860f0b4a7ef44f57a30db86a3862c2afef3a15c7fa1674414"
+      "runner_checksum": "7ecac8e8eb215d62b95638af127aff2cc8625676633719cdd6f3a8aaba1344a0",
+      "checksum": "7ecac8e8eb215d62b95638af127aff2cc8625676633719cdd6f3a8aaba1344a0"
     },
     {
       "name": "011_ea35_canonical_schema_finalization.sql",
-      "runner_checksum": "c909762e5dfe758e11340eefbca5f25080e617de143fa83e55af78789ac81600"
+      "runner_checksum": "0380bc929745c77afb5ea005bb9953c1f76a541d521792764097ffe086bf1099",
+      "checksum": "0380bc929745c77afb5ea005bb9953c1f76a541d521792764097ffe086bf1099"
     },
     {
       "name": "012_canonical_production.sql",
-      "runner_checksum": "0d5a08e6fbe30a885b4aca9666b323ab6dee163195de3762e6d52ce210ff3422"
+      "runner_checksum": "265238201aaf4f2df6f4b5d7a619053999435e74d9306263cda15c6f20d84efb",
+      "checksum": "265238201aaf4f2df6f4b5d7a619053999435e74d9306263cda15c6f20d84efb"
     },
     {
       "name": "013_ea35_canonical_schema_hardening.sql",
-      "runner_checksum": "4788add812f36fdb08c79b6a194c4f1bf0c9101c9819e707f75b435d9bf7cda8"
+      "runner_checksum": "7197c05a54a6873f25773bf20c874c970733d94bbcd417a364011d4f9657d4df",
+      "checksum": "7197c05a54a6873f25773bf20c874c970733d94bbcd417a364011d4f9657d4df"
     },
     {
       "name": "014_canonical_escrow_state_constraint.sql",
-      "runner_checksum": "26dd142518010da5cf6c0c678c8e018301055af6ad096b4080f61fa913e84240"
+      "runner_checksum": "e11b0d6c8317ca27abc59450f83e29fcc1dcd8766b0ae7bbffb21e23b952a7ce",
+      "checksum": "e11b0d6c8317ca27abc59450f83e29fcc1dcd8766b0ae7bbffb21e23b952a7ce"
     },
     {
       "name": "015_repair_escrow_state_constraint_drift.sql",
-      "runner_checksum": "848118b7dd2d4bff1744bce5ce9f4eb3c98b6be70907856c7f340882d27bdce3"
+      "runner_checksum": "d49149698339021eefba9fffd9d7c4fea632f4d6c9ecdf64ed6871b414b482f3",
+      "checksum": "d49149698339021eefba9fffd9d7c4fea632f4d6c9ecdf64ed6871b414b482f3"
     },
     {
       "name": "016_reconcile_escrow_state_constraint.sql",
-      "runner_checksum": "2261f9bb4a9d82224389eca9475f3f8e152de74cfd250365bf84a9a7c78437d4"
+      "runner_checksum": "638f2f65bc28435800102a92444477bc826e318cf570cd45e1dea426a9d35698",
+      "checksum": "638f2f65bc28435800102a92444477bc826e318cf570cd45e1dea426a9d35698"
     },
     {
       "name": "017_ea35_created_witness_event.sql",
-      "runner_checksum": "6f8bf1a7c7d97e74c5a4fd1f86db068b6cf953d803b1a305a24e88f66cf0b8f8"
+      "runner_checksum": "fa87039a7be57726795d3249952f31100a66b49da882bac5d73b2b5986d590df",
+      "checksum": "fa87039a7be57726795d3249952f31100a66b49da882bac5d73b2b5986d590df"
     }
   ]
 }
