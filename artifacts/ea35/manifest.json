@@ -1,6 +1,94 @@
 {
   "source_commit_sha": "18916b9c2e7f2051e7ccdb91e1505ca00bd747d0",
+  "target_release_sha": "10a408dc4a7821db85a9bc68cfccdb66a20b4dcf",
   "checked_out_head_sha": "10a408dc4a7821db85a9bc68cfccdb66a20b4dcf",
+  "migrations": [
+    {
+      "filename": "001_canonical_production.sql",
+      "runner_checksum": "5a0bac08e2f499b6148607a68a0afea5f1a36cf8710576dd00033c819152db60",
+      "size_bytes": 4107
+    },
+    {
+      "filename": "002_canonical_production.sql",
+      "runner_checksum": "32e6d40eafa633b7b66262b028470485e8ec159341f36b0103ca1f3073932c97",
+      "size_bytes": 6091
+    },
+    {
+      "filename": "003_canonical_compatibility.sql",
+      "runner_checksum": "2e5a854cb31bf84fdcf5eb341b367e9bc8ee628870659739ab93b13eb9fcd2f0",
+      "size_bytes": 679
+    },
+    {
+      "filename": "004_canonical_value_truth.sql",
+      "runner_checksum": "fa491c1c8c360754b9d3e47d56737f7503912c9e3dcd16e666ef318ea63cade5",
+      "size_bytes": 477
+    },
+    {
+      "filename": "005_canonical_production.sql",
+      "runner_checksum": "6d5c67f13ea8d6091684eaf487371f52c16118d92dec842e1e8f1b508f6a8559",
+      "size_bytes": 1429
+    },
+    {
+      "filename": "006_canonical_movement_integrity.sql",
+      "runner_checksum": "7cc8019d510ea290645eda20cb1ec507b12d205b6f4da8a194a88d52f89d899a",
+      "size_bytes": 919
+    },
+    {
+      "filename": "007_canonical_production_reconciliation.sql",
+      "runner_checksum": "d2c44091f4fd0996066ac7dc62979301c2ee4a4c55c663b25bf408a906755b2f",
+      "size_bytes": 822
+    },
+    {
+      "filename": "008_ea35_idempotency_compat.sql",
+      "runner_checksum": "85d56489486c98472b6e91de0aa4c343440355e235acf673f4c578dcc4e5db19",
+      "size_bytes": 493
+    },
+    {
+      "filename": "009_canonical_movement_integrity_hardening.sql",
+      "runner_checksum": "03a3240945fa0aa9b51c67e6bcab45564324671be9c79dddd271d63b3a4264ea",
+      "size_bytes": 1115
+    },
+    {
+      "filename": "010_canonical_evidence_constraints.sql",
+      "runner_checksum": "7ecac8e8eb215d62b95638af127aff2cc8625676633719cdd6f3a8aaba1344a0",
+      "size_bytes": 2133
+    },
+    {
+      "filename": "011_ea35_canonical_schema_finalization.sql",
+      "runner_checksum": "0380bc929745c77afb5ea005bb9953c1f76a541d521792764097ffe086bf1099",
+      "size_bytes": 3721
+    },
+    {
+      "filename": "012_canonical_production.sql",
+      "runner_checksum": "265238201aaf4f2df6f4b5d7a619053999435e74d9306263cda15c6f20d84efb",
+      "size_bytes": 3383
+    },
+    {
+      "filename": "013_ea35_canonical_schema_hardening.sql",
+      "runner_checksum": "7197c05a54a6873f25773bf20c874c970733d94bbcd417a364011d4f9657d4df",
+      "size_bytes": 2616
+    },
+    {
+      "filename": "014_canonical_escrow_state_constraint.sql",
+      "runner_checksum": "e11b0d6c8317ca27abc59450f83e29fcc1dcd8766b0ae7bbffb21e23b952a7ce",
+      "size_bytes": 1551
+    },
+    {
+      "filename": "015_repair_escrow_state_constraint_drift.sql",
+      "runner_checksum": "d49149698339021eefba9fffd9d7c4fea632f4d6c9ecdf64ed6871b414b482f3",
+      "size_bytes": 2021
+    },
+    {
+      "filename": "016_reconcile_escrow_state_constraint.sql",
+      "runner_checksum": "638f2f65bc28435800102a92444477bc826e318cf570cd45e1dea426a9d35698",
+      "size_bytes": 2168
+    },
+    {
+      "filename": "017_ea35_created_witness_event.sql",
+      "runner_checksum": "fa87039a7be57726795d3249952f31100a66b49da882bac5d73b2b5986d590df",
+      "size_bytes": 731
+    }
+  ],
   "required_gates": [
     "inventory_map",
     "error_duplicate_excess",

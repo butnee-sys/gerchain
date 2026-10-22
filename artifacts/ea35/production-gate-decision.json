@@ -1,6 +1,9 @@
 {
-  "decision": "LOCKED",
+  "decision": "PENDING_VERIFIED_CI_PROOF",
   "source_commit_sha": "18916b9c2e7f2051e7ccdb91e1505ca00bd747d0",
+  "target_release_sha": "10a408dc4a7821db85a9bc68cfccdb66a20b4dcf",
   "checked_out_head_sha": "10a408dc4a7821db85a9bc68cfccdb66a20b4dcf",
-  "failures": []
+  "failures": [
+    "AWAITING_INDEPENDENT_CI_WORKFLOW_LOG"
+  ]
 }
