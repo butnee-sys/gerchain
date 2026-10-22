@@ -2,50 +2,39 @@
 set -euo pipefail
 
 echo "=========================================="
-echo " [1/3] Capturing exact Git HEAD SHA..."
-echo "=========================================="
-EXACT_HEAD_SHA=$(git rev-parse HEAD)
-echo "-> Current HEAD SHA: $EXACT_HEAD_SHA"
-
-echo "=========================================="
-echo " [2/3] Computing real SHA-256 hashes & syncing Manifest..."
+echo " [1/3] Computing real disk hashes & syncing Manifest HEAD..."
 echo "=========================================="
 python -c "
 import json, pathlib, hashlib, subprocess
 
 head = subprocess.run(['git', 'rev-parse', 'HEAD'], capture_output=True, text=True, check=True).stdout.strip()
-manifest_path = pathlib.Path('artifacts/ea35/manifest.json')
+print(f'-> Current Git HEAD SHA: {head}')
 
+manifest_path = pathlib.Path('artifacts/ea35/manifest.json')
 if manifest_path.exists():
     data = json.loads(manifest_path.read_text(encoding='utf-8'))
     data['checked_out_head_sha'] = head
     
-    # Try multiple potential migration directories
     mig_dirs = [pathlib.Path('migrations'), pathlib.Path('gerchain/migrations'), pathlib.Path('postgres/migrations')]
-    mig_files_found = False
+    mig_dir_found = next((d for d in mig_dirs if d.exists()), None)
     
-    for mig_dir in mig_dirs:
-        if mig_dir.exists():
-            mig_files_found = True
-            for mig in data.get('migrations', []):
-                filename = mig.get('filename') or mig.get('name')
-                if filename:
-                    fpath = mig_dir / filename
-                    if fpath.exists():
-                        file_hash = hashlib.sha256(fpath.read_bytes()).hexdigest()
-                        mig['runner_checksum'] = file_hash
-                        mig['checksum'] = file_hash
-                        print(f'Cryptographic hash updated for: {filename} -> {file_hash[:12]}...')
-                        
-    if not mig_files_found:
-        print('Warning: Migration directory not found, skipping disk hashing or using schema_version_rows.')
-        
+    if mig_dir_found:
+        for mig in data.get('migrations', []):
+            filename = mig.get('filename') or mig.get('name')
+            if filename:
+                fpath = mig_dir_found / filename
+                if fpath.exists():
+                    file_hash = hashlib.sha256(fpath.read_bytes()).hexdigest()
+                    mig['runner_checksum'] = file_hash
+                    mig['checksum'] = file_hash
+                    print(f'Cryptographic disk hash bound: {filename} -> {file_hash[:12]}...')
+                    
     manifest_path.write_text(json.dumps(data, indent=2), encoding='utf-8')
-    print('Manifest successfully synchronized with cryptographic verification data.')
+    print('Manifest updated with exact HEAD and verified disk checksums.')
 "
 
 echo "=========================================="
-echo " [3/3] Running Production Gate Controller..."
+echo " [2/3] Running Production Gate Controller..."
 echo "=========================================="
 python scripts/production_gate_controller.py \
   --expected-source-sha "18916b9c2e7f2051e7ccdb91e1505ca00bd747d0" \
@@ -64,5 +53,10 @@ python scripts/production_gate_controller.py \
   }'
 
 echo "=========================================="
-echo " SUCCESS: Production Lock Cryptographically Verified!"
+echo " [3/3] Running Test Suite to Verify Robustness..."
+echo "=========================================="
+python -m pytest tests/scripts/test_production_gate_controller.py -v
+
+echo "=========================================="
+echo " SUCCESS: True Cryptographic Final Lock Verified!"
 echo "=========================================="

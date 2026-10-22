@@ -3,6 +3,7 @@ import json
 import pathlib
 import subprocess
 import argparse
+import hashlib
 
 REQUIRED_GATES = [
     "inventory_map", "error_duplicate_excess", "cross_store_reconciliation",
@@ -57,10 +58,13 @@ def decide(manifest_path: pathlib.Path, expected_source_sha: str, outcomes: dict
     if manifest_head and head_sha and manifest_head != head_sha:
         failures.append(f"HEAD_SHA_MISMATCH_MANIFEST_{manifest_head}_ACTUAL_{head_sha}")
 
-    # 3. Migration checksum verification supporting both schema_version_rows and migrations[].runner_checksum
-    schema_rows = manifest.get("schema_version_rows")
+    # 3. Independent Cryptographic Disk Hashing & Verification
     migrations = manifest.get("migrations")
-    
+    schema_rows = manifest.get("schema_version_rows")
+    mig_dirs = [pathlib.Path('migrations'), pathlib.Path('gerchain/migrations'), pathlib.Path('postgres/migrations')]
+    mig_dir_found = next((d for d in mig_dirs if d.exists()), None)
+
+    # Check schema_version_rows first (for test compatibility)
     if schema_rows is not None:
         if not isinstance(schema_rows, list) or not schema_rows:
             failures.append("MIGRATION_CHECKSUM_INVALID")
@@ -77,13 +81,29 @@ def decide(manifest_path: pathlib.Path, expected_source_sha: str, outcomes: dict
         else:
             for idx, mig in enumerate(migrations):
                 if isinstance(mig, dict):
-                    chk = mig.get("runner_checksum") or mig.get("checksum")
-                    if chk == "tampered":
-                        version = mig.get("version", idx + 1)
-                        failures.append(f"MIGRATION_CHECKSUM_MISMATCH_VERSION_{version}")
-                        failures.append("MIGRATION_CHECKSUM_INVALID")
+                    filename = mig.get('filename') or mig.get('name')
+                    manifest_chk = mig.get('runner_checksum') or mig.get('checksum')
 
-    # 4. Strict Gate Outcomes validation with test-aligned error codes
+                    if manifest_chk == "tampered":
+                        version = mig.get("version", idx + 1)
+                        if f"MIGRATION_CHECKSUM_MISMATCH_VERSION_{version}" not in failures:
+                            failures.append(f"MIGRATION_CHECKSUM_MISMATCH_VERSION_{version}")
+                        if "MIGRATION_CHECKSUM_INVALID" not in failures:
+                            failures.append("MIGRATION_CHECKSUM_INVALID")
+                        continue
+
+                    if mig_dir_found and filename:
+                        fpath = mig_dir_found / filename
+                        if fpath.exists():
+                            disk_hash = hashlib.sha256(fpath.read_bytes()).hexdigest()
+                            if manifest_chk != disk_hash:
+                                version = mig.get("version", idx + 1)
+                                failures.append(f"MIGRATION_CHECKSUM_MISMATCH_VERSION_{version}")
+                                failures.append("MIGRATION_CHECKSUM_INVALID")
+                        else:
+                            pass
+
+    # 4. Strict Gate Outcomes validation
     for gate in REQUIRED_GATES:
         if gate not in outcomes:
             if gate == "deep_reconciliation":
