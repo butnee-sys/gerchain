@@ -97,7 +97,8 @@ jobs:
       - name: Bind all 17 migration checksums and validate canonical constraints from PostgreSQL catalog
         id: migration_catalog_evidence
         run: |
-          python - <<'PY'
+          set -o pipefail
+          python - <<'PY' 2>&1 | tee artifacts/ea35/logs/migration-catalog.log
           import hashlib
           import os
           from pathlib import Path
