@@ -1,0 +1,13 @@
+{
+  "master_plan_version": "v1",
+  "target_release_sha": "10a408dc4a7821db85a9bc68cfccdb66a20b4dcf",
+  "ci_workflow_run_id": 39799640206,
+  "verification_status": "MASTER_VERIFIED_AND_LOCKED",
+  "components": {
+    "acceptance_matrix": "artifacts/master_v1/master_acceptance_matrix.json",
+    "security_report": "artifacts/master_v1/security_audit_final_report.json",
+    "recovery_report": "artifacts/master_v1/state_recovery_final_report.json",
+    "postgresql_migration_gate": "artifacts/ea35/production-gate-decision.json"
+  },
+  "blocking_failures": []
+}
