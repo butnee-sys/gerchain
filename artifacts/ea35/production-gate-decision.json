@@ -1,6 +1,8 @@
 {
-  "decision": "LOCKED",
+  "decision": "NOT_LOCKED",
   "source_commit_sha": "18916b9c2e7f2051e7ccdb91e1505ca00bd747d0",
-  "checked_out_head_sha": "18916b9c2e7f2051e7ccdb91e1505ca00bd747d0",
-  "failures": []
+  "checked_out_head_sha": "1054df58d6a973682b54e54c7fd83de240d3a3cf",
+  "failures": [
+    "SOURCE_SHA_MISMATCH_EXPECTED_wrong-sha-0000_GOT_18916b9c2e7f2051e7ccdb91e1505ca00bd747d0"
+  ]
 }

@@ -11,76 +11,78 @@ def _head_sha() -> str:
     except Exception:
         return os.environ.get("GITHUB_SHA", "")
 
-def decide(manifest_path: pathlib.Path, expected_sha: str, outcomes: dict[str, str]) -> dict:
+def decide(manifest_path: pathlib.Path, expected_sha: str, outcomes: dict[str, str], json_parse_error: bool = False) -> dict:
     failures = []
     head_sha = _head_sha()
-    
+
+    # 1. Malformed JSON failure (Fail-Closed)
+    if json_parse_error:
+        failures.append("MALFORMED_OUTCOMES_JSON")
+
     if not manifest_path.exists():
-        return {"decision": "NOT_LOCKED", "failures": ["MANIFEST_NOT_FOUND"]}
-        
+        return {"decision": "NOT_LOCKED", "failures": ["MANIFEST_NOT_FOUND"] + failures}
+
     try:
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     except Exception as exc:
-        return {"decision": "NOT_LOCKED", "failures": [f"MANIFEST_UNREADABLE_{type(exc).__name__}"]}
+        return {"decision": "NOT_LOCKED", "failures": [f"MANIFEST_UNREADABLE_{type(exc).__name__}"] + failures}
 
     source_sha = manifest.get("source_commit_sha") or manifest.get("commit_sha")
-    
-    # Хэрэв expected_sha өгөгдсөн бөгөөд зөрвөл алдаа бүртгэх (хэрэв strict горим байвал)
-    if expected_sha and source_sha and source_sha != expected_sha:
-        # Strict SHA check alignment
-        pass
 
-    # Gate outcomes шалгах
-    for gate, outcome in outcomes.items():
+    # 2. Strict SHA check (Fail-Closed)
+    if not expected_sha:
+        failures.append("MISSING_EXPECTED_SHA")
+    if not source_sha:
+        failures.append("MISSING_SOURCE_COMMIT_SHA")
+    if expected_sha and source_sha and source_sha != expected_sha:
+        failures.append(f"SOURCE_SHA_MISMATCH_EXPECTED_{expected_sha}_GOT_{source_sha}")
+
+    # 3. Mandatory gates strict verification (No default success)
+    required_gates = [
+        "inventory_map", "core_correctness", "transaction_correctness",
+        "migration_atomicity", "migration_concurrency", "migration_catalog", "manifest"
+    ]
+
+    for gate in required_gates:
+        outcome = outcomes.get(gate)
         if outcome != "success":
-            failures.append(f"GATE_FAILED_{gate.upper()}")
+            failures.append(f"GATE_NOT_SUCCESS_{gate.upper()}")
 
     decision = "LOCKED" if not failures else "NOT_LOCKED"
     return {
         "decision": decision,
-        "source_commit_sha": source_sha,
+        "source_commit_sha": source_sha or "",
         "checked_out_head_sha": head_sha,
         "failures": failures
     }
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Production Gate Controller")
+    parser = argparse.ArgumentParser(description="Production Gate Controller (Strict Fail-Closed)")
     parser.add_argument("--manifest", default="artifacts/ea35/manifest.json")
     parser.add_argument("--expected-sha", default=_head_sha())
     parser.add_argument("--output", default="artifacts/ea35/production-gate-decision.json")
-    parser.add_argument("--outcomes-json", default="")
+    parser.add_argument("--outcomes-json", default="{}")
     args = parser.parse_args()
-    
-    # outcomes-json аргументоор дамжуулсан бол задлах, үгүй бол үндсэн амжилттай төлөвийг ашиглах
-    outcomes = {
-        "inventory_map": "success", "error_duplicate_excess": "success", "cross_store_reconciliation": "success",
-        "authority_boundary": "success", "core_correctness": "success", "adapter_boundaries": "success",
-        "eai_g3_governance": "success", "transaction_correctness": "success", "recovery": "success",
-        "auditability": "success", "security_iam_mfa": "success", "observability": "success",
-        "performance_stress": "success", "disaster_recovery": "success", "ci_release_governance": "success",
-        "independent_reperformance": "success", "final_evidence_bundle": "success",
-        "compile": "success", "regression": "success", "postgres_connection": "success", 
-        "migration_atomicity": "success", "legacy_upgrade": "success", "lifecycle": "success", 
-        "migration_concurrency": "success", "publication_integrity": "success",
-        "entrypoint": "success", "production_boot": "success", "migration_catalog": "success", 
-        "deep_reconciliation": "success", "manifest": "success"
-    }
-    
+
+    outcomes = {}
+    json_parse_error = False
+
     if args.outcomes_json:
         try:
-            custom_outcomes = json.loads(args.outcomes_json)
-            if isinstance(custom_outcomes, dict):
-                outcomes.update(custom_outcomes)
+            parsed = json.loads(args.outcomes_json)
+            if isinstance(parsed, dict):
+                outcomes = parsed
+            else:
+                json_parse_error = True
         except Exception:
-            pass
+            json_parse_error = True
 
-    res = decide(pathlib.Path(args.manifest), args.expected_sha, outcomes)
-    
-    # Үр дүнг output файл руу бичих
+    res = decide(pathlib.Path(args.manifest), args.expected_sha, outcomes, json_parse_error)
+
     output_path = pathlib.Path(args.output)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(json.dumps(res, indent=2), encoding="utf-8")
-    
+
     print(json.dumps(res, indent=2))
     if res["decision"] != "LOCKED":
         exit(1)
