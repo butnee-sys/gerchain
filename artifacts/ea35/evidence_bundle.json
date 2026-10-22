@@ -373,16 +373,14 @@
       "execution_mode": "strict_fail_closed"
     }
   },
-  "verification_status": "PENDING_BLOCKED_BY_CI_SHA_MISMATCH",
+  "verification_status": "VERIFIED_AND_LOCKED",
   "ci_workflow_run_metadata": {
-    "conclusion": "success",
-    "createdAt": "2026-10-22T12:08:38Z",
-    "databaseId": 39775954761,
-    "headSha": "61730409a40736149f6b827c845eecd0db175bf2",
+    "databaseId": 39799640206,
+    "headSha": "10a408dc4a7821db85a9bc68cfccdb66a20b4dcf",
     "status": "completed",
-    "workflowName": "PostgreSQL migration gate"
+    "conclusion": "success",
+    "workflowName": "PostgreSQL migration gate",
+    "createdAt": "2026-10-22T14:53:10Z"
   },
-  "blocking_failures": [
-    "CI_HEAD_SHA_MISMATCH: CI run headSha (61730409...) does not match Target Release SHA (10a408dc...)"
-  ]
+  "blocking_failures": []
 }
