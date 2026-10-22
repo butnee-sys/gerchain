@@ -6,121 +6,191 @@
     {
       "version": 1,
       "filename": "001_canonical_production.sql",
-      "runner_checksum": "5a0bac08e2f499b6148607a68a0afea5f1a36cf8710576dd00033c819152db60",
-      "checksum": "5a0bac08e2f499b6148607a68a0afea5f1a36cf8710576dd00033c819152db60",
-      "size_bytes": 4107
+      "runner_checksum": "dc502a930cc23f8bf501f9200d092218d43f3462d6bf56b38c409480b498193b",
+      "checksum": "dc502a930cc23f8bf501f9200d092218d43f3462d6bf56b38c409480b498193b",
+      "size_bytes": 4000
     },
     {
       "version": 2,
       "filename": "002_canonical_production.sql",
-      "runner_checksum": "32e6d40eafa633b7b66262b028470485e8ec159341f36b0103ca1f3073932c97",
-      "checksum": "32e6d40eafa633b7b66262b028470485e8ec159341f36b0103ca1f3073932c97",
-      "size_bytes": 6091
+      "runner_checksum": "1dad432b63dec39434d72ec929b135b1ef19e38a642a513750f37deb9de0cca2",
+      "checksum": "1dad432b63dec39434d72ec929b135b1ef19e38a642a513750f37deb9de0cca2",
+      "size_bytes": 5935
     },
     {
       "version": 3,
       "filename": "003_canonical_compatibility.sql",
-      "runner_checksum": "2e5a854cb31bf84fdcf5eb341b367e9bc8ee628870659739ab93b13eb9fcd2f0",
-      "checksum": "2e5a854cb31bf84fdcf5eb341b367e9bc8ee628870659739ab93b13eb9fcd2f0",
-      "size_bytes": 679
+      "runner_checksum": "11100743bf446be372cfb372a27792e477261acd6ec2d0cf20c06d4b14883f5d",
+      "checksum": "11100743bf446be372cfb372a27792e477261acd6ec2d0cf20c06d4b14883f5d",
+      "size_bytes": 665
     },
     {
       "version": 4,
       "filename": "004_canonical_value_truth.sql",
-      "runner_checksum": "fa491c1c8c360754b9d3e47d56737f7503912c9e3dcd16e666ef318ea63cade5",
-      "checksum": "fa491c1c8c360754b9d3e47d56737f7503912c9e3dcd16e666ef318ea63cade5",
-      "size_bytes": 477
+      "runner_checksum": "0d5d063a1d35fbb79bef3023e8b02e06e76776c0af5da41b843fb702b702cf57",
+      "checksum": "0d5d063a1d35fbb79bef3023e8b02e06e76776c0af5da41b843fb702b702cf57",
+      "size_bytes": 473
     },
     {
       "version": 5,
       "filename": "005_canonical_production.sql",
-      "runner_checksum": "6d5c67f13ea8d6091684eaf487371f52c16118d92dec842e1e8f1b508f6a8559",
-      "checksum": "6d5c67f13ea8d6091684eaf487371f52c16118d92dec842e1e8f1b508f6a8559",
-      "size_bytes": 1429
+      "runner_checksum": "ecfc4306afb3b7ccde65902487f0702a6697ac343bced4534f624d134984effb",
+      "checksum": "ecfc4306afb3b7ccde65902487f0702a6697ac343bced4534f624d134984effb",
+      "size_bytes": 1389
     },
     {
       "version": 6,
       "filename": "006_canonical_movement_integrity.sql",
-      "runner_checksum": "7cc8019d510ea290645eda20cb1ec507b12d205b6f4da8a194a88d52f89d899a",
-      "checksum": "7cc8019d510ea290645eda20cb1ec507b12d205b6f4da8a194a88d52f89d899a",
-      "size_bytes": 919
+      "runner_checksum": "40d271147de5ada9ff233895fbe166f72cac4e562258ddc6414e7f7059ba79ff",
+      "checksum": "40d271147de5ada9ff233895fbe166f72cac4e562258ddc6414e7f7059ba79ff",
+      "size_bytes": 900
     },
     {
       "version": 7,
       "filename": "007_canonical_production_reconciliation.sql",
-      "runner_checksum": "d2c44091f4fd0996066ac7dc62979301c2ee4a4c55c663b25bf408a906755b2f",
-      "checksum": "d2c44091f4fd0996066ac7dc62979301c2ee4a4c55c663b25bf408a906755b2f",
-      "size_bytes": 822
+      "runner_checksum": "d62f3ff8a423bcfffb6d63c38c4aeeff70b481b8355d7b4ca7c80a9a50051e2e",
+      "checksum": "d62f3ff8a423bcfffb6d63c38c4aeeff70b481b8355d7b4ca7c80a9a50051e2e",
+      "size_bytes": 817
     },
     {
       "version": 8,
       "filename": "008_ea35_idempotency_compat.sql",
-      "runner_checksum": "85d56489486c98472b6e91de0aa4c343440355e235acf673f4c578dcc4e5db19",
-      "checksum": "85d56489486c98472b6e91de0aa4c343440355e235acf673f4c578dcc4e5db19",
-      "size_bytes": 493
+      "runner_checksum": "ffee1c1cedaa59d7b40c75b67fe035a11e4f3cdfd9c9079a62c78a8016c2abe3",
+      "checksum": "ffee1c1cedaa59d7b40c75b67fe035a11e4f3cdfd9c9079a62c78a8016c2abe3",
+      "size_bytes": 478
     },
     {
       "version": 9,
       "filename": "009_canonical_movement_integrity_hardening.sql",
-      "runner_checksum": "03a3240945fa0aa9b51c67e6bcab45564324671be9c79dddd271d63b3a4264ea",
-      "checksum": "03a3240945fa0aa9b51c67e6bcab45564324671be9c79dddd271d63b3a4264ea",
-      "size_bytes": 1115
+      "runner_checksum": "ff2c383cddc8e9d6b5d399e2ce043cdf629de7864c8ba8cafb5a5160e947a28a",
+      "checksum": "ff2c383cddc8e9d6b5d399e2ce043cdf629de7864c8ba8cafb5a5160e947a28a",
+      "size_bytes": 1091
     },
     {
       "version": 10,
       "filename": "010_canonical_evidence_constraints.sql",
-      "runner_checksum": "7ecac8e8eb215d62b95638af127aff2cc8625676633719cdd6f3a8aaba1344a0",
-      "checksum": "7ecac8e8eb215d62b95638af127aff2cc8625676633719cdd6f3a8aaba1344a0",
-      "size_bytes": 2133
+      "runner_checksum": "2866ce1e85021a1860f0b4a7ef44f57a30db86a3862c2afef3a15c7fa1674414",
+      "checksum": "2866ce1e85021a1860f0b4a7ef44f57a30db86a3862c2afef3a15c7fa1674414",
+      "size_bytes": 2084
     },
     {
       "version": 11,
       "filename": "011_ea35_canonical_schema_finalization.sql",
-      "runner_checksum": "0380bc929745c77afb5ea005bb9953c1f76a541d521792764097ffe086bf1099",
-      "checksum": "0380bc929745c77afb5ea005bb9953c1f76a541d521792764097ffe086bf1099",
-      "size_bytes": 3721
+      "runner_checksum": "c909762e5dfe758e11340eefbca5f25080e617de143fa83e55af78789ac81600",
+      "checksum": "c909762e5dfe758e11340eefbca5f25080e617de143fa83e55af78789ac81600",
+      "size_bytes": 3634
     },
     {
       "version": 12,
       "filename": "012_canonical_production.sql",
-      "runner_checksum": "265238201aaf4f2df6f4b5d7a619053999435e74d9306263cda15c6f20d84efb",
-      "checksum": "265238201aaf4f2df6f4b5d7a619053999435e74d9306263cda15c6f20d84efb",
-      "size_bytes": 3383
+      "runner_checksum": "0d5a08e6fbe30a885b4aca9666b323ab6dee163195de3762e6d52ce210ff3422",
+      "checksum": "0d5a08e6fbe30a885b4aca9666b323ab6dee163195de3762e6d52ce210ff3422",
+      "size_bytes": 3298
     },
     {
       "version": 13,
       "filename": "013_ea35_canonical_schema_hardening.sql",
-      "runner_checksum": "7197c05a54a6873f25773bf20c874c970733d94bbcd417a364011d4f9657d4df",
-      "checksum": "7197c05a54a6873f25773bf20c874c970733d94bbcd417a364011d4f9657d4df",
-      "size_bytes": 2616
+      "runner_checksum": "4788add812f36fdb08c79b6a194c4f1bf0c9101c9819e707f75b435d9bf7cda8",
+      "checksum": "4788add812f36fdb08c79b6a194c4f1bf0c9101c9819e707f75b435d9bf7cda8",
+      "size_bytes": 2549
     },
     {
       "version": 14,
       "filename": "014_canonical_escrow_state_constraint.sql",
-      "runner_checksum": "e11b0d6c8317ca27abc59450f83e29fcc1dcd8766b0ae7bbffb21e23b952a7ce",
-      "checksum": "e11b0d6c8317ca27abc59450f83e29fcc1dcd8766b0ae7bbffb21e23b952a7ce",
-      "size_bytes": 1551
+      "runner_checksum": "26dd142518010da5cf6c0c678c8e018301055af6ad096b4080f61fa913e84240",
+      "checksum": "26dd142518010da5cf6c0c678c8e018301055af6ad096b4080f61fa913e84240",
+      "size_bytes": 1511
     },
     {
       "version": 15,
       "filename": "015_repair_escrow_state_constraint_drift.sql",
-      "runner_checksum": "d49149698339021eefba9fffd9d7c4fea632f4d6c9ecdf64ed6871b414b482f3",
-      "checksum": "d49149698339021eefba9fffd9d7c4fea632f4d6c9ecdf64ed6871b414b482f3",
-      "size_bytes": 2021
+      "runner_checksum": "848118b7dd2d4bff1744bce5ce9f4eb3c98b6be70907856c7f340882d27bdce3",
+      "checksum": "848118b7dd2d4bff1744bce5ce9f4eb3c98b6be70907856c7f340882d27bdce3",
+      "size_bytes": 1967
     },
     {
       "version": 16,
       "filename": "016_reconcile_escrow_state_constraint.sql",
-      "runner_checksum": "638f2f65bc28435800102a92444477bc826e318cf570cd45e1dea426a9d35698",
-      "checksum": "638f2f65bc28435800102a92444477bc826e318cf570cd45e1dea426a9d35698",
-      "size_bytes": 2168
+      "runner_checksum": "2261f9bb4a9d82224389eca9475f3f8e152de74cfd250365bf84a9a7c78437d4",
+      "checksum": "2261f9bb4a9d82224389eca9475f3f8e152de74cfd250365bf84a9a7c78437d4",
+      "size_bytes": 2107
     },
     {
       "version": 17,
       "filename": "017_ea35_created_witness_event.sql",
-      "runner_checksum": "fa87039a7be57726795d3249952f31100a66b49da882bac5d73b2b5986d590df",
-      "checksum": "fa87039a7be57726795d3249952f31100a66b49da882bac5d73b2b5986d590df",
-      "size_bytes": 731
+      "runner_checksum": "6f8bf1a7c7d97e74c5a4fd1f86db068b6cf953d803b1a305a24e88f66cf0b8f8",
+      "checksum": "6f8bf1a7c7d97e74c5a4fd1f86db068b6cf953d803b1a305a24e88f66cf0b8f8",
+      "size_bytes": 713
+    },
+    {
+      "version": 18,
+      "filename": "001_concurrency.sql",
+      "runner_checksum": "67d8d946fc5c1d1ff965b00b9116f9b7f9f667ff03e9a202ddae1d0075df6a31",
+      "checksum": "67d8d946fc5c1d1ff965b00b9116f9b7f9f667ff03e9a202ddae1d0075df6a31",
+      "size_bytes": 1595
+    },
+    {
+      "version": 19,
+      "filename": "001_escrow.sql",
+      "runner_checksum": "8cdc9897e6c0afa532c63aea3db0131ef6a3f16bd1e32aff96f025945db4331f",
+      "checksum": "8cdc9897e6c0afa532c63aea3db0131ef6a3f16bd1e32aff96f025945db4331f",
+      "size_bytes": 508
+    },
+    {
+      "version": 20,
+      "filename": "002_ea22_canonical_escrow_lifecycle.sql",
+      "runner_checksum": "af0106355e335ff82510716937a63b81b95ac38d9d2563316ff477df49ddc7ba",
+      "checksum": "af0106355e335ff82510716937a63b81b95ac38d9d2563316ff477df49ddc7ba",
+      "size_bytes": 641
+    },
+    {
+      "version": 21,
+      "filename": "002_ledger.sql",
+      "runner_checksum": "048ba70307395055cdd59bcd1748566a11500a45fd44ccb5133d2be11e7e08dc",
+      "checksum": "048ba70307395055cdd59bcd1748566a11500a45fd44ccb5133d2be11e7e08dc",
+      "size_bytes": 722
+    },
+    {
+      "version": 22,
+      "filename": "003_ea25_durable_idempotency.sql",
+      "runner_checksum": "c9ecb35b2ab94257c0ce8dabdacc8a52ee3217923a416fce30a64f4228dd1570",
+      "checksum": "c9ecb35b2ab94257c0ce8dabdacc8a52ee3217923a416fce30a64f4228dd1570",
+      "size_bytes": 482
+    },
+    {
+      "version": 23,
+      "filename": "003_witness.sql",
+      "runner_checksum": "9f3180fc613fce4ab6b0a02d1571dd3ca4497213e4acae0ef2deafb1e6126b8d",
+      "checksum": "9f3180fc613fce4ab6b0a02d1571dd3ca4497213e4acae0ef2deafb1e6126b8d",
+      "size_bytes": 294
+    },
+    {
+      "version": 24,
+      "filename": "004_ea26_value_flow_persistence.sql",
+      "runner_checksum": "2b4560411042d886990e3f9057b36abc2a24e00a21e7204c2d43ee2396fddfd9",
+      "checksum": "2b4560411042d886990e3f9057b36abc2a24e00a21e7204c2d43ee2396fddfd9",
+      "size_bytes": 1464
+    },
+    {
+      "version": 25,
+      "filename": "004_outbox.sql",
+      "runner_checksum": "4b3e1783ed150c7e54bce85532dd364fc15866204f220889b723b332db35260f",
+      "checksum": "4b3e1783ed150c7e54bce85532dd364fc15866204f220889b723b332db35260f",
+      "size_bytes": 459
+    },
+    {
+      "version": 26,
+      "filename": "005_ea35_movement_evidence_binding.sql",
+      "runner_checksum": "9d6a5e402a6d7132b822583a1a0c9753f645cf472686b990ddbe5ed74645fb35",
+      "checksum": "9d6a5e402a6d7132b822583a1a0c9753f645cf472686b990ddbe5ed74645fb35",
+      "size_bytes": 606
+    },
+    {
+      "version": 27,
+      "filename": "005_idempotency.sql",
+      "runner_checksum": "28c99dd97f50609cdbfd9877ecace035133be8c500660f6489660794ab654392",
+      "checksum": "28c99dd97f50609cdbfd9877ecace035133be8c500660f6489660794ab654392",
+      "size_bytes": 342
     }
   ],
   "required_gates": [

@@ -4,6 +4,6 @@
   "target_release_sha": "10a408dc4a7821db85a9bc68cfccdb66a20b4dcf",
   "checked_out_head_sha": "10a408dc4a7821db85a9bc68cfccdb66a20b4dcf",
   "failures": [
-    "AWAITING_FULL_CI_ARTIFACT_RECONCILIATION"
+    "AWAITING_EXACT_CI_COMMIT_LOG_PROOF"
   ]
 }
