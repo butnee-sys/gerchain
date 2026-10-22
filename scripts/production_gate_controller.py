@@ -58,7 +58,7 @@ def decide(manifest_path: pathlib.Path, expected_source_sha: str, outcomes: dict
     if manifest_head and head_sha and manifest_head != head_sha:
         failures.append(f"HEAD_SHA_MISMATCH_MANIFEST_{manifest_head}_ACTUAL_{head_sha}")
 
-    # 3. Independent Cryptographic Disk Hashing & Verification
+    # 3. Independent Cryptographic Disk Hashing & Verification (Strict Fail-Closed)
     migrations = manifest.get("migrations")
     schema_rows = manifest.get("schema_version_rows")
     mig_dirs = [pathlib.Path('migrations'), pathlib.Path('gerchain/migrations'), pathlib.Path('postgres/migrations')]
@@ -101,7 +101,13 @@ def decide(manifest_path: pathlib.Path, expected_source_sha: str, outcomes: dict
                                 failures.append(f"MIGRATION_CHECKSUM_MISMATCH_VERSION_{version}")
                                 failures.append("MIGRATION_CHECKSUM_INVALID")
                         else:
-                            pass
+                            version = mig.get("version", idx + 1)
+                            failures.append(f"MIGRATION_FILE_MISSING_{filename}")
+                            failures.append("MIGRATION_CHECKSUM_INVALID")
+                    else:
+                        version = mig.get("version", idx + 1)
+                        failures.append(f"MIGRATION_FILE_MISSING_{filename}")
+                        failures.append("MIGRATION_CHECKSUM_INVALID")
 
     # 4. Strict Gate Outcomes validation
     for gate in REQUIRED_GATES:
