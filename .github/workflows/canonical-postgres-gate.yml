@@ -45,19 +45,24 @@ jobs:
         if: always()
         run: mkdir -p artifacts/ea35/logs
       - name: Compile production and persistence modules
+        id: compile_evidence
         run: set -o pipefail; python -m compileall -q production_entrypoint.py persistence services core postgres 2>&1 | tee artifacts/ea35/logs/python-compile.log
       - name: Collect CORE foundation regression tests separately
         run: set -o pipefail; pytest --collect-only -q tests/services/test_gerchain_runtime_atomic_lifecycle.py tests/services/test_gerchain_runtime_canonical_ledger.py tests/services/test_gerchain_runtime_factory.py tests/persistence/test_deep_value_reconciliation.py tests/postgres/test_migrations.py tests/postgres/test_migration_manifest.py 2>&1 | tee artifacts/ea35/logs/pytest-collection.log
       - name: Run CORE foundation regression tests
-        run: >-
-          pytest -q
-          tests/services/test_gerchain_runtime_atomic_lifecycle.py
-          tests/services/test_gerchain_runtime_canonical_ledger.py
-          tests/services/test_gerchain_runtime_factory.py
-          tests/persistence/test_deep_value_reconciliation.py
-          tests/postgres/test_migrations.py
-          tests/postgres/test_migration_manifest.py
+        id: regression_evidence
+        run: |
+          set -o pipefail
+          pytest -q \
+            tests/services/test_gerchain_runtime_atomic_lifecycle.py \
+            tests/services/test_gerchain_runtime_canonical_ledger.py \
+            tests/services/test_gerchain_runtime_factory.py \
+            tests/persistence/test_deep_value_reconciliation.py \
+            tests/postgres/test_migrations.py \
+            tests/postgres/test_migration_manifest.py \
+            2>&1 | tee artifacts/ea35/logs/core-regression.log
       - name: Verify PostgreSQL connection
+        id: postgres_connection_evidence
         run: |
           python - <<'PY'
           import os
@@ -75,16 +80,22 @@ jobs:
                   Path("artifacts/ea35/logs/postgres-connection-primary.log").write_text(line + "\n", encoding="utf-8")
           PY
       - name: Validate checksum atomicity and duplicate migration publication
+        id: migration_atomicity_evidence
         run: set -o pipefail; pytest -vv -s postgres/tests/test_migration_checksum_atomicity.py tests/postgres/test_migration_runner_concurrency.py 2>&1 | tee artifacts/ea35/logs/checksum-atomicity-concurrency.log
       - name: Re-perform legacy escrow constraint upgrade and data preservation
+        id: legacy_upgrade_evidence
         run: set -o pipefail; pytest -vv -s tests/postgres/test_legacy_escrow_constraint_upgrade.py 2>&1 | tee artifacts/ea35/logs/legacy-escrow-upgrade.log
       - name: Re-perform canonical PostgreSQL escrow lifecycle
+        id: lifecycle_evidence
         run: set -o pipefail; pytest -vv -s tests/postgres/test_production_postgres_reperformance.py 2>&1 | tee artifacts/ea35/logs/production-lifecycle.log
       - name: Re-perform PostgreSQL migration concurrency and checksum gate
+        id: migration_concurrency_evidence
         run: set -o pipefail; python -m pytest -vv -s postgres/tests/test_concurrency.py 2>&1 | tee artifacts/ea35/logs/migration-concurrency.log
       - name: Re-perform duplicate publication and checksum fail-closed cases on PostgreSQL
+        id: publication_integrity_evidence
         run: set -o pipefail; pytest -vv -s postgres/tests/test_migration_publication_integrity.py 2>&1 | tee artifacts/ea35/logs/migration-publication-integrity.log
       - name: Bind all 17 migration checksums and validate canonical constraints from PostgreSQL catalog
+        id: migration_catalog_evidence
         run: |
           python - <<'PY'
           import hashlib
@@ -194,6 +205,7 @@ jobs:
           PY
 
       - name: Build canonical migration evidence manifest
+        id: manifest_evidence
         if: always()
         env:
           EVIDENCE_COMMIT_SHA: ${{ github.sha }}
@@ -309,8 +321,10 @@ jobs:
           PY
 
       - name: Test production entrypoint contract
+        id: entrypoint_evidence
         run: set -o pipefail; pytest -vv -s tests/services/test_production_entrypoint.py 2>&1 | tee artifacts/ea35/logs/production-entrypoint.log
       - name: Boot real PostgreSQL production runtime and validate schema
+        id: production_boot_evidence
         run: |
           python - <<'PY'
           from sqlalchemy import create_engine, inspect, text
@@ -408,6 +422,7 @@ jobs:
               engine.dispose()
           PY
       - name: Deep value-truth reconciliation tests on PostgreSQL
+        id: deep_reconciliation_evidence
         run: set -o pipefail; pytest -vv -s tests/persistence/test_deep_value_reconciliation_postgres.py 2>&1 | tee artifacts/ea35/logs/deep-value-reconciliation.log
 
       - name: Verify error duplicate excess invariants on exact SHA
@@ -506,6 +521,19 @@ jobs:
           AUDITABILITY_OUTCOME: ${{ steps.auditability_evidence.outcome }}
           PERFORMANCE_STRESS_OUTCOME: ${{ steps.performance_stress_evidence.outcome }}
           DISASTER_RECOVERY_OUTCOME: ${{ steps.disaster_recovery_evidence.outcome }}
+          COMPILE_OUTCOME: ${{ steps.compile_evidence.outcome }}
+          REGRESSION_OUTCOME: ${{ steps.regression_evidence.outcome }}
+          POSTGRES_CONNECTION_OUTCOME: ${{ steps.postgres_connection_evidence.outcome }}
+          MIGRATION_ATOMICITY_OUTCOME: ${{ steps.migration_atomicity_evidence.outcome }}
+          LEGACY_UPGRADE_OUTCOME: ${{ steps.legacy_upgrade_evidence.outcome }}
+          LIFECYCLE_OUTCOME: ${{ steps.lifecycle_evidence.outcome }}
+          MIGRATION_CONCURRENCY_OUTCOME: ${{ steps.migration_concurrency_evidence.outcome }}
+          PUBLICATION_INTEGRITY_OUTCOME: ${{ steps.publication_integrity_evidence.outcome }}
+          ENTRYPOINT_OUTCOME: ${{ steps.entrypoint_evidence.outcome }}
+          PRODUCTION_BOOT_OUTCOME: ${{ steps.production_boot_evidence.outcome }}
+          MIGRATION_CATALOG_OUTCOME: ${{ steps.migration_catalog_evidence.outcome }}
+          DEEP_RECONCILIATION_OUTCOME: ${{ steps.deep_reconciliation_evidence.outcome }}
+          MANIFEST_OUTCOME: ${{ steps.manifest_evidence.outcome }}
         run: |
           python - <<'PY'
           import hashlib, json, os, subprocess, xml.etree.ElementTree as ET
@@ -660,6 +688,31 @@ jobs:
           # and observed gate outcomes. Unverified or missing gates remain failures.
           from scripts.production_gate_controller import decide
           outcomes = {name: record["outcome"] for name, record in records.items()}
+          # Bind controller sub-gates to actual GitHub step outcomes, not mere
+          # log-file existence. Failed or skipped steps are never upgraded to PASS.
+          subgates = {
+              "compile": ("COMPILE_OUTCOME", "logs/python-compile.log"),
+              "regression": ("REGRESSION_OUTCOME", "logs/core-regression.log"),
+              "postgres_connection": ("POSTGRES_CONNECTION_OUTCOME", "logs/postgres-connection-primary.log"),
+              "migration_atomicity": ("MIGRATION_ATOMICITY_OUTCOME", "logs/checksum-atomicity-concurrency.log"),
+              "legacy_upgrade": ("LEGACY_UPGRADE_OUTCOME", "logs/legacy-escrow-upgrade.log"),
+              "lifecycle": ("LIFECYCLE_OUTCOME", "logs/production-lifecycle.log"),
+              "migration_concurrency": ("MIGRATION_CONCURRENCY_OUTCOME", "logs/migration-concurrency.log"),
+              "publication_integrity": ("PUBLICATION_INTEGRITY_OUTCOME", "logs/migration-publication-integrity.log"),
+              "entrypoint": ("ENTRYPOINT_OUTCOME", "logs/production-entrypoint.log"),
+              "production_boot": ("PRODUCTION_BOOT_OUTCOME", "logs/postgres-connection-runtime.log"),
+              "migration_catalog": ("MIGRATION_CATALOG_OUTCOME", "logs/migration-catalog.log"),
+              "deep_reconciliation": ("DEEP_RECONCILIATION_OUTCOME", "logs/deep-value-reconciliation.log"),
+              "manifest": ("MANIFEST_OUTCOME", "manifest.json"),
+          }
+          for gate_name, (env_name, evidence_path) in subgates.items():
+              step_outcome = os.environ.get(env_name, "skipped")
+              if step_outcome == "success" and (root / evidence_path).is_file():
+                  outcomes[gate_name] = "success"
+              elif step_outcome == "failure":
+                  outcomes[gate_name] = "failure"
+              else:
+                  outcomes[gate_name] = "open"
           decision_report = decide(root / "manifest.json", expected, outcomes)
           (root / "production-gate-decision.json").write_text(
               json.dumps(decision_report, indent=2) + "\n", encoding="utf-8"
