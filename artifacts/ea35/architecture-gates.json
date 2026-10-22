@@ -1,6 +1,8 @@
 {
   "schema_version": 2,
+  "authority": "HISTORICAL_NON_AUTHORITATIVE_SNAPSHOT",
+  "warning": "This checked-in file is a historical snapshot, not current gate evidence. Use architecture-gates.json from the exact-HEAD Canonical PostgreSQL production gate artifact.",
   "source_commit_sha": "d4ae8a7ff83e0984b3d1545da7dcfdb05516d38c",
   "commit_sha": "d4ae8a7ff83e0984b3d1545da7dcfdb05516d38c",
-  "status": "PASS"
+  "status": "HISTORICAL_NON_AUTHORITATIVE"
 }
