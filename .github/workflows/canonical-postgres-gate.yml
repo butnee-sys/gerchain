@@ -513,6 +513,10 @@ jobs:
 
           root = Path("artifacts/ea35")
           root.mkdir(parents=True, exist_ok=True)
+          # Discard any previous run's decision before generating fresh evidence.
+          stale_decision = root / "production-gate-decision.json"
+          if stale_decision.exists():
+              stale_decision.unlink()
           expected = os.environ["EVIDENCE_COMMIT_SHA"]
           head = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
           repo = os.environ["GITHUB_REPOSITORY"]
@@ -652,8 +656,18 @@ jobs:
               encoding="utf-8",
           )
 
-          # Final checksum index includes both architecture-gates.json and the
-          # bundle report. The index itself is separately bound by MANIFEST.SHA256.
+          # The decision must be regenerated from this run's exact-SHA manifest
+          # and observed gate outcomes. Unverified or missing gates remain failures.
+          from scripts.production_gate_controller import decide
+          outcomes = {name: record["outcome"] for name, record in records.items()}
+          decision_report = decide(root / "manifest.json", expected, outcomes)
+          (root / "production-gate-decision.json").write_text(
+              json.dumps(decision_report, indent=2) + "\n", encoding="utf-8"
+          )
+          print(json.dumps(decision_report, indent=2))
+
+          # Final checksum index includes architecture gates, the evidence bundle,
+          # and the fresh production decision. The index itself is separately bound.
           sums_path = root / "SHA256SUMS"
           files = sorted(p for p in root.rglob("*") if p.is_file()
                          and p.name not in {"SHA256SUMS", "MANIFEST.SHA256"})
