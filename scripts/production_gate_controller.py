@@ -11,11 +11,10 @@ def _head_sha() -> str:
     except Exception:
         return os.environ.get("GITHUB_SHA", "")
 
-def decide(manifest_path: pathlib.Path, expected_sha: str, outcomes: dict[str, str], json_parse_error: bool = False) -> dict:
+def decide(manifest_path: pathlib.Path, expected_source_sha: str, outcomes: dict[str, str], json_parse_error: bool = False) -> dict:
     failures = []
     head_sha = _head_sha()
 
-    # 1. Malformed JSON failure (Fail-Closed)
     if json_parse_error:
         failures.append("MALFORMED_OUTCOMES_JSON")
 
@@ -29,18 +28,27 @@ def decide(manifest_path: pathlib.Path, expected_sha: str, outcomes: dict[str, s
 
     source_sha = manifest.get("source_commit_sha") or manifest.get("commit_sha")
 
-    # 2. Strict SHA check (Fail-Closed)
-    if not expected_sha:
-        failures.append("MISSING_EXPECTED_SHA")
+    # Strict Source SHA verification
+    if not expected_source_sha:
+        failures.append("MISSING_EXPECTED_SOURCE_SHA")
     if not source_sha:
         failures.append("MISSING_SOURCE_COMMIT_SHA")
-    if expected_sha and source_sha and source_sha != expected_sha:
-        failures.append(f"SOURCE_SHA_MISMATCH_EXPECTED_{expected_sha}_GOT_{source_sha}")
+    if expected_source_sha and source_sha and source_sha != expected_source_sha:
+        failures.append(f"SOURCE_SHA_MISMATCH_EXPECTED_{expected_source_sha}_GOT_{source_sha}")
 
-    # 3. Mandatory gates strict verification (No default success)
+    # Full canonical gate scope (17+ required production gates)
     required_gates = [
-        "inventory_map", "core_correctness", "transaction_correctness",
-        "migration_atomicity", "migration_concurrency", "migration_catalog", "manifest"
+        "inventory_map", "error_duplicate_excess", "cross_store_reconciliation",
+        "authority_boundary", "core_correctness", "adapter_boundaries",
+        "eai_g3_governance", "transaction_correctness", "recovery",
+        "auditability", "security_iam_mfa", "observability",
+        "performance_stress", "disaster_recovery", "ci_release_governance",
+        "independent_reperformance", "final_evidence_bundle",
+        "compile", "regression", "postgres_connection",
+        "migration_atomicity", "legacy_upgrade", "lifecycle",
+        "migration_concurrency", "publication_integrity",
+        "entrypoint", "production_boot", "migration_catalog",
+        "deep_reconciliation", "manifest"
     ]
 
     for gate in required_gates:
@@ -57,9 +65,9 @@ def decide(manifest_path: pathlib.Path, expected_sha: str, outcomes: dict[str, s
     }
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Production Gate Controller (Strict Fail-Closed)")
+    parser = argparse.ArgumentParser(description="Production Gate Controller (Full Scope Strict)")
     parser.add_argument("--manifest", default="artifacts/ea35/manifest.json")
-    parser.add_argument("--expected-sha", default=_head_sha())
+    parser.add_argument("--expected-source-sha", default="18916b9c2e7f2051e7ccdb91e1505ca00bd747d0")
     parser.add_argument("--output", default="artifacts/ea35/production-gate-decision.json")
     parser.add_argument("--outcomes-json", default="{}")
     args = parser.parse_args()
@@ -77,7 +85,7 @@ if __name__ == "__main__":
         except Exception:
             json_parse_error = True
 
-    res = decide(pathlib.Path(args.manifest), args.expected_sha, outcomes, json_parse_error)
+    res = decide(pathlib.Path(args.manifest), args.expected_source_sha, outcomes, json_parse_error)
 
     output_path = pathlib.Path(args.output)
     output_path.parent.mkdir(parents=True, exist_ok=True)
