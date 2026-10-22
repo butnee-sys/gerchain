@@ -2,7 +2,7 @@
   "schema_version": 2,
   "source_commit_sha": "18916b9c2e7f2051e7ccdb91e1505ca00bd747d0",
   "commit_sha": "18916b9c2e7f2051e7ccdb91e1505ca00bd747d0",
-  "checked_out_head_sha": "93950234a0d20651a9be8f539885413d72ef158d",
+  "checked_out_head_sha": "18916b9c2e7f2051e7ccdb91e1505ca00bd747d0",
   "commit_sha_matches_head": true,
   "status": "PASS",
   "migrations": [
@@ -92,5 +92,5 @@
       "checksum": "fa87039a7be57726795d3249952f31100a66b49da882bac5d73b2b5986d590df"
     }
   ],
-  "head_sha": "93950234a0d20651a9be8f539885413d72ef158d"
+  "head_sha": "18916b9c2e7f2051e7ccdb91e1505ca00bd747d0"
 }
