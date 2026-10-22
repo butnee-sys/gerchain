@@ -373,7 +373,7 @@
       "execution_mode": "strict_fail_closed"
     }
   },
-  "verification_status": "PENDING_FINAL_HUMAN_REVIEW",
+  "verification_status": "PENDING_BLOCKED_BY_CI_SHA_MISMATCH",
   "ci_workflow_run_metadata": {
     "conclusion": "success",
     "createdAt": "2026-10-22T12:08:38Z",
@@ -381,5 +381,8 @@
     "headSha": "61730409a40736149f6b827c845eecd0db175bf2",
     "status": "completed",
     "workflowName": "PostgreSQL migration gate"
-  }
+  },
+  "blocking_failures": [
+    "CI_HEAD_SHA_MISMATCH: CI run headSha (61730409...) does not match Target Release SHA (10a408dc...)"
+  ]
 }
