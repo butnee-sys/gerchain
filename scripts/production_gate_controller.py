@@ -66,6 +66,11 @@ def _failure_once(failures: list[str], value: str) -> None:
         failures.append(value)
 
 
+def _write_report(output: pathlib.Path, report: dict[str, Any]) -> None:
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+
+
 def decide(
     manifest_path: pathlib.Path, expected_sha: str, outcomes: dict[str, str]
 ) -> dict[str, Any]:
@@ -216,6 +221,7 @@ def main() -> int:
         help="JSON object containing explicit outcomes for every required gate",
     )
     args = parser.parse_args()
+    output_path = pathlib.Path(args.output)
 
     if not args.outcomes_json:
         outcomes: dict[str, str] = {}
@@ -223,16 +229,34 @@ def main() -> int:
         try:
             outcomes = json.loads(args.outcomes_json)
         except json.JSONDecodeError as exc:
+            # Overwrite any stale LOCKED report so malformed input cannot leave
+            # a previous success artifact available to downstream consumers.
+            report = {
+                "decision": "NOT_LOCKED",
+                "source_commit_sha": None,
+                "expected_sha": args.expected_sha or None,
+                "checked_out_head_sha": _head_sha() or None,
+                "failures": ["OUTCOMES_JSON_INVALID"],
+            }
+            _write_report(output_path, report)
             print(f"Invalid --outcomes-json: {exc}", file=sys.stderr)
-            return 2
+            print(json.dumps(report, indent=2))
+            return 1
         if not isinstance(outcomes, dict):
+            report = {
+                "decision": "NOT_LOCKED",
+                "source_commit_sha": None,
+                "expected_sha": args.expected_sha or None,
+                "checked_out_head_sha": _head_sha() or None,
+                "failures": ["OUTCOMES_JSON_INVALID_SHAPE"],
+            }
+            _write_report(output_path, report)
             print("--outcomes-json must decode to a JSON object", file=sys.stderr)
-            return 2
+            print(json.dumps(report, indent=2))
+            return 1
 
     report = decide(pathlib.Path(args.manifest), args.expected_sha, outcomes)
-    output_path = pathlib.Path(args.output)
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    output_path.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+    _write_report(output_path, report)
     print(json.dumps(report, indent=2))
     return 0 if report["decision"] == "LOCKED" else 1
 
