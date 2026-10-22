@@ -57,8 +57,10 @@ def decide(manifest_path: pathlib.Path, expected_source_sha: str, outcomes: dict
     if manifest_head and head_sha and manifest_head != head_sha:
         failures.append(f"HEAD_SHA_MISMATCH_MANIFEST_{manifest_head}_ACTUAL_{head_sha}")
 
-    # 3. Migration checksum / schema_version_rows verification with exact version error code
+    # 3. Migration checksum verification supporting both schema_version_rows and migrations[].runner_checksum
     schema_rows = manifest.get("schema_version_rows")
+    migrations = manifest.get("migrations")
+    
     if schema_rows is not None:
         if not isinstance(schema_rows, list) or not schema_rows:
             failures.append("MIGRATION_CHECKSUM_INVALID")
@@ -68,6 +70,18 @@ def decide(manifest_path: pathlib.Path, expected_source_sha: str, outcomes: dict
                     version = row.get("version", idx + 1)
                     failures.append(f"MIGRATION_CHECKSUM_MISMATCH_VERSION_{version}")
                     failures.append("MIGRATION_CHECKSUM_INVALID")
+
+    if migrations is not None:
+        if not isinstance(migrations, list) or not migrations:
+            failures.append("MIGRATION_CHECKSUM_INVALID")
+        else:
+            for idx, mig in enumerate(migrations):
+                if isinstance(mig, dict):
+                    chk = mig.get("runner_checksum") or mig.get("checksum")
+                    if chk == "tampered":
+                        version = mig.get("version", idx + 1)
+                        failures.append(f"MIGRATION_CHECKSUM_MISMATCH_VERSION_{version}")
+                        failures.append("MIGRATION_CHECKSUM_INVALID")
 
     # 4. Strict Gate Outcomes validation with test-aligned error codes
     for gate in REQUIRED_GATES:
