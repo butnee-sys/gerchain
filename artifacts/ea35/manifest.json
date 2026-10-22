@@ -1,117 +1,36 @@
 {
-  "schema_version": 2,
-  "source_commit_sha": "18916b9c2e7f2051e7ccdb91e1505ca00bd747d0",
-  "commit_sha": "18916b9c2e7f2051e7ccdb91e1505ca00bd747d0",
-  "checked_out_head_sha": "18916b9c2e7f2051e7ccdb91e1505ca00bd747d0",
-  "commit_sha_matches_head": true,
-  "status": "PENDING_VERIFIED_CI_PROOF",
-  "migrations": [
-    {
-      "name": "001_canonical_production.sql",
-      "runner_checksum": "5a0bac08e2f499b6148607a68a0afea5f1a36cf8710576dd00033c819152db60",
-      "checksum": "5a0bac08e2f499b6148607a68a0afea5f1a36cf8710576dd00033c819152db60"
-    },
-    {
-      "name": "002_canonical_production.sql",
-      "runner_checksum": "32e6d40eafa633b7b66262b028470485e8ec159341f36b0103ca1f3073932c97",
-      "checksum": "32e6d40eafa633b7b66262b028470485e8ec159341f36b0103ca1f3073932c97"
-    },
-    {
-      "name": "003_canonical_compatibility.sql",
-      "runner_checksum": "2e5a854cb31bf84fdcf5eb341b367e9bc8ee628870659739ab93b13eb9fcd2f0",
-      "checksum": "2e5a854cb31bf84fdcf5eb341b367e9bc8ee628870659739ab93b13eb9fcd2f0"
-    },
-    {
-      "name": "004_canonical_value_truth.sql",
-      "runner_checksum": "fa491c1c8c360754b9d3e47d56737f7503912c9e3dcd16e666ef318ea63cade5",
-      "checksum": "fa491c1c8c360754b9d3e47d56737f7503912c9e3dcd16e666ef318ea63cade5"
-    },
-    {
-      "name": "005_canonical_production.sql",
-      "runner_checksum": "6d5c67f13ea8d6091684eaf487371f52c16118d92dec842e1e8f1b508f6a8559",
-      "checksum": "6d5c67f13ea8d6091684eaf487371f52c16118d92dec842e1e8f1b508f6a8559"
-    },
-    {
-      "name": "006_canonical_movement_integrity.sql",
-      "runner_checksum": "7cc8019d510ea290645eda20cb1ec507b12d205b6f4da8a194a88d52f89d899a",
-      "checksum": "7cc8019d510ea290645eda20cb1ec507b12d205b6f4da8a194a88d52f89d899a"
-    },
-    {
-      "name": "007_canonical_production_reconciliation.sql",
-      "runner_checksum": "d2c44091f4fd0996066ac7dc62979301c2ee4a4c55c663b25bf408a906755b2f",
-      "checksum": "d2c44091f4fd0996066ac7dc62979301c2ee4a4c55c663b25bf408a906755b2f"
-    },
-    {
-      "name": "008_ea35_idempotency_compat.sql",
-      "runner_checksum": "85d56489486c98472b6e91de0aa4c343440355e235acf673f4c578dcc4e5db19",
-      "checksum": "85d56489486c98472b6e91de0aa4c343440355e235acf673f4c578dcc4e5db19"
-    },
-    {
-      "name": "009_canonical_movement_integrity_hardening.sql",
-      "runner_checksum": "03a3240945fa0aa9b51c67e6bcab45564324671be9c79dddd271d63b3a4264ea",
-      "checksum": "03a3240945fa0aa9b51c67e6bcab45564324671be9c79dddd271d63b3a4264ea"
-    },
-    {
-      "name": "010_canonical_evidence_constraints.sql",
-      "runner_checksum": "7ecac8e8eb215d62b95638af127aff2cc8625676633719cdd6f3a8aaba1344a0",
-      "checksum": "7ecac8e8eb215d62b95638af127aff2cc8625676633719cdd6f3a8aaba1344a0"
-    },
-    {
-      "name": "011_ea35_canonical_schema_finalization.sql",
-      "runner_checksum": "0380bc929745c77afb5ea005bb9953c1f76a541d521792764097ffe086bf1099",
-      "checksum": "0380bc929745c77afb5ea005bb9953c1f76a541d521792764097ffe086bf1099"
-    },
-    {
-      "name": "012_canonical_production.sql",
-      "runner_checksum": "265238201aaf4f2df6f4b5d7a619053999435e74d9306263cda15c6f20d84efb",
-      "checksum": "265238201aaf4f2df6f4b5d7a619053999435e74d9306263cda15c6f20d84efb"
-    },
-    {
-      "name": "013_ea35_canonical_schema_hardening.sql",
-      "runner_checksum": "7197c05a54a6873f25773bf20c874c970733d94bbcd417a364011d4f9657d4df",
-      "checksum": "7197c05a54a6873f25773bf20c874c970733d94bbcd417a364011d4f9657d4df"
-    },
-    {
-      "name": "014_canonical_escrow_state_constraint.sql",
-      "runner_checksum": "e11b0d6c8317ca27abc59450f83e29fcc1dcd8766b0ae7bbffb21e23b952a7ce",
-      "checksum": "e11b0d6c8317ca27abc59450f83e29fcc1dcd8766b0ae7bbffb21e23b952a7ce"
-    },
-    {
-      "name": "015_repair_escrow_state_constraint_drift.sql",
-      "runner_checksum": "d49149698339021eefba9fffd9d7c4fea632f4d6c9ecdf64ed6871b414b482f3",
-      "checksum": "d49149698339021eefba9fffd9d7c4fea632f4d6c9ecdf64ed6871b414b482f3"
-    },
-    {
-      "name": "016_reconcile_escrow_state_constraint.sql",
-      "runner_checksum": "638f2f65bc28435800102a92444477bc826e318cf570cd45e1dea426a9d35698",
-      "checksum": "638f2f65bc28435800102a92444477bc826e318cf570cd45e1dea426a9d35698"
-    },
-    {
-      "name": "017_ea35_created_witness_event.sql",
-      "runner_checksum": "fa87039a7be57726795d3249952f31100a66b49da882bac5d73b2b5986d590df",
-      "checksum": "fa87039a7be57726795d3249952f31100a66b49da882bac5d73b2b5986d590df"
-    }
-  ],
-  "head_sha": "18916b9c2e7f2051e7ccdb91e1505ca00bd747d0",
+  "checked_out_head_sha": "4664c29fa650ccdfb5aa80997875fdc7c6ec9bf3",
   "immutable_baseline_sha": "18916b9c2e7f2051e7ccdb91e1505ca00bd747d0",
-  "production_release_head_sha": "5a5ace6833e0c309d259dc6bfc07d5174dd4ac09",
-  "migration_checksums": {
-    "001_canonical_production.sql": "5a0bac08e2f499b6148607a68a0afea5f1a36cf8710576dd00033c819152db60",
-    "002_canonical_production.sql": "32e6d40eafa633b7b66262b028470485e8ec159341f36b0103ca1f3073932c97",
-    "003_canonical_compatibility.sql": "2e5a854cb31bf84fdcf5eb341b367e9bc8ee628870659739ab93b13eb9fcd2f0",
-    "004_canonical_value_truth.sql": "fa491c1c8c360754b9d3e47d56737f7503912c9e3dcd16e666ef318ea63cade5",
-    "005_canonical_production.sql": "6d5c67f13ea8d6091684eaf487371f52c16118d92dec842e1e8f1b508f6a8559",
-    "006_canonical_movement_integrity.sql": "7cc8019d510ea290645eda20cb1ec507b12d205b6f4da8a194a88d52f89d899a",
-    "007_canonical_production_reconciliation.sql": "d2c44091f4fd0996066ac7dc62979301c2ee4a4c55c663b25bf408a906755b2f",
-    "008_ea35_idempotency_compat.sql": "85d56489486c98472b6e91de0aa4c343440355e235acf673f4c578dcc4e5db19",
-    "009_canonical_movement_integrity_hardening.sql": "03a3240945fa0aa9b51c67e6bcab45564324671be9c79dddd271d63b3a4264ea",
-    "010_canonical_evidence_constraints.sql": "7ecac8e8eb215d62b95638af127aff2cc8625676633719cdd6f3a8aaba1344a0",
-    "011_ea35_canonical_schema_finalization.sql": "0380bc929745c77afb5ea005bb9953c1f76a541d521792764097ffe086bf1099",
-    "012_canonical_production.sql": "265238201aaf4f2df6f4b5d7a619053999435e74d9306263cda15c6f20d84efb",
-    "013_ea35_canonical_schema_hardening.sql": "7197c05a54a6873f25773bf20c874c970733d94bbcd417a364011d4f9657d4df",
-    "014_canonical_escrow_state_constraint.sql": "e11b0d6c8317ca27abc59450f83e29fcc1dcd8766b0ae7bbffb21e23b952a7ce",
-    "015_repair_escrow_state_constraint_drift.sql": "d49149698339021eefba9fffd9d7c4fea632f4d6c9ecdf64ed6871b414b482f3",
-    "016_reconcile_escrow_state_constraint.sql": "638f2f65bc28435800102a92444477bc826e318cf570cd45e1dea426a9d35698",
-    "017_ea35_created_witness_event.sql": "fa87039a7be57726795d3249952f31100a66b49da882bac5d73b2b5986d590df"
-  }
+  "required_gates": [
+    "GATE_INVENTORY_MAP",
+    "GATE_ERROR_DUPLICATE_EXCESS",
+    "GATE_CROSS_STORE_RECONCILIATION",
+    "GATE_AUTHORITY_BOUNDARY",
+    "GATE_CORE_CORRECTNESS",
+    "GATE_ADAPTER_BOUNDARIES",
+    "GATE_EAI_G3_GOVERNANCE",
+    "GATE_TRANSACTION_CORRECTNESS",
+    "GATE_RECOVERY",
+    "GATE_AUDITABILITY",
+    "GATE_SECURITY_IAM_MFA",
+    "GATE_OBSERVABILITY",
+    "GATE_PERFORMANCE_STRESS",
+    "GATE_DISASTER_RECOVERY",
+    "GATE_CI_RELEASE_GOVERNANCE",
+    "GATE_INDEPENDENT_REPERFORMANCE",
+    "GATE_FINAL_EVIDENCE_BUNDLE",
+    "GATE_COMPILE",
+    "GATE_REGRESSION",
+    "GATE_POSTGRES_CONNECTION",
+    "GATE_MIGRATION_ATOMICITY",
+    "GATE_LEGACY_UPGRADE",
+    "GATE_LIFECYCLE",
+    "GATE_MIGRATION_CONCURRENCY",
+    "GATE_PUBLICATION_INTEGRITY",
+    "GATE_ENTRYPOINT",
+    "GATE_PRODUCTION_BOOT",
+    "GATE_MIGRATION_CATALOG",
+    "GATE_DEEP_RECONCILIATION",
+    "GATE_MANIFEST"
+  ]
 }
