@@ -1,6 +1,10 @@
 {
-  "decision": "LOCKED",
+  "decision": "NOT_LOCKED",
+  "authority": "HISTORICAL_NON_AUTHORITATIVE_SNAPSHOT",
+  "warning": "This checked-in decision is not authoritative for the current HEAD. Production lock requires a fresh exact-SHA CI decision with every required gate independently evidenced.",
   "source_commit_sha": "d4ae8a7ff83e0984b3d1545da7dcfdb05516d38c",
   "checked_out_head_sha": "d4ae8a7ff83e0984b3d1545da7dcfdb05516d38c",
-  "failures": []
+  "failures": [
+    "TRACKED_SNAPSHOT_STALE_NON_AUTHORITATIVE"
+  ]
 }
