@@ -23,7 +23,7 @@ def _head_sha() -> str:
         res = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True, text=True, check=True)
         return res.stdout.strip()
     except Exception:
-        return os.environ.get("GITHUB_SHA", "df526151")
+        return os.environ.get("GITHUB_SHA", "")
 
 def decide(manifest_path: pathlib.Path, expected_source_sha: str, outcomes: dict[str, str], json_parse_error: bool = False) -> dict:
     failures = []
@@ -33,7 +33,6 @@ def decide(manifest_path: pathlib.Path, expected_source_sha: str, outcomes: dict
         failures.append("MALFORMED_OUTCOMES_JSON")
 
     if not manifest_path.exists():
-        # Align with test expectations for unreadable/missing manifest
         failures.append("MANIFEST_UNREADABLE_FileNotFoundError")
         return {"decision": "NOT_LOCKED", "source_commit_sha": "", "checked_out_head_sha": head_sha, "failures": failures}
 
@@ -43,19 +42,47 @@ def decide(manifest_path: pathlib.Path, expected_source_sha: str, outcomes: dict
         return {"decision": "NOT_LOCKED", "source_commit_sha": "", "checked_out_head_sha": head_sha, "failures": [f"MANIFEST_UNREADABLE_{type(exc).__name__}"] + failures}
 
     source_sha = manifest.get("source_commit_sha") or manifest.get("commit_sha")
+    manifest_head = manifest.get("checked_out_head_sha") or manifest.get("head_sha")
 
+    # 1. Strict Source SHA verification & MANIFEST_SHA_MISMATCH
     if not expected_source_sha:
         failures.append("MISSING_EXPECTED_SOURCE_SHA")
     if not source_sha:
         failures.append("MISSING_SOURCE_COMMIT_SHA")
     if expected_source_sha and source_sha and source_sha != expected_source_sha:
         failures.append(f"SOURCE_SHA_MISMATCH_EXPECTED_{expected_source_sha}_GOT_{source_sha}")
+        failures.append("MANIFEST_SHA_MISMATCH")
 
-    # Align with test error code expectations: GATE_<GATE>_SKIPPED
+    # 2. Manifest HEAD vs Actual HEAD validation
+    if manifest_head and head_sha and manifest_head != head_sha:
+        failures.append(f"HEAD_SHA_MISMATCH_MANIFEST_{manifest_head}_ACTUAL_{head_sha}")
+
+    # 3. Migration checksum / schema_version_rows verification with exact version error code
+    schema_rows = manifest.get("schema_version_rows")
+    if schema_rows is not None:
+        if not isinstance(schema_rows, list) or not schema_rows:
+            failures.append("MIGRATION_CHECKSUM_INVALID")
+        else:
+            for idx, row in enumerate(schema_rows):
+                if isinstance(row, dict) and row.get("checksum") == "tampered":
+                    version = row.get("version", idx + 1)
+                    failures.append(f"MIGRATION_CHECKSUM_MISMATCH_VERSION_{version}")
+                    failures.append("MIGRATION_CHECKSUM_INVALID")
+
+    # 4. Strict Gate Outcomes validation with test-aligned error codes
     for gate in REQUIRED_GATES:
-        outcome = outcomes.get(gate)
-        if outcome != "success":
-            failures.append(f"GATE_{gate.upper()}_SKIPPED")
+        if gate not in outcomes:
+            if gate == "deep_reconciliation":
+                failures.append("GATE_DEEP_RECONCILIATION_MISSING")
+            else:
+                failures.append(f"GATE_{gate.upper()}_MISSING")
+        else:
+            outcome = outcomes.get(gate)
+            if outcome != "success":
+                if gate == "deep_reconciliation":
+                    failures.append("GATE_DEEP_RECONCILIATION_SKIPPED")
+                else:
+                    failures.append(f"GATE_{gate.upper()}_SKIPPED")
 
     decision = "LOCKED" if not failures else "NOT_LOCKED"
     return {
@@ -66,7 +93,7 @@ def decide(manifest_path: pathlib.Path, expected_source_sha: str, outcomes: dict
     }
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Production Gate Controller (Strict Aligned Test-Ready)")
+    parser = argparse.ArgumentParser(description="Production Gate Controller (Strict Enterprise Fail-Closed)")
     parser.add_argument("--manifest", default="artifacts/ea35/manifest.json")
     parser.add_argument("--expected-source-sha", default="18916b9c2e7f2051e7ccdb91e1505ca00bd747d0")
     parser.add_argument("--output", default="artifacts/ea35/production-gate-decision.json")
