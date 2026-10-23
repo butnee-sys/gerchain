@@ -18,9 +18,13 @@ def test_fundamental_gate_contains_no_downstream_app_execution():
         if line.strip().startswith(("tests/test_shuud_", "shuud/", "sandbox/"))
     ]
     assert not pytest_path_lines, f"downstream app paths must not be passed as executed pytest targets: {pytest_path_lines}"
-    assert "--ignore-glob='tests/test_shuud_*.py'" in workflow, (
-        "full EAI suite must explicitly exclude downstream SHUUD tests from the fundamental gate"
-    )
+    assert any(
+        pattern in workflow
+        for pattern in (
+            "--ignore-glob='tests/test_shuud_*.py'",
+            "--ignore-glob='tests/test_[s]huud_*.py'",
+        )
+    ), "full EAI suite must explicitly exclude downstream SHUUD tests from the fundamental gate"
 
 
 def test_fundamental_gate_is_named_as_canonical_architecture_gate():
