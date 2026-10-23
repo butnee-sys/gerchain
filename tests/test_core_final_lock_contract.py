@@ -5,6 +5,8 @@ def test_fundamental_gate_contains_no_downstream_app_execution():
     root = Path(__file__).resolve().parents[1]
     workflow = (root / ".github" / "workflows" / "core-gates.yml").read_text(encoding="utf-8")
 
+    # Failure dispositions and release-scope boundaries are tracked in
+    # docs/PRODUCTION_FAILURE_TRIAGE_2026-10-23.md.
     # Exclusion globs may name downstream tests; that is not execution. Reject
     # actual downstream paths in the pytest argument list, while requiring the
     # full-suite invocation to explicitly ignore SHUUD tests.
