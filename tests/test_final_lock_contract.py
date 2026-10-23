@@ -23,13 +23,14 @@ def test_core_source_never_imports_shuud():
     assert not offenders, f"CORE must not import SHUUD: {offenders}"
 
 
-def test_shuud_workflows_are_path_isolated():
+def test_shuud_workflows_are_separate_manual_entrypoints():
     root = Path(__file__).resolve().parents[1]
     for name in ("shuud-command-layer.yml", "shuud-sandbox-smoke.yml"):
         text = (root / ".github" / "workflows" / name).read_text(encoding="utf-8")
-        assert 'paths:' in text
-        assert '"shuud/**"' in text
-        assert '"sandbox/**"' in text
+        triggers = text.split("jobs:", 1)[0]
+        assert "workflow_dispatch:" in triggers
+        assert "\\n  push:" not in triggers
+        assert "\\n  pull_request:" not in triggers
 
 
 def test_core_gate_does_not_execute_shuud_tests():

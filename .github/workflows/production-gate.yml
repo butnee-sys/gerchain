@@ -51,12 +51,12 @@ jobs:
         run: createdb -h localhost -U gerchain gerchain_migration_test
       - name: Compile all Python sources (fail closed)
         run: python -m compileall -q .
-      - name: Collect the complete test suite (fail closed)
+      - name: Collect repository tests (fail closed; acceptance scope excludes separate SHUUD app)
         run: python -m pytest --import-mode=importlib --collect-only -q
-      - name: Run complete test suite and emit JUnit evidence
+      - name: Run complete EAI acceptance suite and emit JUnit evidence (SHUUD excluded by canonical scope)
         run: |
           mkdir -p production-evidence
-          python -m pytest --import-mode=importlib -q --junitxml=production-evidence/junit.xml
+          python -m pytest --import-mode=importlib -q --junitxml=production-evidence/junit.xml --ignore-glob='tests/test_shuud_*.py'
 
       - name: Apply canonical migrations and capture PostgreSQL evidence
         env:
