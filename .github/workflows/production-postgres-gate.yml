@@ -264,7 +264,7 @@ jobs:
               "evidence_status": "PASS_CANDIDATE" if expected_sha == head and not migration_error and len(applied) == len(migrations) and checksum_match and sorted(applied_by_version) == list(range(1, len(expected_by_version) + 1)) and source_files and not source_missing and junit and all(x.get("tests", 0) > 0 and x.get("failures", 0) == 0 and x.get("errors", 0) == 0 for x in junit) else "INCOMPLETE_OR_FAILED",
           }
           out = Path("artifacts/production-postgres/migration-lifecycle-report.json")
-          out.write_text(json.dumps(report, indent=2, sort_keys=True) + "\\n", encoding="utf-8")
+          out.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
           print(json.dumps({k: report[k] for k in ("commit_sha", "checked_out_head_sha", "sha_match", "source_file_count", "source_hashes_complete", "source_missing", "migration_file_count", "applied_migration_count", "migration_checksums_match_files", "migration_history_versions_exact", "lifecycle_junit", "evidence_status")}, indent=2))
           if not report["sha_match"]:
               raise SystemExit("commit_sha does not match checked_out_head_sha")
