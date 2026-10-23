@@ -1,7 +1,8 @@
 name: core-gates
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
-  cancel-in-progress: true
+  # Preserve long-running evidence collection; a newer queued request must not cancel it.
+  cancel-in-progress: false
 
 # Production PostgreSQL evidence gate: EA-35.27 exact-branch re-performance
 # EA-35.47: exact-SHA final production evidence gate after runtime/migration fixes.
@@ -105,13 +106,34 @@ jobs:
           REQUIRE_MIGRATION_HISTORY: "1"
           MIGRATION_INVENTORY_REPORT: artifacts/canonical-postgres-evidence/migration-gate-report.json
         run: |
+          set +e
           mkdir -p artifacts/canonical-postgres-evidence
           python scripts/audit_migration_inventory.py
+          audit_rc=$?
+          report="artifacts/canonical-postgres-evidence/migration-gate-report.json"
+          if [ ! -s "$report" ]; then
+            python - <<'PY'
+          import json, os
+          from pathlib import Path
+          from datetime import datetime, timezone
+          report = Path("artifacts/canonical-postgres-evidence/migration-gate-report.json")
+          report.write_text(json.dumps({
+              "status": "FAIL",
+              "evidence_status": "INCOMPLETE_OR_FAILED",
+              "commit_sha": os.environ.get("GITHUB_SHA", "UNKNOWN"),
+              "generated_at": datetime.now(timezone.utc).isoformat(),
+              "failure": "Migration inventory audit did not produce its report; inspect the preceding audit step logs.",
+          }, indent=2, sort_keys=True) + "\\n", encoding="utf-8")
+          PY
+          fi
+          echo "MIGRATION_AUDIT_EXIT_CODE=$audit_rc"
+          test -s "$report"
+          exit "$audit_rc"
       - name: Upload migration inventory evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: migration-gate-report-${{ github.event.pull_request.head.sha || github.sha }}
-          path: artifacts/canonical-postgres-evidence/migration-gate-report.json
-          if-no-files-found: warn
+          path: artifacts/canonical-postgres-evidence/
+          if-no-files-found: error
           retention-days: 90
