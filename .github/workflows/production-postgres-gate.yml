@@ -103,7 +103,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: segmented-test-diagnostics-${{ github.sha }}
+          name: segmented-test-diagnostics-${{ github.event.pull_request.head.sha || github.sha }}
           path: artifacts/segmented-tests/
           if-no-files-found: warn
           retention-days: 90
@@ -275,7 +275,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: production-postgres-evidence-${{ github.sha }}
+          name: production-postgres-evidence-${{ github.event.pull_request.head.sha || github.sha }}
           path: |
             artifacts/production-postgres/
             artifacts/postgres-lifecycle-junit.xml

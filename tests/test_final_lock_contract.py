@@ -29,14 +29,16 @@ def test_shuud_workflows_are_separate_manual_entrypoints():
         text = (root / ".github" / "workflows" / name).read_text(encoding="utf-8")
         triggers = text.split("jobs:", 1)[0]
         assert "workflow_dispatch:" in triggers
-        assert "\\n  push:" not in triggers
-        assert "\\n  pull_request:" not in triggers
+        assert "\n  push:" not in triggers
+        assert "\n  pull_request:" not in triggers
 
 
 def test_core_gate_does_not_execute_shuud_tests():
     root = Path(__file__).resolve().parents[1]
     text = (root / ".github" / "workflows" / "core-gates.yml").read_text(encoding="utf-8")
-    assert "tests/test_shuud_" not in text
+    ignore_rule = "--ignore-glob='tests/test_shuud_*.py'"
+    assert ignore_rule in text
+    assert "tests/test_shuud_" not in text.replace(ignore_rule, "")
     assert "shuud/" not in text
 
 

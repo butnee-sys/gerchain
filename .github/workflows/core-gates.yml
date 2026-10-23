@@ -37,6 +37,8 @@ jobs:
       PYTHONPATH: .
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
@@ -108,7 +110,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: migration-gate-report-${{ github.sha }}
+          name: migration-gate-report-${{ github.event.pull_request.head.sha || github.sha }}
           path: artifacts/canonical-postgres-evidence/migration-gate-report.json
           if-no-files-found: warn
           retention-days: 90
