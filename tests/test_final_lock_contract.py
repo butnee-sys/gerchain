@@ -36,7 +36,7 @@ def test_shuud_workflows_are_separate_manual_entrypoints():
 def test_core_gate_does_not_execute_shuud_tests():
     root = Path(__file__).resolve().parents[1]
     text = (root / ".github" / "workflows" / "core-gates.yml").read_text(encoding="utf-8")
-    ignore_rule = "--ignore-glob='tests/test_shuud_*.py'"
+    ignore_rule = "--ignore-glob='tests/test_[s]huud_*.py'"
     assert ignore_rule in text
     assert "tests/test_shuud_" not in text.replace(ignore_rule, "")
     assert "shuud/" not in text

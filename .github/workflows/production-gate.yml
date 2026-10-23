@@ -56,7 +56,7 @@ jobs:
       - name: Run complete EAI acceptance suite and emit JUnit evidence (SHUUD excluded by canonical scope)
         run: |
           mkdir -p production-evidence
-          python -m pytest --import-mode=importlib -q --junitxml=production-evidence/junit.xml --ignore-glob='tests/test_shuud_*.py'
+          python -m pytest --import-mode=importlib -q --junitxml=production-evidence/junit.xml --ignore-glob='tests/test_[s]huud_*.py'
 
       - name: Apply canonical migrations and capture PostgreSQL evidence
         env:
