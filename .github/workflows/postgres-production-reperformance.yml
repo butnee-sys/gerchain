@@ -196,26 +196,32 @@ jobs:
           python - <<'PY'
           import json, os, pathlib, subprocess
           root = pathlib.Path("production-gate-evidence")
+          checked_out_sha = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+          source_sha = os.environ["HEAD_SHA"]
           manifest = {
               "artifact": "production-gate-evidence",
               "workflow": "PostgreSQL Production Re-performance",
               "run_id": os.environ["RUN_ID"],
               "run_attempt": os.environ["RUN_ATTEMPT"],
-              "github_sha": os.environ["HEAD_SHA"],
-              "checked_out_sha": subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip(),
+              "github_sha": source_sha,
+              "checked_out_sha": checked_out_sha,
+              "sha_match": source_sha == checked_out_sha,
               "job_status_at_manifest_step": os.environ["JOB_STATUS"],
               "production_boot_evidence_present": (root / "production-boot-status.txt").exists(),
               "reconciliation_report_present": (root / "reconciliation-report.json").exists(),
+              "evidence_status": "BLOCKED" if source_sha != checked_out_sha else "COLLECTED_PENDING_VERIFICATION",
               "note": "Artifact presence does not itself mean the gate passed; inspect workflow conclusion and each report."
           }
           (root / "production-gate-evidence.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
           print(json.dumps(manifest, indent=2))
+          if source_sha != checked_out_sha:
+              raise SystemExit(f"FAIL-CLOSED: requested source SHA {source_sha} != checked-out SHA {checked_out_sha}")
           PY
       - name: Upload production gate evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: production-gate-evidence
+          name: production-gate-evidence-${{ github.run_id }}-${{ github.event.pull_request.head.sha || github.sha }}
           path: production-gate-evidence/
           if-no-files-found: error
           retention-days: 30
