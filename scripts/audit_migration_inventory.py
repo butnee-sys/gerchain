@@ -10,15 +10,26 @@ import sys
 from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
-
-from postgres.migrations import (
-    FROZEN_CHECKSUMS,
-    LEGACY_CHECKSUMS,
-    _canonical_migration_files,
-    checksum,
-)
+import importlib.util
 
 ROOT = Path(__file__).resolve().parents[1]
+
+# The repository contains both postgres/migrations.py (historical checksum
+# registry) and postgres/migrations/ (the active runner package). Python
+# resolves "postgres.migrations" to the package, so load the registry file by
+# explicit path rather than accidentally importing the package and failing.
+_registry_path = ROOT / "postgres" / "migrations.py"
+_registry_spec = importlib.util.spec_from_file_location(
+    "gerchain_migration_registry_compat", _registry_path
+)
+if _registry_spec is None or _registry_spec.loader is None:
+    raise ImportError(f"cannot load migration registry from {_registry_path}")
+_registry = importlib.util.module_from_spec(_registry_spec)
+_registry_spec.loader.exec_module(_registry)
+FROZEN_CHECKSUMS = _registry.FROZEN_CHECKSUMS
+LEGACY_CHECKSUMS = _registry.LEGACY_CHECKSUMS
+_canonical_migration_files = _registry._canonical_migration_files
+checksum = _registry.checksum
 MIGRATION_DIR = ROOT / "postgres" / "migrations"
 OUTPUT = Path(os.environ.get("MIGRATION_INVENTORY_REPORT", "migration-inventory-report.json"))
 

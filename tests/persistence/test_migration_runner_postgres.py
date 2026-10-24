@@ -39,7 +39,7 @@ def pg_engine():
 
 def _version() -> int:
     # schema_version is shared by all migration tests; use a fresh positive version.
-    return int(time.time()) * 1_000_000 + uuid.uuid4().int % 1_000_000
+    return 1_000_000_000 + uuid.uuid4().int % 1_000_000_000
 
 
 def test_concurrent_migration_runners_apply_one_version_once(pg_engine):

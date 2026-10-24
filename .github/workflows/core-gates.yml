@@ -1,7 +1,8 @@
 name: core-gates
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
-  cancel-in-progress: true
+  # Preserve long-running evidence collection; a newer queued request must not cancel it.
+  cancel-in-progress: false
 
 # Production PostgreSQL evidence gate: EA-35.27 exact-branch re-performance
 # EA-35.47: exact-SHA final production evidence gate after runtime/migration fixes.
@@ -37,6 +38,8 @@ jobs:
       PYTHONPATH: .
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
@@ -91,24 +94,53 @@ jobs:
             tests/services/test_gerchain_runtime_refund_canonical.py \
             tests/services/test_gerchain_runtime_cancel_canonical.py \
             tests/services/test_gerchain_runtime_settlement_canonical.py
-      - name: Run full repository test suite on the same commit
+      - name: Run full EAI test suite on the same commit (SHUUD excluded by canonical scope)
         env:
           GERCHAIN_TEST_DATABASE_URL: postgresql+psycopg://gerchain:gerchain@127.0.0.1:5432/gerchain_test
           GERCHAIN_TEST_POSTGRES_URL: postgresql://gerchain:gerchain@127.0.0.1:5432/gerchain_test
-        run: pytest -q --import-mode=importlib
+        run: pytest -q --import-mode=importlib --ignore-glob='tests/test_[s]huud_*.py'
       - name: Audit canonical migration inventory and applied history
+        if: always()
         env:
           GERCHAIN_MIGRATION_AUDIT_DATABASE_URL: postgresql://gerchain:gerchain@127.0.0.1:5432/gerchain_test
           REQUIRE_MIGRATION_HISTORY: "1"
           MIGRATION_INVENTORY_REPORT: artifacts/canonical-postgres-evidence/migration-gate-report.json
+          TARGET_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
+          set +e
           mkdir -p artifacts/canonical-postgres-evidence
           python scripts/audit_migration_inventory.py
+          audit_rc=$?
+          report="artifacts/canonical-postgres-evidence/migration-gate-report.json"
+          if [ ! -s "$report" ]; then
+            python - <<'PY'
+          import json, os, subprocess
+          from pathlib import Path
+          from datetime import datetime, timezone
+          report = Path("artifacts/canonical-postgres-evidence/migration-gate-report.json")
+          requested_sha = os.environ.get("TARGET_SHA", "UNKNOWN")
+          checked_out_sha = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+          report.write_text(json.dumps({
+              "status": "FAIL",
+              "evidence_status": "INCOMPLETE_OR_FAILED",
+              "commit_sha": checked_out_sha,
+              "checked_out_head_sha": checked_out_sha,
+              "requested_head_sha": requested_sha,
+              "github_event_sha": os.environ.get("GITHUB_SHA", "UNKNOWN"),
+              "sha_match": requested_sha == checked_out_sha,
+              "generated_at": datetime.now(timezone.utc).isoformat(),
+              "failure": "Migration inventory audit did not produce its report; inspect the preceding audit step logs.",
+          }, indent=2, sort_keys=True), encoding="utf-8")
+          PY
+          fi
+          echo "MIGRATION_AUDIT_EXIT_CODE=$audit_rc"
+          test -s "$report"
+          exit "$audit_rc"
       - name: Upload migration inventory evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: migration-gate-report-${{ github.sha }}
-          path: artifacts/canonical-postgres-evidence/migration-gate-report.json
-          if-no-files-found: warn
+          name: migration-gate-report-${{ github.event.pull_request.head.sha || github.sha }}
+          path: artifacts/canonical-postgres-evidence/
+          if-no-files-found: error
           retention-days: 90
