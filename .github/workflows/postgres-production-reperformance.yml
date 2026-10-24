@@ -136,10 +136,44 @@ jobs:
               raise SystemExit(f"expected 17 migration hashes, got {len(hashes)}")
           if [row["version"] for row in history] != list(range(1, 18)):
               raise SystemExit("migration history is not exactly versions 1..17")
+          expected_by_version = {
+              int(item["file"].split("_", 1)[0]): item["sha256"]
+              for item in hashes
+          }
+          applied_by_version = {int(row["version"]): str(row["checksum"]) for row in history}
+          if applied_by_version != expected_by_version:
+              raise SystemExit("live migration history checksums do not match the checked-out migration files")
           if not constraints or any(not row["validated"] for row in constraints if row["constraint_type"] == "c"):
               raise SystemExit("missing escrow constraints or an unvalidated CHECK constraint")
+          checked_out_sha = payload["checked_out_sha"]
+          if checked_out_sha != os.environ["HEAD_SHA"]:
+              raise SystemExit(f"FAIL-CLOSED: requested SHA {os.environ['HEAD_SHA']} != checked-out SHA {checked_out_sha}")
           out = pathlib.Path("production-gate-evidence/migration-catalog-proof.json")
           out.write_text(json.dumps(payload, indent=2, default=str), encoding="utf-8")
+          (out.parent / "migration-history.json").write_text(json.dumps({
+              "workflow": payload["workflow"],
+              "run_id": payload["run_id"],
+              "run_attempt": payload["run_attempt"],
+              "github_sha": payload["github_sha"],
+              "checked_out_sha": payload["checked_out_sha"],
+              "migration_history": history,
+              "migration_files": hashes,
+              "versions_exact": True,
+              "checksums_match_files": True
+          }, indent=2, default=str), encoding="utf-8")
+          (out.parent / "postgres-constraints.json").write_text(json.dumps({
+              "workflow": payload["workflow"],
+              "run_id": payload["run_id"],
+              "run_attempt": payload["run_attempt"],
+              "github_sha": payload["github_sha"],
+              "checked_out_sha": payload["checked_out_sha"],
+              "schema": "current_schema()",
+              "table": "escrows",
+              "constraints": constraints,
+              "all_check_constraints_validated": all(
+                  row["validated"] for row in constraints if row["constraint_type"] == "c"
+              )
+          }, indent=2, default=str), encoding="utf-8")
           print(json.dumps(payload, indent=2, default=str))
           PY
       - name: Write standalone production database reconciliation report
