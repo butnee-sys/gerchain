@@ -52,6 +52,29 @@ jobs:
           python -m pip install -r requirements-dee-security.txt -r postgres/requirements-test.txt pytest fastapi uvicorn httpx pyyaml
       - name: Compile all Python modules
         run: python -m compileall -q .
+      - name: Initialize canonical PostgreSQL test database before regression diagnostics
+        run: |
+          python - <<'PY'
+          import os
+          import psycopg
+          from pathlib import Path
+          from postgres.migrations import apply_migrations, _canonical_migration_files
+
+          dsn = os.environ["GERCHAIN_TEST_DATABASE_URL"].replace("postgresql+psycopg://", "postgresql://", 1)
+          migration_dir = Path("postgres/migrations")
+          expected = tuple(range(1, len(_canonical_migration_files(migration_dir)) + 1))
+          with psycopg.connect(dsn) as conn:
+              applied = apply_migrations(conn, migration_dir)
+              rows = conn.execute("SELECT version, checksum FROM schema_version ORDER BY version").fetchall()
+              versions = tuple(row[0] for row in rows)
+              if versions != expected:
+                  raise SystemExit(f"FAIL: canonical migration versions expected {expected}, got {versions}")
+              if applied not in ((), expected):
+                  raise SystemExit(f"FAIL: partial migration application: {applied!r}")
+              if any(len(str(row[1])) != 64 for row in rows):
+                  raise SystemExit("FAIL: malformed migration SHA-256 checksum")
+              print(f"DIAGNOSTIC_DATABASE_CANONICAL_MIGRATIONS=PASS versions={len(rows)} newly_applied={len(applied)}")
+          PY
       - name: Run settlement trust-contract tests
         run: |
           PYTHONFAULTHANDLER=1 python -X faulthandler -m pytest -vv -s \
@@ -157,6 +180,12 @@ jobs:
         run: python -m pytest -q tests/persistence/test_postgres_migration_concurrency.py
 
       - name: Re-perform canonical PostgreSQL value lifecycle
+        # Use the separately migrated database; do not reuse mutable diagnostic state.
+        env:
+          GERCHAIN_DATABASE_URL: postgresql+psycopg://gerchain:gerchain_test@127.0.0.1:5432/gerchain_migration_chain
+          GERCHAIN_TEST_DATABASE_URL: postgresql+psycopg://gerchain:gerchain_test@127.0.0.1:5432/gerchain_migration_chain
+          GERCHAIN_POSTGRES_DSN: postgresql://gerchain:gerchain_test@127.0.0.1:5432/gerchain_migration_chain
+          GERCHAIN_TEST_POSTGRES_URL: postgresql://gerchain:gerchain_test@127.0.0.1:5432/gerchain_migration_chain
         run: >-
           python -m pytest -vv -s
           --junitxml=artifacts/postgres-lifecycle-junit.xml
@@ -315,7 +344,7 @@ jobs:
           )
 
           constraint_rows = query_db(
-              os.environ["GERCHAIN_TEST_DATABASE_URL"],
+              chain_dsn,
               """
               SELECT ns.nspname AS schema_name,
                      tbl.relname AS table_name,
@@ -333,7 +362,7 @@ jobs:
           constraint_report = {
               "repository": "butnee-sys/gerchain",
               "commit_sha": commit,
-              "database": "gerchain_test",
+              "database": "gerchain_migration_chain",
               "constraint_count": len(constraint_rows),
               "constraints": constraint_rows,
               "all_constraints_validated": all(bool(r["validated"]) for r in constraint_rows),

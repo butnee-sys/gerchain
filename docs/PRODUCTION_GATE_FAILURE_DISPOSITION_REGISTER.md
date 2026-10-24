@@ -155,3 +155,19 @@ The earlier production and core gate logs also contain PostgreSQL `integer out o
 6. Bind independent re-performance and the remaining IAM/MFA, privileged access, monitoring/recovery, performance/concurrency, backup/restore/DR, release-governance and authorized human approval evidence to that same candidate SHA.
 
 **Decision remains unchanged:** `FINAL LOCK = OPEN`; `PRODUCTION READY = NOT VERIFIED`. No evidence in this addendum grants final lock.
+
+
+## Follow-up findings — candidate `4cd8337f61a5a358daa6370ec3428e8cac703685`
+
+The prior 21 root-suite failures remain **OPEN**; the rows above are not resolved by this follow-up. Newer exact-SHA runs exposed additional migration/test-environment defects:
+
+| Test / gate | Observed evidence | Requirement area | Corrective action in this commit | Verification still required |
+|---|---|---|---|---|
+| `postgres/tests/test_canonical_schema.py::test_canonical_escrow_schema_migration_is_applied` | Test points the canonical runner at `postgres/schema`, a historical alias directory with multiple version-002 files; runner correctly fails closed with an ambiguous version. | Canonical migration source and schema contract | Point test at `postgres/migrations`; assert the canonical state constraint and versions 1–17. | Re-run the test and the full PostgreSQL gate on the new commit. |
+| `tests/postgres/test_migration_gate_postgresql.py::test_postgresql_clean_migration_rerun_and_checksum_drift_are_safe` | Psycopg receives a SQLAlchemy `postgresql+psycopg://` URL; migration test also expected only versions 1–16 although the canonical chain contains 17. | Migration test correctness / DSN handling | Normalize the URL for psycopg and align the test with versions 1–17. | Re-run isolated migration, idempotency and checksum-drift tests. |
+| `tests/postgres/test_migration_race.py` | Both real-PostgreSQL race tests fail before exercising concurrency because psycopg cannot parse the SQLAlchemy dialect URL. | Migration concurrency / fail-closed checksum handling | Normalize the DSN before opening psycopg connections. | Re-run both race tests on PostgreSQL 16. |
+| `tests/postgres/test_production_postgres_reperformance.py` (3 tests) | Lifecycle JUnit reported 3 failures because the runtime migration chain attempted to add `gerchain_movement_amount_check` to a database already containing that constraint but lacking the canonical migration history expected by the test. | Canonical migration source, migration history and PostgreSQL constraint consistency | Initialize the diagnostic database with the canonical 17-migration chain before database-backed diagnostics; run lifecycle re-performance against the separately migrated `gerchain_migration_chain`; export constraint evidence from that same database. No historical migration file checksum is changed. | Confirm migration history, constraint catalogue, lifecycle JUnit (0 failures/errors), and report SHA all match the new checked-out HEAD. |
+
+The latest observed run at the candidate SHA also had the full Production Gate fail in `postgres/tests/test_canonical_schema.py`; the PostgreSQL lifecycle artifact reported `evidence_status=INCOMPLETE_OR_FAILED` with 3 JUnit failures. These are not passing evidence. The changes above are corrective hypotheses grounded in those logs; they are **not considered resolved until the new commit runs and retained artifacts confirm them**.
+
+Decision remains: `FINAL LOCK = OPEN`; `PRODUCTION READY = NOT VERIFIED`.

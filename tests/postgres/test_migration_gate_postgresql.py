@@ -1,4 +1,4 @@
-"""Real PostgreSQL proof for the canonical 001..016 migration gate.
+"""Real PostgreSQL proof for the canonical 001..017 migration gate.
 
 Set GERCHAIN_TEST_DATABASE_URL to a disposable PostgreSQL database. Tests create
 and drop an isolated schema; they never target public schema directly.
@@ -16,7 +16,7 @@ import pytest
 from postgres.migrations import apply_migrations
 
 
-DATABASE_URL = os.environ.get("GERCHAIN_TEST_DATABASE_URL")
+DATABASE_URL = (os.environ.get("GERCHAIN_TEST_DATABASE_URL") or "").replace("postgresql+psycopg://", "postgresql://", 1)
 MIGRATION_DIR = Path(__file__).resolve().parents[2] / "postgres" / "migrations"
 pytestmark = pytest.mark.skipif(
     not DATABASE_URL,
@@ -96,12 +96,12 @@ def test_postgresql_clean_migration_rerun_and_checksum_drift_are_safe(tmp_path: 
         # PostgreSQL search_path isolates every unqualified migration object.
         with psycopg.connect(DATABASE_URL, options=f"-c search_path={schema},public") as connection:
             first = apply_migrations(connection, MIGRATION_DIR)
-            assert first == tuple(range(1, 17))
+            assert first == tuple(range(1, 18))
 
             history = connection.execute(
                 f'SELECT version, checksum FROM "{schema}".schema_version ORDER BY version'
             ).fetchall()
-            assert [version for version, _ in history] == list(range(1, 17))
+            assert [version for version, _ in history] == list(range(1, 18))
             assert len({version for version, _ in history}) == 16
             assert all(len(digest) == 64 for _, digest in history)
             assert all(
