@@ -29,4 +29,4 @@ jobs:
 
       - name: Run Production Gate Tests with Detailed Log
         run: |
-          python -m pytest --maxfail=1 --disable-warnings -v
+          python -m pytest --import-mode=importlib --maxfail=1 --disable-warnings -v
