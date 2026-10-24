@@ -25,14 +25,17 @@ jobs:
           --health-timeout 5s
           --health-retries 20
     env:
+      DATABASE_URL: postgresql://gerchain:gerchain_test@127.0.0.1:5432/gerchain_test
       GERCHAIN_DATABASE_URL: postgresql+psycopg://gerchain:gerchain_test@127.0.0.1:5432/gerchain_test
       GERCHAIN_TEST_DATABASE_URL: postgresql+psycopg://gerchain:gerchain_test@127.0.0.1:5432/gerchain_test
       GERCHAIN_POSTGRES_DSN: postgresql+psycopg://gerchain:gerchain_test@127.0.0.1:5432/gerchain_test
       GERCHAIN_MIGRATION_TEST_DATABASE_URL: postgresql://gerchain:gerchain_test@127.0.0.1:5432/gerchain_test
 
     steps:
-      - name: Checkout repository
+      - name: Checkout exact tested commit
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -48,6 +51,22 @@ jobs:
           if [ -f postgres/requirements-test.txt ]; then python -m pip install -r postgres/requirements-test.txt; fi
           python -m pip install pytest "psycopg[binary]" "fastapi>=0.115,<1" "uvicorn>=0.30,<1" "httpx>=0.27,<1" "python-multipart>=0.0.9"
 
+      - name: Apply canonical PostgreSQL migrations before database-backed tests
+        run: |
+          python - <<'PY'
+          import os
+          import psycopg
+          from postgres.migrations import apply_migrations
+          with psycopg.connect(os.environ['GERCHAIN_MIGRATION_TEST_DATABASE_URL']) as conn:
+              applied = apply_migrations(conn, 'postgres/migrations')
+              rows = conn.execute('SELECT version, checksum FROM schema_version ORDER BY version').fetchall()
+              expected = list(range(1, 18))
+              if [row[0] for row in rows] != expected:
+                  raise SystemExit(f'FAIL: expected migration versions 1..17, got {[row[0] for row in rows]}')
+              if len(applied) not in (0, 17):
+                  raise SystemExit(f'FAIL: unexpected migration application result: {applied!r}')
+              print(f'PRODUCTION_GATE_MIGRATIONS=PASS versions={len(rows)} newly_applied={len(applied)}')
+          PY
       - name: Run Production Gate Tests with Detailed Log
         run: |
           python -m pytest --import-mode=importlib --maxfail=1 --disable-warnings -v
