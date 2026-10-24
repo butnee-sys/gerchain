@@ -105,6 +105,7 @@ jobs:
           GERCHAIN_MIGRATION_AUDIT_DATABASE_URL: postgresql://gerchain:gerchain@127.0.0.1:5432/gerchain_test
           REQUIRE_MIGRATION_HISTORY: "1"
           MIGRATION_INVENTORY_REPORT: artifacts/canonical-postgres-evidence/migration-gate-report.json
+          TARGET_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
           set +e
           mkdir -p artifacts/canonical-postgres-evidence
@@ -113,14 +114,20 @@ jobs:
           report="artifacts/canonical-postgres-evidence/migration-gate-report.json"
           if [ ! -s "$report" ]; then
             python - <<'PY'
-          import json, os
+          import json, os, subprocess
           from pathlib import Path
           from datetime import datetime, timezone
           report = Path("artifacts/canonical-postgres-evidence/migration-gate-report.json")
+          requested_sha = os.environ.get("TARGET_SHA", "UNKNOWN")
+          checked_out_sha = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
           report.write_text(json.dumps({
               "status": "FAIL",
               "evidence_status": "INCOMPLETE_OR_FAILED",
-              "commit_sha": os.environ.get("GITHUB_SHA", "UNKNOWN"),
+              "commit_sha": checked_out_sha,
+              "checked_out_head_sha": checked_out_sha,
+              "requested_head_sha": requested_sha,
+              "github_event_sha": os.environ.get("GITHUB_SHA", "UNKNOWN"),
+              "sha_match": requested_sha == checked_out_sha,
               "generated_at": datetime.now(timezone.utc).isoformat(),
               "failure": "Migration inventory audit did not produce its report; inspect the preceding audit step logs.",
           }, indent=2, sort_keys=True), encoding="utf-8")
