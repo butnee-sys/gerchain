@@ -38,7 +38,7 @@
 | 18 | `tests/test_shuud_operational_timing.py::test_operational_timing_tracks_full_lifecycle_and_durations` | Operational milestones were not monotonic. | SHUUD lifecycle timing. | OPEN for SHUUD. No fix or retest claimed. |
 | 19 | `tests/test_shuud_process_restart_e2e.py::test_shuud_survives_real_process_restart` | Restart test endpoint returned HTTP 404. | SHUUD process-restart/recovery contract. | OPEN for SHUUD. No fix or retest claimed. |
 | 20 | `tests/test_shuud_sandbox_config.py::test_day0_rejects_invalid_window_and_threshold_order` | Test constructed `SandboxConfig` without required `status`. | SHUUD configuration validation. | OPEN for SHUUD. No fix or retest claimed. |
-| 21 (historical only) | `test_shuud_workflows_are_path_isolated` | Older workflow contract expected a `paths:` filter, while the workflow used a manual trigger and disabled sandbox-smoke job. | SHUUD workflow isolation. | NOT PRESENT in latest root failure list (latest count is 20); treat as provisionally cleared only after the latest full root log confirms the test passed. No standalone pass record retained yet. |
+| 21 (historical only) | `test_shuud_workflows_are_path_isolated` | Older workflow contract expected a `paths:` filter, while the workflow used a manual trigger and disabled sandbox-smoke job. | SHUUD workflow isolation. | UNVERIFIED: not listed in the latest root log's failure list, but the log also does not show a collected/passed result for this test. Do not count as resolved until a dedicated test result is retained. |
 
 ## EAI gate failure distinct from the SHUUD diagnostic failures
 
