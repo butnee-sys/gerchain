@@ -271,6 +271,83 @@ jobs:
           PY
           sha256sum artifacts/production-postgres/migration-lifecycle-report.json > artifacts/production-postgres/migration-lifecycle-report.json.sha256
 
+      - name: Export machine-readable migration history and PostgreSQL constraints
+        if: always()
+        run: |
+          mkdir -p artifacts/production-postgres
+          python - <<'PY'
+          import json, os, subprocess
+          from pathlib import Path
+          import psycopg
+
+          def query_db(dsn, sql):
+              with psycopg.connect(dsn) as conn:
+                  with conn.cursor() as cur:
+                      cur.execute(sql)
+                      columns = [c.name for c in cur.description]
+                      return [dict(zip(columns, row)) for row in cur.fetchall()]
+
+          dsn = os.environ["GERCHAIN_MIGRATION_TEST_DATABASE_URL"]
+          chain_dsn = dsn.rsplit("/", 1)[0] + "/gerchain_migration_chain"
+          commit = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+          migration_rows = query_db(
+              chain_dsn,
+              "SELECT version, checksum FROM schema_version ORDER BY version"
+          )
+          migration_report = {
+              "repository": "butnee-sys/gerchain",
+              "commit_sha": commit,
+              "database": "gerchain_migration_chain",
+              "migration_count": len(migration_rows),
+              "migrations": migration_rows,
+              "versions_contiguous_from_one": [int(r["version"]) for r in migration_rows] == list(range(1, len(migration_rows) + 1)),
+              "checksums_sha256_length_valid": all(len(str(r["checksum"])) == 64 for r in migration_rows),
+          }
+          Path("artifacts/production-postgres/migration-history.json").write_text(
+              json.dumps(migration_report, indent=2, sort_keys=True, default=str) + "\n", encoding="utf-8"
+          )
+
+          constraint_rows = query_db(
+              os.environ["GERCHAIN_TEST_DATABASE_URL"],
+              """
+              SELECT ns.nspname AS schema_name,
+                     tbl.relname AS table_name,
+                     con.conname AS constraint_name,
+                     con.contype AS constraint_type,
+                     pg_get_constraintdef(con.oid, true) AS definition,
+                     con.convalidated AS validated
+              FROM pg_constraint con
+              JOIN pg_class tbl ON tbl.oid = con.conrelid
+              JOIN pg_namespace ns ON ns.oid = tbl.relnamespace
+              WHERE ns.nspname NOT IN ('pg_catalog', 'information_schema')
+              ORDER BY ns.nspname, tbl.relname, con.conname
+              """
+          )
+          constraint_report = {
+              "repository": "butnee-sys/gerchain",
+              "commit_sha": commit,
+              "database": "gerchain_test",
+              "constraint_count": len(constraint_rows),
+              "constraints": constraint_rows,
+              "all_constraints_validated": all(bool(r["validated"]) for r in constraint_rows),
+          }
+          Path("artifacts/production-postgres/postgres-constraints.json").write_text(
+              json.dumps(constraint_report, indent=2, sort_keys=True, default=str) + "\n", encoding="utf-8"
+          )
+          print(json.dumps({
+              "commit_sha": commit,
+              "migration_count": migration_report["migration_count"],
+              "versions_contiguous_from_one": migration_report["versions_contiguous_from_one"],
+              "constraint_count": constraint_report["constraint_count"],
+              "all_constraints_validated": constraint_report["all_constraints_validated"],
+          }, indent=2))
+          if not migration_report["versions_contiguous_from_one"] or not migration_report["checksums_sha256_length_valid"]:
+              raise SystemExit("Migration history evidence validation failed")
+          if not constraint_rows or not constraint_report["all_constraints_validated"]:
+              raise SystemExit("PostgreSQL constraint evidence validation failed")
+          PY
+          sha256sum artifacts/production-postgres/migration-history.json artifacts/production-postgres/postgres-constraints.json > artifacts/production-postgres/database-evidence.sha256
+
       - name: Upload PostgreSQL production evidence bundle
         if: always()
         uses: actions/upload-artifact@v4
