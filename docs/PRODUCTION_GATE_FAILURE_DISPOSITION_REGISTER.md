@@ -124,3 +124,34 @@ The 21 entries above are from the retained diagnostic at SHA `d9c8af8d7b9498ff6c
 5. Continue to require independent evidence for IAM/MFA, privileged access, authority-store write freeze, observability/recovery, backup/restore/DR, production-like performance/concurrency, release governance and authorized approval.
 
 **Current decision remains: `FINAL LOCK = OPEN`; `PRODUCTION READY = NOT VERIFIED`.**
+
+
+## Audit addendum — 2026-10-25 (candidate `b193bb379d45a4c012a4d652ab23972f39adace8`)
+
+This addendum records the latest exact-SHA workflow results inspected after the earlier `d9c8af8...` candidate. It does not close any failure or authorize a production release.
+
+### Current candidate and workflow outcomes
+
+Candidate SHA: `b193bb379d45a4c012a4d652ab23972f39adace8`.
+
+- [Production Gate, run 40110638161](https://github.com/butnee-sys/gerchain/actions/runs/40110638161): **FAILURE**. The job applied migrations 1–17 successfully, then failed at `postgres/tests/test_canonical_schema.py::test_canonical_escrow_schema_migration_is_applied`. Psycopg reported `ProgrammingError: missing "=" after "***127.0.0.1:5432/gerchain_test" in connection info string`. The log redacts the connection string; inspect the actual variable source and normalize the DSN by driver (native `postgresql://` for `psycopg.connect`; SQLAlchemy `postgresql+psycopg://` only for SQLAlchemy). Do not infer a pass from the workflow's migration pre-step.
+- [Production PostgreSQL Gate, run 40110638150](https://github.com/butnee-sys/gerchain/actions/runs/40110638150): **FAILURE**. PostgreSQL logs contain repeated `constraint "gerchain_movement_amount_check" ... already exists`, authentication failures for `gerchain`, and duplicate-key violations for `uq_gerchain_release_idempotency_key`. These are blockers requiring identification of the invoking tests and whether schema repair/bootstrap is racing or being invoked repeatedly; expected negative-test errors must be distinguished from unhandled failures by JUnit and assertions.
+- [FINAL EAI/CORE Exact-SHA Gate, run 40110638291](https://github.com/butnee-sys/gerchain/actions/runs/40110638291): workflow conclusion `success`; inspect its retained artifact before treating it as proof beyond the specific gate.
+- [PostgreSQL Production Re-performance, run 40110638237](https://github.com/butnee-sys/gerchain/actions/runs/40110638237): workflow conclusion `success`; inspect report/JUnit and SHA binding before acceptance.
+- [Independent Production Audit, run 40110638200](https://github.com/butnee-sys/gerchain/actions/runs/40110638200): workflow conclusion `success`; this is scoped automated audit evidence, not by itself a sign-off for every operational requirement.
+- [core-gates, run 40110638176](https://github.com/butnee-sys/gerchain/actions/runs/40110638176): still `pending` at the time of this audit; no final outcome is recorded here.
+
+### Additional errors to track
+
+The earlier production and core gate logs also contain PostgreSQL `integer out of range` errors during test execution. They must be mapped to the exact test/query and column type before changing schema or bounds. The `ledger_transfer()` argument mismatch mentioned in the work notes must likewise be tied to its exact failing test and function signature; this addendum does not claim it is fixed because a verified log excerpt and passing retest were not available in the inspected latest run.
+
+### Required remediation sequence
+
+1. Fix the connection-string source for each driver and add a small preflight that verifies the scheme/driver contract without printing credentials. Re-run the failing schema test and the complete Production Gate.
+2. Trace duplicate-constraint creation to its migration/bootstrap/repair call sites; make schema creation/repair safe under repeated and concurrent startup, then prove this on a fresh PostgreSQL 16 database with concurrent runners and a second no-op run.
+3. For every `integer out of range`, record test name, SQL statement/parameter, affected column/type, intended numeric domain, and the approved schema/application correction. Do not widen numeric types blindly.
+4. Record the exact `ledger_transfer()` caller, expected signature, argument types/order, and regression test. Preserve atomicity, idempotency, and no-duplicate-movement invariants.
+5. Re-run all applicable tests and retain JUnit, PostgreSQL logs, migration history, constraint catalog, source hashes, and report SHA-256 from one immutable commit. Compare the current 21-row register with the new full-suite results; do not mark a row resolved without its passing retest or a reviewer-approved scope rationale.
+6. Bind independent re-performance and the remaining IAM/MFA, privileged access, monitoring/recovery, performance/concurrency, backup/restore/DR, release-governance and authorized human approval evidence to that same candidate SHA.
+
+**Decision remains unchanged:** `FINAL LOCK = OPEN`; `PRODUCTION READY = NOT VERIFIED`. No evidence in this addendum grants final lock.
