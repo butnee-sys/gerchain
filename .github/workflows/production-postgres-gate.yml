@@ -281,6 +281,8 @@ jobs:
           import psycopg
 
           def query_db(dsn, sql):
+              # psycopg accepts libpq URLs, not SQLAlchemy's +psycopg dialect form.
+              dsn = dsn.replace("postgresql+psycopg://", "postgresql://", 1)
               with psycopg.connect(dsn) as conn:
                   with conn.cursor() as cur:
                       cur.execute(sql)
