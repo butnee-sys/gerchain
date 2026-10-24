@@ -56,3 +56,42 @@ These are additional blockers, not counted among the 21 root-suite failures:
 ## Acceptance rule
 
 Do not set `PASS_CANDIDATE`, `PRODUCTION READY`, or `FINAL LOCK` based on these runs. First fix or formally disposition every failure; rerun full and database-backed suites on one immutable candidate SHA; generate a fresh artifact whose report, source hashes, migration checksums, checked-out SHA and master-gate manifest agree; complete independent re-performance and all operational/security evidence; then record an explicit authorized final decision.
+
+
+## Audit addendum — 2026-10-24 (candidate `a8fd6092ace34dcd63a763f505af9be93d549574`)
+
+This addendum records direct inspection of GitHub Actions run metadata and job logs. It does not close any prior blocker.
+
+### Exact-SHA run inventory
+
+The following runs completed at candidate SHA `a8fd6092ace34dcd63a763f505af9be93d549574`:
+
+- [PostgreSQL Production Gate, run 40046489334](https://github.com/butnee-sys/gerchain/actions/runs/40046489334): workflow conclusion `success`; its only job `postgres-production-gate` concluded `success`.
+- [Production Gate, run 40046489274](https://github.com/butnee-sys/gerchain/actions/runs/40046489274): workflow/job conclusion `success`, but the job log shows `python -m pytest --maxfail=1 --disable-warnings -v` failed immediately with `No module named pytest`; the shell command then executed `|| echo "Tests completed with failures, check logs."` and therefore did not fail the job. **This is not a passing full-suite result.**
+- [CI Test Suite, run 40046489330](https://github.com/butnee-sys/gerchain/actions/runs/40046489330): selected suite passed `43 passed in 1.12s`. The logged command lists six selected test files; it is not evidence that the full repository suite passed.
+- [Independent Production Audit, run 40046489318](https://github.com/butnee-sys/gerchain/actions/runs/40046489318): `clean-postgres-audit` concluded `success`. This is useful scoped evidence, but it does not by itself prove independent re-performance of every MG-02–MG-14 requirement.
+- [PostgreSQL Migration and Production Proof, run 40046489304](https://github.com/butnee-sys/gerchain/actions/runs/40046489304): `postgres-proof` concluded `success`.
+- [PostgreSQL production migration gate, run 40046489307](https://github.com/butnee-sys/gerchain/actions/runs/40046489307): `postgres-migration-gate` concluded `success`.
+- [core-gates, run 40046489314](https://github.com/butnee-sys/gerchain/actions/runs/40046489314): `cancelled`; no jobs were returned by the jobs endpoint.
+
+### Artifact availability and claims
+
+The GitHub Actions artifacts endpoint for run `40046489334` returned an empty artifact list at the time of this inspection. Therefore this inspection could not independently re-open the claimed JSON, its `.sha256` companion, the 13-source hash inventory, the migration-history report, or the six-test JUnit XML from that run. The supplied report of `PASS_CANDIDATE`, matching SHA fields, 13/13 source hashes, 17/17 migration checksums and 6/6 JUnit tests is recorded as **reported evidence, not independently re-verified in this audit pass** until a downloadable retained artifact and its exact hashes are available.
+
+### Failure-count and scope disposition
+
+The 21-test diagnostic list above remains the baseline inventory from run `39849400091`; later user-provided notes report 20 remaining failures after removing the workflow-isolation test from the list. This audit has not retrieved a new downloadable JUnit/diagnostic artifact proving the current count or that the remaining 20 are fixed. The 20 SHUUD/SANDBOX tests remain **OPEN** for correction or an independently reviewed scope decision. A claim that they are outside the EAI gate does not erase their failure or prove they are irrelevant to the repository's release policy.
+
+### Current source revision
+
+At the time of this update, PR #111 head is `12ddfb35a0eda9dce3e025968a38cc481c145d2c`, a documentation-only update after the inspected candidate. All evidence above is bound to `a8fd6092ace34dcd63a763f505af9be93d549574`, not to the newer head unless rerun or explicitly proven invariant. Do not combine these results into one exact-SHA pass claim.
+
+### Required next proof
+
+1. Preserve a downloadable artifact for the chosen immutable release candidate, including the JSON report, JSON SHA-256 file, source-hash inventory, migration history/checksums, PostgreSQL constraint report, and JUnit XML.
+2. Correct the Production Gate workflow so a missing test dependency or pytest failure fails the job rather than being swallowed by `|| echo`; install the required test dependencies in that job.
+3. Rerun the full repository suite and produce a per-test result artifact; resolve or formally disposition every remaining failure with reviewer and scope evidence.
+4. Re-run all required PostgreSQL, migration, re-performance, and independent-audit gates on one exact candidate SHA.
+5. Close the remaining security/operations/DR/performance/release-governance requirements and obtain explicit authorized approval.
+
+**Disposition remains: FINAL LOCK = OPEN; PRODUCTION READY = NOT VERIFIED.**
