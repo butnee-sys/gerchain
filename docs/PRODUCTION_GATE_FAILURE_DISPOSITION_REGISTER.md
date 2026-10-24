@@ -95,3 +95,32 @@ At the time of this update, PR #111 head is `12ddfb35a0eda9dce3e025968a38cc481c1
 5. Close the remaining security/operations/DR/performance/release-governance requirements and obtain explicit authorized approval.
 
 **Disposition remains: FINAL LOCK = OPEN; PRODUCTION READY = NOT VERIFIED.**
+
+
+## Audit addendum — 2026-10-24 (candidate `a1056e176ffefd8b78f552594dff5fdb39c4a401`)
+
+This addendum supersedes no earlier evidence; it records a newer candidate and keeps results bound to their own SHA.
+
+### Current exact-SHA run results
+
+- [Production Gate run 40102667162](https://github.com/butnee-sys/gerchain/actions/runs/40102667162): **FAILURE** at SHA `a1056e176ffefd8b78f552594dff5fdb39c4a401`. Job log: 1,318 tests collected; first test `postgres/tests/test_canonical_eai_postgres.py::test_canonical_postgres_transaction_and_deep_truth` failed because `GERCHAIN_POSTGRES_DSN` was not set. The job stopped at `--maxfail=1`; this run does not establish the current 21-failure count or pass the full suite.
+- [PostgreSQL Production Re-performance run 40102667219](https://github.com/butnee-sys/gerchain/actions/runs/40102667219): **SUCCESS** at the same SHA. Downloaded artifact ID `12563138670`, `production-gate-evidence-a1056e.zip`, inspected directly. `migration-catalog-proof.json`, `production-gate-evidence.json`, and `reconciliation-report.json` all bind to `a1056e176ffefd8b78f552594dff5fdb39c4a401`. PostgreSQL 16.15, 17 migration files, migration-history versions 1–17, checksums, and escrow constraint catalog records were present. Evidence reports `sha_match: true`, boot status PASS, and reconciliation `matched: true`.
+- Important limitation: reconciliation explicitly describes a **fresh empty baseline**: zero movements, witnesses, outbox rows, idempotency rows, and escrows. It does not prove a non-empty end-to-end production transaction graph.
+- The artifact still embeds migration history and escrow constraints inside `migration-catalog-proof.json`; standalone `migration-history.json` and `postgres-constraints.json` are absent. Treat this as an evidence-packaging gap until the workflow emits and retains both standalone files.
+- [FINAL EAI/CORE Exact-SHA Gate run 40102667163](https://github.com/butnee-sys/gerchain/actions/runs/40102667163), [EAI PostgreSQL Re-performance run 40102667164](https://github.com/butnee-sys/gerchain/actions/runs/40102667164), [Independent Production Audit run 40102667185](https://github.com/butnee-sys/gerchain/actions/runs/40102667185), [PostgreSQL Production Gate run 40102667244](https://github.com/butnee-sys/gerchain/actions/runs/40102667244), [Production Readiness Gates run 40102667174](https://github.com/butnee-sys/gerchain/actions/runs/40102667174), and [CI Test Suite run 40102667188](https://github.com/butnee-sys/gerchain/actions/runs/40102667188) reported workflow success at this SHA. These are scoped gate results, not a substitute for the failed Production Gate or the remaining operations/security evidence.
+- [core-gates run 40102667181](https://github.com/butnee-sys/gerchain/actions/runs/40102667181) was pending at inspection; no pass is inferred.
+- The older artifact from run 39849400050 that embedded SHA `e872ba14c40be0904260308e626aaab8d0a4c6f7` while the previously inspected run context expected `d9c8af8d7b9498ff6c814543112a06d11f73602b` remains a historical SHA mismatch. Do not use it as evidence for either candidate. The new `a1056e...` artifact is correctly bound to its own SHA; this does not retroactively repair the older artifact.
+
+### Status of the 21-test register
+
+The 21 entries above are from the retained diagnostic at SHA `d9c8af8d7b9498ff6c814543112a06d11f73602b`. They remain individually **OPEN**: no subsequent full-suite JUnit or per-test rerun artifact was inspected proving each fixed or formally waived. The current Production Gate stopped at its first missing-DSN failure, so it cannot resolve any of those 21 entries.
+
+### Immediate corrective actions
+
+1. Fix the Production Gate's PostgreSQL test environment so the first test receives a disposable PostgreSQL 16 DSN, then rerun. Do not suppress the missing-DSN error or skip the test.
+2. Emit `migration-history.json` and `postgres-constraints.json` as standalone files from the live database queries and include them in the retained artifact.
+3. Generate a fresh full-suite JUnit/diagnostic artifact and update each of the 21 rows only with a fix commit or reviewer-approved scope decision plus passing evidence.
+4. Run Production Gate, core-gates, exact-SHA gate and independent audit on one immutable candidate SHA, then verify all artifact manifests and file hashes match it.
+5. Continue to require independent evidence for IAM/MFA, privileged access, authority-store write freeze, observability/recovery, backup/restore/DR, production-like performance/concurrency, release governance and authorized approval.
+
+**Current decision remains: `FINAL LOCK = OPEN`; `PRODUCTION READY = NOT VERIFIED`.**
