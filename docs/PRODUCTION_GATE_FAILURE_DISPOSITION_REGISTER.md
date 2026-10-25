@@ -193,3 +193,12 @@ Decision remains: `FINAL LOCK = OPEN`; `PRODUCTION READY = NOT VERIFIED`.
 The above are follow-up findings and fixes, not blanket resolution. New exact-SHA runs must prove the fixture fix, clean database isolation, migration count, per-segment outcomes and artifact provenance. The original 21-failure register remains individually OPEN pending passing retests or reviewer-approved scope decisions.
 
 **Decision remains: `FINAL LOCK = OPEN`; `PRODUCTION READY = NOT VERIFIED`.**
+
+
+## Follow-up — candidate `1b099a88770609c6e34f5a945d15a18975ed473c`
+
+- [Production Gate run 40145446599](https://github.com/butnee-sys/gerchain/actions/runs/40145446599) failed after 37 passing tests at `tests/core/test_concurrent_operations.py::test_disjoint_resources_run_concurrently_and_results_keep_input_order` with `NameError: name 'next_index' is not defined` in `core/concurrent_operations.py`.
+- Code inspection found both an undefined variable and a scheduler ordering gap: a later pending operation could overtake an earlier pending operation sharing one resource when the earlier item was blocked by a different active resource. This commit initializes the scan index and tracks blocked resources to preserve submission order for overlapping resource keys; a regression test covers the cross-resource case.
+- This new concurrency correction is not considered passed until the exact-SHA full Production Gate and concurrency-specific tests complete successfully.
+
+Decision remains `FINAL LOCK = OPEN`; `PRODUCTION READY = NOT VERIFIED`.
