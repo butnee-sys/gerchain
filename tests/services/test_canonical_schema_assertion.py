@@ -12,6 +12,20 @@ from services.gerchain_runtime_factory import assert_canonical_production_schema
 
 
 def _create_canonical_test_schema(engine) -> None:
+    # Mirror migration-owned DDL in the unit-test schema without adding the
+    # production CHECK constraint to ORM metadata.
+    with engine.begin() as connection:
+        connection.execute(text(
+            "CREATE TABLE escrows ("
+            "id VARCHAR PRIMARY KEY, sender_address VARCHAR NOT NULL, "
+            "receiver_address VARCHAR NOT NULL, amount NUMERIC(38, 8) NOT NULL, "
+            "state VARCHAR(32) NOT NULL, condition_desc VARCHAR, "
+            "refund_destination VARCHAR NOT NULL, currency VARCHAR(16), "
+            "version BIGINT NOT NULL, created_at DATETIME NOT NULL, "
+            "updated_at DATETIME NOT NULL, "
+            "CONSTRAINT escrows_state_canonical_check CHECK "
+            "(state IN ('CREATED', 'FUNDED', 'LOCKED', 'RELEASED', 'REFUNDED', 'CANCELLED')))"
+        ))
     for base in (AtomicLedgerBase, EscrowBase, OutboxBase, IdempotencyBase, WitnessBase):
         base.metadata.create_all(engine)
     with engine.begin() as connection:
