@@ -223,3 +223,25 @@ Decision remains `FINAL LOCK = OPEN`; `PRODUCTION READY = NOT VERIFIED`.
 - This commit changes the helper to use a native psycopg DSN, an idle psycopg connection, and `postgres/migrations`. The migration-source/connection fix must pass on the new SHA before this finding can be closed.
 
 Decision remains `FINAL LOCK = OPEN`; `PRODUCTION READY = NOT VERIFIED`.
+
+## Audit addendum — 2026-10-25 (decision freshness and artifact SHA provenance)
+
+This addendum records workflow defects found while investigating the stale `LOCKED` decision and the re-performance artifact SHA mismatch. It does not close any production gate.
+
+### Findings
+
+1. **Old `LOCKED` decision is historical, not evidence for a new candidate.** The repository's tracked `artifacts/master_v1/master_certificate.json` explicitly records `HISTORICAL_EVIDENCE_ONLY`, `final_lock_granted: false`, target SHA `10a408dc4a7821db85a9bc68cfccdb66a20b4dcf`, and historical run ID `39799640206`. It must not be reused as a current release decision. Any downloaded artifact reporting `decision: LOCKED` for that old target is invalid for the current candidate.
+
+2. **Master-gate controller argument mismatch.** `.github/workflows/production-master-gate.yml` invoked the controller with `--expected-sha`, but `scripts/production_gate_controller.py` defines `--expected-source-sha`. This could prevent fresh decision generation. Commit `2461cb115bcc9e831405b1747d89057f3bab852a` corrects the argument, removes a pre-existing decision file before recomputation, and forces `NOT_LOCKED` when the fresh decision's source or checked-out SHA differs from the target. This is a source-level correction only; it still needs a workflow run and artifact verification.
+
+3. **Re-performance artifact name used a different SHA expression from checkout.** `.github/workflows/ea35-postgres-reperformance.yml` checked out `${{ github.event.pull_request.head.sha || github.sha }}` but named its artifact with `${{ github.sha }}`. On pull-request events, `github.sha` may identify the synthetic merge commit while checkout/manifest identify the PR head. Commit `da17ed4e4a9ece2ceeaaef5592141a7371501cd0` aligns the artifact name with the checked-out PR-head SHA expression. This addresses one provenance ambiguity; it does not prove that the previously mismatched artifact was regenerated or repaired.
+
+### Verification still required
+
+- Run the corrected master-gate workflow from a fresh checkout; verify no pre-existing decision is reused and the emitted decision JSON's `source_commit_sha`, `checked_out_head_sha`, expected target SHA, run ID and attempt agree.
+- Run the corrected re-performance workflow; inspect the downloadable artifact and confirm the artifact name, internal manifest, `tested-commit.txt`, source hashes, migration history, JUnit and workflow API head all refer to the same SHA. Reject any merge-SHA/head-SHA discrepancy.
+- Retrieve and inspect the final Production Gate and `core-gates` logs/JUnit. Previous attempts at `d9c8af8d7b9498ff6c814543112a06d11f73602b` were cancelled; they do not provide a completed full-suite verdict.
+- The 21 failures in the register remain individually OPEN. No test was marked fixed, waived or out of scope by the workflow corrections above.
+- IAM/MFA, privileged access, legacy authority write-freeze, observability/recovery, production-like performance/concurrency, backup/restore/DR, release governance, independent re-performance, complete evidence index and authorized approval remain outstanding.
+
+**Decision remains: `FINAL LOCK = OPEN`; `PRODUCTION READY = NOT VERIFIED`.**
