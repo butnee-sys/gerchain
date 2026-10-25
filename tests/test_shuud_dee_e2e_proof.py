@@ -38,7 +38,7 @@ def _root_and_release():
     manifest = build_manifest(
         version=1,
         commit_sha="shuud-dee-e2e-proof",
-        protected_paths=["shuud", "nef_gerchain_port", "dee_security"],
+        protected_paths=["shuud/api.py", "nef_gerchain_port/contract.py", "dee_security/release_policy.py"],
         artifact_hashes={"shuud": hashlib.sha256(b"shuud-e2e").hexdigest()},
         schema_version="1",
     )

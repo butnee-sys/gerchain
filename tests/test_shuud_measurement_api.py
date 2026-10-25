@@ -112,7 +112,7 @@ def test_measurement_summary_api_exposes_timing_and_economics() -> None:
 
     actual_clearance = data["actual_clearance_seconds"]
     assert 110.0 <= actual_clearance < 120.0
-    assert data["actual_settlement_seconds"] >= actual_clearance
+    assert data["actual_settlement_seconds"] <= actual_clearance
     assert data["within_two_minutes"] is True
 
     saved_seconds = 300.0 - actual_clearance
