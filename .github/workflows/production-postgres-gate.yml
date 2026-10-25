@@ -36,6 +36,7 @@ jobs:
       GERCHAIN_ESCROW_AMOUNT: "10"
       GERCHAIN_CURRENCY: MNT
       GERCHAIN_WITNESS_ID: ci-production-witness
+      PYTHONPYCACHEPREFIX: /tmp/gerchain-pycache
     steps:
       - name: Checkout exact commit
         uses: actions/checkout@v4

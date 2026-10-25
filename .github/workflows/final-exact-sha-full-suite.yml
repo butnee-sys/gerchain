@@ -37,6 +37,7 @@ jobs:
       GERCHAIN_POSTGRES_DSN: postgresql+psycopg://gerchain:gerchain@127.0.0.1:5432/gerchain_test
       GERCHAIN_MIGRATION_TEST_DSN: postgresql://gerchain:gerchain@127.0.0.1:5432/gerchain_migration_proof
       PYTHONPATH: .
+      PYTHONPYCACHEPREFIX: /tmp/gerchain-pycache
     steps:
       - uses: actions/checkout@v4
         with:
@@ -350,6 +351,16 @@ jobs:
           (out / "commit-sha.txt").write_text(manifest["commit_sha"] + "\n", encoding="utf-8")
           print(json.dumps(manifest, indent=2))
           PY
+      - name: Require clean source checkout after verification
+        if: always()
+        run: |
+          dirty="$(git status --porcelain --untracked-files=all)"
+          if [ -n "$dirty" ]; then
+            echo "FAIL: verification modified tracked or unignored source files"
+            printf '%s\n' "$dirty"
+            exit 1
+          fi
+          echo "SOURCE_CHECKOUT_CLEAN=PASS"
       - name: Upload exact-SHA evidence bundle
         if: always()
         uses: actions/upload-artifact@v4
