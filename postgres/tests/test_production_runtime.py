@@ -51,6 +51,8 @@ def test_production_runtime_canonical_value_flow_and_reconciliation():
         session.add_all([
             LedgerAccountModel(account_id="production-source", currency="MNT", balance=100, version=0, updated_at=now),
             LedgerAccountModel(account_id="production-beneficiary", currency="MNT", balance=0, version=0, updated_at=now),
+            # FUND transfers value into the escrow canonical ledger account; the runtime-created account was deleted above.
+            LedgerAccountModel(account_id="production-reperf-1", currency="MNT", balance=0, version=0, updated_at=now),
             CanonicalEscrow(
                 id="production-reperf-1",
                 sender_address="production-source",

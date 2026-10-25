@@ -171,3 +171,25 @@ The prior 21 root-suite failures remain **OPEN**; the rows above are not resolve
 The latest observed run at the candidate SHA also had the full Production Gate fail in `postgres/tests/test_canonical_schema.py`; the PostgreSQL lifecycle artifact reported `evidence_status=INCOMPLETE_OR_FAILED` with 3 JUnit failures. These are not passing evidence. The changes above are corrective hypotheses grounded in those logs; they are **not considered resolved until the new commit runs and retained artifacts confirm them**.
 
 Decision remains: `FINAL LOCK = OPEN`; `PRODUCTION READY = NOT VERIFIED`.
+
+
+## Audit addendum — candidate `1f2542bf50da3831d98f298b5a8544b7ae989906`
+
+### Verified PostgreSQL evidence
+
+- [Production PostgreSQL Gate run 40144870154](https://github.com/butnee-sys/gerchain/actions/runs/40144870154) completed `success` at this exact SHA. Retained artifact `12580161268` contains `migration-lifecycle-report.json`, `migration-history.json`, `postgres-constraints.json`, sidecar SHA-256 files and JUnit XML.
+- `migration-lifecycle-report.json`: `evidence_status=PASS_CANDIDATE`; `commit_sha=checked_out_head_sha=1f2542bf50da3831d98f298b5a8544b7ae989906`; `sha_match=true`; source hashes 13/13 complete; migration files/applied versions 17/17; checksums match; JUnit 6 tests, 0 failures, 0 errors, 0 skipped. Recomputed report SHA-256 `9b0d8ee8602402b9740a2898970bf57c56699376458426e1fb8efeb9cb9e8cc9` matches its `.sha256` sidecar.
+- `migration-history.json` SHA-256 `beb97ae4ba6ee670e1ff81cb6ad90b05531121e4ff05beaf79f9afb1bb38380e`; it lists versions 1–17 and binds to the same SHA.
+- `postgres-constraints.json` SHA-256 `0a61586674f4d43930762cc9b278f8c8454903561022777f68fa45dbfea8851c`; it describes `gerchain_migration_chain`, 36 constraints, all reported validated, and binds to the same SHA.
+- [PostgreSQL migration gate run 40144870110](https://github.com/butnee-sys/gerchain/actions/runs/40144870110), [PostgreSQL production migration gate run 40144870112](https://github.com/butnee-sys/gerchain/actions/runs/40144870112), [PostgreSQL concurrency and migration gate run 40144870120](https://github.com/butnee-sys/gerchain/actions/runs/40144870120), [PostgreSQL Production Re-performance run 40144870127](https://github.com/butnee-sys/gerchain/actions/runs/40144870127), [FINAL EAI/CORE Exact-SHA Gate run 40144870150](https://github.com/butnee-sys/gerchain/actions/runs/40144870150), and [Independent Production Audit run 40144870170](https://github.com/butnee-sys/gerchain/actions/runs/40144870170) reported success at the same SHA. These scoped passes do not establish full-suite or operational readiness.
+
+### Remaining failures observed on this candidate
+
+- [Production Gate run 40144870182](https://github.com/butnee-sys/gerchain/actions/runs/40144870182) failed after 23 passed tests at `postgres/tests/test_production_runtime.py::test_production_runtime_canonical_value_flow_and_reconciliation`: `NoResultFound` because the fixture deleted all `LedgerAccountModel` rows and did not recreate the escrow ledger account required by the FUND transfer. This commit adds the missing escrow ledger account to the test fixture; the failure remains unclosed until the rerun passes.
+- The retained segmented diagnostics in artifact `12580161268` reported 29 root failures: the 20 previously recorded SHUUD/SANDBOX failures remain open, plus 9 PostgreSQL-backed runtime tests failing with duplicate `gerchain_movement_amount_check` constraints. These duplicate-constraint failures arose after setup/settlement tests and indicate shared-database state contamination in the diagnostic workflow; the clean-database reset is moved after setup tests and before segmented diagnostics in this commit.
+- Additional segment failures in the same artifact: persistence 9 failed; PostgreSQL tests 5 failed and 2 errors; production tests 15 failed; PostgreSQL migration tests 5 failed; services 8 failed. They include SQLAlchemy URL passed to psycopg, one positional argument mismatch in `PostgreSQLAtomicLedger.transfer_in_transaction`, PostgreSQL authentication failure for `gerchain`, SQLite-incompatible schema inspection SQL, constraint-definition expectation mismatch (`>=0` versus `>=`), and a self-repair source-template mismatch. The failure names and tracebacks remain in the retained artifact logs; none are waived by this addendum.
+- The migration-gate diagnostic still had `assert 17 == 16`; this was a stale assertion after the earlier version-range update. This commit corrects the distinct-version count to 17. The separate PostgreSQL migration gate success does not by itself prove this diagnostic assertion passed.
+
+The above are follow-up findings and fixes, not blanket resolution. New exact-SHA runs must prove the fixture fix, clean database isolation, migration count, per-segment outcomes and artifact provenance. The original 21-failure register remains individually OPEN pending passing retests or reviewer-approved scope decisions.
+
+**Decision remains: `FINAL LOCK = OPEN`; `PRODUCTION READY = NOT VERIFIED`.**

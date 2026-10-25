@@ -102,7 +102,7 @@ def test_postgresql_clean_migration_rerun_and_checksum_drift_are_safe(tmp_path: 
                 f'SELECT version, checksum FROM "{schema}".schema_version ORDER BY version'
             ).fetchall()
             assert [version for version, _ in history] == list(range(1, 18))
-            assert len({version for version, _ in history}) == 16
+            assert len({version for version, _ in history}) == 17
             assert all(len(digest) == 64 for _, digest in history)
             assert all(
                 all(character in "0123456789abcdef" for character in digest)

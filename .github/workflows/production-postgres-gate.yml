@@ -52,7 +52,13 @@ jobs:
           python -m pip install -r requirements-dee-security.txt -r postgres/requirements-test.txt pytest fastapi uvicorn httpx pyyaml
       - name: Compile all Python modules
         run: python -m compileall -q .
-      - name: Initialize canonical PostgreSQL test database before regression diagnostics
+      - name: Run settlement trust-contract tests
+        run: |
+          PYTHONFAULTHANDLER=1 python -X faulthandler -m pytest -vv -s \
+            tests/persistence/test_settlement_coordinator.py \
+            tests/services/test_gerchain_runtime_settlement_canonical.py
+      - name: Reset and initialize canonical PostgreSQL database after setup tests
+        # Earlier setup tests may mutate the shared database. Start diagnostics from a clean, canonical state.
         run: |
           python - <<'PY'
           import os
@@ -61,6 +67,10 @@ jobs:
           from postgres.migrations import apply_migrations, _canonical_migration_files
 
           dsn = os.environ["GERCHAIN_TEST_DATABASE_URL"].replace("postgresql+psycopg://", "postgresql://", 1)
+          admin_dsn = dsn.rsplit("/", 1)[0] + "/postgres"
+          with psycopg.connect(admin_dsn, autocommit=True) as admin:
+              admin.execute('DROP DATABASE IF EXISTS "gerchain_test" WITH (FORCE)')
+              admin.execute('CREATE DATABASE "gerchain_test"')
           migration_dir = Path("postgres/migrations")
           expected = tuple(range(1, len(_canonical_migration_files(migration_dir)) + 1))
           with psycopg.connect(dsn) as conn:
@@ -69,17 +79,13 @@ jobs:
               versions = tuple(row[0] for row in rows)
               if versions != expected:
                   raise SystemExit(f"FAIL: canonical migration versions expected {expected}, got {versions}")
-              if applied not in ((), expected):
-                  raise SystemExit(f"FAIL: partial migration application: {applied!r}")
+              if applied != expected:
+                  raise SystemExit(f"FAIL: fresh database should apply all migrations, got {applied!r}")
               if any(len(str(row[1])) != 64 for row in rows):
                   raise SystemExit("FAIL: malformed migration SHA-256 checksum")
-              print(f"DIAGNOSTIC_DATABASE_CANONICAL_MIGRATIONS=PASS versions={len(rows)} newly_applied={len(applied)}")
+              print(f"DIAGNOSTIC_DATABASE_RESET_AND_MIGRATED=PASS versions={len(rows)}")
           PY
-      - name: Run settlement trust-contract tests
-        run: |
-          PYTHONFAULTHANDLER=1 python -X faulthandler -m pytest -vv -s \
-            tests/persistence/test_settlement_coordinator.py \
-            tests/services/test_gerchain_runtime_settlement_canonical.py
+
       - name: Run full regression suite in isolated segments and diagnose native crashes
         # Keep broad regression diagnostics separate from the dedicated PostgreSQL migration and production gates below.
         # continue-on-error allows those gates to run, but the job remains failed if their own assertions fail.
