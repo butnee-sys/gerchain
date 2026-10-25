@@ -109,5 +109,5 @@ def test_postgresql_canonical_value_flow_is_atomic_and_reconciled():
         assert balances["BENEFICIARY"] == 10
         assert balances["SRC-B"] == 100
         assert balances["SETTLE-DEST"] == 5
-        assert balances["SRC-A"] == 70
+        assert balances["SRC-A"] == 85  # cancellation returns the 15 MNT escrow to its source
     engine.dispose()
