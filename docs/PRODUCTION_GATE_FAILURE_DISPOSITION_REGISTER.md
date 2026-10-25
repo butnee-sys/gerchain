@@ -256,3 +256,21 @@ Commit `0b8a3d177a9128a0b7a87a6c4c76c46aab30acc7` removes the invalid duplicate 
 The previous exact-SHA artifact mismatch remains rejected. The 21 root-suite failures and all separately recorded segmented failures remain unresolved unless new passing logs or a reviewed scope disposition explicitly closes each item.
 
 **Decision remains: `FINAL LOCK = OPEN`; `PRODUCTION READY = NOT VERIFIED`.**
+
+
+## Follow-up — candidate `8f08ae66be6771f580a16242983b7ff694919a44`: production-test fixture correction and pending verification
+
+The per-file Production Gate diagnostic artifact `12603697892` at the preceding candidate `e3edc39cc710e9005fd6cfbc321c37fe78f442b2` recorded five failing cases in four test files. Commit `8f08ae66be6771f580a16242983b7ff694919a44` corrected four of the observed causes: the first EAI escrow creation keyword, missing escrow ledger accounts in two value-flow fixtures, use of a native psycopg connection for migrations, and the canonical escrow constraint name in the repair test. Follow-up inspection found that the same EAI test still passed `source=` to the refund and cancel `create_escrow` calls; this commit changes those two calls to the declared `sender=` argument as well.
+
+These are fixture/contract corrections, **not yet passing evidence**. The next exact-SHA Production Gate and PostgreSQL gate must re-run the four affected files and retain JUnit. If new failures appear after the first failure is removed, they must be recorded separately rather than assumed resolved.
+
+### Exact-SHA run state at this audit
+
+- [Production Gate run 40207872683](https://github.com/butnee-sys/gerchain/actions/runs/40207872683), SHA `8f08ae66be6771f580a16242983b7ff694919a44`: `in_progress` at the last poll; no final result or full-suite pass is claimed.
+- [core-gates run 40207872679](https://github.com/butnee-sys/gerchain/actions/runs/40207872679), same SHA: `pending`; no test result is claimed.
+- [Production PostgreSQL Gate run 40207872643](https://github.com/butnee-sys/gerchain/actions/runs/40207872643), same SHA: `in_progress`; no final artifact was available at the last poll.
+- Earlier runs `39849399966` and `39849400130` at SHA `d9c8af8d7b9498ff6c814543112a06d11f73602b` ended `cancelled` and remain historical only.
+
+The original 21 root-suite failures remain individually OPEN until each has either a passing retest or a formally approved scope disposition. The five per-file failures above are additional findings, not a replacement for those 21. PostgreSQL lifecycle `PASS_CANDIDATE` at the older SHA does not make the full Production Gate pass, and the missing evidence files / stale manifest in the cancelled master-gate artifact remain unresolved.
+
+**Decision remains: `FINAL LOCK = OPEN`; `PRODUCTION READY = NOT VERIFIED`.**

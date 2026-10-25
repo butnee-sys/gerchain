@@ -81,7 +81,7 @@ def test_production_postgresql_full_value_flow() -> None:
     ).create()
     refund_runtime.create_escrow(
         escrow_id="pg-refund-escrow",
-        source="pg-refund",
+        sender="pg-refund",
         beneficiary="pg-beneficiary",
         refund_destination="pg-refund",
         amount=80,
@@ -112,7 +112,7 @@ def test_production_postgresql_full_value_flow() -> None:
     ).create()
     cancel_runtime.create_escrow(
         escrow_id="pg-cancel-escrow",
-        source="pg-cancel",
+        sender="pg-cancel",
         beneficiary="pg-beneficiary",
         refund_destination="pg-cancel",
         amount=60,
