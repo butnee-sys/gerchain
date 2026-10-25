@@ -209,3 +209,10 @@ Decision remains `FINAL LOCK = OPEN`; `PRODUCTION READY = NOT VERIFIED`.
 - This commit seeds the three zero-balance escrow ledger accounts explicitly. This is a fixture correction for a real ledger precondition, not a waiver; rerun the exact-SHA Production Gate and deep reconciliation before closing this item.
 
 Decision remains `FINAL LOCK = OPEN`; `PRODUCTION READY = NOT VERIFIED`.
+
+## Follow-up — candidate `b52d7079eed7d61287bc35969687fffc28f547d9`
+
+- [Production Gate run 40146252902](https://github.com/butnee-sys/gerchain/actions/runs/40146252902) passed the previous PostgreSQL escrow-account seeding issue and failed at `tests/integration/test_production_postgres_runtime.py::test_production_postgresql_canonical_value_flow`: observed `alice` balance 70 while the test expected 50. The REFUND path returns the 20-unit escrow funding to Alice, so the correct net balance is 100 − 30 release = 70; the assertion is corrected accordingly.
+- This balance correction is based on the implemented fund/refund flow and does not weaken deep reconciliation. The exact-SHA Production Gate must pass after the correction.
+
+Decision remains `FINAL LOCK = OPEN`; `PRODUCTION READY = NOT VERIFIED`.
