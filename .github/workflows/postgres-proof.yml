@@ -40,7 +40,7 @@ jobs:
         run: |
           expected="${EXPECTED_EVIDENCE_SHA}"
           actual="$(git rev-parse HEAD)"
-          printf 'EXPECTED_EVIDENCE_SHA=%s\\nCHECKED_OUT_HEAD_SHA=%s\\n' "$expected" "$actual"
+          printf 'EXPECTED_EVIDENCE_SHA=%s\nCHECKED_OUT_HEAD_SHA=%s\n' "$expected" "$actual"
           test "$actual" = "$expected"
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -137,7 +137,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: ea35-postgres-proof-${{ github.sha }}-run-${{ github.run_id }}
+          name: ea35-postgres-proof-${{ github.event.pull_request.head.sha || github.sha }}-run-${{ github.run_id }}
           path: artifacts/ea35-postgres-proof/
           if-no-files-found: error
           retention-days: 90

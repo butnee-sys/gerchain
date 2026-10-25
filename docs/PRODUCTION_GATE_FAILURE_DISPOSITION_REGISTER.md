@@ -298,3 +298,6 @@ The PR-head checkout correction in the preceding commit is supplemented here wit
 No earlier artifact is retroactively accepted. The first fresh run on this updated commit must still be inspected directly, including `MANIFEST.SHA256`, `SHA256SUMS`, source hashes, JUnit and the workflow run ID/attempt.
 
 **Decision remains: `FINAL LOCK = OPEN`; `PRODUCTION READY = NOT VERIFIED`.**
+
+
+The same proof workflow's artifact name was also using `github.sha`, which can be the synthetic pull-request merge SHA. This commit aligns the artifact label with the tested-head expression used for checkout and the manifest. The checkout diagnostic now emits separate expected/actual SHA log lines. Acceptance still requires inspecting the fresh artifact's internal SHA fields and checksums; matching the label alone is not sufficient.
