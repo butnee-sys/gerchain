@@ -9,13 +9,30 @@ venv/
 ENV/
 env/
 
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+secrets/
+credentials/
+
 # Local runtime database
 gerchain.db
+*.db
+*.sqlite
+*.sqlite3
 
 # Test/runtime artifacts
 .pytest_cache/
 .coverage
+coverage.xml
 htmlcov/
+*.log
 
 # OS / IDE
 .DS_Store
