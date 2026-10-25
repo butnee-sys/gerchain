@@ -16,20 +16,21 @@ def test_operational_timing_tracks_full_lifecycle_and_durations() -> None:
     )
     timing = timing.with_milestone("shiid_decided_at", start + timedelta(seconds=55))
     timing = timing.with_milestone(
-        "clearance_confirmed_at", start + timedelta(seconds=110)
+        "settlement_released_at", start + timedelta(seconds=110)
     )
     timing = timing.with_milestone(
-        "settlement_released_at", start + timedelta(seconds=118)
+        "clearance_confirmed_at", start + timedelta(seconds=118)
     )
 
     assert timing.durations() == {
         "incident_to_evidence_seconds": 20.0,
         "evidence_to_verification_seconds": 15.0,
         "verification_to_shiid_seconds": 20.0,
-        "shiid_to_clearance_seconds": 55.0,
-        "clearance_to_settlement_seconds": 8.0,
-        "incident_to_clearance_seconds": 110.0,
-        "incident_to_settlement_seconds": 118.0,
+        "shiid_to_settlement_seconds": 55.0,
+        "settlement_to_clearance_seconds": 8.0,
+        "shiid_to_clearance_seconds": 63.0,
+        "incident_to_clearance_seconds": 118.0,
+        "incident_to_settlement_seconds": 110.0,
     }
     assert timing.within_two_minutes() is True
 

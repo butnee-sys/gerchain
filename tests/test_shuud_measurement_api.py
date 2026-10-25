@@ -70,13 +70,6 @@ def test_measurement_summary_api_exposes_timing_and_economics() -> None:
 
     _allow_decision(client, incident_id)
 
-    clearance_time = datetime.now(timezone.utc)
-    clearance_response = client.post(
-        "/api/v1/shuud/metrics/clearance",
-        json={"incident_id": incident_id, "clearance_time": clearance_time.isoformat()},
-    )
-    assert clearance_response.status_code == 200
-
     escrow_response = client.post(
         "/api/v1/shuud/escrows",
         json={
@@ -96,6 +89,13 @@ def test_measurement_summary_api_exposes_timing_and_economics() -> None:
     assert release_response.status_code == 200
     assert release_response.json()["previous_state"] == "LOCKED"
     assert release_response.json()["new_state"] == "RELEASED"
+
+    clearance_time = datetime.now(timezone.utc)
+    clearance_response = client.post(
+        "/api/v1/shuud/metrics/clearance",
+        json={"incident_id": incident_id, "clearance_time": clearance_time.isoformat()},
+    )
+    assert clearance_response.status_code == 200
 
     response = client.post(
         f"/api/v1/shuud/metrics/{incident_id}/summary",
