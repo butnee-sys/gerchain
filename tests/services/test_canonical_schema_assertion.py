@@ -52,7 +52,7 @@ def test_canonical_schema_assertion_rejects_version_marker_with_missing_columns(
             "INSERT INTO schema_version(version, checksum) VALUES (13, 'test')"
         ))
     with engine.connect() as connection:
-        with pytest.raises(RuntimeError, match="missing columns"):
+        with pytest.raises(RuntimeError, match="missing required columns"):
             assert_canonical_production_schema(connection)
     engine.dispose()
 
