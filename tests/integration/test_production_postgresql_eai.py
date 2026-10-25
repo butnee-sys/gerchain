@@ -50,7 +50,7 @@ def test_production_postgresql_full_value_flow() -> None:
     ).create()
     release_runtime.create_escrow(
         escrow_id="pg-release-escrow",
-        source="pg-source",
+        sender="pg-source",
         beneficiary="pg-beneficiary",
         refund_destination="pg-source",
         amount=100,

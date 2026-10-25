@@ -68,6 +68,7 @@ def test_real_postgresql_factory_and_value_truth():
     with factory.session_factory() as session:
         PostgreSQLAtomicLedger.create_account_in_transaction(session, "SRC", "USD", 500)
         PostgreSQLAtomicLedger.create_account_in_transaction(session, "DST", "USD", 0)
+        PostgreSQLAtomicLedger.create_account_in_transaction(session, "esc-prod", "USD", 0)
         _seed_escrow(session, "esc-prod", amount=100)
         session.commit()
 
@@ -112,7 +113,7 @@ def test_production_factory_repairs_legacy_escrow_state_constraint():
     factory = _factory()
     factory.create()
     with factory.engine.begin() as connection:
-        connection.execute(text("ALTER TABLE escrows DROP CONSTRAINT IF EXISTS ck_escrows_canonical_state"))
+        connection.execute(text("ALTER TABLE escrows DROP CONSTRAINT IF EXISTS escrows_state_canonical_check"))
         connection.execute(text(
             "ALTER TABLE escrows ADD CONSTRAINT legacy_escrow_state_check "
             "CHECK (state IN ('CREATED','LOCKED','RELEASED'))"
@@ -129,9 +130,9 @@ def test_production_factory_repairs_legacy_escrow_state_constraint():
             "AND contype = 'c' AND pg_get_constraintdef(oid) LIKE '%state%' "
         )).all()
         names = {row[0] for row in constraints}
-        assert "ck_escrows_canonical_state" in names
+        assert "escrows_state_canonical_check" in names
         assert "legacy_escrow_state_check" not in names
-        definition = next(row[1] for row in constraints if row[0] == "ck_escrows_canonical_state")
+        definition = next(row[1] for row in constraints if row[0] == "escrows_state_canonical_check")
         assert "FUNDED" in definition
         assert "REFUNDED" in definition
         assert "CANCELLED" in definition

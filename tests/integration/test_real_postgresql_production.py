@@ -4,6 +4,7 @@ import os
 from datetime import datetime, timezone
 from pathlib import Path
 
+import psycopg
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 
@@ -45,9 +46,9 @@ def test_real_postgresql_production_lifecycle() -> None:
     _reset_database(engine)
 
     migration_dir = Path(__file__).resolve().parents[2] / "postgres" / "migrations"
-    with engine.connect() as connection:
+    migration_url = database_url.replace("postgresql+psycopg://", "postgresql://", 1)
+    with psycopg.connect(migration_url) as connection:
         apply_migrations(connection, migration_dir)
-        connection.commit()
     with engine.connect() as connection:
         assert_canonical_production_schema(connection)
 
