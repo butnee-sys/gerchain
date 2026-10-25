@@ -24,6 +24,7 @@ class AuthorizationPolicy:
         "verifier/",
         "database/migrations/",
         "dee_security/",
+        "shuud/",
     )
     allowed_change_kinds: frozenset[str] = frozenset(
         {"source", "config", "schema", "rule", "release"}

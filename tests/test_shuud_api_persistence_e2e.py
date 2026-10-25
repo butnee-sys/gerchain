@@ -3,7 +3,7 @@ import os
 from fastapi.testclient import TestClient
 
 import shuud.api as shuud_api
-from gerchain.web_ui import app
+from shuud.app import app
 from shuud.persistence import SHUUDPersistence
 from shuud.runtime_store import SHUUDRuntimeStore
 
