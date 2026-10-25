@@ -12,21 +12,24 @@ from persistence.escrow_aggregate import CanonicalEscrow
 from persistence.fund_escrow import fund_escrow_in_transaction
 from persistence.lock_escrow import lock_escrow_in_transaction
 from persistence.release_escrow import release_escrow_in_transaction
-from services.gerchain_runtime_factory import ProductionRuntimeFactory
+from services.gerchain_runtime_factory import ProductionRuntimeConfig, ProductionRuntimeFactory
 
 
 def test_production_postgresql_canonical_value_flow():
     url = os.environ["GERCHAIN_DATABASE_URL"]
     engine = create_engine(url, pool_pre_ping=True)
     try:
-        factory = ProductionRuntimeFactory.from_engine(
-            escrow_id="eai-pg-smoke",
-            amount=100,
-            currency="MNT",
-            witness_id="witness-pg-smoke",
+        factory = ProductionRuntimeFactory(
+            ProductionRuntimeConfig(
+                database_url=url,
+                escrow_id="eai-pg-smoke",
+                amount=100,
+                currency="MNT",
+                witness_id="witness-pg-smoke",
+            ),
             engine=engine,
         )
-        runtime = factory
+        runtime = factory.create()
         assert runtime.is_canonical_ledger_authoritative
 
         Session = sessionmaker(bind=engine, expire_on_commit=False)
