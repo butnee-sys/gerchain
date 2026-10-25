@@ -53,6 +53,7 @@ def test_day0_rejects_invalid_window_and_threshold_order():
             name="Test",
             start_date=date(2026, 10, 1),
             end_date=date(2026, 10, 2),
+            status=SandboxStatus.PLANNED,
             conditional_clearance_rate=0.96,
             go_clearance_rate=0.95,
         )

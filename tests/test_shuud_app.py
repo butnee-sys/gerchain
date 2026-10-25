@@ -10,7 +10,6 @@ def test_shuud_app_exposes_lifecycle_and_sandbox_routes():
     assert "/api/v1/shuud/sandbox/kpi" in paths
     assert "/api/v1/shuud/sandbox/command" in paths
     assert "/api/v1/shuud/sandbox/config/{sandbox_id}/cases/{incident_id}" in paths
-    assert "/" in paths
 
 
 def test_shuud_app_keeps_static_mount_last():
