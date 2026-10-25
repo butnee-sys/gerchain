@@ -76,7 +76,16 @@ def test_postgresql_canonical_value_flow_is_atomic_and_reconciled():
     engine = create_engine(url, pool_pre_ping=True)
     sessions = sessionmaker(bind=engine, expire_on_commit=False)
     ledger = PostgreSQLAtomicLedger(sessions)
-    for account, balance in (("SRC-A",100),("SRC-B",100),("BENEFICIARY",0),("SETTLE-DEST",0)):
+    for account, balance in (
+        ("SRC-A", 100),
+        ("SRC-B", 100),
+        ("BENEFICIARY", 0),
+        ("SETTLE-DEST", 0),
+        # FUND writes into the canonical escrow ledger account before lock/release.
+        ("esc-release", 0),
+        ("esc-refund", 0),
+        ("esc-cancel", 0),
+    ):
         ledger.create_account(account, "MNT", balance)
     now = datetime.now(timezone.utc)
     with sessions() as session:

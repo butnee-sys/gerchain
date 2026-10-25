@@ -202,3 +202,10 @@ The above are follow-up findings and fixes, not blanket resolution. New exact-SH
 - This new concurrency correction is not considered passed until the exact-SHA full Production Gate and concurrency-specific tests complete successfully.
 
 Decision remains `FINAL LOCK = OPEN`; `PRODUCTION READY = NOT VERIFIED`.
+
+## Follow-up — candidate `e3d1542c49a224f08d1efe1b23d8acef0e306151`
+
+- [Production Gate run 40145731681](https://github.com/butnee-sys/gerchain/actions/runs/40145731681) failed at `tests/integration/test_postgresql_production_reperformance.py::test_postgresql_canonical_value_flow_is_atomic_and_reconciled` with SQLAlchemy `NoResultFound`. The fixture created sender/beneficiary/settlement accounts but omitted canonical ledger accounts for `esc-release`, `esc-refund`, and `esc-cancel`, although FUND transfers value into each escrow account before subsequent state transitions.
+- This commit seeds the three zero-balance escrow ledger accounts explicitly. This is a fixture correction for a real ledger precondition, not a waiver; rerun the exact-SHA Production Gate and deep reconciliation before closing this item.
+
+Decision remains `FINAL LOCK = OPEN`; `PRODUCTION READY = NOT VERIFIED`.
