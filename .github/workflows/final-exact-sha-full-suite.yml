@@ -319,6 +319,9 @@ jobs:
       - name: Build exact-SHA evidence manifest
         if: always()
         run: |
+          # Restore historically tracked Python bytecode before recording the
+          # source-tree state in the immutable manifest.
+          git restore --worktree -- '**/__pycache__/*.pyc' || true
           python - <<'PY'
           import hashlib, json, os, platform, subprocess
           from pathlib import Path
