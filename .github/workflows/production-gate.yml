@@ -68,5 +68,50 @@ jobs:
               print(f'PRODUCTION_GATE_MIGRATIONS=PASS versions={len(rows)} newly_applied={len(applied)}')
           PY
       - name: Run Production Gate Tests with Detailed Log
+        shell: bash
         run: |
-          python -m pytest --import-mode=importlib --maxfail=1 --disable-warnings -v
+          set +e
+          mkdir -p artifacts/production-gate
+          failures=0
+          reset_public_schema() {
+            python - <<'PY'
+          import os
+          import psycopg
+
+          dsn = os.environ["GERCHAIN_TEST_DATABASE_URL"].replace("postgresql+psycopg://", "postgresql://", 1)
+          with psycopg.connect(dsn, autocommit=True) as connection:
+              connection.execute("DROP SCHEMA public CASCADE")
+              connection.execute("CREATE SCHEMA public")
+              connection.execute("GRANT ALL ON SCHEMA public TO gerchain")
+              connection.execute("GRANT ALL ON SCHEMA public TO PUBLIC")
+          PY
+          }
+          mapfile -t test_files < <(find tests postgres/tests -type f -name 'test_*.py' | sort)
+          for test_file in "${test_files[@]}"; do
+            file_stem="${test_file//\//__}"
+            log="artifacts/production-gate/${file_stem}.log"
+            junit="artifacts/production-gate/${file_stem}.junit.xml"
+            echo "=== PRODUCTION GATE FILE: $test_file ==="
+            reset_public_schema
+            reset_rc=$?
+            if [ "$reset_rc" -ne 0 ]; then
+              echo "DATABASE_RESET_FAILED=$test_file" | tee "$log"
+              failures=$((failures + 1))
+              continue
+            fi
+            PYTHONFAULTHANDLER=1 python -X faulthandler -m pytest --import-mode=importlib --disable-warnings -v --junitxml="$junit" "$test_file" >"$log" 2>&1
+            rc=$?
+            echo "FILE_RESULT=$test_file EXIT_CODE=$rc" | tee -a "$log"
+            tail -n 8 "$log"
+            if [ "$rc" -ne 0 ]; then failures=$((failures + 1)); fi
+          done
+          echo "PRODUCTION_GATE_FILE_FAILURE_COUNT=$failures"
+          if [ "$failures" -ne 0 ]; then exit 1; fi
+      - name: Upload per-file Production Gate logs and JUnit
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-gate-per-file-logs-${{ github.event.pull_request.head.sha || github.sha }}
+          path: artifacts/production-gate/
+          if-no-files-found: warn
+          retention-days: 90

@@ -201,8 +201,8 @@ def test_shuud_dee_end_to_end_proves_trust_transparency_performance():
     assert [entry.record.event_type for entry in witness.entries] == [
         "SHUUD_EVIDENCE_LOCKED",
         "SHIID_DECISION",
+        "ESCROW_TRANSITION",
+        "ESCROW_TRANSITION",
         "SHUUD_RELEASE_AUTHORIZED",
-        "ESCROW_TRANSITION",
-        "ESCROW_TRANSITION",
         "ESCROW_TRANSITION",
     ]

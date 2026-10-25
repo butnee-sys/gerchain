@@ -82,6 +82,7 @@ def test_updated_economic_measurement_replaces_previous_value_without_double_cou
         "INC-003",
         clearance_seconds=100,
         economic={
+            "model_version": "shuud-economic-v1",
             "time_saved_seconds": 500,
             "vehicle_user_savings_mnt": 2000,
             "insurer_savings_mnt": 400,

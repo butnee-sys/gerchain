@@ -96,24 +96,57 @@ jobs:
           mkdir -p artifacts/segmented-tests
           failures=0
           segfaults=0
+          reset_diagnostic_database() {
+            python - <<'PY'
+          import os
+          import psycopg
+
+          dsn = os.environ["GERCHAIN_TEST_DATABASE_URL"].replace("postgresql+psycopg://", "postgresql://", 1)
+          with psycopg.connect(dsn, autocommit=True) as connection:
+              connection.execute("DROP SCHEMA public CASCADE")
+              connection.execute("CREATE SCHEMA public")
+              connection.execute("GRANT ALL ON SCHEMA public TO gerchain")
+              connection.execute("GRANT ALL ON SCHEMA public TO PUBLIC")
+          PY
+          }
           run_segment() {
             name="$1"
             shift
             log="artifacts/segmented-tests/$name.log"
-            echo "=== SEGMENT $name ==="
-            # Use the job-level PostgreSQL service DSNs consistently across every diagnostic segment.
-            # Unsetting them caused artificial KeyError failures and fallback to mismatched local credentials.
-            PYTHONFAULTHANDLER=1 python -X faulthandler -m pytest -vv -s "$@" >"$log" 2>&1
-            rc=$?
-            cat "$log"
-            echo "SEGMENT_RESULT=$name EXIT_CODE=$rc"
-            if [ "$rc" -ne 0 ]; then
-              failures=$((failures + 1))
-            fi
-            if [ "$rc" -eq 139 ] || grep -Eqi "Segmentation fault|Fatal Python error: Segmentation fault" "$log"; then
-              segfaults=$((segfaults + 1))
-              echo "SEGMENTATION_FAULT_CONFIRMED_IN=$name"
-            fi
+            : >"$log"
+            echo "=== SEGMENT $name ===" | tee -a "$log"
+            for target in "$@"; do
+              files=()
+              if [ -d "$target" ]; then
+                mapfile -t files < <(find "$target" -type f -name 'test_*.py' | sort)
+              else
+                files=("$target")
+              fi
+              for test_file in "${files[@]}"; do
+                file_stem="${name}__${test_file//\//__}"
+                file_log="artifacts/segmented-tests/${file_stem}.log"
+                junit="artifacts/segmented-tests/${file_stem}.junit.xml"
+                echo "=== FILE $test_file ===" | tee -a "$log"
+                reset_diagnostic_database >"$file_log" 2>&1
+                reset_rc=$?
+                if [ "$reset_rc" -ne 0 ]; then
+                  echo "DATABASE_RESET_FAILED=$test_file" | tee -a "$file_log" "$log"
+                  failures=$((failures + 1))
+                  continue
+                fi
+                PYTHONFAULTHANDLER=1 python -X faulthandler -m pytest -vv -s --junitxml="$junit" "$test_file" >>"$file_log" 2>&1
+                rc=$?
+                echo "FILE_RESULT=$test_file EXIT_CODE=$rc" | tee -a "$file_log" "$log"
+                cat "$file_log" >>"$log"
+                if [ "$rc" -ne 0 ]; then failures=$((failures + 1)); fi
+                if [ "$rc" -eq 139 ] || grep -Eqi "Segmentation fault|Fatal Python error: Segmentation fault" "$file_log"; then
+                  segfaults=$((segfaults + 1))
+                  echo "SEGMENTATION_FAULT_CONFIRMED_IN=$test_file" | tee -a "$log"
+                fi
+                tail -n 6 "$file_log"
+              done
+            done
+            echo "SEGMENT_RESULT=$name CUMULATIVE_FILE_FAILURES=$failures" | tee -a "$log"
           }
           run_segment persistence tests/persistence
           run_segment services tests/services
@@ -126,6 +159,7 @@ jobs:
           fi
           echo "SEGMENTED_FAILURE_COUNT=$failures"
           echo "SEGMENTATION_FAULT_SEGMENT_COUNT=$segfaults"
+          printf '%s\n' "$failures" > artifacts/segmented-tests/failure-count.txt
           if [ "$segfaults" -gt 0 ]; then
             echo "DIAGNOSIS: native crash isolated to one or more named test segments; inspect matching logs."
           fi
@@ -389,6 +423,20 @@ jobs:
               raise SystemExit("PostgreSQL constraint evidence validation failed")
           PY
           sha256sum artifacts/production-postgres/migration-history.json artifacts/production-postgres/postgres-constraints.json > artifacts/production-postgres/database-evidence.sha256
+
+      - name: Enforce segmented regression results
+        if: always()
+        run: |
+          if [ ! -f artifacts/segmented-tests/failure-count.txt ]; then
+            echo "FAIL: segmented regression summary is missing"
+            exit 1
+          fi
+          failures="$(cat artifacts/segmented-tests/failure-count.txt)"
+          echo "SEGMENTED_FAILURE_COUNT=$failures"
+          if [ "$failures" -ne 0 ]; then
+            echo "FAIL: segmented regression failures must be fixed or explicitly dispositioned"
+            exit 1
+          fi
 
       - name: Upload PostgreSQL production evidence bundle
         if: always()

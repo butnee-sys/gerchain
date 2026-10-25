@@ -53,8 +53,7 @@ def test_postgresql_canonical_value_truth_reperformance() -> None:
     with factory() as session:
         from persistence.atomic_value_transaction import AtomicValueTransaction
 
-        def ledger_transfer(*args, **kwargs):
-            return PostgreSQLAtomicLedger.transfer_in_transaction(session, *args, **kwargs)
+        ledger_transfer = PostgreSQLAtomicLedger.transfer_in_transaction
 
         result = AtomicValueTransaction(session).transfer_and_transition(
             transaction_id="pg-reperformance-1",

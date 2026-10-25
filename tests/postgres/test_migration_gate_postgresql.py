@@ -110,10 +110,12 @@ def test_postgresql_clean_migration_rerun_and_checksum_drift_are_safe(tmp_path: 
             )
 
             before_rerun = _schema_snapshot(connection, schema)
+            connection.commit()
             second = apply_migrations(connection, MIGRATION_DIR)
             after_rerun = _schema_snapshot(connection, schema)
             assert second == ()
             assert after_rerun == before_rerun
+            connection.commit()
 
             changed_dir = tmp_path / "migrations"
             shutil.copytree(MIGRATION_DIR, changed_dir)
@@ -123,6 +125,7 @@ def test_postgresql_clean_migration_rerun_and_checksum_drift_are_safe(tmp_path: 
                 encoding="utf-8",
             )
             before_drift_attempt = _schema_snapshot(connection, schema)
+            connection.commit()
             with pytest.raises(RuntimeError, match="Migration checksum mismatch for version 1"):
                 apply_migrations(connection, changed_dir)
             after_drift_attempt = _schema_snapshot(connection, schema)
