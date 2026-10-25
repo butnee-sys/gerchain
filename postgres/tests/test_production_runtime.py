@@ -7,7 +7,7 @@ import pytest
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker
 
-from persistence.atomic_ledger import LedgerAccountModel
+from persistence.atomic_ledger import LedgerAccountModel, LedgerMovementModel
 from persistence.deep_value_reconciliation import deep_reconcile_value_truth
 from persistence.escrow_aggregate import CanonicalEscrow, EscrowState
 from persistence.fund_escrow import fund_escrow_in_transaction
@@ -41,6 +41,9 @@ def test_production_runtime_canonical_value_flow_and_reconciliation():
 
     now = datetime.now(timezone.utc)
     with factory() as session:
+        # Isolate this reconciliation proof: stale movements from earlier tests
+        # must not survive after their linked escrow/evidence rows are cleared.
+        session.query(LedgerMovementModel).delete()
         session.query(OutboxEvent).delete()
         session.query(TransactionWitness).delete()
         session.query(DurableIdempotencyRecord).delete()
