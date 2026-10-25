@@ -274,3 +274,18 @@ These are fixture/contract corrections, **not yet passing evidence**. The next e
 The original 21 root-suite failures remain individually OPEN until each has either a passing retest or a formally approved scope disposition. The five per-file failures above are additional findings, not a replacement for those 21. PostgreSQL lifecycle `PASS_CANDIDATE` at the older SHA does not make the full Production Gate pass, and the missing evidence files / stale manifest in the cancelled master-gate artifact remain unresolved.
 
 **Decision remains: `FINAL LOCK = OPEN`; `PRODUCTION READY = NOT VERIFIED`.**
+
+
+## Follow-up — candidate `9e279cfa9c20a0d83f34314d8618ed4bb3fa9ded`: PostgreSQL proof artifact SHA mismatch
+
+Artifact `12604647757` from [PostgreSQL Migration and Production Proof run 40208522692](https://github.com/butnee-sys/gerchain/actions/runs/40208522692) was downloaded and inspected. The workflow API reports head SHA `9e279cfa9c20a0d83f34314d8618ed4bb3fa9ded`, but the artifact's `manifest.json` and `commit-sha.txt` both record `ac18205eaf28b070bed10f803c9dd12677469b47`. Therefore this artifact is **rejected as exact-candidate evidence** despite the workflow conclusion `success`.
+
+The cause is `.github/workflows/postgres-proof.yml` checking out the default pull-request merge ref and recording `github.sha`, rather than checking out the tested PR-head SHA. The workflow is corrected in this commit to:
+- checkout the PR-head SHA (or `github.sha` outside pull requests);
+- assert `git rev-parse HEAD` matches the expected SHA before tests;
+- record that same expected SHA in the evidence manifest and commit file;
+- exclude only the generated evidence directory itself from the manifest's dirty-source status list.
+
+This correction is **not proof that the earlier mismatched artifact is repaired**. A fresh run on the new commit must produce a retained artifact where workflow head, checkout HEAD, `manifest.json`, `commit-sha.txt`, migration/source hashes and run ID/attempt all agree. The prior artifact remains rejected.
+
+**Decision remains: `FINAL LOCK = OPEN`; `PRODUCTION READY = NOT VERIFIED`.**
