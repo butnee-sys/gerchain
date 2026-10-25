@@ -22,7 +22,7 @@ def _create_canonical_test_schema(engine) -> None:
         ))
         connection.execute(
             text("INSERT INTO schema_version(version, checksum) VALUES (:version, :checksum)"),
-            [{"version": version, "checksum": f"test-{version}"} for version in range(1, 14)],
+            [{"version": version, "checksum": f"test-{version}"} for version in range(1, 18)],
         )
 
 
@@ -66,6 +66,6 @@ def test_canonical_schema_assertion_rejects_incomplete_migration_history() -> No
             "INSERT INTO schema_version(version, checksum) VALUES (12, 'test')"
         ))
     with engine.connect() as connection:
-        with pytest.raises(RuntimeError, match="required=13"):
+        with pytest.raises(RuntimeError, match="required=17"):
             assert_canonical_production_schema(connection)
     engine.dispose()

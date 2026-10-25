@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from enum import StrEnum
 
-from sqlalchemy import BigInteger, DateTime, Numeric, String, select
+from sqlalchemy import BigInteger, CheckConstraint, DateTime, Numeric, String, select
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
 
 
@@ -34,6 +34,12 @@ class CanonicalEscrow(EscrowBase):
     """Durable representation of the existing canonical escrow aggregate."""
 
     __tablename__ = "escrows"
+    __table_args__ = (
+        CheckConstraint(
+            "state IN ('CREATED', 'FUNDED', 'LOCKED', 'RELEASED', 'REFUNDED', 'CANCELLED')",
+            name="escrows_state_canonical_check",
+        ),
+    )
 
     id: Mapped[str] = mapped_column(String, primary_key=True)
     sender_address: Mapped[str] = mapped_column(String, nullable=False)
