@@ -289,3 +289,12 @@ The cause is `.github/workflows/postgres-proof.yml` checking out the default pul
 This correction is **not proof that the earlier mismatched artifact is repaired**. A fresh run on the new commit must produce a retained artifact where workflow head, checkout HEAD, `manifest.json`, `commit-sha.txt`, migration/source hashes and run ID/attempt all agree. The prior artifact remains rejected.
 
 **Decision remains: `FINAL LOCK = OPEN`; `PRODUCTION READY = NOT VERIFIED`.**
+
+
+## Follow-up — exact-SHA proof manifest hardening
+
+The PR-head checkout correction in the preceding commit is supplemented here with an explicit in-script `git rev-parse HEAD` comparison. The PostgreSQL proof manifest now records both `commit_sha` and `checked_out_head_sha` plus `sha_match`, and the manifest-generation step fails if the checked-out SHA differs from the expected evidence SHA. This is intended to make the SHA binding independently auditable rather than relying only on an earlier shell step. The `printf` assertion output is also corrected to emit separate log lines.
+
+No earlier artifact is retroactively accepted. The first fresh run on this updated commit must still be inspected directly, including `MANIFEST.SHA256`, `SHA256SUMS`, source hashes, JUnit and the workflow run ID/attempt.
+
+**Decision remains: `FINAL LOCK = OPEN`; `PRODUCTION READY = NOT VERIFIED`.**

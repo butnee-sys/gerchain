@@ -99,9 +99,15 @@ jobs:
               check=True, capture_output=True, text=True
           ).stdout
           (out / "SHA256SUMS").write_text(sha_lines, encoding="utf-8")
+          checked_out_head_sha = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+          expected_sha = os.environ["EVIDENCE_COMMIT_SHA"]
+          if checked_out_head_sha != expected_sha:
+              raise SystemExit(f"FAIL: checked-out HEAD {checked_out_head_sha} != expected evidence SHA {expected_sha}")
           manifest = {
               "repository": os.environ.get("GITHUB_REPOSITORY"),
-              "commit_sha": os.environ["EVIDENCE_COMMIT_SHA"],
+              "commit_sha": expected_sha,
+              "checked_out_head_sha": checked_out_head_sha,
+              "sha_match": checked_out_head_sha == expected_sha,
               "workflow_run_id": os.environ["EVIDENCE_RUN_ID"],
               "workflow_run_attempt": os.environ["EVIDENCE_RUN_ATTEMPT"],
               "python_version": platform.python_version(),
