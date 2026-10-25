@@ -245,3 +245,14 @@ This addendum records workflow defects found while investigating the stale `LOCK
 - IAM/MFA, privileged access, legacy authority write-freeze, observability/recovery, production-like performance/concurrency, backup/restore/DR, release governance, independent re-performance, complete evidence index and authorized approval remain outstanding.
 
 **Decision remains: `FINAL LOCK = OPEN`; `PRODUCTION READY = NOT VERIFIED`.**
+
+
+## Follow-up — 2026-10-25: PostgreSQL re-performance workflow did not create a job
+
+The new run [PostgreSQL Production Re-performance, run 40204082279](https://github.com/butnee-sys/gerchain/actions/runs/40204082279) at SHA `819a1c734f4847168a65187e2f043e626c51840b` concluded failure and the Actions jobs endpoint returned zero jobs. Inspecting `.github/workflows/postgres-production-reperformance.yml` identified a duplicate `with:` block under the shell-based “Assert checkout matches the tested PR head” step. A `run:` step cannot take an action `with:` input; this made the workflow invalid before any test evidence could be collected.
+
+Commit `0b8a3d177a9128a0b7a87a6c4c76c46aab30acc7` removes the invalid duplicate block and updates the migration evidence step label to reflect 17 migrations. This is a workflow syntax correction only. It remains OPEN until a new run has a real job, the checkout SHA assertion passes, the artifact is retained, and its internal `tested-commit.txt`, manifest SHA, migration inventory, constraints and JUnit agree with the workflow head SHA.
+
+The previous exact-SHA artifact mismatch remains rejected. The 21 root-suite failures and all separately recorded segmented failures remain unresolved unless new passing logs or a reviewed scope disposition explicitly closes each item.
+
+**Decision remains: `FINAL LOCK = OPEN`; `PRODUCTION READY = NOT VERIFIED`.**
