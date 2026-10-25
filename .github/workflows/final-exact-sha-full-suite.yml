@@ -354,7 +354,11 @@ jobs:
       - name: Require clean source checkout after verification
         if: always()
         run: |
-          dirty="$(git status --porcelain --untracked-files=all)"
+          # Python bytecode is tracked historically in this repository. Restore
+          # those generated files after compile/test execution before auditing
+          # source cleanliness. The evidence bundle is an intentional output.
+          git restore --worktree -- '**/__pycache__/*.pyc' || true
+          dirty="$(git status --porcelain --untracked-files=all -- . ':!artifacts/final-eai-core-evidence')"
           if [ -n "$dirty" ]; then
             echo "FAIL: verification modified tracked or unignored source files"
             printf '%s\n' "$dirty"
