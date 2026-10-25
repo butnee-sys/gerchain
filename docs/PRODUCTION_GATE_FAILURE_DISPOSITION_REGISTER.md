@@ -216,3 +216,10 @@ Decision remains `FINAL LOCK = OPEN`; `PRODUCTION READY = NOT VERIFIED`.
 - This balance correction is based on the implemented fund/refund flow and does not weaken deep reconciliation. The exact-SHA Production Gate must pass after the correction.
 
 Decision remains `FINAL LOCK = OPEN`; `PRODUCTION READY = NOT VERIFIED`.
+
+## Follow-up — candidate `c88f8202587524acb0c40dc582c5760f0bf2a754`
+
+- [Production Gate run 40146423455](https://github.com/butnee-sys/gerchain/actions/runs/40146423455) failed at `tests/integration/test_production_postgres_value_flow.py::test_production_postgres_value_flow_and_deep_reconciliation` with `AttributeError: 'dict' object has no attribute 'transaction_status'`. The test helper passed a SQLAlchemy `Connection` (already inside `engine.begin()`) to a migration runner that requires an idle psycopg connection, and pointed it at the historical `postgres/schema` alias directory rather than the canonical migration source.
+- This commit changes the helper to use a native psycopg DSN, an idle psycopg connection, and `postgres/migrations`. The migration-source/connection fix must pass on the new SHA before this finding can be closed.
+
+Decision remains `FINAL LOCK = OPEN`; `PRODUCTION READY = NOT VERIFIED`.
