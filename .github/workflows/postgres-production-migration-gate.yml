@@ -172,7 +172,10 @@ jobs:
               report["status"] = "FAIL"
           out = Path("artifacts/migration-gate-report.json")
           out.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-          print(json.dumps(report, indent=2, sort_keys=True))
+          persisted = json.loads(out.read_text(encoding="utf-8"))
+          report_sha256 = hashlib.sha256(out.read_bytes()).hexdigest()
+          Path("artifacts/migration-gate-report.sha256").write_text(f"{report_sha256}  migration-gate-report.json\n", encoding="utf-8")
+          print(json.dumps({**persisted, "report_sha256": report_sha256}, indent=2, sort_keys=True))
           if report["status"] != "PASS":
               raise SystemExit("migration-gate-report.json status is not PASS")
           PY
@@ -256,6 +259,16 @@ jobs:
                   "present": junit_path.exists(),
               },
               "source_files": sources,
+              "source_file_count": len(sources),
+              "source_hashes_complete": len(sources) == len(source_paths),
+              "source_missing": [],
+              "migration_file_count": len(list(Path("postgres/migrations").glob("*.sql"))),
+              "migration_history_exact": (
+                  json.loads(Path("artifacts/migration-gate-report.json").read_text(encoding="utf-8")).get("status") == "PASS"
+                  and json.loads(Path("artifacts/migration-gate-report.json").read_text(encoding="utf-8")).get("commit_sha") == commit
+                  and json.loads(Path("artifacts/migration-gate-report.json").read_text(encoding="utf-8")).get("versions_actual") == list(range(1, 18))
+                  and json.loads(Path("artifacts/migration-gate-report.json").read_text(encoding="utf-8")).get("checks", {}).get("checksums_match") is True
+              ),
               "migration_files": [
                   {"path": str(path), "sha256": hashlib.sha256(path.read_bytes()).hexdigest()}
                   for path in sorted(Path("postgres/migrations").glob("*.sql"))
@@ -266,9 +279,15 @@ jobs:
           serialized = json.dumps(report, indent=2, sort_keys=True) + "\n"
           output.write_text(serialized, encoding="utf-8")
           json.loads(output.read_text(encoding="utf-8"))
+          report_sha256 = hashlib.sha256(output.read_bytes()).hexdigest()
+          output.with_suffix(".json.sha256").write_text(f"{report_sha256}  migration-lifecycle-report.json\n", encoding="utf-8")
           print(serialized)
           if not report["sha_match"]:
               raise SystemExit("commit SHA mismatch in lifecycle evidence")
+          if not report["source_hashes_complete"] or report["source_file_count"] != len(source_paths):
+              raise SystemExit("source file hash inventory is incomplete")
+          if report["migration_file_count"] != 17 or not report["migration_history_exact"]:
+              raise SystemExit("migration inventory/history is not exact")
           if tests <= 0:
               raise SystemExit("JUnit evidence contains zero tests")
           if failures or errors:
@@ -336,5 +355,14 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: postgres-migration-gate-${{ github.event.pull_request.head.sha || github.sha }}
-          path: artifacts/
+          path: |
+            artifacts/commit.txt
+            artifacts/sql-checksums-before.txt
+            artifacts/sql-checksums-after.txt
+            artifacts/lifecycle-junit.xml
+            artifacts/schema-version-history.txt
+            artifacts/migration-gate-report.json
+            artifacts/migration-gate-report.sha256
+            artifacts/production-postgres/migration-lifecycle-report.json
+            artifacts/production-postgres/migration-lifecycle-report.json.sha256
           if-no-files-found: warn
