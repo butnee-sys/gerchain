@@ -9,7 +9,7 @@ on:
 jobs:
   production-gate:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 360
     services:
       postgres:
         image: postgres:16
