@@ -251,7 +251,7 @@ jobs:
           migrations = []
           for path in _canonical_migration_files(migration_dir):
               migrations.append({"path": str(path), "sha256": hashlib.sha256(path.read_bytes()).hexdigest()})
-          dsn = os.environ["GERCHAIN_MIGRATION_TEST_DATABASE_URL"]
+          dsn = os.environ["GERCHAIN_TEST_DATABASE_URL"].replace("postgresql+psycopg://", "postgresql://", 1)
           chain_dsn = dsn.rsplit("/", 1)[0] + "/gerchain_migration_chain"
           applied = []
           migration_error = None
@@ -364,7 +364,7 @@ jobs:
                       columns = [c.name for c in cur.description]
                       return [dict(zip(columns, row)) for row in cur.fetchall()]
 
-          dsn = os.environ["GERCHAIN_MIGRATION_TEST_DATABASE_URL"]
+          dsn = os.environ["GERCHAIN_TEST_DATABASE_URL"].replace("postgresql+psycopg://", "postgresql://", 1)
           chain_dsn = dsn.rsplit("/", 1)[0] + "/gerchain_migration_chain"
           commit = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
           migration_rows = query_db(
