@@ -347,7 +347,7 @@ jobs:
           sha256sum artifacts/production-postgres/migration-lifecycle-report.json > artifacts/production-postgres/migration-lifecycle-report.json.sha256
 
       - name: Export machine-readable migration history and PostgreSQL constraints
-        if: always()
+        if: success()
         run: |
           mkdir -p artifacts/production-postgres
           python - <<'PY'
