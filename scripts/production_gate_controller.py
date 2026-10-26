@@ -177,4 +177,3 @@ if __name__ == "__main__":
     print(json.dumps(res, indent=2))
     if res["decision"] != "LOCKED":
         raise SystemExit(1)
-}
