@@ -31,12 +31,14 @@ jobs:
           --health-timeout 5s
           --health-retries 20
     env:
+      EVIDENCE_COMMIT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
       GERCHAIN_DATABASE_URL: postgresql+psycopg://gerchain:gerchain_test@localhost:5432/gerchain_test
       PYTHONUNBUFFERED: "1"
     steps:
-      - name: Checkout exact commit
+      - name: Checkout exact candidate commit
         uses: actions/checkout@v4
         with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
 
       - name: Record commit and SQL migration checksums
@@ -146,7 +148,7 @@ jobs:
           report = {
               "status": "PASS",
               "commit_sha": commit_sha,
-              "workflow_sha": os.environ.get("GITHUB_SHA", ""),
+              "workflow_sha": os.environ["EVIDENCE_COMMIT_SHA"],
               "workflow_run_id": os.environ.get("GITHUB_RUN_ID", ""),
               "workflow_run_attempt": os.environ.get("GITHUB_RUN_ATTEMPT", ""),
               "migration_count_expected": 17,
@@ -163,7 +165,7 @@ jobs:
                   "sequence_1_to_17": True,
                   "no_duplicate_versions": True,
                   "checksums_match": True,
-                  "commit_sha_matches_workflow": bool(os.environ.get("GITHUB_SHA")) and commit_sha == os.environ["GITHUB_SHA"],
+                  "commit_sha_matches_workflow": bool(os.environ.get("EVIDENCE_COMMIT_SHA")) and commit_sha == os.environ["EVIDENCE_COMMIT_SHA"],
               },
           }
           if not report["checks"]["commit_sha_matches_workflow"]:
@@ -214,7 +216,7 @@ jobs:
           from pathlib import Path
 
           commit = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
-          workflow_sha = os.environ.get("GITHUB_SHA", "")
+          workflow_sha = os.environ["EVIDENCE_COMMIT_SHA"]
           junit_path = Path("artifacts/lifecycle-junit.xml")
           suites = []
           if junit_path.exists():
@@ -305,8 +307,8 @@ jobs:
           report = json.loads(report_path.read_text(encoding="utf-8"))
           if report.get("status") != "PASS":
               raise SystemExit(f"migration report status is not PASS: {report.get('status')}")
-          if report.get("commit_sha") != os.environ.get("GITHUB_SHA"):
-              raise SystemExit("report commit_sha does not match workflow GITHUB_SHA")
+          if report.get("commit_sha") != os.environ.get("EVIDENCE_COMMIT_SHA"):
+              raise SystemExit("report commit_sha does not match exact candidate SHA")
           if report.get("workflow_run_id") != os.environ.get("GITHUB_RUN_ID"):
               raise SystemExit("report workflow_run_id mismatch")
           if report.get("workflow_run_attempt") != os.environ.get("GITHUB_RUN_ATTEMPT"):
@@ -333,6 +335,6 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: postgres-migration-gate-${{ github.sha }}
+          name: postgres-migration-gate-${{ github.event.pull_request.head.sha || github.sha }}
           path: artifacts/
           if-no-files-found: warn
