@@ -211,14 +211,17 @@ jobs:
           print(f"EVIDENCE_DATABASE_MIGRATIONS_APPLIED={len(rows)}/{len(files)}")
           print("EVIDENCE_DATABASE_CHECKSUMS_MATCH_SOURCE=PASS")
           print("EVIDENCE_DATABASE_SECOND_RUN_NOOP=PASS")
+          sqlalchemy_dsn = evidence_dsn.replace("postgresql://", "postgresql+psycopg://", 1)
+          with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as env:
+              env.write(f"GERCHAIN_EVIDENCE_DATABASE_URL={evidence_dsn}\n")
+              env.write(f"GERCHAIN_DATABASE_URL={sqlalchemy_dsn}\n")
+              env.write(f"GERCHAIN_TEST_DATABASE_URL={sqlalchemy_dsn}\n")
+              env.write(f"GERCHAIN_POSTGRES_DSN={evidence_dsn}\n")
+              env.write(f"GERCHAIN_TEST_POSTGRES_URL={evidence_dsn}\n")
           PY
       - name: Re-perform canonical PostgreSQL value lifecycle
-        # Use the dedicated evidence database created after mutation tests.
-        env:
-          GERCHAIN_DATABASE_URL: postgresql+psycopg://gerchain:gerchain_test@127.0.0.1:5432/${{ env.GERCHAIN_EVIDENCE_DATABASE_NAME }}
-          GERCHAIN_TEST_DATABASE_URL: postgresql+psycopg://gerchain:gerchain_test@127.0.0.1:5432/${{ env.GERCHAIN_EVIDENCE_DATABASE_NAME }}
-          GERCHAIN_POSTGRES_DSN: postgresql://gerchain:gerchain_test@127.0.0.1:5432/${{ env.GERCHAIN_EVIDENCE_DATABASE_NAME }}
-          GERCHAIN_TEST_POSTGRES_URL: postgresql://gerchain:gerchain_test@127.0.0.1:5432/${{ env.GERCHAIN_EVIDENCE_DATABASE_NAME }}
+        # Use the exact DSNs exported by the step that created and migrated the
+        # evidence database; do not reconstruct a database name via expressions.
         run: >-
           python -m pytest -vv -s
           --junitxml=artifacts/postgres-lifecycle-junit.xml
@@ -243,8 +246,7 @@ jobs:
           migrations = []
           for path in _canonical_migration_files(migration_dir):
               migrations.append({"path": str(path), "sha256": hashlib.sha256(path.read_bytes()).hexdigest()})
-          dsn = os.environ["GERCHAIN_TEST_DATABASE_URL"].replace("postgresql+psycopg://", "postgresql://", 1)
-          chain_dsn = dsn.rsplit("/", 1)[0] + "/" + os.environ["GERCHAIN_EVIDENCE_DATABASE_NAME"]
+          chain_dsn = os.environ["GERCHAIN_EVIDENCE_DATABASE_URL"].replace("postgresql+psycopg://", "postgresql://", 1)
           applied = []
           migration_error = None
           try:
@@ -358,8 +360,8 @@ jobs:
                       columns = [c.name for c in cur.description]
                       return [dict(zip(columns, row)) for row in cur.fetchall()]
 
-          dsn = os.environ["GERCHAIN_TEST_DATABASE_URL"].replace("postgresql+psycopg://", "postgresql://", 1)
-          chain_dsn = dsn.rsplit("/", 1)[0] + "/" + os.environ["GERCHAIN_EVIDENCE_DATABASE_NAME"]
+          dsn = os.environ["GERCHAIN_EVIDENCE_DATABASE_URL"].replace("postgresql+psycopg://", "postgresql://", 1)
+          chain_dsn = dsn
           commit = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
           migration_rows = query_db(
               chain_dsn,
