@@ -343,6 +343,29 @@ def apply_migrations(connection: Connection, migration_dir: Path) -> tuple[int, 
                     "SELECT checksum FROM schema_version WHERE version = %s FOR UPDATE",
                     (version,),
                 ).fetchone()
+                # Some legacy/test databases can retain canonical tables and CHECK
+                # constraints after their schema_version rows were cleared. In that
+                # specific empty-history state, migration 001 must be replayable:
+                # remove only the named constraints that v1 itself recreates, inside
+                # this migration transaction. Later canonical migrations re-establish
+                # the strict definitions; any failure rolls this repair back.
+                if is_canonical_chain and version == 1 and row is None:
+                    history_count = connection.execute(
+                        "SELECT COUNT(*) FROM schema_version"
+                    ).fetchone()[0]
+                    if history_count == 0:
+                        for table_name, constraint_name in (
+                            ("gerchain_ledger_movements", "gerchain_movement_amount_check"),
+                            ("gerchain_ledger_movements", "gerchain_movement_operation_check"),
+                            ("gerchain_ledger_movements", "gerchain_movement_integrity_hash_check"),
+                            ("gerchain_ledger_movements", "gerchain_movement_escrow_binding_check"),
+                            ("gerchain_transaction_witnesses", "gerchain_witness_amount_check"),
+                            ("gerchain_idempotency_records", "gerchain_idempotency_state_check"),
+                        ):
+                            connection.execute(
+                                f"ALTER TABLE IF EXISTS {table_name} "
+                                f"DROP CONSTRAINT IF EXISTS {constraint_name}"
+                            )
                 if row is not None:
                     if row[0] not in accepted_checksums:
                         raise RuntimeError(
