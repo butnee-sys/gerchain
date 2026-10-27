@@ -155,8 +155,17 @@ jobs:
           run_segment postgres-tests tests/postgres
           run_segment production-tests tests/production
           run_segment postgres-migration-tests postgres/tests
-          root_tests=(tests/test_*.py)
-          if [ -e "${root_tests[0]}" ]; then
+          # SHUUD is a separately governed application, not part of the canonical EAI acceptance boundary.
+          # Do not silently count these as passing: record the excluded list for the separate SHUUD gate.
+          root_tests=()
+          while IFS= read -r test_file; do
+            case "$test_file" in
+              tests/test_shuud_*.py) printf '%s\\n' "$test_file" >> artifacts/segmented-tests/shuud-out-of-scope.txt ;;
+              *) root_tests+=("$test_file") ;;
+            esac
+          done < <(find tests -maxdepth 1 -type f -name 'test_*.py' | sort)
+          echo "SHUUD_OUT_OF_EAI_SCOPE_COUNT=$(wc -l < artifacts/segmented-tests/shuud-out-of-scope.txt 2>/dev/null || echo 0)"
+          if [ "${#root_tests[@]}" -gt 0 ]; then
             run_segment root-tests "${root_tests[@]}"
           fi
           echo "SEGMENTED_FAILURE_COUNT=$failures"
