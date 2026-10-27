@@ -37,6 +37,7 @@ jobs:
       GERCHAIN_CURRENCY: MNT
       GERCHAIN_WITNESS_ID: ci-production-witness
       PYTHONPYCACHEPREFIX: /tmp/gerchain-pycache
+      PYTHONPATH: .
       GERCHAIN_EVIDENCE_DATABASE_NAME: gerchain_evidence_${{ github.run_id }}_${{ github.run_attempt }}
     steps:
       - name: Checkout exact commit
@@ -131,7 +132,9 @@ jobs:
           with psycopg.connect(admin_dsn, autocommit=True) as admin:
               admin.execute("DROP DATABASE IF EXISTS gerchain_migration_chain")
               admin.execute("CREATE DATABASE gerchain_migration_chain")
-          chain_dsn = dsn.rsplit("/", 1)[0] + "/" + os.environ["GERCHAIN_EVIDENCE_DATABASE_NAME"]
+          # This step created gerchain_migration_chain above; use that database here.
+          # The uniquely named evidence database is created in the later dedicated-evidence step.
+          chain_dsn = dsn.rsplit("/", 1)[0] + "/gerchain_migration_chain"
           with psycopg.connect(chain_dsn) as conn:
               migration_dir = Path("postgres/migrations")
               expected = tuple(range(1, len(_canonical_migration_files(migration_dir)) + 1))
