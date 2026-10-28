@@ -120,10 +120,13 @@ jobs:
                   if versions != expected_versions:
                       raise SystemExit(f"migration history mismatch: expected {expected_versions}, got {versions}")
                   with open("evidence/postgres/migration-history.txt", "w", encoding="utf-8") as handle:
-                      handle.write("version\\tchecksum\\tapplied_at\\n")
+                      handle.write("version\tchecksum\tapplied_at\n")
                       for row in rows:
-                          handle.write(f"{row.version}\\t{row.checksum}\\t{row.applied_at.isoformat()}\\n")
-                  print("MIGRATION_HISTORY=PASS")
+                          handle.write(f"{row.version}\t{row.checksum}\t{row.applied_at.isoformat()}\n")
+                  history_lines = Path("evidence/postgres/migration-history.txt").read_text(encoding="utf-8").splitlines()
+                  if len(history_lines) != len(rows) + 1:
+                      raise SystemExit(f"migration history text row count mismatch: expected {len(rows) + 1}, got {len(history_lines)}")
+                  print(f"MIGRATION_HISTORY=PASS rows={len(rows)} text_lines={len(history_lines)}")
           finally:
               engine.dispose()
           PY
