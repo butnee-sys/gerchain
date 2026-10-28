@@ -301,3 +301,39 @@ No earlier artifact is retroactively accepted. The first fresh run on this updat
 
 
 The same proof workflow's artifact name was also using `github.sha`, which can be the synthetic pull-request merge SHA. This commit aligns the artifact label with the tested-head expression used for checkout and the manifest. The checkout diagnostic now emits separate expected/actual SHA log lines. Acceptance still requires inspecting the fresh artifact's internal SHA fields and checksums; matching the label alone is not sufficient.
+
+
+## Audit addendum — 2026-10-28 (candidate `6b1896791db8ef2c5a9192173a4e344bd73d3257`)
+
+This addendum records direct inspection of retained artifacts and current workflow metadata. It does not close the full Production Gate or any of the original 21 failure dispositions.
+
+### Exact-SHA run outcomes
+
+All listed successful scoped runs report head SHA `6b1896791db8ef2c5a9192173a4e344bd73d3257`:
+
+- [CI Test Suite, run 40540457812](https://github.com/butnee-sys/gerchain/actions/runs/40540457812): workflow success. This result alone does not prove the full repository suite passed.
+- [PostgreSQL Production Gate, run 40540457873](https://github.com/butnee-sys/gerchain/actions/runs/40540457873): workflow success, but the workflow-run artifact list returned empty at inspection. No full PostgreSQL lifecycle report is inferred from this run.
+- [FINAL EAI/CORE Exact-SHA Gate, run 40540457871](https://github.com/butnee-sys/gerchain/actions/runs/40540457871): workflow success; retained artifact ID `12751201147`, with `commit-sha.txt` and `manifest.json` both recording the candidate SHA. Manifest inventories SHA-256 and byte counts for migration files 001–017. This is scoped EAI/CORE and migration-inventory evidence, not full production certification.
+- [PostgreSQL Migration and Production Proof, run 40540457940](https://github.com/butnee-sys/gerchain/actions/runs/40540457940): workflow success; retained artifact ID `12749967792`. Its `manifest.json` records `commit_sha=checked_out_head_sha=6b1896791db8ef2c5a9192173a4e344bd73d3257`, `sha_match=true`, run ID `40540457940`, attempt 1, and a clean checkout. The `MANIFEST.SHA256` check recomputed successfully. `SHA256SUMS` contains 26 source/migration file hashes, including all 17 migrations; however, those source files themselves are not packaged in the ZIP, so this audit verified the retained manifest checksum and listed inventory, not an independent re-hash of all source bytes from that ZIP. Scoped logs report: runtime boot 1 passed, migration rollback 2 passed, migration concurrency 6 passed, and deep value reconciliation 24 passed.
+- [EAI PostgreSQL Re-performance, run 40540458284](https://github.com/butnee-sys/gerchain/actions/runs/40540458284): workflow success at this SHA; its artifact must be evaluated only within its declared scope.
+- [Independent Production Audit, run 40540457967](https://github.com/butnee-sys/gerchain/actions/runs/40540457967): workflow success; artifact ID `12749229526` reports the same SHA, PostgreSQL 16.15, and `87 passed in 5.99s` for the selected EAI test set. Its verdict explicitly says SHUUD/SANDBOX are excluded from that audit's EAI scope; this does not resolve the separate repository-wide SHUUD/SANDBOX failures or establish operational readiness.
+- [Production Readiness Gates, run 40540458104](https://github.com/butnee-sys/gerchain/actions/runs/40540458104), [DEE Security Gate, run 40540458079](https://github.com/butnee-sys/gerchain/actions/runs/40540458079), [PostgreSQL concurrency and migration gate, run 40540458638](https://github.com/butnee-sys/gerchain/actions/runs/40540458638), and [CodeQL Advanced, run 40540458109](https://github.com/butnee-sys/gerchain/actions/runs/40540458109) report workflow success at the same candidate SHA. These remain scoped gate results, not proof of all outstanding operational requirements.
+- [Production Gate, run 40540457789](https://github.com/butnee-sys/gerchain/actions/runs/40540457789): **cancelled**.
+- [Production PostgreSQL Gate, run 40540457885](https://github.com/butnee-sys/gerchain/actions/runs/40540457885): **cancelled**.
+- [core-gates, run 40540457805](https://github.com/butnee-sys/gerchain/actions/runs/40540457805): remained `in_progress` at the latest API inspection; no final outcome is claimed. If it has since completed, inspect the final run and artifact before updating this register.
+
+### Status of the 21 failures and artifact provenance
+
+The original 21 root-suite failures were observed on `d9c8af8d7b9498ff6c814543112a06d11f73602b`. No retained full-suite JUnit/per-test artifact inspected in this addendum proves that all 21 have been individually fixed or formally dispositioned on candidate `6b1896791db8ef2c5a9192173a4e344bd73d3257`. Keep all 21 rows **OPEN** until each row has a passing retest on a chosen immutable candidate or a documented, independently reviewed scope decision. The successful EAI audit's narrower scope is not a waiver of those failures.
+
+The PostgreSQL proof artifact at `12749967792` is correctly bound to `6b1896791db8ef2c5a9192173a4e344bd73d3257`; its manifest checksum verified. This does not repair or replace any older SHA-mismatched artifact. The cancelled Production Gate and Production PostgreSQL Gate runs do not establish full-suite or full-lifecycle success.
+
+### Required next actions
+
+1. Obtain the final `core-gates` outcome and downloadable JUnit/report artifact for this candidate.
+2. Run a completed full Production Gate and full PostgreSQL lifecycle gate on one selected immutable SHA; do not let a cancellation or scoped success stand in for the full suite.
+3. For each of the 21 rows, attach the exact test result, root cause, relevant requirement, fix or reviewer-approved scope disposition, and artifact/log reference.
+4. Rebuild a single evidence package for the final candidate. Include source files or an independently reproducible checkout reference alongside the source-hash inventory; verify all listed source hashes, migration checksums, standalone migration history, constraints report, JUnit, report SHA-256 sidecars, run ID/attempt, and checkout SHA.
+5. Independently re-perform all required gates on that same SHA and separately close IAM/MFA, privileged access, legacy authority write-freeze, observability/recovery/no-duplicate movement, production-like performance/concurrency, backup/restore/DR, release governance, complete evidence index, and authorized approval.
+
+**Decision remains: `FINAL LOCK = OPEN`; `PRODUCTION READY = NOT VERIFIED`.**
