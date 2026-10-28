@@ -35,7 +35,6 @@ jobs:
       PGUSER: gerchain
       PGPASSWORD: gerchain_ci_password
       PYTHONUNBUFFERED: "1"
-      TARGET_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
     steps:
       - name: Checkout exact tested commit
         uses: actions/checkout@v4
@@ -53,7 +52,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p evidence/postgres
-          expected_sha="$TARGET_SHA"
+          expected_sha="${{ github.event.pull_request.head.sha || github.sha }}"
           tested_commit="$(git rev-parse HEAD)"
           printf '%s\n' "$expected_sha" > evidence/postgres/expected-commit.txt
           printf '%s\n' "$tested_commit" > evidence/postgres/commit.txt
@@ -63,6 +62,7 @@ jobs:
             exit 1
           fi
           echo "TARGET_SHA_MATCH=PASS $tested_commit" | tee evidence/postgres/sha-verification.txt
+          
           python --version 2>&1 | tee evidence/postgres/python-version.txt
           psql -v ON_ERROR_STOP=1 -c 'SELECT version();' | tee evidence/postgres/postgres-version.txt
       - name: Compile all Python sources (fail closed)
@@ -200,26 +200,17 @@ jobs:
           psql -v ON_ERROR_STOP=1 -c "SELECT table_schema, table_name FROM information_schema.tables WHERE table_schema='public' ORDER BY table_name;" > evidence/postgres/final-schema.txt 2>&1 || true
           psql -v ON_ERROR_STOP=1 -c 'SELECT version, checksum, applied_at FROM schema_version ORDER BY version;' > evidence/postgres/final-migration-history.txt 2>&1 || true
           test "$(psql -v ON_ERROR_STOP=1 -Atc 'SELECT count(*) FROM schema_version;' 2>/dev/null || echo 0)" -ge 1 || true
+          expected_sha="${{ github.event.pull_request.head.sha || github.sha }}"
           tested_commit="$(git rev-parse HEAD)"
           printf '%s\n' "$tested_commit" > evidence/postgres/final-commit.txt
           printf '%s\n' "$tested_commit" > evidence/postgres/tested-commit.txt
-          printf '%s\n' "$TARGET_SHA" > evidence/postgres/expected-commit.txt
-          sha_match=false
-          if [ "$TARGET_SHA" = "$tested_commit" ]; then sha_match=true; fi
-          evidence_status=INCOMPLETE_OR_FAILED
-          if [ "$sha_match" = true ]; then evidence_status=PASS_CANDIDATE; fi
-          cat > evidence/postgres/commit-evidence.json <<EOF
-{
-  "commit_sha": "$TARGET_SHA",
-  "checked_out_head_sha": "$tested_commit",
-  "tested_commit": "$tested_commit",
-  "sha_match": $sha_match,
-  "evidence_status": "$evidence_status"
-}
-EOF
-          python -m json.tool evidence/postgres/commit-evidence.json >/dev/null
-          echo "COMMIT_EVIDENCE_JSON_VALID=PASS"
-          if [ "$sha_match" != true ]; then echo "TARGET_SHA_MISMATCH"; exit 1; fi
+          printf '%s\n' "$expected_sha" > evidence/postgres/expected-commit.txt
+          if [ "$expected_sha" != "$tested_commit" ]; then
+            echo "FINAL_TARGET_SHA_MISMATCH expected=$expected_sha tested=$tested_commit" | tee evidence/postgres/sha-verification-final.txt
+            exit 1
+          fi
+          echo "FINAL_TARGET_SHA_MATCH=PASS $tested_commit" | tee evidence/postgres/sha-verification-final.txt
+          
           sha256sum .github/workflows/core-gates.yml .github/workflows/eai-postgres-reperformance.yml \
             postgres/migrations/*.sql persistence/deep_value_reconciliation.py \
             tests/persistence/test_deep_value_reconciliation.py \
