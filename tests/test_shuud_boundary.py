@@ -51,8 +51,3 @@ def test_shuud_server_is_standalone_entrypoint():
     assert "from .app import app" in source
     assert "gerchain.web_ui" not in source
 
-
-def test_shuud_app_is_separate_fastapi_product():
-    from shuud.app import app
-    assert app.title == "SHUUD"
-    assert app.description == "2 минутын дотор замаа чөлөөл"

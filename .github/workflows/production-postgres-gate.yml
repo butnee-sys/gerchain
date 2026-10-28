@@ -98,8 +98,8 @@ jobs:
           set +e
           mkdir -p artifacts/segmented-tests
           mapfile -t excluded_shuud_tests < <(find tests -maxdepth 1 -type f -name 'test_shuud_*.py' ! -name 'test_shuud_boundary.py' ! -name 'test_shuud_exim_boundary.py' | sort)
-          printf '%s\\n' "${excluded_shuud_tests[@]}" > artifacts/segmented-tests/shuud-out-of-scope.txt
-          printf '%s\\n' tests/test_shuud_boundary.py tests/test_shuud_exim_boundary.py > artifacts/segmented-tests/shuud-boundary-tests-in-scope.txt
+          printf '%s\n' "${excluded_shuud_tests[@]}" > artifacts/segmented-tests/shuud-out-of-scope.txt
+          printf '%s\n' tests/test_shuud_boundary.py tests/test_shuud_exim_boundary.py > artifacts/segmented-tests/shuud-boundary-tests-in-scope.txt
           echo "SHUUD_OUT_OF_EAI_SCOPE_COUNT=${#excluded_shuud_tests[@]}"
           echo "SHUUD_OUT_OF_EAI_SCOPE_REASON=separate application; not an EAI acceptance pass"
           ignore_args=()
