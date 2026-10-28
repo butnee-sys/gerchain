@@ -33,12 +33,16 @@ def test_shuud_workflows_are_separate_manual_entrypoints():
         assert "\n  pull_request:" not in triggers
 
 
-def test_core_gate_does_not_execute_shuud_tests():
+def test_core_gate_excludes_shuud_product_tests_but_keeps_boundary_tests():
     root = Path(__file__).resolve().parents[1]
     text = (root / ".github" / "workflows" / "core-gates.yml").read_text(encoding="utf-8")
-    ignore_rule = "--ignore-glob='tests/test_[s]huud_*.py'"
-    assert ignore_rule in text
-    assert "tests/test_shuud_" not in text.replace(ignore_rule, "")
+    assert "test_shuud_*.py" in text
+    assert "! -name 'test_shuud_boundary.py'" in text
+    assert "! -name 'test_shuud_exim_boundary.py'" in text
+    assert "tests/test_shuud_boundary.py" in text
+    assert "tests/test_shuud_exim_boundary.py" in text
+    assert "excluded_shuud_tests" in text
+    assert "--ignore=\"$test_file\"" in text
     assert "shuud/" not in text
 
 

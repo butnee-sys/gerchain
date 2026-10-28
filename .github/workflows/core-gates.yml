@@ -94,11 +94,32 @@ jobs:
             tests/services/test_gerchain_runtime_refund_canonical.py \
             tests/services/test_gerchain_runtime_cancel_canonical.py \
             tests/services/test_gerchain_runtime_settlement_canonical.py
-      - name: Run full EAI test suite on the same commit (SHUUD excluded by canonical scope)
+      - name: Run full EAI test suite on the same commit (SHUUD product tests excluded; boundary tests retained)
         env:
           GERCHAIN_TEST_DATABASE_URL: postgresql+psycopg://gerchain:gerchain@127.0.0.1:5432/gerchain_test
           GERCHAIN_TEST_POSTGRES_URL: postgresql://gerchain:gerchain@127.0.0.1:5432/gerchain_test
-        run: pytest -q --import-mode=importlib --ignore-glob='tests/test_[s]huud_*.py'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/eai-scope
+          mapfile -t excluded_shuud_tests < <(find tests -maxdepth 1 -type f -name 'test_shuud_*.py' ! -name 'test_shuud_boundary.py' ! -name 'test_shuud_exim_boundary.py' | sort)
+          printf '%s\n' "${excluded_shuud_tests[@]}" > artifacts/eai-scope/shuud-out-of-scope.txt
+          printf '%s\n' tests/test_shuud_boundary.py tests/test_shuud_exim_boundary.py > artifacts/eai-scope/shuud-boundary-tests-in-scope.txt
+          echo "SHUUD_PRODUCT_TESTS_OUT_OF_EAI_SCOPE=${#excluded_shuud_tests[@]}"
+          echo "SHUUD_ARCHITECTURE_BOUNDARY_TESTS_IN_SCOPE=2"
+          ignore_args=()
+          for test_file in "${excluded_shuud_tests[@]}"; do
+            ignore_args+=(--ignore="$test_file")
+          done
+          pytest -q --import-mode=importlib --junitxml=artifacts/eai-scope/eai-regression.junit.xml "${ignore_args[@]}"
+      - name: Upload EAI scope and regression evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eai-scope-evidence-${{ github.event.pull_request.head.sha || github.sha }}
+          path: artifacts/eai-scope/
+          if-no-files-found: warn
+          retention-days: 90
       - name: Audit canonical migration inventory and applied history
         if: always()
         env:

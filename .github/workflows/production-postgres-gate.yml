@@ -97,10 +97,16 @@ jobs:
         run: |
           set +e
           mkdir -p artifacts/segmented-tests
-          find tests -maxdepth 1 -type f -name 'test_shuud_*.py' | sort > artifacts/segmented-tests/shuud-out-of-scope.txt
-          echo "SHUUD_OUT_OF_EAI_SCOPE_COUNT=$(wc -l < artifacts/segmented-tests/shuud-out-of-scope.txt)"
+          mapfile -t excluded_shuud_tests < <(find tests -maxdepth 1 -type f -name 'test_shuud_*.py' ! -name 'test_shuud_boundary.py' ! -name 'test_shuud_exim_boundary.py' | sort)
+          printf '%s\\n' "${excluded_shuud_tests[@]}" > artifacts/segmented-tests/shuud-out-of-scope.txt
+          printf '%s\\n' tests/test_shuud_boundary.py tests/test_shuud_exim_boundary.py > artifacts/segmented-tests/shuud-boundary-tests-in-scope.txt
+          echo "SHUUD_OUT_OF_EAI_SCOPE_COUNT=${#excluded_shuud_tests[@]}"
           echo "SHUUD_OUT_OF_EAI_SCOPE_REASON=separate application; not an EAI acceptance pass"
-          pytest -q --import-mode=importlib --ignore-glob='tests/test_[s]huud_*.py' --junitxml=artifacts/segmented-tests/eai-regression.junit.xml > artifacts/segmented-tests/eai-regression.log 2>&1
+          ignore_args=()
+          for test_file in "${excluded_shuud_tests[@]}"; do
+            ignore_args+=(--ignore="$test_file")
+          done
+          pytest -q --import-mode=importlib --junitxml=artifacts/segmented-tests/eai-regression.junit.xml "${ignore_args[@]}" > artifacts/segmented-tests/eai-regression.log 2>&1
           rc=$?
           cat artifacts/segmented-tests/eai-regression.log
           if [ "$rc" -eq 0 ]; then
