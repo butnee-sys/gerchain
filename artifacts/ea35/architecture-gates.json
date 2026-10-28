@@ -1,6 +1,9 @@
 {
   "schema_version": 2,
-  "source_commit_sha": "18916b9c2e7f2051e7ccdb91e1505ca00bd747d0",
-  "commit_sha": "18916b9c2e7f2051e7ccdb91e1505ca00bd747d0",
-  "status": "PASS"
+  "record_type": "historical_architecture_gate_record",
+  "status": "NOT_VERIFIED",
+  "final_lock_granted": false,
+  "historical_source_commit_sha": "18916b9c2e7f2051e7ccdb91e1505ca00bd747d0",
+  "gates": {},
+  "note": "Historical record only. No current candidate SHA is asserted and no architecture gate is considered passed by this file. The production-master-gate workflow requires a retained architecture-gates.json generated for the exact target SHA, with explicit evidence for every required gate; absent or mismatched evidence must fail closed."
 }
