@@ -316,10 +316,12 @@ jobs:
                   source_missing.append(name)
               else:
                   source_files.append({"path": name, "sha256": hashlib.sha256(path.read_bytes()).hexdigest()})
+          tested_commit = head
           report = {
               "commit_sha": expected_sha,
               "checked_out_head_sha": head,
-              "sha_match": expected_sha == head,
+              "tested_commit": tested_commit,
+              "sha_match": expected_sha == head == tested_commit,
               "source_files": source_files,
               "source_file_count": len(source_files),
               "source_missing": source_missing,
@@ -333,14 +335,14 @@ jobs:
               "migration_history_versions_exact": sorted(applied_by_version) == list(range(1, len(expected_by_version) + 1)),
               "migration_read_error": migration_error,
               "lifecycle_junit": junit,
-              "evidence_status": "PASS_CANDIDATE" if expected_sha == head and not migration_error and len(applied) == len(migrations) and checksum_match and sorted(applied_by_version) == list(range(1, len(expected_by_version) + 1)) and source_files and not source_missing and junit and all(x.get("tests", 0) > 0 and x.get("failures", 0) == 0 and x.get("errors", 0) == 0 for x in junit) else "INCOMPLETE_OR_FAILED",
+              "evidence_status": "PASS_CANDIDATE" if expected_sha == head == tested_commit and not migration_error and len(applied) == len(migrations) and checksum_match and sorted(applied_by_version) == list(range(1, len(expected_by_version) + 1)) and source_files and not source_missing and junit and all(x.get("tests", 0) > 0 and x.get("failures", 0) == 0 and x.get("errors", 0) == 0 for x in junit) else "INCOMPLETE_OR_FAILED",
           }
           out = Path("artifacts/production-postgres/migration-lifecycle-report.json")
           out.write_text(json.dumps(report, indent=2, sort_keys=True) + chr(10), encoding="utf-8")
           # Validate the exact bytes before producing the SHA-256 sidecar.
           json.loads(out.read_text(encoding="utf-8"))
           print("MIGRATION_LIFECYCLE_REPORT_JSON_VALID=PASS")
-          print(json.dumps({k: report[k] for k in ("commit_sha", "checked_out_head_sha", "sha_match", "source_file_count", "source_hashes_complete", "source_missing", "migration_file_count", "applied_migration_count", "migration_checksums_match_files", "migration_history_versions_exact", "lifecycle_junit", "evidence_status")}, indent=2))
+          print(json.dumps({k: report[k] for k in ("commit_sha", "checked_out_head_sha", "tested_commit", "sha_match", "source_file_count", "source_hashes_complete", "source_missing", "migration_file_count", "applied_migration_count", "migration_checksums_match_files", "migration_history_versions_exact", "lifecycle_junit", "evidence_status")}, indent=2))
           if not report["sha_match"]:
               raise SystemExit("commit_sha does not match checked_out_head_sha")
           if report["evidence_status"] != "PASS_CANDIDATE":
