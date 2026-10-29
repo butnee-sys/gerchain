@@ -89,28 +89,20 @@ jobs:
           }
           mapfile -t all_test_files < <(find tests postgres/tests -type f -name 'test_*.py' | sort)
           test_files=()
-          excluded_shuud_tests=()
+          excluded_product_tests=()
           for test_file in "${all_test_files[@]}"; do
             case "$test_file" in
-              tests/test_shuud_*.py)
-                case "$test_file" in
-                  tests/test_shuud_boundary.py|tests/test_shuud_exim_boundary.py)
-                    test_files+=("$test_file")
-                    ;;
-                  *)
-                    excluded_shuud_tests+=("$test_file")
-                    ;;
-                esac
+              */test_shuud_*.py|*/test_sandbox_*.py)
+                excluded_product_tests+=("$test_file")
                 ;;
               *)
                 test_files+=("$test_file")
                 ;;
             esac
           done
-          printf '%s\n' "${excluded_shuud_tests[@]}" > artifacts/production-gate/shuud-out-of-scope.txt
-          printf '%s\n' tests/test_shuud_boundary.py tests/test_shuud_exim_boundary.py > artifacts/production-gate/shuud-boundary-tests-in-scope.txt
-          echo "SHUUD_PRODUCT_TESTS_OUT_OF_EAI_SCOPE=${#excluded_shuud_tests[@]}"
-          echo "SHUUD_ARCHITECTURE_BOUNDARY_TESTS_IN_SCOPE=2"
+          printf '%s\n' "${excluded_product_tests[@]}" > artifacts/production-gate/product-tests-out-of-eai-scope.txt
+          printf '%s\n' "SHUUD and SANDBOX product tests are evaluated in the isolated product workflow, not as EAI acceptance criteria." > artifacts/production-gate/scope-disposition.txt
+          echo "SHUUD_AND_SANDBOX_PRODUCT_TESTS_OUT_OF_EAI_SCOPE=${#excluded_product_tests[@]}"
           for test_file in "${test_files[@]}"; do
             file_stem="${test_file//\//__}"
             log="artifacts/production-gate/${file_stem}.log"
