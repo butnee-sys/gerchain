@@ -10,6 +10,21 @@ The current branch head observed on 2026-10-29 was `27ec09ccd75ad330d4067b452cde
 
 **Disposition rule:** every row remains OPEN until a same-SHA test run or a reviewed, explicit scope decision supplies the missing evidence. “Out of core acceptance scope” does not mean “product defect resolved.”
 
+## Same-SHA scope separation and product re-test — 2026-10-30
+
+Candidate SHA: `ec53e8d7abca12377a45a3b2fc8010838036aed6`.
+
+The former failures #2–#21 are SHUUD/SANDBOX product tests, not EAI acceptance criteria. They were rerun in the dedicated [SHUUD and SANDBOX Product MVP Tests workflow](https://github.com/butnee-sys/gerchain/actions/runs/40881444525) at this exact SHA. Retained artifact: `shuud-sandbox-product-evidence-ec53e8d7abca12377a45a3b2fc8010838036aed6` (artifact ID `12915255352`), `junit.xml`.
+
+Verified JUnit result: **108 tests, 0 failures, 0 errors, 1 skipped**. Each of the 20 historical tests listed in rows #2–#21 is present in that JUnit and individually passed. The one skipped test is `test_shuud_survives_postgres_process_restart`, which is not one of the 21 historical failures. This is a successful product-MVP regression result, not a claim that SHUUD/SANDBOX are EAI components or that every product deployment control is closed.
+
+EAI scope is tested separately: the core-gates and production-gate workflows exclude `test_shuud_*.py` and `test_sandbox_*.py` files and retain an explicit exclusion inventory. The remaining item #1, `tests/test_final_lock_contract.py::test_shuud_workflows_are_path_isolated`, is a CI/release-governance contract and remains an **EAI-scope OPEN item** until the same-SHA EAI gate completes with a passing result and retained JUnit/log.
+
+Disposition update:
+- #2–#21: **PRODUCT TESTS RE-PASSED; OUT OF EAI ACCEPTANCE SCOPE** — run `40881444525`, artifact `12915255352`, exact SHA above.
+- #1: **OPEN — EAI CI/RELEASE GOVERNANCE RETEST PENDING**.
+- The original 21 failures remain preserved as historical diagnostics; this section records their current re-test evidence without misclassifying product tests as EAI acceptance failures.
+
 ## Individual failures
 
 | # | Exact failing test | Observed failure | Relevant requirement / contract | Current disposition and evidence required |
