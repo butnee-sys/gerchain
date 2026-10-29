@@ -164,17 +164,53 @@ def main() -> int:
             }
             report["status"] = "FAIL"
 
-    OUTPUT.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    checked_out_head_sha = git_sha()
+    requested_head_sha = os.environ.get("TARGET_SHA", checked_out_head_sha)
+    report["checked_out_head_sha"] = checked_out_head_sha
+    report["requested_head_sha"] = requested_head_sha
+    report["sha_match"] = requested_head_sha == checked_out_head_sha
+    if not report["sha_match"]:
+        report["status"] = "FAIL"
+    report["evidence_status"] = (
+        "PASS_CANDIDATE"
+        if report["status"] == "PASS"
+        and report["sha_match"]
+        and report["applied_history"].get("status") == "CAPTURED"
+        else "INCOMPLETE_OR_FAILED"
+    )
+
+    # Persist valid UTF-8 JSON with a real newline, then parse the exact bytes
+    # back and enforce the SHA/evidence contract before returning success.
+    OUTPUT.write_text(json.dumps(report, indent=2, sort_keys=True) + "\\n", encoding="utf-8")
+    persisted = json.loads(OUTPUT.read_text(encoding="utf-8"))
+    if persisted != report:
+        raise SystemExit("FAIL: persisted migration evidence JSON differs from in-memory report")
+    if persisted["commit_sha"] != persisted["checked_out_head_sha"]:
+        raise SystemExit("FAIL: migration evidence commit SHA does not match checked-out HEAD")
+    if persisted["requested_head_sha"] != persisted["checked_out_head_sha"]:
+        raise SystemExit("FAIL: requested candidate SHA does not match checked-out HEAD")
+    if persisted["evidence_status"] != "PASS_CANDIDATE":
+        print(json.dumps({
+            "status": persisted["status"],
+            "evidence_status": persisted["evidence_status"],
+            "commit_sha": persisted["commit_sha"],
+            "checked_out_head_sha": persisted["checked_out_head_sha"],
+            "applied_history_status": persisted["applied_history"]["status"],
+        }, indent=2))
+        return 1
+
     print(json.dumps({
         "status": report["status"],
+        "evidence_status": report["evidence_status"],
         "commit_sha": report["commit_sha"],
+        "checked_out_head_sha": report["checked_out_head_sha"],
         "canonical_versions": actual_versions,
         "versioned_sql_files": len(rows),
         "duplicate_versions": report["duplicate_versions"],
         "report": str(OUTPUT),
         "applied_history_status": report["applied_history"]["status"],
     }, indent=2))
-    return 0 if report["status"] == "PASS" else 1
+    return 0
 
 
 if __name__ == "__main__":
