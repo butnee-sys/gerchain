@@ -2,7 +2,7 @@
 
 **Status: OPEN — FINAL LOCK NOT GRANTED**  
 **Scope:** Canonical GerChain/EAI production infrastructure and overall foundational architecture.  
-**Explicit exclusion:** SHUUD is a separate, isolated application. It is not part of GERCHAIN EAI, is not part of this assurance boundary, and must not be used to reopen or contaminate previously closed GerChain/EAI gates.
+**Explicit exclusions:** SHUUD and SANDBOX are separate product MVPs, not components of GERCHAIN EAI. Their product behavior and product test failures are outside this EAI assurance boundary and must not reopen or contaminate GerChain/EAI gates. Only a separately specified EAI adapter/contract test may remain in scope when it directly verifies a frozen EAI interface; no SHUUD/SANDBOX product lifecycle test is an EAI acceptance criterion.
 
 ## 1. Scope and invariants
 
@@ -28,7 +28,7 @@ The following are retained as previously recorded repository evidence and are no
 | CORE PostgreSQL concurrency | GREEN in existing CORE audit record | Retain prior evidence; not a substitute for the current EAI production re-performance |
 | CORE abandoned PROCESSING recovery | GREEN in existing CORE audit record | Retain prior evidence |
 | CORE reconciliation / CodeQL controls | GREEN in existing CORE audit records | Historical evidence remains scoped to its exact baseline |
-| SHUUD isolation | OUT OF SCOPE / SEPARATE APP | No SHUUD/product gate is part of EAI final lock |
+| SHUUD / SANDBOX isolation | OUT OF SCOPE / SEPARATE PRODUCT MVPs | No SHUUD or SANDBOX product gate is part of EAI final lock |
 
 A retained historical GREEN does not automatically prove the latest working branch or current production deployment. Evidence remains tied to its recorded commit and test scope.
 
@@ -70,5 +70,5 @@ Any failure in a mandatory gate keeps the final lock OPEN. A successful historic
 
 **MASTER GATE: OPEN**  
 **PRODUCTION READY FINAL LOCK: NOT GRANTED — EVIDENCE GATES REMAIN OPEN**  
-**SHUUD: SEPARATE, ISOLATED APPLICATION — OUT OF SCOPE**  
+**SHUUD / SANDBOX: SEPARATE PRODUCT MVPs — OUT OF EAI SCOPE**  
 **Canonical architecture freeze: unchanged.**
