@@ -54,8 +54,8 @@ jobs:
         run: |
           set +e
           mkdir -p artifacts/shuud-sandbox
-          mapfile -t product_tests < <(find tests -type f \\( -name 'test_shuud_*.py' -o -name 'test_sandbox_*.py' \\) | sort)
-          printf '%s\\n' "${product_tests[@]}" > artifacts/shuud-sandbox/test-inventory.txt
+          mapfile -t product_tests < <(find tests -type f \( -name 'test_shuud_*.py' -o -name 'test_sandbox_*.py' \) | sort)
+          printf '%s\n' "${product_tests[@]}" > artifacts/shuud-sandbox/test-inventory.txt
           echo "PRODUCT_TEST_FILE_COUNT=${#product_tests[@]}"
           if [ "${#product_tests[@]}" -eq 0 ]; then
             echo "FAIL: no SHUUD/SANDBOX product tests discovered"
