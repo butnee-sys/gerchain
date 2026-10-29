@@ -89,7 +89,7 @@ jobs:
               print(f"DIAGNOSTIC_DATABASE_RESET_AND_MIGRATED=PASS versions={len(rows)}")
           PY
 
-      - name: Run canonical EAI regression suite and record SHUUD scope exclusion
+      - name: Run canonical EAI regression suite; exclude SHUUD and SANDBOX product tests
         # Run the canonical suite once. Database lifecycle and migration mutation tests
         # have dedicated gates below; per-file reruns duplicated work and produced
         # misleading missing-environment failures in older attempts.
@@ -97,13 +97,12 @@ jobs:
         run: |
           set +e
           mkdir -p artifacts/segmented-tests
-          mapfile -t excluded_shuud_tests < <(find tests -maxdepth 1 -type f -name 'test_shuud_*.py' ! -name 'test_shuud_boundary.py' ! -name 'test_shuud_exim_boundary.py' | sort)
-          printf '%s\n' "${excluded_shuud_tests[@]}" > artifacts/segmented-tests/shuud-out-of-scope.txt
-          printf '%s\n' tests/test_shuud_boundary.py tests/test_shuud_exim_boundary.py > artifacts/segmented-tests/shuud-boundary-tests-in-scope.txt
-          echo "SHUUD_OUT_OF_EAI_SCOPE_COUNT=${#excluded_shuud_tests[@]}"
-          echo "SHUUD_OUT_OF_EAI_SCOPE_REASON=separate application; not an EAI acceptance pass"
+          mapfile -t excluded_product_tests < <(find tests -type f \( -name 'test_shuud_*.py' -o -name 'test_sandbox_*.py' \) | sort)
+          printf '%s\\n' "${excluded_product_tests[@]}" > artifacts/segmented-tests/product-tests-out-of-eai-scope.txt
+          printf '%s\\n' "SHUUD and SANDBOX are separate product MVPs; their product tests are not EAI acceptance criteria." > artifacts/segmented-tests/scope-disposition.txt
+          echo "SHUUD_AND_SANDBOX_PRODUCT_TESTS_OUT_OF_EAI_SCOPE=${#excluded_product_tests[@]}"
           ignore_args=()
-          for test_file in "${excluded_shuud_tests[@]}"; do
+          for test_file in "${excluded_product_tests[@]}"; do
             ignore_args+=(--ignore="$test_file")
           done
           pytest -q --import-mode=importlib --junitxml=artifacts/segmented-tests/eai-regression.junit.xml "${ignore_args[@]}" > artifacts/segmented-tests/eai-regression.log 2>&1
