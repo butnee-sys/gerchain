@@ -103,8 +103,8 @@ jobs:
           set -euo pipefail
           mkdir -p artifacts/eai-scope
           mapfile -t excluded_product_tests < <(find tests -type f \( -name 'test_shuud_*.py' -o -name 'test_sandbox_*.py' \) | sort)
-          printf '%s\\n' "${excluded_product_tests[@]}" > artifacts/eai-scope/product-tests-out-of-eai-scope.txt
-          printf '%s\\n' "SHUUD and SANDBOX are separate product MVPs; their product tests are not EAI acceptance criteria." > artifacts/eai-scope/scope-disposition.txt
+          printf '%s\n' "${excluded_product_tests[@]}" > artifacts/eai-scope/product-tests-out-of-eai-scope.txt
+          printf '%s\n' "SHUUD and SANDBOX are separate product MVPs; their product tests are not EAI acceptance criteria." > artifacts/eai-scope/scope-disposition.txt
           echo "SHUUD_AND_SANDBOX_PRODUCT_TESTS_OUT_OF_EAI_SCOPE=${#excluded_product_tests[@]}"
           ignore_args=()
           for test_file in "${excluded_product_tests[@]}"; do
