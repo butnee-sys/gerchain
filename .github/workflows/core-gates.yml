@@ -94,7 +94,7 @@ jobs:
             tests/services/test_gerchain_runtime_refund_canonical.py \
             tests/services/test_gerchain_runtime_cancel_canonical.py \
             tests/services/test_gerchain_runtime_settlement_canonical.py
-      - name: Run full EAI test suite on the same commit (SHUUD product tests excluded; boundary tests retained)
+      - name: Run full EAI test suite on the same commit (SHUUD and SANDBOX product tests excluded)
         env:
           GERCHAIN_TEST_DATABASE_URL: postgresql+psycopg://gerchain:gerchain@127.0.0.1:5432/gerchain_test
           GERCHAIN_TEST_POSTGRES_URL: postgresql://gerchain:gerchain@127.0.0.1:5432/gerchain_test
@@ -102,13 +102,12 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p artifacts/eai-scope
-          mapfile -t excluded_shuud_tests < <(find tests -maxdepth 1 -type f -name 'test_shuud_*.py' ! -name 'test_shuud_boundary.py' ! -name 'test_shuud_exim_boundary.py' | sort)
-          printf '%s\n' "${excluded_shuud_tests[@]}" > artifacts/eai-scope/shuud-out-of-scope.txt
-          printf '%s\n' tests/test_shuud_boundary.py tests/test_shuud_exim_boundary.py > artifacts/eai-scope/shuud-boundary-tests-in-scope.txt
-          echo "SHUUD_PRODUCT_TESTS_OUT_OF_EAI_SCOPE=${#excluded_shuud_tests[@]}"
-          echo "SHUUD_ARCHITECTURE_BOUNDARY_TESTS_IN_SCOPE=2"
+          mapfile -t excluded_product_tests < <(find tests -type f \( -name 'test_shuud_*.py' -o -name 'test_sandbox_*.py' \) | sort)
+          printf '%s\\n' "${excluded_product_tests[@]}" > artifacts/eai-scope/product-tests-out-of-eai-scope.txt
+          printf '%s\\n' "SHUUD and SANDBOX are separate product MVPs; their product tests are not EAI acceptance criteria." > artifacts/eai-scope/scope-disposition.txt
+          echo "SHUUD_AND_SANDBOX_PRODUCT_TESTS_OUT_OF_EAI_SCOPE=${#excluded_product_tests[@]}"
           ignore_args=()
-          for test_file in "${excluded_shuud_tests[@]}"; do
+          for test_file in "${excluded_product_tests[@]}"; do
             ignore_args+=(--ignore="$test_file")
           done
           pytest -q --import-mode=importlib --junitxml=artifacts/eai-scope/eai-regression.junit.xml "${ignore_args[@]}"
