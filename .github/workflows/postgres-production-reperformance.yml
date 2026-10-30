@@ -40,8 +40,6 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
-        with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - name: Assert checkout matches the tested PR head
         env:
           EXPECTED_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
@@ -243,6 +241,17 @@ jobs:
           root = pathlib.Path("production-gate-evidence")
           checked_out_sha = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
           source_sha = os.environ["HEAD_SHA"]
+          sha_match = bool(source_sha) and source_sha == checked_out_sha
+          required_files = [
+              "production-boot-status.txt",
+              "reconciliation-report.json",
+              "migration-catalog-proof.json",
+              "migration-history.json",
+              "postgres-constraints.json",
+              "postgres-test.log",
+          ]
+          missing_required_files = [name for name in required_files if not (root / name).is_file()]
+          job_status = os.environ["JOB_STATUS"]
           manifest = {
               "artifact": "production-gate-evidence",
               "workflow": "PostgreSQL Production Re-performance",
@@ -250,12 +259,14 @@ jobs:
               "run_attempt": os.environ["RUN_ATTEMPT"],
               "github_sha": source_sha,
               "checked_out_sha": checked_out_sha,
-              "sha_match": source_sha == checked_out_sha,
-              "job_status_at_manifest_step": os.environ["JOB_STATUS"],
-              "production_boot_evidence_present": (root / "production-boot-status.txt").exists(),
-              "reconciliation_report_present": (root / "reconciliation-report.json").exists(),
-              "evidence_status": "BLOCKED" if source_sha != checked_out_sha else "COLLECTED_PENDING_VERIFICATION",
-              "note": "Artifact presence does not itself mean the gate passed; inspect workflow conclusion and each report."
+              "sha_match": sha_match,
+              "job_status_at_manifest_step": job_status,
+              "production_boot_evidence_present": (root / "production-boot-status.txt").is_file(),
+              "reconciliation_report_present": (root / "reconciliation-report.json").is_file(),
+              "required_files": required_files,
+              "missing_required_files": missing_required_files,
+              "evidence_status": "PASS_CANDIDATE" if sha_match and job_status == "success" and not missing_required_files else "INCOMPLETE_OR_FAILED",
+              "note": "PASS_CANDIDATE is not FINAL LOCK; it requires independent review of logs and reports."
           }
           (root / "production-gate-evidence.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
           print(json.dumps(manifest, indent=2))
