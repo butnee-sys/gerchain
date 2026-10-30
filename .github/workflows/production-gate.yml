@@ -144,28 +144,40 @@ jobs:
           set -euo pipefail
           mkdir -p artifacts/production-gate
           python - <<'PY'
-          import hashlib, json, os, subprocess
+          import hashlib, json, os, subprocess, xml.etree.ElementTree as ET
           from pathlib import Path
           root = Path("artifacts/production-gate")
           canonical = os.environ["CANONICAL_COMMIT_SHA"]
           checked_out = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
           tracked = subprocess.check_output(["git", "ls-files", "-z"], text=False).split(bytes([0]))
           hashes = []
-          for raw in tracked:
+          source_candidates = [raw for raw in tracked if raw and Path(raw.decode()).suffix in {".py", ".sql", ".yml", ".yaml", ".toml", ".json"}]
+          missing_sources = []
+          for raw in source_candidates:
               if not raw: continue
               path = Path(raw.decode())
-              if path.is_file() and path.suffix in {".py", ".sql", ".yml", ".yaml", ".toml", ".json"}:
+              if path.is_file():
                   hashes.append({"path": path.as_posix(), "sha256": hashlib.sha256(path.read_bytes()).hexdigest()})
+              else:
+                  missing_sources.append(path.as_posix())
           junit = sorted(p.as_posix() for p in root.rglob("*.junit.xml"))
           logs = sorted(p.as_posix() for p in root.rglob("*.log"))
+          test_counts = {"failures": 0, "errors": 0, "skipped": 0, "suites": 0}
+          for name in junit:
+              suite = ET.parse(name).getroot()
+              suites = list(suite.iter("testsuite")) if suite.tag != "testsuite" else [suite]
+              for item in suites:
+                  test_counts["suites"] += 1
+                  for key in ("failures", "errors", "skipped"):
+                      test_counts[key] += int(item.attrib.get(key, "0"))
           manifest = {
-              "evidence_status": "PASS_CANDIDATE" if canonical == checked_out and junit else "INCOMPLETE_OR_FAILED",
+              "evidence_status": "PASS_CANDIDATE" if canonical == checked_out and junit and test_counts["failures"] == 0 and test_counts["errors"] == 0 and not missing_sources else "INCOMPLETE_OR_FAILED",
               "canonical_commit_sha": canonical, "commit_sha": canonical,
               "checked_out_head_sha": checked_out,
               "github_event_sha": os.environ.get("GITHUB_EVENT_COMMIT_SHA"),
               "pull_request_head_sha": os.environ.get("PR_HEAD_COMMIT_SHA") or None,
               "run_id": os.environ.get("GITHUB_RUN_ID"), "run_attempt": os.environ.get("GITHUB_RUN_ATTEMPT"),
-              "source_hashes_complete": bool(hashes), "source_file_count": len(hashes), "source_hashes": hashes,
+              "source_hashes_complete": len(hashes) == len(source_candidates) and not missing_sources, "source_file_count": len(hashes), "source_hashes": hashes, "missing_source_files": missing_sources, "junit_totals": test_counts,
               "junit_files": junit, "log_files": logs,
           }
           (root / "canonical-evidence-manifest.json").write_text(json.dumps(manifest, indent=2, sort_keys=True) + chr(10), encoding="utf-8")
