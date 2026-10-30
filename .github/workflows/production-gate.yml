@@ -31,12 +31,26 @@ jobs:
       GERCHAIN_POSTGRES_DSN: postgresql://gerchain:gerchain_test@127.0.0.1:5432/gerchain_test
       GERCHAIN_MIGRATION_TEST_DATABASE_URL: postgresql://gerchain:gerchain_test@127.0.0.1:5432/gerchain_test
       PYTHONPYCACHEPREFIX: /tmp/gerchain-pycache
+      CANONICAL_COMMIT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      PR_HEAD_COMMIT_SHA: ${{ github.event.pull_request.head.sha || '' }}
+      GITHUB_EVENT_COMMIT_SHA: ${{ github.sha }}
 
     steps:
       - name: Checkout exact tested commit
         uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Verify canonical evidence commit SHA
+        shell: bash
+        run: |
+          set -euo pipefail
+          checked_out_sha="$(git rev-parse HEAD)"
+          test "$checked_out_sha" = "$CANONICAL_COMMIT_SHA"
+          if [ -n "$PR_HEAD_COMMIT_SHA" ]; then test "$checked_out_sha" = "$PR_HEAD_COMMIT_SHA"; fi
+          echo "CANONICAL_COMMIT_SHA=$CANONICAL_COMMIT_SHA"
+          echo "CHECKED_OUT_HEAD_SHA=$checked_out_sha"
+          echo "GITHUB_EVENT_COMMIT_SHA=$GITHUB_EVENT_COMMIT_SHA"
+          echo "PR_HEAD_COMMIT_SHA=$PR_HEAD_COMMIT_SHA"
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -123,6 +137,41 @@ jobs:
           done
           echo "PRODUCTION_GATE_FILE_FAILURE_COUNT=$failures"
           if [ "$failures" -ne 0 ]; then exit 1; fi
+      - name: Build canonical Production Gate evidence manifest
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/production-gate
+          python - <<'PY'
+          import hashlib, json, os, subprocess
+          from pathlib import Path
+          root = Path("artifacts/production-gate")
+          canonical = os.environ["CANONICAL_COMMIT_SHA"]
+          checked_out = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+          tracked = subprocess.check_output(["git", "ls-files", "-z"], text=False).split(b"\\0")
+          hashes = []
+          for raw in tracked:
+              if not raw: continue
+              path = Path(raw.decode())
+              if path.is_file() and path.suffix in {".py", ".sql", ".yml", ".yaml", ".toml", ".json"}:
+                  hashes.append({"path": path.as_posix(), "sha256": hashlib.sha256(path.read_bytes()).hexdigest()})
+          junit = sorted(p.as_posix() for p in root.rglob("*.junit.xml"))
+          logs = sorted(p.as_posix() for p in root.rglob("*.log"))
+          manifest = {
+              "evidence_status": "PASS_CANDIDATE" if canonical == checked_out and junit else "INCOMPLETE_OR_FAILED",
+              "canonical_commit_sha": canonical, "commit_sha": canonical,
+              "checked_out_head_sha": checked_out,
+              "github_event_sha": os.environ.get("GITHUB_EVENT_COMMIT_SHA"),
+              "pull_request_head_sha": os.environ.get("PR_HEAD_COMMIT_SHA") or None,
+              "run_id": os.environ.get("GITHUB_RUN_ID"), "run_attempt": os.environ.get("GITHUB_RUN_ATTEMPT"),
+              "source_hashes_complete": bool(hashes), "source_file_count": len(hashes), "source_hashes": hashes,
+              "junit_files": junit, "log_files": logs,
+          }
+          (root / "canonical-evidence-manifest.json").write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\\n", encoding="utf-8")
+          print(json.dumps({k:v for k,v in manifest.items() if k != "source_hashes"}, indent=2))
+          assert canonical == checked_out, "canonical commit SHA mismatch"
+          PY
       - name: Upload per-file Production Gate logs and JUnit
         if: always()
         uses: actions/upload-artifact@v4
