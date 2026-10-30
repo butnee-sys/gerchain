@@ -350,7 +350,9 @@ jobs:
           sha256sum artifacts/production-postgres/migration-lifecycle-report.json > artifacts/production-postgres/migration-lifecycle-report.json.sha256
 
       - name: Export machine-readable migration history and PostgreSQL constraints
-        if: success()
+        # Preserve database-state evidence even when application/JUnit tests fail.
+        # The step itself still fails closed if the evidence database was not created.
+        if: always()
         run: |
           mkdir -p artifacts/production-postgres
           python - <<'PY'
