@@ -42,3 +42,20 @@ The later [Production PostgreSQL Gate run 40976839116](https://github.com/butnee
 5. Bind independent re-performance and all outstanding operational/release controls to that same frozen SHA.
 
 No artifact is silently rewritten, no SHA mismatch is waived, and no certificate is promoted by this record.
+
+
+## Current branch-head artifact review — 2026-10-30 — SHA 2c4c6dd0871a688e4f3f7dc354295020d2a5da8a
+
+The old artifact 12457545216 remains quarantined and immutable; it is not edited in place. Its embedded `e872ba14...` tested SHA does not match the older run's declared head SHA, so it remains inadmissible for that candidate.
+
+A newer artifact was collected from [PostgreSQL Production Re-performance run 41029049024](https://github.com/butnee-sys/gerchain/actions/runs/41029049024), artifact [12966011382](https://github.com/butnee-sys/gerchain/actions/runs/41029049024/artifacts/12966011382). The archived `production-gate-evidence.json`, `migration-history.json`, `postgres-constraints.json`, and `tested-commit.txt` all identify run 41029049024, attempt 1, and bind `github_sha == checked_out_sha == tested_commit == 2c4c6dd0871a688e4f3f7dc354295020d2a5da8a`. It records migrations 001–017 with applied timestamps and matching migration-file SHA-256 values; all listed PostgreSQL check constraints are validated; production boot reports PASS.
+
+Important limitations: this artifact's top-level `evidence_status` is **COLLECTED_PENDING_VERIFICATION**, not PASS_CANDIDATE. Its reconciliation report is explicitly an empty-baseline reconciliation (zero movements, witnesses, outbox, idempotency, and escrow rows); it is not evidence of a non-empty production transaction history. The artifact itself does not supply a full source-file hash inventory or a lifecycle JUnit report.
+
+The separate [EAI PostgreSQL Re-performance run 41029049038](https://github.com/butnee-sys/gerchain/actions/runs/41029049038), artifact 12965980648, binds commit/expected/tested/final SHA to 2c4c6dd0871a688e4f3f7dc354295020d2a5da8a; its SHA256SUMS manifest is retained, and its JUnit reports core 56/56 and deep reconciliation 24/24 passing. This is scoped EAI evidence, not a substitute for the complete Production PostgreSQL Gate evidence manifest.
+
+At the time of this addendum, [Production PostgreSQL Gate 41029049056](https://github.com/butnee-sys/gerchain/actions/runs/41029049056) and [Production Gate 41029049063](https://github.com/butnee-sys/gerchain/actions/runs/41029049063) remained in progress, while [core-gates 41029049010](https://github.com/butnee-sys/gerchain/actions/runs/41029049010) was pending. Their final logs/JUnit and a complete SHA-bound production evidence bundle remain required.
+
+The new evidence does not rewrite or rehabilitate the historical mismatched artifact, and it does not change the decision:
+- `FINAL LOCK = OPEN`
+- `PRODUCTION READY = NOT VERIFIED`

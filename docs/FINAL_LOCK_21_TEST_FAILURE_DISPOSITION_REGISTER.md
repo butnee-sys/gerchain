@@ -57,3 +57,19 @@ This section supplements, and does not erase, the historical d9c8af8 failure rec
 | #1 | Not present in product-workflow JUnit; workflow-contract difference remains | **OPEN — explicit policy approval or corrected contract test required** |
 
 No historical failure is silently waived. A later candidate must rerun the relevant tests and attach JUnit/log evidence bound to that exact SHA before these rows can be closed for release.
+
+
+## Current candidate re-test — 2026-10-30 — SHA 2c4c6dd0871a688e4f3f7dc354295020d2a5da8a
+
+The current branch-head product workflow [41029048996](https://github.com/butnee-sys/gerchain/actions/runs/41029048996), attempt 1, completed successfully at the exact SHA above. Retained JUnit artifact: [12965650542](https://github.com/butnee-sys/gerchain/actions/runs/41029048996/artifacts/12965650542). The JUnit XML parses and reports **108 tests, 0 failures, 0 errors, 1 skipped**. Cross-checking the exact historical test node IDs confirms that rows #2–#21 all appear and pass individually on this candidate SHA.
+
+The single skipped test is `tests.test_shuud_process_restart_postgres_e2e::test_shuud_survives_postgres_process_restart`; the skip reason is `SHUUD_POSTGRES_DSN is required for PostgreSQL process-restart E2E`. This is not one of the original 21, but it remains an open PostgreSQL-specific product verification item.
+
+Rows #2–#21 are therefore recorded as **PASS ON 2c4c6dd0871a688e4f3f7dc354295020d2a5da8a; OPEN FOR REVALIDATION ON THE NEXT FROZEN CANDIDATE SHA**. They are not promoted to final closure until the next candidate's required workflows rerun and retain matching JUnit. Row #1, `tests/test_final_lock_contract.py::test_shuud_workflows_are_path_isolated`, remains **OPEN** pending the completed same-SHA EAI/core-gates result and reviewer-approved workflow-scope contract.
+
+Separate EAI evidence at the same SHA:
+- [EAI PostgreSQL Re-performance run 41029049038](https://github.com/butnee-sys/gerchain/actions/runs/41029049038), artifact 12965980648: commit/expected/tested/final SHA files match; core JUnit 56/56 passed; deep-reconciliation JUnit 24/24 passed; migration history and source checksums are retained.
+- [FINAL EAI/CORE Exact-SHA Gate run 41029049160](https://github.com/butnee-sys/gerchain/actions/runs/41029049160), artifact 12966345521: manifest commit SHA matches; 17 migration files are inventoried.
+- [Production Gate run 41029049063](https://github.com/butnee-sys/gerchain/actions/runs/41029049063), [Production PostgreSQL Gate run 41029049056](https://github.com/butnee-sys/gerchain/actions/runs/41029049056), and [core-gates run 41029049010](https://github.com/butnee-sys/gerchain/actions/runs/41029049010) had not completed when this record was prepared. No final full-suite/JUnit conclusion is inferred from them.
+
+This addendum updates evidence only. It does not waive any row, certify SHUUD/SANDBOX production readiness, or grant final lock.

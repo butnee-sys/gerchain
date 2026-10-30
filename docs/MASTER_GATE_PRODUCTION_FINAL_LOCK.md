@@ -72,3 +72,23 @@ Any failure in a mandatory gate keeps the final lock OPEN. A successful historic
 **PRODUCTION READY FINAL LOCK: NOT GRANTED — EVIDENCE GATES REMAIN OPEN**  
 **SHUUD / SANDBOX: SEPARATE PRODUCT MVPs — OUT OF EAI SCOPE**  
 **Canonical architecture freeze: unchanged.**
+
+
+## Candidate evidence checkpoint — 2026-10-30
+
+Current branch candidate reviewed: `2c4c6dd0871a688e4f3f7dc354295020d2a5da8a`.
+
+Verified at this candidate:
+- SHUUD/SANDBOX product MVP JUnit: 108 tests, 0 failures, 0 errors, 1 skipped (PostgreSQL process-restart test skipped because `SHUUD_POSTGRES_DSN` was not configured); 20 historical rows #2–#21 individually pass on this SHA.
+- EAI core JUnit: 56/56 passed; deep value reconciliation JUnit: 24/24 passed.
+- 17 migration files and 17 applied migration-history rows are retained in the EAI PostgreSQL re-performance evidence.
+- PostgreSQL production re-performance reports SHA equality and successful production boot, but its evidence status is only `COLLECTED_PENDING_VERIFICATION`; its reconciliation is an empty-baseline check, not a populated live-transaction proof.
+- The full Production Gate and Production PostgreSQL Gate are still running, and core-gates is pending at the time of this checkpoint. Row #1 of the historical 21-test register is therefore not closed.
+
+The old SHA-mismatched artifact remains quarantined. The tracked `docs/production-master-gate-manifest.json` is a source template with no embedded candidate SHA; run-specific manifests must remain in run-scoped artifacts and must be validated against their run metadata. The historical certificate JSON/PDF remain explicitly withdrawn as current certification.
+
+Before selecting a release candidate, finish the current runs and reconcile all retained artifacts. Then make one documentation/evidence-register commit, freeze its resulting SHA, and rerun every mandatory gate on that exact SHA. Do not combine evidence from different candidate SHAs.
+
+Outstanding production controls remain: legacy authority-store write freeze, IAM/MFA and privileged access, observability/recovery/no-duplicate movement, production-like performance/concurrency, backup/restore/DR, independent re-performance, complete evidence index, and explicit authorized approval.
+
+**MASTER GATE = OPEN; PRODUCTION READY = NOT VERIFIED; FINAL LOCK = OPEN.**
