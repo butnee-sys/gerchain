@@ -181,7 +181,7 @@ def main() -> int:
 
     # Persist valid UTF-8 JSON with a real newline, then parse the exact bytes
     # back and enforce the SHA/evidence contract before returning success.
-    OUTPUT.write_text(json.dumps(report, indent=2, sort_keys=True) + "\\n", encoding="utf-8")
+    OUTPUT.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     persisted = json.loads(OUTPUT.read_text(encoding="utf-8"))
     if persisted != report:
         raise SystemExit("FAIL: persisted migration evidence JSON differs from in-memory report")
