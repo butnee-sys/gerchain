@@ -48,14 +48,15 @@ jobs:
       PYTHONPATH: .
       GERCHAIN_MIGRATION_TEST_DATABASE_URL: postgresql://gerchain:gerchain@localhost:5432/migration_gate
       MIGRATION_GATE_REPORT: migration-gate-report.json
+      EVIDENCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
     steps:
       - name: Checkout exact tested revision
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.sha }}
+          ref: ${{ env.EVIDENCE_SHA }}
       - name: Assert checkout matches requested evidence SHA
         env:
-          EXPECTED_COMMIT_SHA: ${{ github.sha }}
+          EXPECTED_COMMIT_SHA: ${{ env.EVIDENCE_SHA }}
         run: |
           python - <<'PY'
           import os, subprocess
@@ -80,7 +81,7 @@ jobs:
       - name: Bind migration report to exact checkout SHA
         if: always()
         env:
-          EXPECTED_COMMIT_SHA: ${{ github.sha }}
+          EXPECTED_COMMIT_SHA: ${{ env.EVIDENCE_SHA }}
           EVIDENCE_RUN_ID: ${{ github.run_id }}
           EVIDENCE_RUN_ATTEMPT: ${{ github.run_attempt }}
         run: |
@@ -126,7 +127,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: canonical-migration-gate-${{ github.sha }}
+          name: canonical-migration-gate-${{ env.EVIDENCE_SHA }}
           path: |
             migration-gate-report.json
             migration-gate-junit.xml
