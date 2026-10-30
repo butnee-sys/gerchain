@@ -149,7 +149,7 @@ jobs:
           root = Path("artifacts/production-gate")
           canonical = os.environ["CANONICAL_COMMIT_SHA"]
           checked_out = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
-          tracked = subprocess.check_output(["git", "ls-files", "-z"], text=False).split(b"\\0")
+          tracked = subprocess.check_output(["git", "ls-files", "-z"], text=False).split(bytes([0]))
           hashes = []
           for raw in tracked:
               if not raw: continue
@@ -168,7 +168,7 @@ jobs:
               "source_hashes_complete": bool(hashes), "source_file_count": len(hashes), "source_hashes": hashes,
               "junit_files": junit, "log_files": logs,
           }
-          (root / "canonical-evidence-manifest.json").write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\\n", encoding="utf-8")
+          (root / "canonical-evidence-manifest.json").write_text(json.dumps(manifest, indent=2, sort_keys=True) + chr(10), encoding="utf-8")
           print(json.dumps({k:v for k,v in manifest.items() if k != "source_hashes"}, indent=2))
           assert canonical == checked_out, "canonical commit SHA mismatch"
           PY
