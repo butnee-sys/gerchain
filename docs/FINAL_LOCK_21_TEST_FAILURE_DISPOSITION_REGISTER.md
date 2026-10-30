@@ -36,3 +36,24 @@
 - Test #1 remains in scope because it validates CI/workflow boundary isolation.
 - Close a row only with a linked fix commit and a passing targeted JUnit/log at that commit, or an explicit, reviewable scope decision by the responsible authority. A new SHA requires rerunning the relevant verification.
 - No failures are silently suppressed, converted to skips, or counted as successful.
+
+
+## Follow-up verification on candidate d371daa (2026-10-30)
+
+This section supplements, and does not erase, the historical d9c8af8 failure record.
+
+- Candidate: `d371daa4263be8736e0c2ca782f09cf06f8d02b2`.
+- Separate SHUUD/SANDBOX product workflow: [run 40976839068](https://github.com/butnee-sys/gerchain/actions/runs/40976839068), JUnit artifact `12942773525`.
+- JUnit result: 108 tests; 107 passed, 0 failed, 0 errors, 1 skipped.
+- A test-inventory cross-check recorded in PR #111 comment [6516223987](https://github.com/butnee-sys/gerchain/pull/111#issuecomment-6516223987) matched 20 of the 21 historical failures (#2–#21) to passing tests in that product workflow. Accordingly, those 20 rows have **PASS EVIDENCE ON d371daa**; they are not declared permanently closed because the current branch head is later than d371daa and needs same-SHA rerun.
+- Row #1 (`test_shuud_workflows_are_path_isolated`) is not in that product-workflow JUnit. It remains **OPEN** pending an explicit approval of the changed workflow-isolation contract or a corrected contract test and passing run.
+- The product workflow had one skipped test, `tests.test_shuud_process_restart_postgres_e2e::test_shuud_survives_postgres_process_restart`. It is a separate outstanding PostgreSQL-enabled SHUUD check; it is not counted as one of the 20 passing historical failures.
+
+### Row-level follow-up disposition
+
+| Historical rows | Candidate d371daa evidence | Current branch disposition |
+|---|---|---|
+| #2–#21 | Matching SHUUD/SANDBOX tests present and passing in run 40976839068, JUnit artifact 12942773525 | PASS EVIDENCE ON d371daa; **OPEN for revalidation on current frozen SHA** |
+| #1 | Not present in product-workflow JUnit; workflow-contract difference remains | **OPEN — explicit policy approval or corrected contract test required** |
+
+No historical failure is silently waived. A later candidate must rerun the relevant tests and attach JUnit/log evidence bound to that exact SHA before these rows can be closed for release.
