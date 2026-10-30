@@ -125,6 +125,40 @@ jobs:
             ignore_args+=(--ignore="$test_file")
           done
           pytest -q --import-mode=importlib --junitxml=artifacts/eai-scope/eai-regression.junit.xml "${ignore_args[@]}"
+      - name: Build canonical core-gates evidence manifest
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/eai-scope
+          python - <<'PY'
+          import hashlib, json, os, subprocess
+          from pathlib import Path
+          canonical = os.environ["CANONICAL_COMMIT_SHA"]
+          checked_out = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+          tracked = subprocess.check_output(["git", "ls-files", "-z"], text=False).split(bytes([0]))
+          hashes = []
+          for raw in tracked:
+              if not raw: continue
+              path = Path(raw.decode())
+              if path.is_file() and path.suffix in {".py", ".sql", ".yml", ".yaml", ".toml", ".json"}:
+                  hashes.append({"path": path.as_posix(), "sha256": hashlib.sha256(path.read_bytes()).hexdigest()})
+          junit = sorted(p.as_posix() for p in Path("artifacts").rglob("*.junit.xml"))
+          manifest = {
+              "evidence_status": "PASS_CANDIDATE" if canonical == checked_out and junit else "INCOMPLETE_OR_FAILED",
+              "canonical_commit_sha": canonical, "commit_sha": canonical,
+              "checked_out_head_sha": checked_out,
+              "github_event_sha": os.environ.get("GITHUB_EVENT_COMMIT_SHA"),
+              "pull_request_head_sha": os.environ.get("PR_HEAD_COMMIT_SHA") or None,
+              "run_id": os.environ.get("GITHUB_RUN_ID"), "run_attempt": os.environ.get("GITHUB_RUN_ATTEMPT"),
+              "source_hashes_complete": bool(hashes), "source_file_count": len(hashes), "source_hashes": hashes,
+              "junit_files": junit,
+          }
+          out = Path("artifacts/eai-scope/canonical-evidence-manifest.json")
+          out.write_text(json.dumps(manifest, indent=2, sort_keys=True) + chr(10), encoding="utf-8")
+          print(json.dumps({k:v for k,v in manifest.items() if k != "source_hashes"}, indent=2))
+          assert canonical == checked_out, "canonical commit SHA mismatch"
+          PY
       - name: Upload EAI scope and regression evidence
         if: always()
         uses: actions/upload-artifact@v4
