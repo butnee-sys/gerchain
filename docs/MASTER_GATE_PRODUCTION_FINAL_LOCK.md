@@ -92,3 +92,81 @@ Before selecting a release candidate, finish the current runs and reconcile all 
 Outstanding production controls remain: legacy authority-store write freeze, IAM/MFA and privileged access, observability/recovery/no-duplicate movement, production-like performance/concurrency, backup/restore/DR, independent re-performance, complete evidence index, and explicit authorized approval.
 
 **MASTER GATE = OPEN; PRODUCTION READY = NOT VERIFIED; FINAL LOCK = OPEN.**
+
+
+## Exact-SHA evidence checkpoint — 2026-10-31 — candidate `8695758751a8d484aa41651add4f6cf5322ef160`
+
+This checkpoint supersedes the 2026-10-30 candidate snapshot above for current branch status. It does not grant or imply production readiness.
+
+### Candidate identity and workflow results
+
+- Branch: `fix/withdraw-unverified-production-certificate`
+- Candidate SHA: `8695758751a8d484aa41651add4f6cf5322ef160`
+- Commit: [8695758751a8d484aa41651add4f6cf5322ef160](https://github.com/butnee-sys/gerchain/commit/8695758751a8d484aa41651add4f6cf5322ef160)
+- PR #111 remains open. The previous `d9c8af8...` run results are not evidence for this newer SHA.
+
+Same-SHA workflow results observed:
+- [Production Gate run 41212630458](https://github.com/butnee-sys/gerchain/actions/runs/41212630458): **FAILURE**.
+- [Production PostgreSQL Gate run 41212630656](https://github.com/butnee-sys/gerchain/actions/runs/41212630656): **FAILURE**.
+- [core-gates run 41212630511](https://github.com/butnee-sys/gerchain/actions/runs/41212630511): pending/no completed job at review time.
+- [Independent Production Audit run 41212630630](https://github.com/butnee-sys/gerchain/actions/runs/41212630630): workflow success; audit metadata binds to this SHA and PostgreSQL 16. This is a bounded audit, not closure of all master gates.
+- [Production Readiness Gates run 41212630519](https://github.com/butnee-sys/gerchain/actions/runs/41212630519): both migration/boot and value-truth jobs succeeded.
+- [Canonical PostgreSQL Migration Gate run 41212630582](https://github.com/butnee-sys/gerchain/actions/runs/41212630582): success.
+- [FINAL EAI/CORE Exact-SHA Gate run 41212630654](https://github.com/butnee-sys/gerchain/actions/runs/41212630654): success.
+- [CI Test Suite run 41212630702](https://github.com/butnee-sys/gerchain/actions/runs/41212630702): success.
+- DEE Security Gate, PostgreSQL concurrency/migration, migration idempotency, and EAI/PostgreSQL re-performance workflows also report success on this SHA.
+
+### Exact-SHA failure evidence
+
+**Production Gate artifact:** [run 41212630458](https://github.com/butnee-sys/gerchain/actions/runs/41212630458), artifact `13047322337`, file `canonical-evidence-manifest.json`.
+- `commit_sha` = `checked_out_head_sha` = candidate SHA.
+- `source_hashes_complete=true`; 681 source files hashed.
+- `evidence_status=INCOMPLETE_OR_FAILED`.
+- `gate_file_failure_count=7`.
+- JUnit totals: 4 failures, 1 error, 18 skipped, across 313 suites.
+- Failing file-level evidence includes:
+  1. `tests/production/test_production_runtime_postgres_smoke.py`: second PostgreSQL scenario timed out during fixture setup at 300 seconds while truncating shared tables.
+  2. `tests/production/test_runtime_postgres_smoke.py`: `runtime.create_account(...)` returned `None`; test expected a balance result.
+  3. `tests/test_final_lock_contract.py`: workflow source no longer contains the expected explicit exclusions preserving `test_shuud_boundary.py` and `test_shuud_exim_boundary.py`.
+  4. `tests/test_production_postgres.py`: value-flow test could not find the expected ledger account row (`NoResultFound`).
+  5. `tests/test_production_postgres_boot.py`: stale test assertion expects migration version 12, but the canonical chain is now version 17.
+- The gate reports seven failing files; the retained artifact excerpt exposes the five named JUnit cases above. The remaining two file-level failures must be reconciled from the complete retained per-file logs before this register is considered complete.
+
+**Production PostgreSQL Gate artifact/logs:** [run 41212630656](https://github.com/butnee-sys/gerchain/actions/runs/41212630656), artifacts `13047093063` and `13047456980`.
+- Canonical EAI regression JUnit: 1,212 tests, 1,180 passed, 10 failed, 4 errors, 18 skipped; duration 695.043 seconds.
+- Seven persistence/production cases fail with `DuplicateObject` because `gerchain_movement_amount_check` already exists while production runtime initialization applies migrations to a database whose schema was also created/altered by test setup. This is a real migration/bootstrap idempotency defect to resolve, not a pass.
+- One test has a migration-count expectation of 12 while the current canonical inventory is 17.
+- One value-flow test has a missing ledger-account row (`NoResultFound`).
+- Two production PostgreSQL smoke tests timed out at 300 seconds.
+- The final evidence-generation step raised `KeyError: GERCHAIN_EVIDENCE_DATABASE_URL`; therefore no valid current-SHA lifecycle evidence report was produced by this run. Do not reuse the older `d9c8af8...` report as a substitute.
+- Segmented regression failure count is 1. It must be examined and dispositioned; do not treat the SHUUD/SANDBOX scope note as evidence that these EAI regressions passed.
+
+### Required remediation register for this candidate
+
+| Ref | Observed defect | Requirement / acceptance criterion | Required action and proof |
+|---|---|---|---|
+| PG-01 | Migration 010 re-adds an already-existing `gerchain_movement_amount_check` during production factory boot | Production boot and migration replay must be safe on supported pre-existing schema states | Reproduce with the exact CI fixture; correct migration ordering/legacy fixture ownership or make migration robust without weakening the check; test fresh install, upgrade, and repeated boot |
+| PG-02 | Migration lifecycle evidence step lacks `GERCHAIN_EVIDENCE_DATABASE_URL` | Evidence report must be generated and retained from a dedicated fresh PostgreSQL database | Fix workflow environment propagation/order; assert variable exists before use; produce JSON + detached SHA-256 + JUnit on the candidate SHA |
+| PG-03 | Two smoke-test setup/runtime defects: shared-table truncate timeout and `create_account` returns `None` | Production account creation and test isolation must be deterministic, bounded, and auditable | Separate DB fixtures or scoped cleanup; inspect canonical runtime return contract; correct implementation/test expectation based on API contract; targeted and full rerun |
+| PG-04 | Production value-flow test cannot find seeded account | Atomic ledger transfer must operate on the same durable account/session state | Trace account creation/session transaction boundary; prove source/destination rows exist before transfer; rerun end-to-end PostgreSQL flow and reconciliation |
+| PG-05 | Test expects schema version 12 while canonical migration inventory is 17 | Tests must assert the current canonical migration contract, not a historical count | Update stale assertion only after verifying the exact canonical list 001–017; test the maximum version and exact ordered history |
+| PG-06 | Core workflow contract test disagrees with actual SHUUD boundary-test selection | EAI scope must exclude SHUUD product tests while retaining explicitly required boundary contracts | Align workflow selection and contract test; prove both boundary tests execute and product suites remain excluded |
+| PG-07 | Two 300-second PostgreSQL smoke-test timeouts | Required PostgreSQL lifecycle/recovery proof must complete within a declared bounded duration | Identify lock contention/fixture deadlock; ensure fixture cleanup does not contend with test-held connections; targeted rerun with lock diagnostics |
+| PG-08 | Seven Production Gate file failures; only five named JUnit cases visible in inspected artifact excerpt | Every file-level failure must have a named case, cause, requirement mapping, and verified resolution | Reconcile all seven file logs and JUnit files; no blanket waiver |
+| PG-09 | Historical 21-failure register was created on an earlier candidate | No failure may be called resolved solely because the candidate changed | Map all 21 historical cases to current test inclusion/exclusion and current results; each row gets FIXED + same-SHA PASS, OUT-OF-SCOPE + owner/contract proof, or OPEN |
+| PG-10 | Current `core-gates` result not completed at review | Mandatory core assurance must pass on exact final SHA | Obtain completed passing run after all source/evidence changes; retain complete logs and artifact |
+
+### Evidence integrity warning
+
+A previously downloaded artifact from run `39849400071` carries commit SHA `d9c8af8d7b9498ff6c814543112a06d11f73602b`, not this candidate. It cannot substantiate the `8695758...` candidate. The current Production Gate manifest has complete source hashes (681 files) but is explicitly `INCOMPLETE_OR_FAILED`; the current PostgreSQL lifecycle report is missing because evidence generation failed. The successful current-SHA migration and independent audit jobs do not replace these failed/missing artifacts.
+
+### Next work sequence
+
+1. Reconcile all seven Production Gate file failures and all 10 + 4 EAI regression failures/errors into a case-level register; include the earlier 21 cases and their current same-SHA status.
+2. Fix the migration duplicate-constraint defect and the missing evidence-database environment propagation.
+3. Fix or correct the stale migration-version assertion, account-creation result contract, value-flow row/session issue, workflow boundary selection, and PostgreSQL fixture timeout.
+4. Run focused regression tests, then the full mandatory suites on one frozen candidate SHA.
+5. Produce a current-SHA `PASS_CANDIDATE` migration lifecycle report, detached report checksum, full source hash inventory, and JUnit with zero failures/errors.
+6. Complete independent re-performance and all open operational/security/recovery/performance/DR/release-governance controls at that same SHA; obtain authorized approval.
+
+**Disposition at this checkpoint: MASTER GATE = OPEN; PRODUCTION READY = NOT VERIFIED; FINAL LOCK = OPEN.**
