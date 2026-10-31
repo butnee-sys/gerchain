@@ -36,8 +36,10 @@ jobs:
       GERCHAIN_CURRENCY: TST
       GERCHAIN_WITNESS_ID: production-gate-smoke-witness
     steps:
-      - name: Checkout exact tested commit
+      - name: Checkout exact PR head commit (not synthetic merge ref)
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - name: Assert checkout matches the tested PR head
@@ -135,12 +137,20 @@ jobs:
               "run_id": os.environ["RUN_ID"],
               "run_attempt": os.environ["RUN_ATTEMPT"],
               "github_sha": os.environ["HEAD_SHA"],
+              "workflow_event_sha": os.environ["WORKFLOW_EVENT_SHA"],
               "checked_out_sha": subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip(),
               "canonical_migration_count": len(hashes),
               "migration_files": hashes,
               "migration_history": history,
               "escrow_constraints": constraints,
           }
+          if payload["checked_out_sha"] != payload["github_sha"]:
+              raise SystemExit(
+                  "candidate SHA mismatch: checked_out_sha="
+                  + payload["checked_out_sha"]
+                  + " github_sha="
+                  + payload["github_sha"]
+              )
           if len(hashes) != 17:
               raise SystemExit(f"expected 17 migration hashes, got {len(hashes)}")
           if [row["version"] for row in history] != list(range(1, 18)):
