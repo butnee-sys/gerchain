@@ -116,15 +116,17 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p artifacts/eai-scope
-          mapfile -t excluded_product_tests < <(find tests -type f \( -name 'test_shuud_*.py' -o -name 'test_sandbox_*.py' \) | sort)
-          printf '%s\n' "${excluded_product_tests[@]}" > artifacts/eai-scope/product-tests-out-of-eai-scope.txt
-          printf '%s\n' "SHUUD and SANDBOX are separate product MVPs; their product tests are not EAI acceptance criteria." > artifacts/eai-scope/scope-disposition.txt
-          echo "SHUUD_AND_SANDBOX_PRODUCT_TESTS_OUT_OF_EAI_SCOPE=${#excluded_product_tests[@]}"
+          mapfile -t excluded_shuud_tests < <(find tests -type f -name 'test_shuud_*.py' ! -name 'test_shuud_boundary.py' ! -name 'test_shuud_exim_boundary.py' | sort)
+          mapfile -t excluded_sandbox_tests < <(find tests -type f -name 'test_sandbox_*.py' | sort)
+          printf '%s\n' "${excluded_shuud_tests[@]}" "${excluded_sandbox_tests[@]}" > artifacts/eai-scope/product-tests-out-of-eai-scope.txt
+          printf '%s\n' "SHUUD and SANDBOX product tests are outside EAI acceptance; SHUUD boundary adapter tests remain in the EAI gate." > artifacts/eai-scope/scope-disposition.txt
+          echo "SHUUD_PRODUCT_TESTS_OUT_OF_EAI_SCOPE=${#excluded_shuud_tests[@]}"
+          echo "SANDBOX_PRODUCT_TESTS_OUT_OF_EAI_SCOPE=${#excluded_sandbox_tests[@]}"
           ignore_args=()
-          for test_file in "${excluded_product_tests[@]}"; do
+          for test_file in "${excluded_shuud_tests[@]}" "${excluded_sandbox_tests[@]}"; do
             ignore_args+=(--ignore="$test_file")
           done
-          pytest -q --import-mode=importlib --junitxml=artifacts/eai-scope/eai-regression.junit.xml "${ignore_args[@]}"
+          pytest -q --import-mode=importlib --junitxml=artifacts/eai-scope/eai-regression.junit.xml "${ignore_args[@]}" tests/test_shuud_boundary.py tests/test_shuud_exim_boundary.py
       - name: Build canonical core-gates evidence manifest
         if: always()
         shell: bash

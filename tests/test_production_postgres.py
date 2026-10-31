@@ -43,6 +43,8 @@ def test_production_postgres_full_value_flow():
             ("sender-release", 100), ("sender-refund", 100),
             ("sender-cancel", 100), ("beneficiary-release", 0),
             ("settlement-destination", 0), ("settlement-source", 50),
+            # FUND transfers into each escrow's canonical ledger account.
+            ("it-esc-release", 0), ("it-esc-refund", 0), ("it-esc-cancel", 0),
         ]:
             runtime._canonical_ledger.create_account(
                 account_id=account_id, currency="MNT", initial_balance=balance

@@ -262,19 +262,19 @@ class GerchainRuntime:
     def cancel_hold(self, hold_id: str) -> Hold:
         return self.holds.cancel(hold_id)
 
-    def create_account(self, account_id: str, initial_balance: int = 0) -> None:
+    def create_account(self, account_id: str, initial_balance: int = 0) -> dict[str, Any] | None:
         if self.is_canonical_ledger_authoritative:
-            self._canonical_ledger.create_account(
+            return self._canonical_ledger.create_account(
                 account_id=account_id,
                 currency=self.escrow_engine.currency,
                 initial_balance=initial_balance,
             )
-            return
         self._require_test_memory_fallback("CREATE_ACCOUNT")
         self.money_ledger.create_account(
             account_id=account_id,
             initial_balance=initial_balance,
         )
+        return None
 
     def verify_initial_money_consistency(self) -> bool:
         commitment = self.witness_chain.get_initial_money_commitment()

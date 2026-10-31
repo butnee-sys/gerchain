@@ -44,6 +44,6 @@ def test_production_runtime_boots_on_postgresql():
         version = connection.execute(
             text("SELECT MAX(version) FROM schema_version")
         ).scalar_one()
-        assert version == 12
+        assert version == 17
 
     engine.dispose()
