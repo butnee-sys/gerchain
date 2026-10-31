@@ -88,7 +88,9 @@ jobs:
           set +e
           mkdir -p artifacts/production-gate
           failures=0
+          no_pytest_cases=()
           timing_file="artifacts/production-gate/step-timings.tsv"
+          printf 'test_file\tclassification\treason\n' > artifacts/production-gate/no-pytest-cases.tsv
           printf 'test_file\tstarted_epoch\tduration_seconds\texit_code\tresult\n' > "$timing_file"
           reset_public_schema() {
             python - <<'PY'
@@ -139,7 +141,19 @@ jobs:
               --durations=50 --junitxml="$junit" "$test_file" >"$log" 2>&1
             rc=$?
             duration_seconds=$((SECONDS - start_seconds))
-            if [ ! -s "$junit" ]; then
+            if [ "$rc" -eq 5 ]; then
+              # pytest exit 5 is specifically "no tests collected", not a test failure.
+              # Record the non-test module explicitly; never label it as a passing test.
+              no_pytest_cases+=("$test_file")
+              printf '%s\t%s\t%s\n' "$test_file" "NO_PYTEST_CASES" "pytest collected zero cases; source remains hashed" >> artifacts/production-gate/no-pytest-cases.tsv
+              python - "$junit" "$test_file" <<'PY'
+          import sys, xml.etree.ElementTree as ET
+          target, test_file = sys.argv[1:]
+          root = ET.Element("testsuite", name="no-pytest-cases", tests="0", failures="0", errors="0", skipped="0", time="0")
+          root.set("file", test_file)
+          ET.ElementTree(root).write(target, encoding="utf-8", xml_declaration=True)
+          PY
+            elif [ ! -s "$junit" ]; then
               python - "$junit" "$test_file" "$rc" <<'PY'
           import sys, xml.etree.ElementTree as ET
           target, test_file, rc = sys.argv[1:]
@@ -152,12 +166,14 @@ jobs:
               echo "JUNIT_SYNTHETIC_TIMEOUT_OR_EARLY_EXIT=1" >> "$log"
             fi
             result="PASS"
-            if [ "$rc" -ne 0 ]; then result="FAIL"; failures=$((failures + 1)); fi
+            if [ "$rc" -ne 0 ] && [ "$rc" -ne 5 ]; then result="FAIL"; failures=$((failures + 1)); fi
             printf '%s\t%s\t%s\t%s\t%s\n' "$test_file" "$started_epoch" "$duration_seconds" "$rc" "$result" >> "$timing_file"
             echo "FILE_DURATION_SECONDS=$duration_seconds FILE_RESULT=$test_file EXIT_CODE=$rc" | tee -a "$log"
             tail -n 12 "$log"
           done
           printf '%s\n' "$failures" > artifacts/production-gate/file-failure-count.txt
+          printf '%s\n' "${no_pytest_cases[@]}" > artifacts/production-gate/no-pytest-cases.txt
+          echo "PRODUCTION_GATE_NO_PYTEST_CASE_FILES=${#no_pytest_cases[@]}"
           echo "PRODUCTION_GATE_FILE_FAILURE_COUNT=$failures"
           if [ "$failures" -ne 0 ]; then exit 1; fi
       - name: Build canonical Production Gate evidence manifest
