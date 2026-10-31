@@ -34,6 +34,6 @@ def test_production_runtime_factory_boots_against_postgres():
 
     result = runtime.create_account("smoke-account", 1000)
     assert result["balance"] == 1000
-    assert runtime.get_balance("smoke-account")["balance"] == 1000
+    assert runtime.get_balance("smoke-account") == 1000
 
     factory.engine.dispose()
