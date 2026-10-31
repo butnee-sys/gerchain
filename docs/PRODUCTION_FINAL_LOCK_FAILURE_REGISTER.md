@@ -45,6 +45,32 @@ The following 21 failures were recorded in the segmented root-suite log for the 
 | 20 | `tests/test_shuud_process_restart_e2e.py::test_shuud_survives_real_process_restart` | HTTP 404 during process-restart flow | SHUUD process restart/recovery | Unassigned | Pending | Pending | Pending |
 | 21 | `tests/test_shuud_sandbox_config.py::test_day0_rejects_invalid_window_and_threshold_order` | `SandboxConfig.__init__()` missing required `status` | SHUUD sandbox configuration validation | Unassigned | Pending | Pending | Pending |
 
+## Retest evidence on candidate `94cbb6207bb1fddd4ceaa45a9777d3a02c655857`
+
+Observed 2026-10-31 on the exact candidate SHA `94cbb6207bb1fddd4ceaa45a9777d3a02c655857`:
+
+- Production PostgreSQL Gate run `41225677312`, artifact `13052111408`: PostgreSQL lifecycle JUnit 6/6 passed; segmented EAI regression JUnit 1,212 testcases, 0 failures, 0 errors, 18 skipped; log summary `1,194 passed, 18 skipped`.
+- SHUUD and SANDBOX Product MVP Tests run `41225677296`, artifact `13051787915`: JUnit 108 testcases, 0 failures, 0 errors, 1 skipped; log summary `107 passed, 1 skipped`.
+- The 20 SHUUD product failures from the historical 21-item list are present and pass in the product JUnit. The historical DEE proof case is `test_shuud_dee_end_to_end_proves_trust_transparency_performance` and passes. The historical workflow-isolation test was replaced by the stronger/current contract `tests/test_final_lock_contract.py::test_shuud_workflows_are_separate_manual_entrypoints`, which passes in the EAI regression JUnit.
+- Therefore, all 21 historical failure entries have a passing or superseding test result on candidate `94cbb620...`; this is **not** a formal waiver and does not prove that the entire production gate is green. Retain the historical failure reasons above; the current passing JUnit results are their retest evidence.
+
+### Same-SHA evidence still incomplete on `94cbb620...`
+
+- Production PostgreSQL Gate run `41225677312` failed after the regression and lifecycle test JUnit completed. The evidence-manifest builder raised `NameError: name 'report' is not defined` because `evidence_status` referenced `report["source_worktree_clean"]` while `report` was still being constructed. This is a CI evidence-generation defect; it prevents a valid `PASS_CANDIDATE` report even though the two JUnit suites passed.
+- Production Gate run `41225677339` was still in progress at the time of review; core-gates run `41225677301` later ended `cancelled`, with no completed job or artifact. Neither is accepted as a pass.
+- PostgreSQL migration/proof artifact `13052041701` binds `commit_sha` and `checked_out_head_sha` to `94cbb620...`, reports a clean worktree, and includes 17 migration SHA-256 entries plus `SHA256SUMS`; scoped logs report 24 deep reconciliation, 6 migration concurrency, 2 rollback, and 1 production runtime boot tests passed.
+- Independent audit artifact `13051827699` binds to `94cbb620...` and reports 87 EAI tests passed, but explicitly states it is automated evidence, not production-ready certification.
+- Exact-SHA artifact `13051986917` binds to `94cbb620...` and lists all 17 migration SHA-256 values.
+- The separate `.github/workflows/postgres-production-reperformance.yml` run `41225672896` failed and exposed no job/artifact through the Actions jobs/artifacts endpoints. Do not infer a pass or treat it as replacement for the previously SHA-mismatched artifact.
+
+### Corrective CI commit
+
+- The self-referential manifest expression was moved to a post-construction calculation in commit `9cf719ccd9812f5b4462d5671340cb5dd2cff0f0` (`fix(ci): avoid self-reference in PostgreSQL evidence manifest`).
+- This commit creates a new candidate SHA. All `94cbb620...` evidence is predecessor evidence only and must not be mixed with the new candidate's final evidence. Re-run Production PostgreSQL Gate, Production Gate, core-gates, PostgreSQL proof/re-performance, Exact-SHA, and independent audit on one identical new SHA; verify `tested_commit`, `commit_sha`, and `checked_out_head_sha` equality and the regenerated report's `evidence_status`.
+- Do not reuse artifact `12457545216` (embedded SHA `e872ba14...`); it remains quarantined.
+
+**Decision remains:** `FINAL LOCK = OPEN`; `PRODUCTION READY = NOT VERIFIED`.
+
 ## Required closure fields for every failure
 
 For each row, update only with verifiable evidence:
