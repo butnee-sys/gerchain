@@ -437,6 +437,9 @@ jobs:
           json.loads(out.read_text(encoding="utf-8"))
           print("MIGRATION_LIFECYCLE_REPORT_JSON_VALID=PASS")
           print(json.dumps({k: report[k] for k in ("commit_sha", "checked_out_head_sha", "tested_commit", "sha_match", "source_file_count", "source_hashes_complete", "source_missing", "migration_file_count", "applied_migration_count", "migration_checksums_match_files", "migration_history_versions_exact", "lifecycle_junit", "evidence_status")}, indent=2))
+          if not (report["commit_sha"] == report["checked_out_head_sha"] == report["tested_commit"] == expected_sha):
+              raise SystemExit("tested_commit, commit_sha, checked_out_head_sha, and expected SHA must be identical")
+          print(f"TESTED_COMMIT_SHA_MATCH=PASS {expected_sha}")
           if not report["sha_match"]:
               raise SystemExit("commit_sha does not match checked_out_head_sha")
           if report["evidence_status"] != "PASS_CANDIDATE":
