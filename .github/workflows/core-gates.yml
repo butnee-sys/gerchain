@@ -123,7 +123,7 @@ jobs:
           echo "SHUUD_PRODUCT_TESTS_OUT_OF_EAI_SCOPE=${#excluded_shuud_tests[@]}"
           echo "SANDBOX_PRODUCT_TESTS_OUT_OF_EAI_SCOPE=${#excluded_sandbox_tests[@]}"
           ignore_args=()
-          for test_file in "${excluded_shuud_tests[@]}" "${excluded_sandbox_tests[@]}"; do
+          for test_file in "${excluded_product_tests[@]}"; do
             ignore_args+=(--ignore="$test_file")
           done
           pytest -q --import-mode=importlib --junitxml=artifacts/eai-scope/eai-regression.junit.xml "${ignore_args[@]}" tests/test_shuud_boundary.py tests/test_shuud_exim_boundary.py
