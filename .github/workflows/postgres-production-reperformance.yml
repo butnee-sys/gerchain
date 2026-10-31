@@ -40,8 +40,6 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
-        with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - name: Assert checkout matches the tested PR head
         env:
           EXPECTED_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
@@ -84,6 +82,7 @@ jobs:
           RUN_ID: ${{ github.run_id }}
           RUN_ATTEMPT: ${{ github.run_attempt }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          WORKFLOW_EVENT_SHA: ${{ github.sha }}
         run: |
           python - <<'PY'
           import hashlib, json, os, pathlib, subprocess
@@ -138,6 +137,9 @@ jobs:
               "run_attempt": os.environ["RUN_ATTEMPT"],
               "github_sha": os.environ["HEAD_SHA"],
               "workflow_event_sha": os.environ["WORKFLOW_EVENT_SHA"],
+              "commit_sha": os.environ["HEAD_SHA"],
+              "tested_commit": subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip(),
+              "checked_out_head_sha": subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip(),
               "checked_out_sha": subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip(),
               "canonical_migration_count": len(hashes),
               "migration_files": hashes,
@@ -211,6 +213,8 @@ jobs:
               result = {
                   "scope": "fresh production-gate PostgreSQL database immediately after boot, before concurrency test",
                   "tested_commit": os.popen("git rev-parse HEAD").read().strip(),
+                  "commit_sha": os.popen("git rev-parse HEAD").read().strip(),
+                  "checked_out_head_sha": os.popen("git rev-parse HEAD").read().strip(),
                   "migration_versions": versions,
                   "canonical_movement_count": report.canonical_movement_count,
                   "witness_count": report.witness_count,
