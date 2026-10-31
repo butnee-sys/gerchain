@@ -83,10 +83,7 @@ jobs:
         run: python -m pytest -q tests/test_dee_recovery_governance.py
       - name: Verify EXIM Escrow Port boundary
         run: python -m pytest -q tests/test_nef_gerchain_port.py
-      - name: Verify SHUUD ecosystem boundary
-        run: python -m pytest -q tests/test_shuud_boundary.py
-      - name: Verify SHUUD DEE E2E proof
-        run: python -m pytest -q tests/test_shuud_dee_e2e.py
+      # SHUUD product tests run in shuud-sandbox-product-tests.yml and are not EAI/DEE acceptance gates.
       - name: Benchmark DEE Trinity
         run: python -m pytest -q -s tests/test_dee_trinity_benchmark.py
       - name: Verify DEE Trinity invariants

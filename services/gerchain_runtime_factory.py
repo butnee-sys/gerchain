@@ -10,7 +10,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import sessionmaker
 
-from postgres.migrations import apply_migrations
+from postgres.migrations import _canonical_migration_files, apply_migrations
 from services.gerchain_runtime import GerchainRuntime
 
 
@@ -127,51 +127,87 @@ def assert_canonical_production_schema(connection: Any) -> None:
             )
 
     # The migration runner owns schema evolution. Startup independently verifies
-    # the two safety-critical catalog invariants before exposing a production runtime.
-    version_index = connection.exec_driver_sql(
-        """
-        SELECT EXISTS (
-            SELECT 1
-            FROM pg_index i
-            JOIN pg_class t ON t.oid = i.indrelid
-            JOIN pg_namespace n ON n.oid = t.relnamespace
-            JOIN pg_attribute a ON a.attrelid = t.oid AND a.attnum = i.indkey[0]
-            WHERE n.nspname = current_schema()
-              AND t.relname = 'schema_version'
-              AND i.indisunique
-              AND i.indpred IS NULL
-              AND i.indnkeyatts = 1
-              AND a.attname = 'version'
+    # migration history and safety-critical constraints before exposing a runtime.
+    migration_dir = Path(__file__).resolve().parents[1] / "postgres" / "migrations"
+    expected_versions = list(range(1, len(_canonical_migration_files(migration_dir)) + 1))
+    applied_versions = list(
+        connection.exec_driver_sql(
+            "SELECT version FROM schema_version ORDER BY version"
+        ).scalars().all()
+    )
+    if applied_versions != expected_versions:
+        raise RuntimeError(
+            f"schema_version migration history incomplete: required={len(expected_versions)}, "
+            f"got={applied_versions}"
         )
-        """
-    ).scalar_one()
-    if not version_index:
-        raise RuntimeError("schema_version.version must have a unique index")
 
-    state_constraints = connection.exec_driver_sql(
-        """
-        SELECT conname, pg_get_constraintdef(oid), convalidated
-        FROM pg_constraint
-        WHERE conrelid = 'escrows'::regclass
-          AND contype = 'c'
-          AND position('state' in lower(pg_get_constraintdef(oid))) > 0
-        """
-    ).all()
-    if len(state_constraints) != 1:
-        raise RuntimeError(
-            "escrows.state must have exactly one canonical state CHECK constraint"
-        )
-    name, definition, validated = state_constraints[0]
     required_states = ("CREATED", "FUNDED", "LOCKED", "RELEASED", "REFUNDED", "CANCELLED")
-    normalized_definition = str(definition).upper()
-    if (
-        name != "escrows_state_canonical_check"
-        or not validated
-        or any(state not in normalized_definition for state in required_states)
-    ):
-        raise RuntimeError(
-            "escrows.state canonical CHECK is missing, unvalidated, or incomplete"
-        )
+    if connection.dialect.name == "sqlite":
+        if not _has_unique_key(inspector, "schema_version", ("version",)):
+            raise RuntimeError("schema_version.version must have a unique index")
+        state_constraints = inspector.get_check_constraints("escrows")
+        state_constraints = [
+            item for item in state_constraints
+            if "state" in str(item.get("sqltext", "")).lower()
+        ]
+        if len(state_constraints) != 1:
+            raise RuntimeError(
+                "escrows.state must have exactly one canonical state CHECK constraint"
+            )
+        name = state_constraints[0].get("name")
+        definition = state_constraints[0].get("sqltext", "")
+        normalized_definition = str(definition).upper()
+        if name != "escrows_state_canonical_check" or any(
+            state not in normalized_definition for state in required_states
+        ):
+            raise RuntimeError(
+                "escrows.state canonical CHECK is missing, unvalidated, or incomplete"
+            )
+    else:
+        version_index = connection.exec_driver_sql(
+            """
+            SELECT EXISTS (
+                SELECT 1
+                FROM pg_index i
+                JOIN pg_class t ON t.oid = i.indrelid
+                JOIN pg_namespace n ON n.oid = t.relnamespace
+                JOIN pg_attribute a ON a.attrelid = t.oid AND a.attnum = i.indkey[0]
+                WHERE n.nspname = current_schema()
+                  AND t.relname = 'schema_version'
+                  AND i.indisunique
+                  AND i.indpred IS NULL
+                  AND i.indnkeyatts = 1
+                  AND a.attname = 'version'
+            )
+            """
+        ).scalar_one()
+        if not version_index:
+            raise RuntimeError("schema_version.version must have a unique index")
+
+        state_constraints = connection.exec_driver_sql(
+            """
+            SELECT conname, pg_get_constraintdef(oid), convalidated
+            FROM pg_constraint
+            WHERE conrelid = 'escrows'::regclass
+              AND contype = 'c'
+              AND position('state' in lower(pg_get_constraintdef(oid))) > 0
+            """
+        ).all()
+        if len(state_constraints) != 1:
+            raise RuntimeError(
+                "escrows.state must have exactly one canonical state CHECK constraint"
+            )
+        name, definition, validated = state_constraints[0]
+        normalized_definition = str(definition).upper()
+        if (
+            name != "escrows_state_canonical_check"
+            or not validated
+            or any(state not in normalized_definition for state in required_states)
+        ):
+            raise RuntimeError(
+                "escrows.state canonical CHECK is missing, unvalidated, or incomplete"
+            )
+
 
 
 class ProductionRuntimeFactory:

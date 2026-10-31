@@ -1,0 +1,76 @@
+name: SHUUD and SANDBOX Product MVP Tests
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [fix/withdraw-unverified-production-certificate]
+  workflow_dispatch:
+
+concurrency:
+  group: shuud-sandbox-product-tests-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  product-tests:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: gerchain
+          POSTGRES_PASSWORD: gerchain_test
+          POSTGRES_DB: gerchain_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U gerchain -d gerchain_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      GERCHAIN_TEST_DATABASE_URL: postgresql+psycopg://gerchain:gerchain_test@127.0.0.1:5432/gerchain_test
+      GERCHAIN_DATABASE_URL: postgresql+psycopg://gerchain:gerchain_test@127.0.0.1:5432/gerchain_test
+      GERCHAIN_POSTGRES_DSN: postgresql://gerchain:gerchain_test@127.0.0.1:5432/gerchain_test
+      GERCHAIN_MIGRATION_TEST_DATABASE_URL: postgresql://gerchain:gerchain_test@127.0.0.1:5432/gerchain_test
+      GERCHAIN_TEST_POSTGRES_URL: postgresql://gerchain:gerchain_test@127.0.0.1:5432/gerchain_test
+      PYTHONPATH: .
+    steps:
+      - name: Checkout exact commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements-dee-security.txt ]; then pip install -r requirements-dee-security.txt; fi
+          if [ -f postgres/requirements-test.txt ]; then pip install -r postgres/requirements-test.txt; fi
+          pip install pytest fastapi uvicorn httpx pyyaml
+      - name: Run SHUUD and SANDBOX product tests only
+        shell: bash
+        run: |
+          set +e
+          mkdir -p artifacts/shuud-sandbox
+          mapfile -t product_tests < <(find tests -type f \( -name 'test_shuud_*.py' -o -name 'test_sandbox_*.py' \) | sort)
+          printf '%s\n' "${product_tests[@]}" > artifacts/shuud-sandbox/test-inventory.txt
+          echo "PRODUCT_TEST_FILE_COUNT=${#product_tests[@]}"
+          if [ "${#product_tests[@]}" -eq 0 ]; then
+            echo "FAIL: no SHUUD/SANDBOX product tests discovered"
+            exit 2
+          fi
+          pytest -q --import-mode=importlib --junitxml=artifacts/shuud-sandbox/junit.xml "${product_tests[@]}" > artifacts/shuud-sandbox/pytest.log 2>&1
+          rc=$?
+          cat artifacts/shuud-sandbox/pytest.log
+          echo "$rc" > artifacts/shuud-sandbox/exit-code.txt
+          exit "$rc"
+      - name: Upload isolated product test evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: shuud-sandbox-product-evidence-${{ github.event.pull_request.head.sha || github.sha }}
+          path: artifacts/shuud-sandbox/
+          if-no-files-found: warn
+          retention-days: 90

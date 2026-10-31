@@ -13,6 +13,7 @@ on:
 jobs:
   postgres-production-gate:
     runs-on: ubuntu-latest
+    timeout-minutes: 180
     services:
       postgres:
         image: postgres:16
@@ -28,14 +29,17 @@ jobs:
           --health-timeout 5s
           --health-retries 20
     env:
-      GERCHAIN_MIGRATION_TEST_DATABASE_URL: postgresql://gerchain:gerchain_test@localhost:5432/gerchain_test
-      GERCHAIN_TEST_DATABASE_URL: postgresql+psycopg://gerchain:gerchain_test@localhost:5432/gerchain_test
-      GERCHAIN_DATABASE_URL: postgresql+psycopg://gerchain:gerchain_test@localhost:5432/gerchain_test
-      GERCHAIN_POSTGRES_DSN: postgresql+psycopg://gerchain:gerchain_test@localhost:5432/gerchain_test
+      GERCHAIN_MIGRATION_TEST_DATABASE_URL: postgresql://gerchain:gerchain_test@127.0.0.1:5432/gerchain_test
+      GERCHAIN_TEST_DATABASE_URL: postgresql+psycopg://gerchain:gerchain_test@127.0.0.1:5432/gerchain_test
+      GERCHAIN_DATABASE_URL: postgresql+psycopg://gerchain:gerchain_test@127.0.0.1:5432/gerchain_test
+      GERCHAIN_POSTGRES_DSN: postgresql://gerchain:gerchain_test@127.0.0.1:5432/gerchain_test
       GERCHAIN_ESCROW_ID: ci-production-escrow
       GERCHAIN_ESCROW_AMOUNT: "10"
       GERCHAIN_CURRENCY: MNT
       GERCHAIN_WITNESS_ID: ci-production-witness
+      PYTHONPYCACHEPREFIX: /tmp/gerchain-pycache
+      PYTHONPATH: .
+      GERCHAIN_EVIDENCE_DATABASE_NAME: gerchain_evidence_${{ github.run_id }}_${{ github.run_attempt }}
     steps:
       - name: Checkout exact commit
         uses: actions/checkout@v4
@@ -49,7 +53,7 @@ jobs:
       - name: Install test dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -r requirements-dee-security.txt -r postgres/requirements-test.txt pytest fastapi uvicorn httpx pyyaml
+          python -m pip install -r requirements-dee-security.txt -r postgres/requirements-test.txt pytest pytest-timeout fastapi uvicorn httpx pyyaml
       - name: Compile all Python modules
         run: python -m compileall -q .
       - name: Run settlement trust-contract tests
@@ -57,58 +61,95 @@ jobs:
           PYTHONFAULTHANDLER=1 python -X faulthandler -m pytest -vv -s \
             tests/persistence/test_settlement_coordinator.py \
             tests/services/test_gerchain_runtime_settlement_canonical.py
-      - name: Run full regression suite in isolated segments and diagnose native crashes
-        # Keep broad regression diagnostics separate from the dedicated PostgreSQL migration and production gates below.
-        # continue-on-error allows those gates to run, but the job remains failed if their own assertions fail.
-        continue-on-error: true
+      - name: Reset and initialize canonical PostgreSQL database after setup tests
+        # Earlier setup tests may mutate the shared database. Start diagnostics from a clean, canonical state.
+        run: |
+          python - <<'PY'
+          import os
+          import psycopg
+          from pathlib import Path
+          from postgres.migrations import apply_migrations, _canonical_migration_files
+
+          dsn = os.environ["GERCHAIN_TEST_DATABASE_URL"].replace("postgresql+psycopg://", "postgresql://", 1)
+          admin_dsn = dsn.rsplit("/", 1)[0] + "/postgres"
+          with psycopg.connect(admin_dsn, autocommit=True) as admin:
+              admin.execute('DROP DATABASE IF EXISTS "gerchain_test" WITH (FORCE)')
+              admin.execute('CREATE DATABASE "gerchain_test"')
+          migration_dir = Path("postgres/migrations")
+          expected = tuple(range(1, len(_canonical_migration_files(migration_dir)) + 1))
+          with psycopg.connect(dsn) as conn:
+              applied = apply_migrations(conn, migration_dir)
+              rows = conn.execute("SELECT version, checksum FROM schema_version ORDER BY version").fetchall()
+              versions = tuple(row[0] for row in rows)
+              if versions != expected:
+                  raise SystemExit(f"FAIL: canonical migration versions expected {expected}, got {versions}")
+              if applied != expected:
+                  raise SystemExit(f"FAIL: fresh database should apply all migrations, got {applied!r}")
+              if any(len(str(row[1])) != 64 for row in rows):
+                  raise SystemExit("FAIL: malformed migration SHA-256 checksum")
+              print(f"DIAGNOSTIC_DATABASE_RESET_AND_MIGRATED=PASS versions={len(rows)}")
+          PY
+
+      - name: Run canonical EAI regression suite; exclude SHUUD and SANDBOX product tests
+        # Run the canonical suite once. Database lifecycle and migration mutation tests
+        # have dedicated gates below; per-file reruns duplicated work and produced
+        # misleading missing-environment failures in older attempts.
         shell: bash
         run: |
           set +e
           mkdir -p artifacts/segmented-tests
-          failures=0
-          segfaults=0
-          run_segment() {
-            name="$1"
-            shift
-            log="artifacts/segmented-tests/$name.log"
-            echo "=== SEGMENT $name ==="
-            env -u GERCHAIN_MIGRATION_TEST_DATABASE_URL -u GERCHAIN_TEST_DATABASE_URL -u GERCHAIN_DATABASE_URL -u GERCHAIN_POSTGRES_DSN PYTHONFAULTHANDLER=1 python -X faulthandler -m pytest -vv -s "$@" >"$log" 2>&1
-            rc=$?
-            cat "$log"
-            echo "SEGMENT_RESULT=$name EXIT_CODE=$rc"
-            if [ "$rc" -ne 0 ]; then
-              failures=$((failures + 1))
-            fi
-            if [ "$rc" -eq 139 ] || grep -Eqi "Segmentation fault|Fatal Python error: Segmentation fault" "$log"; then
-              segfaults=$((segfaults + 1))
-              echo "SEGMENTATION_FAULT_CONFIRMED_IN=$name"
-            fi
-          }
-          run_segment persistence tests/persistence
-          run_segment services tests/services
-          run_segment postgres-tests tests/postgres
-          run_segment production-tests tests/production
-          run_segment postgres-migration-tests postgres/tests
-          root_tests=(tests/test_*.py)
-          if [ -e "${root_tests[0]}" ]; then
-            run_segment root-tests "${root_tests[@]}"
+          mapfile -t excluded_product_tests < <(find tests -type f \( -name 'test_shuud_*.py' -o -name 'test_sandbox_*.py' \) | sort)
+          printf '%s\n' "${excluded_product_tests[@]}" > artifacts/segmented-tests/product-tests-out-of-eai-scope.txt
+          printf '%s\n' "SHUUD and SANDBOX are separate product MVPs; their product tests are not EAI acceptance criteria." > artifacts/segmented-tests/scope-disposition.txt
+          echo "SHUUD_AND_SANDBOX_PRODUCT_TESTS_OUT_OF_EAI_SCOPE=${#excluded_product_tests[@]}"
+          ignore_args=()
+          for test_file in "${excluded_product_tests[@]}"; do
+            ignore_args+=(--ignore="$test_file")
+          done
+          started_epoch="$(date +%s)"
+          start_seconds=$SECONDS
+          timeout --signal=TERM --kill-after=30s 90m \
+            pytest -q --import-mode=importlib --timeout=300 --durations=50 \
+            --junitxml=artifacts/segmented-tests/eai-regression.junit.xml "${ignore_args[@]}" \
+            > artifacts/segmented-tests/eai-regression.log 2>&1
+          rc=$?
+          duration_seconds=$((SECONDS - start_seconds))
+          printf 'started_epoch=%s\nduration_seconds=%s\nexit_code=%s\n' "$started_epoch" "$duration_seconds" "$rc" > artifacts/segmented-tests/eai-regression-timing.txt
+          echo "EAI_REGRESSION_DURATION_SECONDS=$duration_seconds"
+          cat artifacts/segmented-tests/eai-regression.log
+          if [ ! -s artifacts/segmented-tests/eai-regression.junit.xml ]; then
+            python - <<'PY'
+          import xml.etree.ElementTree as ET
+          root = ET.Element("testsuite", name="eai-regression-bounded-run", tests="1", failures="0", errors="1", skipped="0", time="0")
+          case = ET.SubElement(root, "testcase", classname="workflow.timeout", name="eai-regression-suite", time="0")
+          error = ET.SubElement(case, "error", type="MissingJUnitAfterBoundedRun", message="pytest did not produce a complete JUnit report")
+          error.text = "Inspect eai-regression.log and eai-regression-timing.txt; absence of JUnit is not a pass."
+          ET.ElementTree(root).write("artifacts/segmented-tests/eai-regression.junit.xml", encoding="utf-8", xml_declaration=True)
+          PY
           fi
-          echo "SEGMENTED_FAILURE_COUNT=$failures"
-          echo "SEGMENTATION_FAULT_SEGMENT_COUNT=$segfaults"
-          if [ "$segfaults" -gt 0 ]; then
-            echo "DIAGNOSIS: native crash isolated to one or more named test segments; inspect matching logs."
+          if [ "$rc" -eq 0 ]; then
+            printf '0\n' > artifacts/segmented-tests/failure-count.txt
+            echo "CANONICAL_EAI_REGRESSION=PASS"
+          else
+            printf '1\n' > artifacts/segmented-tests/failure-count.txt
+            echo "CANONICAL_EAI_REGRESSION=FAIL exit_code=$rc"
           fi
-          if [ "$failures" -gt 0 ]; then exit 1; fi
+          exit "$rc"
       - name: Upload segmented test and crash-diagnostic logs
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: segmented-test-diagnostics-${{ github.sha }}
+          name: segmented-test-diagnostics-${{ github.event.pull_request.head.sha || github.sha }}
           path: artifacts/segmented-tests/
           if-no-files-found: warn
           retention-days: 90
-      - name: Apply all canonical migrations to a fresh PostgreSQL database
+      - name: Apply all canonical migrations to a fresh PostgreSQL database (timed)
+        shell: bash
         run: |
+          set +e
+          mkdir -p artifacts
+          started_epoch="$(date +%s)"
+          start_seconds=$SECONDS
           python - <<'PY'
           import os
           import psycopg
@@ -120,6 +161,8 @@ jobs:
           with psycopg.connect(admin_dsn, autocommit=True) as admin:
               admin.execute("DROP DATABASE IF EXISTS gerchain_migration_chain")
               admin.execute("CREATE DATABASE gerchain_migration_chain")
+          # This step created gerchain_migration_chain above; use that database here.
+          # The uniquely named evidence database is created in the later dedicated-evidence step.
           chain_dsn = dsn.rsplit("/", 1)[0] + "/gerchain_migration_chain"
           with psycopg.connect(chain_dsn) as conn:
               migration_dir = Path("postgres/migrations")
@@ -135,6 +178,11 @@ jobs:
               assert all(len(row[1]) == 64 for row in rows), "invalid SHA-256 checksum"
           print(f"CANONICAL_MIGRATIONS={len(expected)}/{len(expected)}; SECOND_RUN=NOOP; CHECKSUMS=SHA256")
           PY
+          rc=$?
+          duration_seconds=$((SECONDS - start_seconds))
+          printf 'started_epoch=%s\nduration_seconds=%s\nexit_code=%s\n' "$started_epoch" "$duration_seconds" "$rc" > artifacts/canonical-migration-chain-timing.txt
+          echo "CANONICAL_MIGRATION_CHAIN_DURATION_SECONDS=$duration_seconds EXIT_CODE=$rc"
+          exit "$rc"
       - name: Create isolated database for migration-runner mutation tests
         run: |
           python - <<'PY'
@@ -154,18 +202,97 @@ jobs:
       - name: Verify PostgreSQL migration concurrency, checksum rollback, and production factory
         run: python -m pytest -q tests/persistence/test_postgres_migration_concurrency.py
 
-      - name: Re-perform canonical PostgreSQL value lifecycle
-        run: >-
-          python -m pytest -vv -s
-          --junitxml=artifacts/postgres-lifecycle-junit.xml
-          tests/postgres/test_production_postgres_reperformance.py
-          tests/persistence/test_deep_value_reconciliation_postgres.py
+      - name: Recreate and verify dedicated evidence database after mutation tests
+        # Mutation tests may alter/drop test databases. Final evidence gets a unique DB
+        # created after those tests, then all canonical migrations are applied and rerun.
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import hashlib
+          import os
+          import psycopg
+          from pathlib import Path
+          from postgres.migrations import apply_migrations, _canonical_migration_files
+
+          base = os.environ["GERCHAIN_MIGRATION_TEST_DATABASE_URL"]
+          admin_dsn = base.rsplit("/", 1)[0] + "/postgres"
+          database = os.environ["GERCHAIN_EVIDENCE_DATABASE_NAME"]
+          if not database.replace("_", "").isalnum():
+              raise SystemExit(f"unsafe evidence database identifier: {database!r}")
+          with psycopg.connect(admin_dsn, autocommit=True) as admin:
+              admin.execute(f'DROP DATABASE IF EXISTS "{database}" WITH (FORCE)')
+              admin.execute(f'CREATE DATABASE "{database}"')
+          evidence_dsn = base.rsplit("/", 1)[0] + "/" + database
+          migration_dir = Path("postgres/migrations")
+          files = _canonical_migration_files(migration_dir)
+          expected_versions = list(range(1, len(files) + 1))
+          expected_checksums = {i: hashlib.sha256(path.read_bytes()).hexdigest() for i, path in enumerate(files, 1)}
+          with psycopg.connect(evidence_dsn) as conn:
+              applied = apply_migrations(conn, migration_dir)
+              rows = conn.execute("SELECT version, checksum FROM schema_version ORDER BY version").fetchall()
+          if list(applied) != expected_versions:
+              raise SystemExit(f"fresh evidence database did not apply every migration: {applied!r}")
+          if [int(row[0]) for row in rows] != expected_versions:
+              raise SystemExit(f"migration history mismatch: {[row[0] for row in rows]!r}")
+          if {int(v): str(h) for v, h in rows} != expected_checksums:
+              raise SystemExit("stored migration checksums do not match exact source files")
+          with psycopg.connect(evidence_dsn) as conn:
+              second = apply_migrations(conn, migration_dir)
+              rows_second = conn.execute("SELECT version, checksum FROM schema_version ORDER BY version").fetchall()
+          if second != () or rows_second != rows:
+              raise SystemExit(f"second migration run was not a no-op: applied={second!r}")
+          print(f"EVIDENCE_DATABASE_CREATED={database}")
+          print(f"EVIDENCE_DATABASE_MIGRATIONS_APPLIED={len(rows)}/{len(files)}")
+          print("EVIDENCE_DATABASE_CHECKSUMS_MATCH_SOURCE=PASS")
+          print("EVIDENCE_DATABASE_SECOND_RUN_NOOP=PASS")
+          sqlalchemy_dsn = evidence_dsn.replace("postgresql://", "postgresql+psycopg://", 1)
+          with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as env:
+              env.write(f"GERCHAIN_EVIDENCE_DATABASE_URL={evidence_dsn}\n")
+              env.write(f"GERCHAIN_DATABASE_URL={sqlalchemy_dsn}\n")
+              env.write(f"GERCHAIN_TEST_DATABASE_URL={sqlalchemy_dsn}\n")
+              env.write(f"GERCHAIN_POSTGRES_DSN={evidence_dsn}\n")
+              env.write(f"GERCHAIN_TEST_POSTGRES_URL={evidence_dsn}\n")
+          PY
+      - name: Re-perform canonical PostgreSQL value lifecycle (bounded)
+        # Use the exact DSNs exported by the step that created and migrated the
+        # evidence database; do not reconstruct a database name via expressions.
+        shell: bash
+        run: |
+          set +e
+          mkdir -p artifacts
+          started_epoch="$(date +%s)"
+          start_seconds=$SECONDS
+          timeout --signal=TERM --kill-after=30s 30m \
+            python -m pytest -vv -s --timeout=300 --durations=50 \
+            --junitxml=artifacts/postgres-lifecycle-junit.xml \
+            tests/postgres/test_production_postgres_reperformance.py \
+            tests/persistence/test_deep_value_reconciliation_postgres.py \
+            > artifacts/postgres-lifecycle.log 2>&1
+          rc=$?
+          duration_seconds=$((SECONDS - start_seconds))
+          printf 'started_epoch=%s\nduration_seconds=%s\nexit_code=%s\n' "$started_epoch" "$duration_seconds" "$rc" > artifacts/postgres-lifecycle-timing.txt
+          cat artifacts/postgres-lifecycle.log
+          if [ ! -s artifacts/postgres-lifecycle-junit.xml ]; then
+            python - <<'PY'
+          import xml.etree.ElementTree as ET
+          root = ET.Element("testsuite", name="postgres-lifecycle-bounded-run", tests="1", failures="0", errors="1", skipped="0", time="0")
+          case = ET.SubElement(root, "testcase", classname="workflow.timeout", name="postgres-lifecycle-suite", time="0")
+          error = ET.SubElement(case, "error", type="MissingJUnitAfterBoundedRun", message="lifecycle pytest did not produce a complete JUnit report")
+          error.text = "Inspect postgres-lifecycle.log and timing record; absence of JUnit is not a pass."
+          ET.ElementTree(root).write("artifacts/postgres-lifecycle-junit.xml", encoding="utf-8", xml_declaration=True)
+          PY
+          fi
+          echo "POSTGRES_LIFECYCLE_DURATION_SECONDS=$duration_seconds EXIT_CODE=$rc"
+          exit "$rc"
 
       - name: Write SHA-bound PostgreSQL migration and lifecycle evidence
         if: always()
         env:
           EVIDENCE_COMMIT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
+          git diff --quiet HEAD -- || { echo "SOURCE_WORKTREE_CLEAN=FAIL"; exit 1; }
+          if [ -n "$(git ls-files --others --exclude-standard -- . ':!artifacts')" ]; then echo "SOURCE_WORKTREE_CLEAN=FAIL"; exit 1; fi
+          echo "SOURCE_WORKTREE_CLEAN=PASS"
           mkdir -p artifacts/production-postgres
           python - <<'PY'
           import hashlib, json, os, subprocess, xml.etree.ElementTree as ET
@@ -179,8 +306,7 @@ jobs:
           migrations = []
           for path in _canonical_migration_files(migration_dir):
               migrations.append({"path": str(path), "sha256": hashlib.sha256(path.read_bytes()).hexdigest()})
-          dsn = os.environ["GERCHAIN_MIGRATION_TEST_DATABASE_URL"]
-          chain_dsn = dsn.rsplit("/", 1)[0] + "/gerchain_migration_chain"
+          chain_dsn = os.environ["GERCHAIN_EVIDENCE_DATABASE_URL"].replace("postgresql+psycopg://", "postgresql://", 1)
           applied = []
           migration_error = None
           try:
@@ -232,7 +358,7 @@ jobs:
               "persistence/recovery_outbox.py",
               "persistence/deep_value_reconciliation.py",
               "postgres/migrations.py",
-              "tests/production/test_production_runtime_entrypoint.py",
+              "tests/production/test_production_entrypoint.py",
               "tests/postgres/test_production_postgres_reperformance.py",
               "tests/persistence/test_deep_value_reconciliation_postgres.py",
           ]
@@ -244,14 +370,17 @@ jobs:
                   source_missing.append(name)
               else:
                   source_files.append({"path": name, "sha256": hashlib.sha256(path.read_bytes()).hexdigest()})
+          tested_commit = head
           report = {
               "commit_sha": expected_sha,
               "checked_out_head_sha": head,
-              "sha_match": expected_sha == head,
+              "tested_commit": tested_commit,
+              "sha_match": expected_sha == head == tested_commit,
               "source_files": source_files,
               "source_file_count": len(source_files),
               "source_missing": source_missing,
               "source_hashes_complete": not source_missing and len(source_files) == len(source_paths),
+              "source_worktree_clean": True,
               "migration_files": migrations,
               "applied_migrations": applied,
               "migration_file_count": len(migrations),
@@ -261,24 +390,127 @@ jobs:
               "migration_history_versions_exact": sorted(applied_by_version) == list(range(1, len(expected_by_version) + 1)),
               "migration_read_error": migration_error,
               "lifecycle_junit": junit,
-              "evidence_status": "PASS_CANDIDATE" if expected_sha == head and not migration_error and len(applied) == len(migrations) and checksum_match and sorted(applied_by_version) == list(range(1, len(expected_by_version) + 1)) and source_files and not source_missing and junit and all(x.get("tests", 0) > 0 and x.get("failures", 0) == 0 and x.get("errors", 0) == 0 for x in junit) else "INCOMPLETE_OR_FAILED",
+              "evidence_status": "PASS_CANDIDATE" if expected_sha == head == tested_commit and not migration_error and len(applied) == len(migrations) and checksum_match and sorted(applied_by_version) == list(range(1, len(expected_by_version) + 1)) and source_files and not source_missing and report["source_worktree_clean"] and junit and all(x.get("tests", 0) > 0 and x.get("failures", 0) == 0 and x.get("errors", 0) == 0 for x in junit) else "INCOMPLETE_OR_FAILED",
           }
           out = Path("artifacts/production-postgres/migration-lifecycle-report.json")
-          out.write_text(json.dumps(report, indent=2, sort_keys=True) + "\\n", encoding="utf-8")
-          print(json.dumps({k: report[k] for k in ("commit_sha", "checked_out_head_sha", "sha_match", "source_file_count", "source_hashes_complete", "source_missing", "migration_file_count", "applied_migration_count", "migration_checksums_match_files", "migration_history_versions_exact", "lifecycle_junit", "evidence_status")}, indent=2))
+          out.write_text(json.dumps(report, indent=2, sort_keys=True) + chr(10), encoding="utf-8")
+          # Validate the exact bytes before producing the SHA-256 sidecar.
+          json.loads(out.read_text(encoding="utf-8"))
+          print("MIGRATION_LIFECYCLE_REPORT_JSON_VALID=PASS")
+          print(json.dumps({k: report[k] for k in ("commit_sha", "checked_out_head_sha", "tested_commit", "sha_match", "source_file_count", "source_hashes_complete", "source_missing", "migration_file_count", "applied_migration_count", "migration_checksums_match_files", "migration_history_versions_exact", "lifecycle_junit", "evidence_status")}, indent=2))
           if not report["sha_match"]:
               raise SystemExit("commit_sha does not match checked_out_head_sha")
+          if report["evidence_status"] != "PASS_CANDIDATE":
+              raise SystemExit("migration lifecycle evidence is not PASS_CANDIDATE; inspect the retained JSON report")
           PY
           sha256sum artifacts/production-postgres/migration-lifecycle-report.json > artifacts/production-postgres/migration-lifecycle-report.json.sha256
+
+      - name: Export machine-readable migration history and PostgreSQL constraints
+        # Preserve database-state evidence even when application/JUnit tests fail.
+        # The step itself still fails closed if the evidence database was not created.
+        if: always()
+        run: |
+          mkdir -p artifacts/production-postgres
+          python - <<'PY'
+          import json, os, subprocess
+          from pathlib import Path
+          import psycopg
+
+          def query_db(dsn, sql):
+              # psycopg accepts libpq URLs, not SQLAlchemy's +psycopg dialect form.
+              dsn = dsn.replace("postgresql+psycopg://", "postgresql://", 1)
+              with psycopg.connect(dsn) as conn:
+                  with conn.cursor() as cur:
+                      cur.execute(sql)
+                      columns = [c.name for c in cur.description]
+                      return [dict(zip(columns, row)) for row in cur.fetchall()]
+
+          dsn = os.environ["GERCHAIN_EVIDENCE_DATABASE_URL"].replace("postgresql+psycopg://", "postgresql://", 1)
+          chain_dsn = dsn
+          commit = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+          migration_rows = query_db(
+              chain_dsn,
+              "SELECT version, checksum FROM schema_version ORDER BY version"
+          )
+          migration_report = {
+              "repository": "butnee-sys/gerchain",
+              "commit_sha": commit,
+              "database": "gerchain_migration_chain",
+              "migration_count": len(migration_rows),
+              "migrations": migration_rows,
+              "versions_contiguous_from_one": [int(r["version"]) for r in migration_rows] == list(range(1, len(migration_rows) + 1)),
+              "checksums_sha256_length_valid": all(len(str(r["checksum"])) == 64 for r in migration_rows),
+          }
+          Path("artifacts/production-postgres/migration-history.json").write_text(
+              json.dumps(migration_report, indent=2, sort_keys=True, default=str) + "\n", encoding="utf-8"
+          )
+
+          constraint_rows = query_db(
+              chain_dsn,
+              """
+              SELECT ns.nspname AS schema_name,
+                     tbl.relname AS table_name,
+                     con.conname AS constraint_name,
+                     con.contype AS constraint_type,
+                     pg_get_constraintdef(con.oid, true) AS definition,
+                     con.convalidated AS validated
+              FROM pg_constraint con
+              JOIN pg_class tbl ON tbl.oid = con.conrelid
+              JOIN pg_namespace ns ON ns.oid = tbl.relnamespace
+              WHERE ns.nspname NOT IN ('pg_catalog', 'information_schema')
+              ORDER BY ns.nspname, tbl.relname, con.conname
+              """
+          )
+          constraint_report = {
+              "repository": "butnee-sys/gerchain",
+              "commit_sha": commit,
+              "database": "gerchain_migration_chain",
+              "constraint_count": len(constraint_rows),
+              "constraints": constraint_rows,
+              "all_constraints_validated": all(bool(r["validated"]) for r in constraint_rows),
+          }
+          Path("artifacts/production-postgres/postgres-constraints.json").write_text(
+              json.dumps(constraint_report, indent=2, sort_keys=True, default=str) + "\n", encoding="utf-8"
+          )
+          print(json.dumps({
+              "commit_sha": commit,
+              "migration_count": migration_report["migration_count"],
+              "versions_contiguous_from_one": migration_report["versions_contiguous_from_one"],
+              "constraint_count": constraint_report["constraint_count"],
+              "all_constraints_validated": constraint_report["all_constraints_validated"],
+          }, indent=2))
+          if not migration_report["versions_contiguous_from_one"] or not migration_report["checksums_sha256_length_valid"]:
+              raise SystemExit("Migration history evidence validation failed")
+          if not constraint_rows or not constraint_report["all_constraints_validated"]:
+              raise SystemExit("PostgreSQL constraint evidence validation failed")
+          PY
+          sha256sum artifacts/production-postgres/migration-history.json artifacts/production-postgres/postgres-constraints.json > artifacts/production-postgres/database-evidence.sha256
+
+      - name: Enforce segmented regression results
+        if: always()
+        run: |
+          if [ ! -f artifacts/segmented-tests/failure-count.txt ]; then
+            echo "FAIL: segmented regression summary is missing"
+            exit 1
+          fi
+          failures="$(cat artifacts/segmented-tests/failure-count.txt)"
+          echo "SEGMENTED_FAILURE_COUNT=$failures"
+          if [ "$failures" -ne 0 ]; then
+            echo "FAIL: segmented regression failures must be fixed or explicitly dispositioned"
+            exit 1
+          fi
 
       - name: Upload PostgreSQL production evidence bundle
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: production-postgres-evidence-${{ github.sha }}
+          name: production-postgres-evidence-${{ github.event.pull_request.head.sha || github.sha }}
           path: |
             artifacts/production-postgres/
             artifacts/postgres-lifecycle-junit.xml
+            artifacts/postgres-lifecycle.log
+            artifacts/postgres-lifecycle-timing.txt
+            artifacts/canonical-migration-chain-timing.txt
             artifacts/segmented-tests/
           if-no-files-found: warn
           retention-days: 90

@@ -50,7 +50,7 @@ def test_production_postgresql_full_value_flow() -> None:
     ).create()
     release_runtime.create_escrow(
         escrow_id="pg-release-escrow",
-        source="pg-source",
+        sender="pg-source",
         beneficiary="pg-beneficiary",
         refund_destination="pg-source",
         amount=100,
@@ -81,7 +81,7 @@ def test_production_postgresql_full_value_flow() -> None:
     ).create()
     refund_runtime.create_escrow(
         escrow_id="pg-refund-escrow",
-        source="pg-refund",
+        sender="pg-refund",
         beneficiary="pg-beneficiary",
         refund_destination="pg-refund",
         amount=80,
@@ -112,7 +112,7 @@ def test_production_postgresql_full_value_flow() -> None:
     ).create()
     cancel_runtime.create_escrow(
         escrow_id="pg-cancel-escrow",
-        source="pg-cancel",
+        sender="pg-cancel",
         beneficiary="pg-beneficiary",
         refund_destination="pg-cancel",
         amount=60,
@@ -152,9 +152,9 @@ def test_production_postgresql_full_value_flow() -> None:
         ).scalar_one() == "CANCELLED"
 
         assert session.execute(select(func.count()).select_from(LedgerMovementModel)).scalar_one() == 7
-        assert session.execute(select(func.count()).select_from(TransactionWitness)).scalar_one() == 8
-        assert session.execute(select(func.count()).select_from(OutboxEvent)).scalar_one() == 8
-        assert session.execute(select(func.count()).select_from(DurableIdempotencyRecord)).scalar_one() == 8
+        assert session.execute(select(func.count()).select_from(TransactionWitness)).scalar_one() == 9
+        assert session.execute(select(func.count()).select_from(OutboxEvent)).scalar_one() == 9
+        assert session.execute(select(func.count()).select_from(DurableIdempotencyRecord)).scalar_one() == 9
 
         report = deep_reconcile_value_truth(session)
         assert report.matched, report.issues

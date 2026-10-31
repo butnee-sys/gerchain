@@ -31,12 +31,14 @@ jobs:
           --health-timeout 5s
           --health-retries 20
     env:
+      EVIDENCE_COMMIT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
       GERCHAIN_DATABASE_URL: postgresql+psycopg://gerchain:gerchain_test@localhost:5432/gerchain_test
       PYTHONUNBUFFERED: "1"
     steps:
-      - name: Checkout exact commit
+      - name: Checkout exact candidate commit
         uses: actions/checkout@v4
         with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
 
       - name: Record commit and SQL migration checksums
@@ -146,7 +148,7 @@ jobs:
           report = {
               "status": "PASS",
               "commit_sha": commit_sha,
-              "workflow_sha": os.environ.get("GITHUB_SHA", ""),
+              "workflow_sha": os.environ["EVIDENCE_COMMIT_SHA"],
               "workflow_run_id": os.environ.get("GITHUB_RUN_ID", ""),
               "workflow_run_attempt": os.environ.get("GITHUB_RUN_ATTEMPT", ""),
               "migration_count_expected": 17,
@@ -163,14 +165,17 @@ jobs:
                   "sequence_1_to_17": True,
                   "no_duplicate_versions": True,
                   "checksums_match": True,
-                  "commit_sha_matches_workflow": bool(os.environ.get("GITHUB_SHA")) and commit_sha == os.environ["GITHUB_SHA"],
+                  "commit_sha_matches_workflow": bool(os.environ.get("EVIDENCE_COMMIT_SHA")) and commit_sha == os.environ["EVIDENCE_COMMIT_SHA"],
               },
           }
           if not report["checks"]["commit_sha_matches_workflow"]:
               report["status"] = "FAIL"
           out = Path("artifacts/migration-gate-report.json")
           out.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-          print(json.dumps(report, indent=2, sort_keys=True))
+          persisted = json.loads(out.read_text(encoding="utf-8"))
+          report_sha256 = hashlib.sha256(out.read_bytes()).hexdigest()
+          Path("artifacts/migration-gate-report.sha256").write_text(f"{report_sha256}  migration-gate-report.json\n", encoding="utf-8")
+          print(json.dumps({**persisted, "report_sha256": report_sha256}, indent=2, sort_keys=True))
           if report["status"] != "PASS":
               raise SystemExit("migration-gate-report.json status is not PASS")
           PY
@@ -214,7 +219,7 @@ jobs:
           from pathlib import Path
 
           commit = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
-          workflow_sha = os.environ.get("GITHUB_SHA", "")
+          workflow_sha = os.environ["EVIDENCE_COMMIT_SHA"]
           junit_path = Path("artifacts/lifecycle-junit.xml")
           suites = []
           if junit_path.exists():
@@ -254,6 +259,22 @@ jobs:
                   "present": junit_path.exists(),
               },
               "source_files": sources,
+              "source_file_count": len(sources),
+              "source_hashes_complete": len(sources) == len(source_paths),
+              "source_missing": [],
+              "migration_file_count": len(list(Path("postgres/migrations").glob("*.sql"))),
+              "migration_history_exact": (
+                  json.loads(Path("artifacts/migration-gate-report.json").read_text(encoding="utf-8")).get("status") == "PASS"
+                  and json.loads(Path("artifacts/migration-gate-report.json").read_text(encoding="utf-8")).get("commit_sha") == commit
+                  and json.loads(Path("artifacts/migration-gate-report.json").read_text(encoding="utf-8")).get("versions_actual") == list(range(1, 18))
+                  and json.loads(Path("artifacts/migration-gate-report.json").read_text(encoding="utf-8")).get("checks", {}).get("checksums_match") is True
+              ),
+              "evidence_status": "PASS_CANDIDATE" if bool(workflow_sha) and commit == workflow_sha and tests > 0 and failures == 0 and errors == 0 and len(sources) == len(source_paths) and len(list(Path("postgres/migrations").glob("*.sql"))) == 17 and (
+                  json.loads(Path("artifacts/migration-gate-report.json").read_text(encoding="utf-8")).get("status") == "PASS"
+                  and json.loads(Path("artifacts/migration-gate-report.json").read_text(encoding="utf-8")).get("commit_sha") == commit
+                  and json.loads(Path("artifacts/migration-gate-report.json").read_text(encoding="utf-8")).get("versions_actual") == list(range(1, 18))
+                  and json.loads(Path("artifacts/migration-gate-report.json").read_text(encoding="utf-8")).get("checks", {}).get("checksums_match") is True
+              ) else "INCOMPLETE_OR_FAILED",
               "migration_files": [
                   {"path": str(path), "sha256": hashlib.sha256(path.read_bytes()).hexdigest()}
                   for path in sorted(Path("postgres/migrations").glob("*.sql"))
@@ -264,9 +285,20 @@ jobs:
           serialized = json.dumps(report, indent=2, sort_keys=True) + "\n"
           output.write_text(serialized, encoding="utf-8")
           json.loads(output.read_text(encoding="utf-8"))
-          print(serialized)
+          report_sha256 = hashlib.sha256(output.read_bytes()).hexdigest()
+          sidecar = output.with_suffix(".json.sha256")
+          sidecar.write_text(f"{report_sha256}  migration-lifecycle-report.json\n", encoding="utf-8")
+          if hashlib.sha256(output.read_bytes()).hexdigest() != sidecar.read_text(encoding="utf-8").split()[0]:
+              raise SystemExit("migration lifecycle report SHA-256 sidecar mismatch")
+          print(json.dumps({**report, "report_sha256": report_sha256}, indent=2, sort_keys=True))
+          if report["evidence_status"] != "PASS_CANDIDATE":
+              raise SystemExit("lifecycle evidence is incomplete or failed")
           if not report["sha_match"]:
               raise SystemExit("commit SHA mismatch in lifecycle evidence")
+          if not report["source_hashes_complete"] or report["source_file_count"] != len(source_paths):
+              raise SystemExit("source file hash inventory is incomplete")
+          if report["migration_file_count"] != 17 or not report["migration_history_exact"]:
+              raise SystemExit("migration inventory/history is not exact")
           if tests <= 0:
               raise SystemExit("JUnit evidence contains zero tests")
           if failures or errors:
@@ -293,6 +325,7 @@ jobs:
         run: |
           set -euo pipefail
           python - <<'PY'
+          import hashlib
           import json
           import os
           from pathlib import Path
@@ -305,12 +338,25 @@ jobs:
           report = json.loads(report_path.read_text(encoding="utf-8"))
           if report.get("status") != "PASS":
               raise SystemExit(f"migration report status is not PASS: {report.get('status')}")
-          if report.get("commit_sha") != os.environ.get("GITHUB_SHA"):
-              raise SystemExit("report commit_sha does not match workflow GITHUB_SHA")
+          if report.get("commit_sha") != os.environ.get("EVIDENCE_COMMIT_SHA"):
+              raise SystemExit("report commit_sha does not match exact candidate SHA")
           if report.get("workflow_run_id") != os.environ.get("GITHUB_RUN_ID"):
               raise SystemExit("report workflow_run_id mismatch")
           if report.get("workflow_run_attempt") != os.environ.get("GITHUB_RUN_ATTEMPT"):
               raise SystemExit("report workflow_run_attempt mismatch")
+          report_digest = hashlib.sha256(report_path.read_bytes()).hexdigest()
+          sidecar_path = Path("artifacts/migration-gate-report.sha256")
+          if not sidecar_path.is_file() or sidecar_path.read_text(encoding="utf-8").split()[0] != report_digest:
+              raise SystemExit("migration-gate-report SHA-256 sidecar mismatch")
+          lifecycle_path = Path("artifacts/production-postgres/migration-lifecycle-report.json")
+          lifecycle_sidecar = lifecycle_path.with_suffix(".json.sha256")
+          if not lifecycle_path.is_file() or not lifecycle_sidecar.is_file():
+              raise SystemExit("lifecycle report or SHA-256 sidecar missing")
+          if hashlib.sha256(lifecycle_path.read_bytes()).hexdigest() != lifecycle_sidecar.read_text(encoding="utf-8").split()[0]:
+              raise SystemExit("lifecycle report SHA-256 sidecar mismatch")
+          lifecycle_report = json.loads(lifecycle_path.read_text(encoding="utf-8"))
+          if lifecycle_report.get("evidence_status") != "PASS_CANDIDATE":
+              raise SystemExit("lifecycle evidence status is not PASS_CANDIDATE")
           dsn = make_url(os.environ["GERCHAIN_DATABASE_URL"]).set(drivername="postgresql").render_as_string(hide_password=False)
           with psycopg.connect(dsn) as connection:
               rows = connection.execute(
@@ -333,6 +379,15 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: postgres-migration-gate-${{ github.sha }}
-          path: artifacts/
+          name: postgres-migration-gate-${{ github.event.pull_request.head.sha || github.sha }}
+          path: |
+            artifacts/commit.txt
+            artifacts/sql-checksums-before.txt
+            artifacts/sql-checksums-after.txt
+            artifacts/lifecycle-junit.xml
+            artifacts/schema-version-history.txt
+            artifacts/migration-gate-report.json
+            artifacts/migration-gate-report.sha256
+            artifacts/production-postgres/migration-lifecycle-report.json
+            artifacts/production-postgres/migration-lifecycle-report.json.sha256
           if-no-files-found: warn

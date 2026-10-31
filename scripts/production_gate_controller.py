@@ -26,6 +26,10 @@ def _head_sha() -> str:
     except Exception:
         return os.environ.get("GITHUB_SHA", "")
 
+def _fail(failures: list[str], message: str) -> None:
+    if message not in failures:
+        failures.append(message)
+
 def decide(manifest_path: pathlib.Path, expected_source_sha: str, outcomes: dict[str, str], json_parse_error: bool = False) -> dict:
     failures = []
     head_sha = _head_sha()
@@ -45,7 +49,6 @@ def decide(manifest_path: pathlib.Path, expected_source_sha: str, outcomes: dict
     source_sha = manifest.get("source_commit_sha") or manifest.get("commit_sha")
     manifest_head = manifest.get("checked_out_head_sha") or manifest.get("head_sha")
 
-    # 1. Strict Source SHA verification & MANIFEST_SHA_MISMATCH
     if not expected_source_sha:
         failures.append("MISSING_EXPECTED_SOURCE_SHA")
     if not source_sha:
@@ -53,76 +56,91 @@ def decide(manifest_path: pathlib.Path, expected_source_sha: str, outcomes: dict
     if expected_source_sha and source_sha and source_sha != expected_source_sha:
         failures.append(f"SOURCE_SHA_MISMATCH_EXPECTED_{expected_source_sha}_GOT_{source_sha}")
         failures.append("MANIFEST_SHA_MISMATCH")
-
-    # 2. Manifest HEAD vs Actual HEAD validation
-    if manifest_head and head_sha and manifest_head != head_sha:
+    if not manifest_head:
+        failures.append("MISSING_CHECKED_OUT_HEAD_SHA")
+    elif head_sha and manifest_head != head_sha:
         failures.append(f"HEAD_SHA_MISMATCH_MANIFEST_{manifest_head}_ACTUAL_{head_sha}")
+    if not head_sha or (expected_source_sha and head_sha != expected_source_sha):
+        failures.append("CHECKED_OUT_HEAD_SHA_MISMATCH")
+    if manifest.get("commit_sha_matches_head") is False:
+        failures.append("MANIFEST_COMMIT_SHA_MATCH_FLAG_FALSE")
 
-    # 3. Independent Cryptographic Disk Hashing & Verification (Strict Fail-Closed)
-    migrations = manifest.get("migrations")
+    # Accept the canonical evidence schema (canonical_migrations) and the
+    # older schema (migrations), but always verify the exact file bytes and
+    # separately verify runner checksums against the recorded DB history.
+    migrations = manifest.get("canonical_migrations")
+    if migrations is None:
+        migrations = manifest.get("migrations")
     schema_rows = manifest.get("schema_version_rows")
-    mig_dirs = [pathlib.Path('migrations'), pathlib.Path('gerchain/migrations'), pathlib.Path('postgres/migrations')]
-    mig_dir_found = next((d for d in mig_dirs if d.exists()), None)
 
-    # Check schema_version_rows first (for test compatibility)
-    if schema_rows is not None:
+    if not isinstance(migrations, list) or not migrations:
+        _fail(failures, "MIGRATION_CHECKSUM_INVALID")
+        migrations = []
+    else:
+        by_version = {}
+        for idx, mig in enumerate(migrations):
+            if not isinstance(mig, dict):
+                _fail(failures, "MIGRATION_CHECKSUM_INVALID")
+                continue
+            version = mig.get("version", idx + 1)
+            path_value = mig.get("path") or mig.get("filename") or mig.get("name")
+            file_hash = mig.get("sha256") or mig.get("file_sha256")
+            runner_hash = mig.get("runner_checksum") or mig.get("checksum")
+            if not path_value:
+                _fail(failures, f"MIGRATION_FILE_MISSING_VERSION_{version}")
+                _fail(failures, "MIGRATION_CHECKSUM_INVALID")
+                continue
+            path = pathlib.Path(str(path_value))
+            # Paths in the canonical workflow are repository-relative, e.g.
+            # postgres/migrations/001_....sql. Legacy manifests may use basenames.
+            if not path.is_file() and not path.is_absolute():
+                candidates = [pathlib.Path("postgres/migrations") / path.name,
+                              pathlib.Path("migrations") / path.name,
+                              pathlib.Path("gerchain/migrations") / path.name]
+                path = next((candidate for candidate in candidates if candidate.is_file()), path)
+            if path.is_absolute() or ".." in pathlib.Path(str(path_value)).parts or not path.is_file():
+                _fail(failures, f"MIGRATION_FILE_MISSING_{path_value}")
+                _fail(failures, "MIGRATION_CHECKSUM_INVALID")
+                continue
+            actual_file_hash = hashlib.sha256(path.read_bytes()).hexdigest()
+            if not file_hash or file_hash != actual_file_hash:
+                _fail(failures, f"MIGRATION_FILE_SHA256_MISMATCH_VERSION_{version}")
+                _fail(failures, "MIGRATION_CHECKSUM_INVALID")
+            if runner_hash:
+                by_version[int(version)] = str(runner_hash)
+            elif not file_hash:
+                _fail(failures, "MIGRATION_CHECKSUM_INVALID")
+
+        if len(by_version) and sorted(by_version) != list(range(1, len(by_version) + 1)):
+            _fail(failures, "MIGRATION_VERSIONS_NOT_CONTIGUOUS")
+
         if not isinstance(schema_rows, list) or not schema_rows:
-            failures.append("MIGRATION_CHECKSUM_INVALID")
+            _fail(failures, "MIGRATION_HISTORY_MISSING")
         else:
+            db_by_version = {}
             for idx, row in enumerate(schema_rows):
-                if isinstance(row, dict) and row.get("checksum") == "tampered":
-                    version = row.get("version", idx + 1)
-                    failures.append(f"MIGRATION_CHECKSUM_MISMATCH_VERSION_{version}")
-                    failures.append("MIGRATION_CHECKSUM_INVALID")
+                if not isinstance(row, dict) or "version" not in row or "checksum" not in row:
+                    _fail(failures, "MIGRATION_HISTORY_INVALID")
+                    continue
+                version = int(row["version"])
+                checksum_value = str(row["checksum"])
+                if checksum_value == "tampered":
+                    _fail(failures, f"MIGRATION_CHECKSUM_MISMATCH_VERSION_{version}")
+                    _fail(failures, "MIGRATION_CHECKSUM_INVALID")
+                db_by_version[version] = checksum_value
+            if by_version and db_by_version != by_version:
+                for version in sorted(set(by_version) | set(db_by_version)):
+                    if by_version.get(version) != db_by_version.get(version):
+                        _fail(failures, f"MIGRATION_CHECKSUM_MISMATCH_VERSION_{version}")
+                _fail(failures, "MIGRATION_CHECKSUM_INVALID")
+            if sorted(db_by_version) != list(range(1, len(db_by_version) + 1)):
+                _fail(failures, "MIGRATION_HISTORY_VERSIONS_NOT_CONTIGUOUS")
 
-    if migrations is not None:
-        if not isinstance(migrations, list) or not migrations:
-            failures.append("MIGRATION_CHECKSUM_INVALID")
-        else:
-            for idx, mig in enumerate(migrations):
-                if isinstance(mig, dict):
-                    filename = mig.get('filename') or mig.get('name')
-                    manifest_chk = mig.get('runner_checksum') or mig.get('checksum')
-
-                    if manifest_chk == "tampered":
-                        version = mig.get("version", idx + 1)
-                        if f"MIGRATION_CHECKSUM_MISMATCH_VERSION_{version}" not in failures:
-                            failures.append(f"MIGRATION_CHECKSUM_MISMATCH_VERSION_{version}")
-                        if "MIGRATION_CHECKSUM_INVALID" not in failures:
-                            failures.append("MIGRATION_CHECKSUM_INVALID")
-                        continue
-
-                    if mig_dir_found and filename:
-                        fpath = mig_dir_found / filename
-                        if fpath.exists():
-                            disk_hash = hashlib.sha256(fpath.read_bytes()).hexdigest()
-                            if manifest_chk != disk_hash:
-                                version = mig.get("version", idx + 1)
-                                failures.append(f"MIGRATION_CHECKSUM_MISMATCH_VERSION_{version}")
-                                failures.append("MIGRATION_CHECKSUM_INVALID")
-                        else:
-                            version = mig.get("version", idx + 1)
-                            failures.append(f"MIGRATION_FILE_MISSING_{filename}")
-                            failures.append("MIGRATION_CHECKSUM_INVALID")
-                    else:
-                        version = mig.get("version", idx + 1)
-                        failures.append(f"MIGRATION_FILE_MISSING_{filename}")
-                        failures.append("MIGRATION_CHECKSUM_INVALID")
-
-    # 4. Strict Gate Outcomes validation
     for gate in REQUIRED_GATES:
         if gate not in outcomes:
-            if gate == "deep_reconciliation":
-                failures.append("GATE_DEEP_RECONCILIATION_MISSING")
-            else:
-                failures.append(f"GATE_{gate.upper()}_MISSING")
-        else:
-            outcome = outcomes.get(gate)
-            if outcome != "success":
-                if gate == "deep_reconciliation":
-                    failures.append("GATE_DEEP_RECONCILIATION_SKIPPED")
-                else:
-                    failures.append(f"GATE_{gate.upper()}_SKIPPED")
+            _fail(failures, "GATE_DEEP_RECONCILIATION_MISSING" if gate == "deep_reconciliation" else f"GATE_{gate.upper()}_MISSING")
+        elif outcomes.get(gate) != "success":
+            _fail(failures, "GATE_DEEP_RECONCILIATION_SKIPPED" if gate == "deep_reconciliation" else f"GATE_{gate.upper()}_SKIPPED")
 
     decision = "LOCKED" if not failures else "NOT_LOCKED"
     return {
@@ -142,7 +160,6 @@ if __name__ == "__main__":
 
     outcomes = {}
     json_parse_error = False
-
     if args.outcomes_json:
         try:
             parsed = json.loads(args.outcomes_json)
@@ -154,11 +171,9 @@ if __name__ == "__main__":
             json_parse_error = True
 
     res = decide(pathlib.Path(args.manifest), args.expected_source_sha, outcomes, json_parse_error)
-
     output_path = pathlib.Path(args.output)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(json.dumps(res, indent=2), encoding="utf-8")
-
     print(json.dumps(res, indent=2))
     if res["decision"] != "LOCKED":
-        exit(1)
+        raise SystemExit(1)

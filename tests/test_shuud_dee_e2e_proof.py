@@ -38,7 +38,7 @@ def _root_and_release():
     manifest = build_manifest(
         version=1,
         commit_sha="shuud-dee-e2e-proof",
-        protected_paths=["shuud", "nef_gerchain_port", "dee_security"],
+        protected_paths=["shuud/api.py", "nef_gerchain_port/contract.py", "dee_security/release_policy.py"],
         artifact_hashes={"shuud": hashlib.sha256(b"shuud-e2e").hexdigest()},
         schema_version="1",
     )
@@ -201,8 +201,8 @@ def test_shuud_dee_end_to_end_proves_trust_transparency_performance():
     assert [entry.record.event_type for entry in witness.entries] == [
         "SHUUD_EVIDENCE_LOCKED",
         "SHIID_DECISION",
+        "ESCROW_TRANSITION",
+        "ESCROW_TRANSITION",
         "SHUUD_RELEASE_AUTHORIZED",
-        "ESCROW_TRANSITION",
-        "ESCROW_TRANSITION",
         "ESCROW_TRANSITION",
     ]

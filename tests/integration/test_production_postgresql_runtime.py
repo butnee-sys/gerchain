@@ -83,9 +83,12 @@ def test_production_postgresql_full_value_flow_and_reconciliation():
             for account, balance in (
                 ("ci-source-release", 100),
                 ("ci-beneficiary", 0),
+                ("ci-release", 0),
                 ("ci-source-refund", 100),
                 ("ci-refund-destination", 0),
+                ("ci-refund", 0),
                 ("ci-source-cancel", 100),
+                ("ci-cancel", 0),
                 ("ci-source-settlement", 50),
                 ("ci-settlement-destination", 0),
             ):

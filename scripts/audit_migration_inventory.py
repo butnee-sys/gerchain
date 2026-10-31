@@ -10,15 +10,26 @@ import sys
 from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
-
-from postgres.migrations import (
-    FROZEN_CHECKSUMS,
-    LEGACY_CHECKSUMS,
-    _canonical_migration_files,
-    checksum,
-)
+import importlib.util
 
 ROOT = Path(__file__).resolve().parents[1]
+
+# The repository contains both postgres/migrations.py (historical checksum
+# registry) and postgres/migrations/ (the active runner package). Python
+# resolves "postgres.migrations" to the package, so load the registry file by
+# explicit path rather than accidentally importing the package and failing.
+_registry_path = ROOT / "postgres" / "migrations.py"
+_registry_spec = importlib.util.spec_from_file_location(
+    "gerchain_migration_registry_compat", _registry_path
+)
+if _registry_spec is None or _registry_spec.loader is None:
+    raise ImportError(f"cannot load migration registry from {_registry_path}")
+_registry = importlib.util.module_from_spec(_registry_spec)
+_registry_spec.loader.exec_module(_registry)
+FROZEN_CHECKSUMS = _registry.FROZEN_CHECKSUMS
+LEGACY_CHECKSUMS = _registry.LEGACY_CHECKSUMS
+_canonical_migration_files = _registry._canonical_migration_files
+checksum = _registry.checksum
 MIGRATION_DIR = ROOT / "postgres" / "migrations"
 OUTPUT = Path(os.environ.get("MIGRATION_INVENTORY_REPORT", "migration-inventory-report.json"))
 
@@ -153,17 +164,53 @@ def main() -> int:
             }
             report["status"] = "FAIL"
 
+    checked_out_head_sha = git_sha()
+    requested_head_sha = os.environ.get("TARGET_SHA", checked_out_head_sha)
+    report["checked_out_head_sha"] = checked_out_head_sha
+    report["requested_head_sha"] = requested_head_sha
+    report["sha_match"] = requested_head_sha == checked_out_head_sha
+    if not report["sha_match"]:
+        report["status"] = "FAIL"
+    report["evidence_status"] = (
+        "PASS_CANDIDATE"
+        if report["status"] == "PASS"
+        and report["sha_match"]
+        and report["applied_history"].get("status") == "CAPTURED"
+        else "INCOMPLETE_OR_FAILED"
+    )
+
+    # Persist valid UTF-8 JSON with a real newline, then parse the exact bytes
+    # back and enforce the SHA/evidence contract before returning success.
     OUTPUT.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    persisted = json.loads(OUTPUT.read_text(encoding="utf-8"))
+    if persisted != report:
+        raise SystemExit("FAIL: persisted migration evidence JSON differs from in-memory report")
+    if persisted["commit_sha"] != persisted["checked_out_head_sha"]:
+        raise SystemExit("FAIL: migration evidence commit SHA does not match checked-out HEAD")
+    if persisted["requested_head_sha"] != persisted["checked_out_head_sha"]:
+        raise SystemExit("FAIL: requested candidate SHA does not match checked-out HEAD")
+    if persisted["evidence_status"] != "PASS_CANDIDATE":
+        print(json.dumps({
+            "status": persisted["status"],
+            "evidence_status": persisted["evidence_status"],
+            "commit_sha": persisted["commit_sha"],
+            "checked_out_head_sha": persisted["checked_out_head_sha"],
+            "applied_history_status": persisted["applied_history"]["status"],
+        }, indent=2))
+        return 1
+
     print(json.dumps({
         "status": report["status"],
+        "evidence_status": report["evidence_status"],
         "commit_sha": report["commit_sha"],
+        "checked_out_head_sha": report["checked_out_head_sha"],
         "canonical_versions": actual_versions,
         "versioned_sql_files": len(rows),
         "duplicate_versions": report["duplicate_versions"],
         "report": str(OUTPUT),
         "applied_history_status": report["applied_history"]["status"],
     }, indent=2))
-    return 0 if report["status"] == "PASS" else 1
+    return 0
 
 
 if __name__ == "__main__":

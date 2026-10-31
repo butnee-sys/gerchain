@@ -70,15 +70,23 @@ def execute_concurrently(
         while pending or active:
             # Scan only in submission order. A conflicting later operation
             # cannot overtake an earlier pending operation on the same resource.
-            scan_index = next_index
+            scan_index = 0
+            blocked_resources: set[str] = set()
             while scan_index < len(pending) and len(active) < max_workers:
                 spec = pending[scan_index]
-                if spec.resource_keys.isdisjoint(active_resources):
+                if (
+                    spec.resource_keys.isdisjoint(active_resources)
+                    and spec.resource_keys.isdisjoint(blocked_resources)
+                ):
                     future = pool.submit(spec.execute)
                     active[future] = spec
                     active_resources.update(spec.resource_keys)
                     pending.pop(scan_index)
                     continue
+                # A later operation must not overtake an earlier pending
+                # operation that shares any resource, even if the earlier one
+                # is temporarily blocked by a different active resource.
+                blocked_resources.update(spec.resource_keys)
                 scan_index += 1
             # pending is mutated as tasks are submitted, so the first remaining
             # item is always the earliest not-yet-submitted operation.

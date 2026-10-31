@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - feat/ea21-transaction-aware-ledger
+      - fix/withdraw-unverified-production-certificate
   pull_request:
     branches:
       - main
@@ -37,6 +38,16 @@ jobs:
     steps:
       - name: Checkout exact tested commit
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Assert checkout matches the tested PR head
+        env:
+          EXPECTED_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          actual="$(git rev-parse HEAD)"
+          printf 'EXPECTED_HEAD_SHA=%s\nCHECKED_OUT_HEAD_SHA=%s\n' "$EXPECTED_HEAD_SHA" "$actual"
+          test "$actual" = "$EXPECTED_HEAD_SHA"
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -66,11 +77,11 @@ jobs:
           fi
           grep -F "GerChain production runtime initialized:" production-gate-evidence/production-boot.log
           echo "PASS: PostgreSQL migrations, schema assertions, and canonical runtime boot" > production-gate-evidence/production-boot-status.txt
-      - name: Capture migration history, 16 source hashes, and validated constraints
+      - name: Capture migration history, 17 migration hashes, and validated constraints
         env:
           RUN_ID: ${{ github.run_id }}
           RUN_ATTEMPT: ${{ github.run_attempt }}
-          HEAD_SHA: ${{ github.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
           python - <<'PY'
           import hashlib, json, os, pathlib, subprocess
@@ -134,10 +145,44 @@ jobs:
               raise SystemExit(f"expected 17 migration hashes, got {len(hashes)}")
           if [row["version"] for row in history] != list(range(1, 18)):
               raise SystemExit("migration history is not exactly versions 1..17")
+          expected_by_version = {
+              int(item["file"].split("_", 1)[0]): item["sha256"]
+              for item in hashes
+          }
+          applied_by_version = {int(row["version"]): str(row["checksum"]) for row in history}
+          if applied_by_version != expected_by_version:
+              raise SystemExit("live migration history checksums do not match the checked-out migration files")
           if not constraints or any(not row["validated"] for row in constraints if row["constraint_type"] == "c"):
               raise SystemExit("missing escrow constraints or an unvalidated CHECK constraint")
+          checked_out_sha = payload["checked_out_sha"]
+          if checked_out_sha != os.environ["HEAD_SHA"]:
+              raise SystemExit(f"FAIL-CLOSED: requested SHA {os.environ['HEAD_SHA']} != checked-out SHA {checked_out_sha}")
           out = pathlib.Path("production-gate-evidence/migration-catalog-proof.json")
           out.write_text(json.dumps(payload, indent=2, default=str), encoding="utf-8")
+          (out.parent / "migration-history.json").write_text(json.dumps({
+              "workflow": payload["workflow"],
+              "run_id": payload["run_id"],
+              "run_attempt": payload["run_attempt"],
+              "github_sha": payload["github_sha"],
+              "checked_out_sha": payload["checked_out_sha"],
+              "migration_history": history,
+              "migration_files": hashes,
+              "versions_exact": True,
+              "checksums_match_files": True
+          }, indent=2, default=str), encoding="utf-8")
+          (out.parent / "postgres-constraints.json").write_text(json.dumps({
+              "workflow": payload["workflow"],
+              "run_id": payload["run_id"],
+              "run_attempt": payload["run_attempt"],
+              "github_sha": payload["github_sha"],
+              "checked_out_sha": payload["checked_out_sha"],
+              "schema": "current_schema()",
+              "table": "escrows",
+              "constraints": constraints,
+              "all_check_constraints_validated": all(
+                  row["validated"] for row in constraints if row["constraint_type"] == "c"
+              )
+          }, indent=2, default=str), encoding="utf-8")
           print(json.dumps(payload, indent=2, default=str))
           PY
       - name: Write standalone production database reconciliation report
@@ -188,32 +233,51 @@ jobs:
           JOB_STATUS: ${{ job.status }}
           RUN_ID: ${{ github.run_id }}
           RUN_ATTEMPT: ${{ github.run_attempt }}
-          HEAD_SHA: ${{ github.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
           mkdir -p production-gate-evidence
           python - <<'PY'
           import json, os, pathlib, subprocess
           root = pathlib.Path("production-gate-evidence")
+          checked_out_sha = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+          source_sha = os.environ["HEAD_SHA"]
+          sha_match = bool(source_sha) and source_sha == checked_out_sha
+          required_files = [
+              "production-boot-status.txt",
+              "reconciliation-report.json",
+              "migration-catalog-proof.json",
+              "migration-history.json",
+              "postgres-constraints.json",
+              "postgres-test.log",
+          ]
+          missing_required_files = [name for name in required_files if not (root / name).is_file()]
+          job_status = os.environ["JOB_STATUS"]
           manifest = {
               "artifact": "production-gate-evidence",
               "workflow": "PostgreSQL Production Re-performance",
               "run_id": os.environ["RUN_ID"],
               "run_attempt": os.environ["RUN_ATTEMPT"],
-              "github_sha": os.environ["HEAD_SHA"],
-              "checked_out_sha": subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip(),
-              "job_status_at_manifest_step": os.environ["JOB_STATUS"],
-              "production_boot_evidence_present": (root / "production-boot-status.txt").exists(),
-              "reconciliation_report_present": (root / "reconciliation-report.json").exists(),
-              "note": "Artifact presence does not itself mean the gate passed; inspect workflow conclusion and each report."
+              "github_sha": source_sha,
+              "checked_out_sha": checked_out_sha,
+              "sha_match": sha_match,
+              "job_status_at_manifest_step": job_status,
+              "production_boot_evidence_present": (root / "production-boot-status.txt").is_file(),
+              "reconciliation_report_present": (root / "reconciliation-report.json").is_file(),
+              "required_files": required_files,
+              "missing_required_files": missing_required_files,
+              "evidence_status": "PASS_CANDIDATE" if sha_match and job_status == "success" and not missing_required_files else "INCOMPLETE_OR_FAILED",
+              "note": "PASS_CANDIDATE is not FINAL LOCK; it requires independent review of logs and reports."
           }
           (root / "production-gate-evidence.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
           print(json.dumps(manifest, indent=2))
+          if source_sha != checked_out_sha:
+              raise SystemExit(f"FAIL-CLOSED: requested source SHA {source_sha} != checked-out SHA {checked_out_sha}")
           PY
       - name: Upload production gate evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: production-gate-evidence
+          name: production-gate-evidence-${{ github.run_id }}-${{ github.event.pull_request.head.sha || github.sha }}
           path: production-gate-evidence/
           if-no-files-found: error
           retention-days: 30

@@ -1,9 +1,15 @@
 {
-  "decision": "LOCKED",
-  "source_commit_sha": "18916b9c2e7f2051e7ccdb91e1505ca00bd747d0",
-  "target_release_sha": "10a408dc4a7821db85a9bc68cfccdb66a20b4dcf",
-  "checked_out_head_sha": "10a408dc4a7821db85a9bc68cfccdb66a20b4dcf",
-  "failures": [],
-  "ci_run_id": "39799640206",
-  "head_sha": "10a408dc4a7821db85a9bc68cfccdb66a20b4dcf"
+  "record_type": "historical_decision_record",
+  "status": "HISTORICAL_EVIDENCE_ONLY",
+  "decision": "NOT_LOCKED",
+  "final_lock_granted": false,
+  "historical_source_commit_sha": "18916b9c2e7f2051e7ccdb91e1505ca00bd747d0",
+  "historical_target_release_sha": "10a408dc4a7821db85a9bc68cfccdb66a20b4dcf",
+  "historical_checked_out_head_sha": "10a408dc4a7821db85a9bc68cfccdb66a20b4dcf",
+  "historical_ci_run_id": "39799640206",
+  "failures": [
+    "HISTORICAL_RECORD_NOT_VALID_FOR_CURRENT_CANDIDATE",
+    "CURRENT_CANDIDATE_REQUIRES_FRESH_EXACT_SHA_EVIDENCE"
+  ],
+  "note": "This tracked record preserves historical provenance only. It must never be used as a current production decision. The production-master-gate workflow must delete and regenerate the run-specific decision from the exact candidate SHA and retained evidence. FINAL LOCK remains OPEN until every required gate, independent re-performance, and explicit authorized approval is proven."
 }
