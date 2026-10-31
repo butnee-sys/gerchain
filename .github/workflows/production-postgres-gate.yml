@@ -472,7 +472,7 @@ jobs:
           commit = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
           migration_rows = query_db(
               chain_dsn,
-              "SELECT version, checksum FROM schema_version ORDER BY version"
+              "SELECT version, checksum, applied_at FROM schema_version ORDER BY version"
           )
           migration_report = {
               "repository": "butnee-sys/gerchain",
