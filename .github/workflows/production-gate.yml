@@ -166,7 +166,12 @@ jobs:
               echo "JUNIT_SYNTHETIC_TIMEOUT_OR_EARLY_EXIT=1" >> "$log"
             fi
             result="PASS"
-            if [ "$rc" -ne 0 ] && [ "$rc" -ne 5 ]; then result="FAIL"; failures=$((failures + 1)); fi
+            if [ "$rc" -eq 5 ]; then
+              result="NO_PYTEST_CASES"
+            elif [ "$rc" -ne 0 ]; then
+              result="FAIL"
+              failures=$((failures + 1))
+            fi
             printf '%s\t%s\t%s\t%s\t%s\n' "$test_file" "$started_epoch" "$duration_seconds" "$rc" "$result" >> "$timing_file"
             echo "FILE_DURATION_SECONDS=$duration_seconds FILE_RESULT=$test_file EXIT_CODE=$rc" | tee -a "$log"
             tail -n 12 "$log"
