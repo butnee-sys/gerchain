@@ -2,14 +2,16 @@ from __future__ import annotations
 
 import os
 
+import pytest
 from sqlalchemy import inspect
 
 from persistence.atomic_ledger import LedgerAccountModel
 from services.gerchain_runtime_factory import ProductionRuntimeConfig, ProductionRuntimeFactory
 
 
-def test_production_runtime_factory_boots_against_postgres():
-    database_url = os.environ["GERCHAIN_DATABASE_URL"]
+@pytest.mark.isolated_postgresql_database
+def test_production_runtime_factory_boots_against_postgres(isolated_postgresql_database):
+    database_url = isolated_postgresql_database
     factory = ProductionRuntimeFactory(
         ProductionRuntimeConfig(
             database_url=database_url,
