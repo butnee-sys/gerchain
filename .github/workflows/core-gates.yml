@@ -122,6 +122,8 @@ jobs:
           printf '%s\n' "SHUUD and SANDBOX product tests are outside EAI acceptance; SHUUD boundary adapter tests remain in the EAI gate." > artifacts/eai-scope/scope-disposition.txt
           echo "SHUUD_PRODUCT_TESTS_OUT_OF_EAI_SCOPE=${#excluded_shuud_tests[@]}"
           echo "SANDBOX_PRODUCT_TESTS_OUT_OF_EAI_SCOPE=${#excluded_sandbox_tests[@]}"
+          excluded_product_tests=("${excluded_shuud_tests[@]}" "${excluded_sandbox_tests[@]}")
+          echo "EXCLUDED_PRODUCT_TEST_COUNT=${#excluded_product_tests[@]}"
           ignore_args=()
           for test_file in "${excluded_product_tests[@]}"; do
             ignore_args+=(--ignore="$test_file")
