@@ -9,7 +9,7 @@ on:
 jobs:
   production-gate:
     runs-on: ubuntu-latest
-    timeout-minutes: 360
+    timeout-minutes: 180
     services:
       postgres:
         image: postgres:16
@@ -64,7 +64,7 @@ jobs:
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
           python -m pip install -r requirements-dee-security.txt
           if [ -f postgres/requirements-test.txt ]; then python -m pip install -r postgres/requirements-test.txt; fi
-          python -m pip install pytest "psycopg[binary]" "fastapi>=0.115,<1" "uvicorn>=0.30,<1" "httpx>=0.27,<1" "python-multipart>=0.0.9"
+          python -m pip install pytest pytest-timeout "psycopg[binary]" "fastapi>=0.115,<1" "uvicorn>=0.30,<1" "httpx>=0.27,<1" "python-multipart>=0.0.9"
 
       - name: Apply canonical PostgreSQL migrations before database-backed tests
         run: |
@@ -88,6 +88,8 @@ jobs:
           set +e
           mkdir -p artifacts/production-gate
           failures=0
+          timing_file="artifacts/production-gate/step-timings.tsv"
+          printf 'test_file\tstarted_epoch\tduration_seconds\texit_code\tresult\n' > "$timing_file"
           reset_public_schema() {
             python - <<'PY'
           import os
@@ -129,11 +131,31 @@ jobs:
               failures=$((failures + 1))
               continue
             fi
-            PYTHONFAULTHANDLER=1 python -X faulthandler -m pytest --import-mode=importlib --disable-warnings -v --junitxml="$junit" "$test_file" >"$log" 2>&1
+            started_epoch="$(date +%s)"
+            start_seconds=$SECONDS
+            timeout --signal=TERM --kill-after=30s 20m \
+              env PYTHONFAULTHANDLER=1 python -X faulthandler -m pytest \
+              --import-mode=importlib --disable-warnings -v --timeout=300 \
+              --durations=50 --junitxml="$junit" "$test_file" >"$log" 2>&1
             rc=$?
-            echo "FILE_RESULT=$test_file EXIT_CODE=$rc" | tee -a "$log"
-            tail -n 8 "$log"
-            if [ "$rc" -ne 0 ]; then failures=$((failures + 1)); fi
+            duration_seconds=$((SECONDS - start_seconds))
+            if [ ! -s "$junit" ]; then
+              python - "$junit" "$test_file" "$rc" <<'PY'
+          import sys, xml.etree.ElementTree as ET
+          target, test_file, rc = sys.argv[1:]
+          root = ET.Element("testsuite", name="bounded-file-run", tests="1", failures="0", errors="1", skipped="0", time="0")
+          case = ET.SubElement(root, "testcase", classname="workflow.timeout", name=test_file, time="0")
+          error = ET.SubElement(case, "error", type="MissingJUnitAfterBoundedRun", message=f"pytest exit code {rc}; original JUnit was not produced")
+          error.text = "The per-file process did not produce a complete JUnit report. Inspect the retained log and timeout record."
+          ET.ElementTree(root).write(target, encoding="utf-8", xml_declaration=True)
+          PY
+              echo "JUNIT_SYNTHETIC_TIMEOUT_OR_EARLY_EXIT=1" >> "$log"
+            fi
+            result="PASS"
+            if [ "$rc" -ne 0 ]; then result="FAIL"; failures=$((failures + 1)); fi
+            printf '%s\t%s\t%s\t%s\t%s\n' "$test_file" "$started_epoch" "$duration_seconds" "$rc" "$result" >> "$timing_file"
+            echo "FILE_DURATION_SECONDS=$duration_seconds FILE_RESULT=$test_file EXIT_CODE=$rc" | tee -a "$log"
+            tail -n 12 "$log"
           done
           printf '%s\n' "$failures" > artifacts/production-gate/file-failure-count.txt
           echo "PRODUCTION_GATE_FILE_FAILURE_COUNT=$failures"

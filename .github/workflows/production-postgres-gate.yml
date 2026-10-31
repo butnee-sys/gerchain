@@ -13,6 +13,7 @@ on:
 jobs:
   postgres-production-gate:
     runs-on: ubuntu-latest
+    timeout-minutes: 180
     services:
       postgres:
         image: postgres:16
@@ -52,7 +53,7 @@ jobs:
       - name: Install test dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -r requirements-dee-security.txt -r postgres/requirements-test.txt pytest fastapi uvicorn httpx pyyaml
+          python -m pip install -r requirements-dee-security.txt -r postgres/requirements-test.txt pytest pytest-timeout fastapi uvicorn httpx pyyaml
       - name: Compile all Python modules
         run: python -m compileall -q .
       - name: Run settlement trust-contract tests
@@ -105,9 +106,27 @@ jobs:
           for test_file in "${excluded_product_tests[@]}"; do
             ignore_args+=(--ignore="$test_file")
           done
-          pytest -q --import-mode=importlib --junitxml=artifacts/segmented-tests/eai-regression.junit.xml "${ignore_args[@]}" > artifacts/segmented-tests/eai-regression.log 2>&1
+          started_epoch="$(date +%s)"
+          start_seconds=$SECONDS
+          timeout --signal=TERM --kill-after=30s 90m \
+            pytest -q --import-mode=importlib --timeout=300 --durations=50 \
+            --junitxml=artifacts/segmented-tests/eai-regression.junit.xml "${ignore_args[@]}" \
+            > artifacts/segmented-tests/eai-regression.log 2>&1
           rc=$?
+          duration_seconds=$((SECONDS - start_seconds))
+          printf 'started_epoch=%s\nduration_seconds=%s\nexit_code=%s\n' "$started_epoch" "$duration_seconds" "$rc" > artifacts/segmented-tests/eai-regression-timing.txt
+          echo "EAI_REGRESSION_DURATION_SECONDS=$duration_seconds"
           cat artifacts/segmented-tests/eai-regression.log
+          if [ ! -s artifacts/segmented-tests/eai-regression.junit.xml ]; then
+            python - <<'PY'
+          import xml.etree.ElementTree as ET
+          root = ET.Element("testsuite", name="eai-regression-bounded-run", tests="1", failures="0", errors="1", skipped="0", time="0")
+          case = ET.SubElement(root, "testcase", classname="workflow.timeout", name="eai-regression-suite", time="0")
+          error = ET.SubElement(case, "error", type="MissingJUnitAfterBoundedRun", message="pytest did not produce a complete JUnit report")
+          error.text = "Inspect eai-regression.log and eai-regression-timing.txt; absence of JUnit is not a pass."
+          ET.ElementTree(root).write("artifacts/segmented-tests/eai-regression.junit.xml", encoding="utf-8", xml_declaration=True)
+          PY
+          fi
           if [ "$rc" -eq 0 ]; then
             printf '0\n' > artifacts/segmented-tests/failure-count.txt
             echo "CANONICAL_EAI_REGRESSION=PASS"
@@ -124,8 +143,13 @@ jobs:
           path: artifacts/segmented-tests/
           if-no-files-found: warn
           retention-days: 90
-      - name: Apply all canonical migrations to a fresh PostgreSQL database
+      - name: Apply all canonical migrations to a fresh PostgreSQL database (timed)
+        shell: bash
         run: |
+          set +e
+          mkdir -p artifacts
+          started_epoch="$(date +%s)"
+          start_seconds=$SECONDS
           python - <<'PY'
           import os
           import psycopg
@@ -154,6 +178,11 @@ jobs:
               assert all(len(row[1]) == 64 for row in rows), "invalid SHA-256 checksum"
           print(f"CANONICAL_MIGRATIONS={len(expected)}/{len(expected)}; SECOND_RUN=NOOP; CHECKSUMS=SHA256")
           PY
+          rc=$?
+          duration_seconds=$((SECONDS - start_seconds))
+          printf 'started_epoch=%s\nduration_seconds=%s\nexit_code=%s\n' "$started_epoch" "$duration_seconds" "$rc" > artifacts/canonical-migration-chain-timing.txt
+          echo "CANONICAL_MIGRATION_CHAIN_DURATION_SECONDS=$duration_seconds EXIT_CODE=$rc"
+          exit "$rc"
       - name: Create isolated database for migration-runner mutation tests
         run: |
           python - <<'PY'
@@ -224,14 +253,37 @@ jobs:
               env.write(f"GERCHAIN_POSTGRES_DSN={evidence_dsn}\n")
               env.write(f"GERCHAIN_TEST_POSTGRES_URL={evidence_dsn}\n")
           PY
-      - name: Re-perform canonical PostgreSQL value lifecycle
+      - name: Re-perform canonical PostgreSQL value lifecycle (bounded)
         # Use the exact DSNs exported by the step that created and migrated the
         # evidence database; do not reconstruct a database name via expressions.
-        run: >-
-          python -m pytest -vv -s
-          --junitxml=artifacts/postgres-lifecycle-junit.xml
-          tests/postgres/test_production_postgres_reperformance.py
-          tests/persistence/test_deep_value_reconciliation_postgres.py
+        shell: bash
+        run: |
+          set +e
+          mkdir -p artifacts
+          started_epoch="$(date +%s)"
+          start_seconds=$SECONDS
+          timeout --signal=TERM --kill-after=30s 30m \
+            python -m pytest -vv -s --timeout=300 --durations=50 \
+            --junitxml=artifacts/postgres-lifecycle-junit.xml \
+            tests/postgres/test_production_postgres_reperformance.py \
+            tests/persistence/test_deep_value_reconciliation_postgres.py \
+            > artifacts/postgres-lifecycle.log 2>&1
+          rc=$?
+          duration_seconds=$((SECONDS - start_seconds))
+          printf 'started_epoch=%s\nduration_seconds=%s\nexit_code=%s\n' "$started_epoch" "$duration_seconds" "$rc" > artifacts/postgres-lifecycle-timing.txt
+          cat artifacts/postgres-lifecycle.log
+          if [ ! -s artifacts/postgres-lifecycle-junit.xml ]; then
+            python - <<'PY'
+          import xml.etree.ElementTree as ET
+          root = ET.Element("testsuite", name="postgres-lifecycle-bounded-run", tests="1", failures="0", errors="1", skipped="0", time="0")
+          case = ET.SubElement(root, "testcase", classname="workflow.timeout", name="postgres-lifecycle-suite", time="0")
+          error = ET.SubElement(case, "error", type="MissingJUnitAfterBoundedRun", message="lifecycle pytest did not produce a complete JUnit report")
+          error.text = "Inspect postgres-lifecycle.log and timing record; absence of JUnit is not a pass."
+          ET.ElementTree(root).write("artifacts/postgres-lifecycle-junit.xml", encoding="utf-8", xml_declaration=True)
+          PY
+          fi
+          echo "POSTGRES_LIFECYCLE_DURATION_SECONDS=$duration_seconds EXIT_CODE=$rc"
+          exit "$rc"
 
       - name: Write SHA-bound PostgreSQL migration and lifecycle evidence
         if: always()
@@ -456,6 +508,9 @@ jobs:
           path: |
             artifacts/production-postgres/
             artifacts/postgres-lifecycle-junit.xml
+            artifacts/postgres-lifecycle.log
+            artifacts/postgres-lifecycle-timing.txt
+            artifacts/canonical-migration-chain-timing.txt
             artifacts/segmented-tests/
           if-no-files-found: warn
           retention-days: 90
