@@ -47,6 +47,8 @@ jobs:
           if [ -f postgres/requirements-test.txt ]; then pip install -r postgres/requirements-test.txt; fi
           pip install "sqlalchemy>=2" "psycopg[binary]" fastapi uvicorn httpx pytest pyyaml "cryptography>=43,<47"
           python -c "import cryptography; print('CRYPTOGRAPHY_VERSION=' + cryptography.__version__)"
+      - name: Configure ephemeral CI Root of Trust
+        uses: ./.github/actions/setup-ci-root-of-trust
       - name: Validate workflow YAML
         run: |
           python - <<'PY'
