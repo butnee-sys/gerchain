@@ -64,27 +64,81 @@ jobs:
           --health-retries 5
     env:
       DEE_POSTGRES_URL: postgresql+psycopg://dee:dee@127.0.0.1:5432/dee_test
+      CANONICAL_COMMIT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      GITHUB_EVENT_COMMIT_SHA: ${{ github.sha }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Verify exact DEE evidence commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          checked_out_sha="$(git rev-parse HEAD)"
+          test "$checked_out_sha" = "$CANONICAL_COMMIT_SHA"
+          echo "CANONICAL_COMMIT_SHA=$CANONICAL_COMMIT_SHA"
+          echo "CHECKED_OUT_HEAD_SHA=$checked_out_sha"
+          echo "GITHUB_EVENT_COMMIT_SHA=$GITHUB_EVENT_COMMIT_SHA"
+
       - uses: actions/setup-python@v5
         with:
           python-version: '3.13'
       - name: Install security and boundary dependencies
         run: python -m pip install -r requirements-dee-security.txt pytest fastapi pydantic
       - name: Verify DEE security primitives
-        run: python -m pytest -q tests/test_dee_security.py
+        run: mkdir -p artifacts/dee-security && python -m pytest -q --junitxml=artifacts/dee-security/dee-security-primitives.junit.xml tests/test_dee_security.py
       - name: Verify DEE owner key lifecycle
-        run: python -m pytest -q tests/test_dee_key_management.py
+        run: mkdir -p artifacts/dee-security && python -m pytest -q --junitxml=artifacts/dee-security/dee-owner-key-lifecycle.junit.xml tests/test_dee_key_management.py
       - name: Verify persistent DEE owner registry
-        run: python -m pytest -q tests/test_dee_persistent_registry.py
+        run: mkdir -p artifacts/dee-security && python -m pytest -q --junitxml=artifacts/dee-security/dee-persistent-registry.junit.xml tests/test_dee_persistent_registry.py
       - name: Verify DEE runtime governance
-        run: python -m pytest -q tests/test_dee_runtime_governance.py
+        run: mkdir -p artifacts/dee-security && python -m pytest -q --junitxml=artifacts/dee-security/dee-runtime-governance.junit.xml tests/test_dee_runtime_governance.py
       - name: Verify DEE recovery governance
-        run: python -m pytest -q tests/test_dee_recovery_governance.py
+        run: mkdir -p artifacts/dee-security && python -m pytest -q --junitxml=artifacts/dee-security/dee-recovery-governance.junit.xml tests/test_dee_recovery_governance.py
       - name: Verify EXIM Escrow Port boundary
-        run: python -m pytest -q tests/test_nef_gerchain_port.py
+        run: mkdir -p artifacts/dee-security && python -m pytest -q --junitxml=artifacts/dee-security/exim-escrow-port.junit.xml tests/test_nef_gerchain_port.py
       # SHUUD product tests run in shuud-sandbox-product-tests.yml and are not EAI/DEE acceptance gates.
       - name: Benchmark DEE Trinity
-        run: python -m pytest -q -s tests/test_dee_trinity_benchmark.py
+        run: mkdir -p artifacts/dee-security && python -m pytest -q -s --junitxml=artifacts/dee-security/dee-trinity-benchmark.junit.xml tests/test_dee_trinity_benchmark.py
       - name: Verify DEE Trinity invariants
-        run: python -m pytest -q tests/test_dee_trinity_invariants.py
+        run: mkdir -p artifacts/dee-security && python -m pytest -q --junitxml=artifacts/dee-security/dee-trinity-invariants.junit.xml tests/test_dee_trinity_invariants.py
+
+      - name: Build exact-SHA DEE evidence manifest
+        if: always()
+        shell: bash
+        run: |
+          python - <<'PY'
+          import hashlib, json, os, subprocess, xml.etree.ElementTree as ET
+          from pathlib import Path
+          canonical = os.environ["CANONICAL_COMMIT_SHA"]
+          checked_out = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+          junit = sorted(p.as_posix() for p in Path("artifacts/dee-security").glob("*.junit.xml"))
+          totals = {"tests": 0, "failures": 0, "errors": 0, "skipped": 0}
+          for name in junit:
+              root = ET.parse(name).getroot()
+              suites = list(root.iter("testsuite")) if root.tag != "testsuite" else [root]
+              for suite in suites:
+                  for key in totals:
+                      totals[key] += int(suite.attrib.get(key, "0"))
+          source_paths = sorted(Path("dee_security").rglob("*.py")) + sorted(Path("tests").glob("test_dee_*.py")) + [Path(".github/workflows/dee-security.yml"), Path("requirements-dee-security.txt")]
+          hashes = [{"path": p.as_posix(), "sha256": hashlib.sha256(p.read_bytes()).hexdigest()} for p in source_paths if p.is_file()]
+          manifest = {
+              "evidence_status": "PASS_CANDIDATE" if canonical == checked_out and junit and totals["failures"] == 0 and totals["errors"] == 0 else "INCOMPLETE_OR_FAILED",
+              "canonical_commit_sha": canonical, "checked_out_head_sha": checked_out,
+              "github_event_sha": os.environ.get("GITHUB_EVENT_COMMIT_SHA"),
+              "run_id": os.environ.get("GITHUB_RUN_ID"), "run_attempt": os.environ.get("GITHUB_RUN_ATTEMPT"),
+              "source_hashes_complete": len(hashes) == len(source_paths),
+              "source_file_count": len(hashes), "source_hashes": hashes,
+              "junit_totals": totals, "junit_files": junit,
+          }
+          Path("artifacts/dee-security/dee-evidence-manifest.json").write_text(json.dumps(manifest, indent=2, sort_keys=True) + chr(10), encoding="utf-8")
+          print(json.dumps({k:v for k,v in manifest.items() if k != "source_hashes"}, indent=2))
+          PY
+      - name: Upload DEE SHA-bound logs and JUnit
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dee-postgres-evidence-${{ github.event.pull_request.head.sha || github.sha }}
+          path: artifacts/dee-security/
+          if-no-files-found: warn
+          retention-days: 90
