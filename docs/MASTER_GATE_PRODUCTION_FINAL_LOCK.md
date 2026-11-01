@@ -170,3 +170,32 @@ A previously downloaded artifact from run `39849400071` carries commit SHA `d9c8
 6. Complete independent re-performance and all open operational/security/recovery/performance/DR/release-governance controls at that same SHA; obtain authorized approval.
 
 **Disposition at this checkpoint: MASTER GATE = OPEN; PRODUCTION READY = NOT VERIFIED; FINAL LOCK = OPEN.**
+
+
+## Exact-SHA evidence checkpoint — 2026-11-01 — candidate `c0086ba9b5ab068d75631966635569037bed6598`
+
+This checkpoint supersedes the earlier 2026-10-31 candidate checkpoint for the evidence listed below. It does not change the Master Gate decision.
+
+### Verified same-SHA runs
+
+- Production Gate [41272250561](https://github.com/butnee-sys/gerchain/actions/runs/41272250561): success; artifact `13070002412`; `PASS_CANDIDATE`, 681 source files hashed, complete hash inventory, 1,206 JUnit cases / 0 failures / 0 errors / 18 skipped.
+- Production PostgreSQL Gate [41272250520](https://github.com/butnee-sys/gerchain/actions/runs/41272250520): success; artifact `13069168501`; `PASS_CANDIDATE`, source hashes complete, all 17 migrations applied, matching SQL/database SHA-256 checksums, lifecycle JUnit 6/6.
+- core-gates [41272250545](https://github.com/butnee-sys/gerchain/actions/runs/41272250545): success; core contract 56/56 and deep reconciliation 24/24.
+- SHUUD/SANDBOX Product MVP [41272250554](https://github.com/butnee-sys/gerchain/actions/runs/41272250554): success; product JUnit 108 cases / 0 failures / 0 errors / 1 skipped.
+- Independent Production Audit [41272250536](https://github.com/butnee-sys/gerchain/actions/runs/41272250536): success; audit verdict explicitly says automated evidence, not production-ready certification.
+- EAI PostgreSQL Re-performance [41272250524](https://github.com/butnee-sys/gerchain/actions/runs/41272250524), PostgreSQL Production Re-performance [41272250570](https://github.com/butnee-sys/gerchain/actions/runs/41272250570), and FINAL EAI/CORE Exact-SHA Gate [41272250607](https://github.com/butnee-sys/gerchain/actions/runs/41272250607): success; run artifacts bind to `c0086ba...`.
+
+### Failure and skip disposition
+
+- The 21 historical failures are all passing at test level on this checkpoint: 20 SHUUD product cases pass in the isolated product JUnit; the old workflow-isolation test is superseded by and replaced with a passing manual-entrypoint contract test in Production Gate JUnit. The row-by-row mapping is in `docs/FINAL_LOCK_21_FAILURE_DISPOSITION_REGISTER.md`.
+- The PostgreSQL process-restart test `test_shuud_survives_postgres_process_restart` remains skipped because `SHUUD_POSTGRES_DSN` was not configured. A workflow-only change in commit `0024117681c2bc004ed24e548f5526f3e8ab333e` now supplies that variable; it has not yet been executed on the post-change candidate.
+- Broad EAI regression JUnit reports 1,212 cases / 0 failures / 0 errors / 18 skipped. Those environment-gated tests are not relabelled as passed. Dedicated gates cover some PostgreSQL functions, but DEE PostgreSQL concurrent rotation remains unverified by this broad job.
+- PostgreSQL production re-performance evidence is SHA-consistent and `PASS_CANDIDATE`; however its reconciliation report is an empty-baseline check with zero value-flow rows, not a populated production transaction graph.
+
+### Remaining Master Gate controls
+
+MG-07 legacy authority-store physical write freeze; MG-08 IAM/MFA and privileged access; MG-09 observability, alerting, restart/recovery and no-duplicate movement; MG-10 production-like performance/concurrency; MG-11 backup/restore/DR and post-restore reconciliation; MG-12 protected release/branch governance; MG-13 independent attributed re-performance acceptance; and MG-14 complete evidence index plus explicit authorized final approval remain OPEN or require review. The independent audit workflow success is not a signed independent approval of all these controls.
+
+The plan and failure-register updates, plus the PostgreSQL restart workflow configuration, create a new candidate SHA. The `c0086ba...` artifacts are evidence only for that checkpoint. All mandatory gates, source hashes, JUnit, PostgreSQL restart and independent re-performance must be rerun/reconciled against the final post-documentation SHA.
+
+**MASTER GATE = OPEN; PRODUCTION READY = NOT VERIFIED; FINAL LOCK = OPEN.**
