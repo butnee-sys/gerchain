@@ -19,7 +19,7 @@ def test_memory_runtime_is_explicitly_test_only() -> None:
         runtime.require_postgresql_authority()
 
 
-def test_postgresql_authority_requires_explicit_configuration() -> None:
+def test_legacy_postgresql_release_authority_is_disabled() -> None:
     runtime = GerchainRuntime(
         escrow_id="ESC-TEST-2",
         amount=100,
@@ -27,7 +27,8 @@ def test_postgresql_authority_requires_explicit_configuration() -> None:
         witness_id="W-TEST-2",
     )
 
-    runtime.configure_postgres_release(lambda: None)
+    with pytest.raises(RuntimeError, match="legacy PostgreSQL release adapter is disabled"):
+        runtime.configure_postgres_release(lambda: None)
 
-    assert runtime.runtime_mode == "production-postgresql"
-    assert runtime.is_postgresql_authoritative is True
+    assert runtime.runtime_mode == "test-memory"
+    assert runtime.is_postgresql_authoritative is False

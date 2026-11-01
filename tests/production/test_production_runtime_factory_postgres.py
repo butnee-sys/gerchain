@@ -12,7 +12,9 @@ from services.gerchain_runtime_factory import (
 
 
 @pytest.mark.postgres
-def test_production_factory_runs_canonical_migrations_and_boots_authoritative_runtime():
+def test_production_factory_runs_canonical_migrations_and_boots_authoritative_runtime(monkeypatch):
+    monkeypatch.setenv("GERCHAIN_AUTH_OWNER_ID", "production-test-owner")
+    monkeypatch.setenv("GERCHAIN_AUTH_PUBLIC_KEY_B64", "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=")
     """Run the actual factory against the disposable PostgreSQL service in core-gates."""
     database_url = os.environ.get("GERCHAIN_TEST_DATABASE_URL")
     if not database_url:
@@ -35,7 +37,7 @@ def test_production_factory_runs_canonical_migrations_and_boots_authoritative_ru
             versions = connection.execute(
                 text("SELECT version FROM schema_version ORDER BY version")
             ).scalars().all()
-            assert versions == list(range(1, 18))
+            assert versions == list(range(1, 19))
             connection.execute(text("SELECT 1"))
     finally:
         engine.dispose()

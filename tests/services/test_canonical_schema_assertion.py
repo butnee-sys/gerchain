@@ -12,7 +12,7 @@ from services.gerchain_runtime_factory import assert_canonical_production_schema
 
 
 def _create_canonical_test_schema(engine) -> None:
-    for base in (AtomicLedgerBase, EscrowBase, OutboxBase, IdempotencyBase, WitnessBase):
+    for base in (AtomicLedgerBase, EscrowBase, OutboxBase, IdempotencyBase, WitnessBase, AuthorizationBase):
         base.metadata.create_all(engine)
     with engine.begin() as connection:
         connection.execute(text(
@@ -40,7 +40,7 @@ def test_canonical_schema_assertion_rejects_version_marker_with_missing_columns(
         connection.execute(text(
             "CREATE TABLE escrows (id TEXT PRIMARY KEY, state TEXT NOT NULL)"
         ))
-    for base in (AtomicLedgerBase, EscrowBase, OutboxBase, IdempotencyBase, WitnessBase):
+    for base in (AtomicLedgerBase, EscrowBase, OutboxBase, IdempotencyBase, WitnessBase, AuthorizationBase):
         base.metadata.create_all(engine)
     with engine.begin() as connection:
         connection.execute(text(

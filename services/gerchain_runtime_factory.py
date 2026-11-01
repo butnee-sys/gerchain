@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import os
 from pathlib import Path
 from typing import Any, Callable
 
@@ -11,6 +12,7 @@ from sqlalchemy.engine import Engine
 from sqlalchemy.orm import sessionmaker
 
 from postgres.migrations import apply_migrations
+from dee_security.root_of_trust import RootOfTrust
 from services.gerchain_runtime import GerchainRuntime
 
 
@@ -96,6 +98,10 @@ def assert_canonical_production_schema(connection: Any) -> None:
         "gerchain_transaction_witnesses": {"transaction_id", "event_type"},
         "gerchain_outbox_events": {"event_id", "event_type", "aggregate_id", "state"},
         "gerchain_idempotency_records": {"key", "fingerprint", "state"},
+        "gerchain_authorization_changes": {
+            "change_id", "owner_id", "operation", "transaction_id", "escrow_id",
+            "version", "payload_hash", "signature", "created_at",
+        },
     }
     tables = set(inspector.get_table_names())
     missing_tables = sorted(set(required) - tables)
@@ -119,12 +125,20 @@ def assert_canonical_production_schema(connection: Any) -> None:
         "gerchain_outbox_events": ("event_id",),
         "gerchain_transaction_witnesses": ("transaction_id",),
         "gerchain_idempotency_records": ("key",),
+        "gerchain_authorization_changes": ("change_id",),
     }
     for table, columns in unique_requirements.items():
         if not _has_unique_key(inspector, table, columns):
             raise RuntimeError(
                 f"{table} must enforce unique key on {', '.join(columns)}"
             )
+
+    if not _has_unique_key(
+        inspector, "gerchain_authorization_changes", ("operation", "transaction_id")
+    ):
+        raise RuntimeError(
+            "gerchain_authorization_changes must enforce unique operation/transaction_id"
+        )
 
     # The migration runner owns schema evolution. Startup independently verifies
     # the two safety-critical catalog invariants before exposing a production runtime.
@@ -204,6 +218,19 @@ class ProductionRuntimeFactory:
             assert_canonical_production_schema(connection)
 
     def create(self) -> GerchainRuntime:
+        owner_id = os.environ.get("GERCHAIN_AUTH_OWNER_ID")
+        public_key_b64 = os.environ.get("GERCHAIN_AUTH_PUBLIC_KEY_B64")
+        if not owner_id or not public_key_b64:
+            raise RuntimeError(
+                "production runtime requires GERCHAIN_AUTH_OWNER_ID and "
+                "GERCHAIN_AUTH_PUBLIC_KEY_B64"
+            )
+        # Validate and pin the public trust anchor before applying migrations
+        # or exposing any production runtime.
+        root_of_trust = RootOfTrust(
+            owner_id=owner_id,
+            public_key_b64=public_key_b64,
+        )
         self.initialize()
         runtime = GerchainRuntime(
             escrow_id=self.config.escrow_id,
@@ -211,6 +238,7 @@ class ProductionRuntimeFactory:
             currency=self.config.currency,
             witness_id=self.config.witness_id,
         )
+        runtime.configure_root_of_trust(root_of_trust)
         runtime.configure_canonical_ledger(self.session_factory)
         runtime.require_canonical_ledger_authority()
         return runtime

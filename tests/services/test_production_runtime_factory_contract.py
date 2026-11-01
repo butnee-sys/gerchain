@@ -15,6 +15,8 @@ class _Engine:
 
 
 def test_production_factory_uses_canonical_ledger_runtime(monkeypatch):
+    monkeypatch.setenv("GERCHAIN_AUTH_OWNER_ID", "production-test-owner")
+    monkeypatch.setenv("GERCHAIN_AUTH_PUBLIC_KEY_B64", "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=")
     factory = ProductionRuntimeFactory(
         ProductionRuntimeConfig(
             database_url="postgresql://test",

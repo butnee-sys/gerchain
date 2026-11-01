@@ -1,5 +1,10 @@
 import os
+import base64
+import json
 from datetime import datetime, timezone
+
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker
@@ -14,10 +19,19 @@ from persistence.atomic_value_transaction import TransactionWitness
 from persistence.recovery_outbox import OutboxEvent
 from persistence.durable_idempotency import DurableIdempotencyRecord
 from services.gerchain_runtime_factory import ProductionRuntimeConfig, ProductionRuntimeFactory
+from dee_security.root_of_trust import RootOfTrust, SignedChange
+from persistence.signed_change_authorization import canonical_release_payload, canonical_payload_hash
 
 
-def test_postgresql_canonical_runtime_end_to_end():
+def test_postgresql_canonical_runtime_end_to_end(monkeypatch):
     url = os.environ["GERCHAIN_DATABASE_URL"]
+    private_key = Ed25519PrivateKey.from_private_bytes(bytes(range(32)))
+    public_key = private_key.public_key().public_bytes(
+        serialization.Encoding.Raw,
+        serialization.PublicFormat.Raw,
+    )
+    monkeypatch.setenv("GERCHAIN_AUTH_OWNER_ID", "pg-e2e-owner")
+    monkeypatch.setenv("GERCHAIN_AUTH_PUBLIC_KEY_B64", base64.b64encode(public_key).decode("ascii"))
     engine = create_engine(url, pool_pre_ping=True)
     factory = sessionmaker(bind=engine, expire_on_commit=False)
 
@@ -90,6 +104,43 @@ def test_postgresql_canonical_runtime_end_to_end():
         )
         session.commit()
 
+        payload = canonical_release_payload(
+            transaction_id="pg-release-1",
+            escrow_id="pg-e2e-escrow",
+            source="pg-e2e-escrow",
+            destination="pg-beneficiary",
+            amount=40,
+            currency="MNT",
+            decision_status="APPROVE",
+            trust=True,
+            transparency=True,
+            performance=True,
+            evidence_verified=True,
+            evidence=None,
+        )
+        unsigned = SignedChange(
+            owner_id="pg-e2e-owner",
+            change_id="change-pg-release-1",
+            version=1,
+            payload_hash=canonical_payload_hash(payload),
+            signature="",
+        )
+        signed_change = SignedChange(
+            owner_id=unsigned.owner_id,
+            change_id=unsigned.change_id,
+            version=unsigned.version,
+            payload_hash=unsigned.payload_hash,
+            signature=base64.b64encode(private_key.sign(json.dumps(
+                unsigned.signing_payload(),
+                sort_keys=True,
+                separators=(",", ":"),
+                ensure_ascii=False,
+            ).encode("utf-8"))).decode("ascii"),
+        )
+        root = RootOfTrust(
+            "pg-e2e-owner",
+            base64.b64encode(public_key).decode("ascii"),
+        )
         release_escrow_in_transaction(
             session,
             transaction_id="pg-release-1",
@@ -98,7 +149,9 @@ def test_postgresql_canonical_runtime_end_to_end():
             amount=40,
             currency="MNT",
             decision_status="APPROVE",
-            authorization_status="AUTHORIZED",
+            root=root,
+            signed_change=signed_change,
+            owner_id="pg-e2e-owner",
             trust=True,
             transparency=True,
             performance=True,

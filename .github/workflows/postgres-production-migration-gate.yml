@@ -62,6 +62,8 @@ jobs:
           python -m pip install -r requirements-dee-security.txt
           python -m pip install 'psycopg[binary]' pytest
 
+      - name: Configure ephemeral CI Root of Trust
+        uses: ./.github/actions/setup-ci-root-of-trust
       - name: Verify live PostgreSQL connection
         run: |
           python - <<'PY'
@@ -96,7 +98,7 @@ jobs:
           print({"canonical_migrations": len(actual), "newly_applied": list(applied), "history_matches_manifest": True})
           PY
 
-      - name: Enforce migration 1-17 history and write migration-gate-report.json
+      - name: Enforce canonical migration history and write migration-gate-report.json
         shell: bash
         run: |
           set -euo pipefail
@@ -113,13 +115,13 @@ jobs:
 
           folder = Path("postgres/migrations")
           files = _canonical_migration_files(folder)
-          expected_versions = list(range(1, 18))
-          if len(files) != 17:
-              raise SystemExit(f"expected exactly 17 canonical migration files, got {len(files)}")
+          expected_versions = list(range(1, len(files) + 1))
+          if not files:
+              raise SystemExit("canonical migration registry is empty")
           expected_names = [f"{i:03d}_" for i in expected_versions]
           names = [p.name for p in files]
           if [int(p.name.split("_", 1)[0]) for p in files] != expected_versions:
-              raise SystemExit(f"migration sequence must be exactly 1..17 without gaps/duplicates: {names}")
+              raise SystemExit(f"migration sequence must match canonical registry without gaps/duplicates: {names}")
           dsn = make_url(os.environ["GERCHAIN_DATABASE_URL"]).set(drivername="postgresql").render_as_string(hide_password=False)
           with psycopg.connect(dsn) as connection:
               history_rows = connection.execute(
@@ -137,7 +139,7 @@ jobs:
           if duplicate_versions:
               raise SystemExit(f"duplicate PostgreSQL migration versions: {duplicate_versions}")
           if actual_versions != expected_versions:
-              raise SystemExit(f"PostgreSQL history must be exactly 1..17: {actual_versions}")
+              raise SystemExit(f"PostgreSQL history must match canonical versions {expected_versions}: {actual_versions}")
           expected_pairs = [(x["version"], x["runner_checksum"]) for x in expected_checksums]
           actual_pairs = [(int(row[0]), row[1]) for row in history_rows]
           if actual_pairs != expected_pairs:
@@ -149,7 +151,7 @@ jobs:
               "workflow_sha": os.environ.get("GITHUB_SHA", ""),
               "workflow_run_id": os.environ.get("GITHUB_RUN_ID", ""),
               "workflow_run_attempt": os.environ.get("GITHUB_RUN_ATTEMPT", ""),
-              "migration_count_expected": 17,
+              "migration_count_expected": len(expected_versions),
               "migration_count_actual": len(history_rows),
               "versions_expected": expected_versions,
               "versions_actual": actual_versions,
@@ -160,7 +162,7 @@ jobs:
                   for row in history_rows
               ],
               "checks": {
-                  "sequence_1_to_17": True,
+                  "sequence_matches_canonical_registry": True,
                   "no_duplicate_versions": True,
                   "checksums_match": True,
                   "commit_sha_matches_workflow": bool(os.environ.get("GITHUB_SHA")) and commit_sha == os.environ["GITHUB_SHA"],
@@ -324,8 +326,9 @@ jobs:
               raise SystemExit(f"PostgreSQL duplicate versions found at final reconciliation: {duplicates}")
           if actual != report.get("postgresql_history"):
               raise SystemExit("artifact PostgreSQL history does not match final live database history")
-          if len(actual) != 17 or [x["version"] for x in actual] != list(range(1, 18)):
-              raise SystemExit("final live PostgreSQL history is not exactly versions 1..17")
+          expected_versions = report.get("versions_expected", [])
+          if len(actual) != report.get("migration_count_expected") or [x["version"] for x in actual] != expected_versions:
+              raise SystemExit(f"final live PostgreSQL history differs from canonical registry: expected={expected_versions}")
           print("PASS: migration-gate-report.json matches final PostgreSQL history and run identity")
           PY
 

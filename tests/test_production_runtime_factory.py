@@ -57,6 +57,8 @@ def test_production_factory_initializes_canonical_schema_once(monkeypatch):
 
 
 def test_production_factory_creates_canonical_ledger_runtime_without_legacy_release(monkeypatch):
+    monkeypatch.setenv("GERCHAIN_AUTH_OWNER_ID", "factory-owner")
+    monkeypatch.setenv("GERCHAIN_AUTH_PUBLIC_KEY_B64", "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=")
     from services import gerchain_runtime_factory as module
 
     calls = []

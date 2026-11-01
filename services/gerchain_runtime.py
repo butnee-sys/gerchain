@@ -12,7 +12,7 @@ from core.hold import Hold, HoldEngine
 from core.idempotency import IdempotencyEngine
 from core.limit import LimitEngine, LimitRule
 from core.transaction_lifecycle import TransactionState, TransactionStateMachine
-from dee_security.root_of_trust import RootOfTrust
+from dee_security.root_of_trust import RootOfTrust, SignedChange
 from escrow.engine import EscrowEngine
 from money.engine import MoneyEngine
 from money.ledger import MoneyLedger
@@ -119,15 +119,14 @@ class GerchainRuntime:
         self.holds = HoldEngine()
         self.limits = LimitEngine()
         self._transactions: dict[str, TransactionStateMachine] = {}
+        self._trusted_root_of_trust: RootOfTrust | None = None
+        self._consumed_authorization_change_ids: dict[str, str] = {}
 
     def configure_postgres_release(self, session_factory) -> PostgreSQLReleaseAdapter:
-        from persistence.atomic_release import PostgreSQLAtomicRelease
-
-        self._postgres_release = PostgreSQLReleaseAdapter(
-            PostgreSQLAtomicRelease(session_factory)
+        raise RuntimeError(
+            "legacy PostgreSQL release adapter is disabled; use canonical RELEASE "
+            "with SignedChange authorization"
         )
-        self.runtime_mode = "production-postgresql"
-        return self._postgres_release
 
     @property
     def is_postgresql_authoritative(self) -> bool:
@@ -137,6 +136,18 @@ class GerchainRuntime:
     def require_postgresql_authority(self) -> None:
         if not self.is_postgresql_authoritative:
             raise RuntimeError("PostgreSQL authoritative runtime is required")
+
+    def configure_root_of_trust(self, root: RootOfTrust) -> None:
+        """Pin the trusted public key before accepting protected value operations."""
+        if not isinstance(root, RootOfTrust):
+            raise ValueError("a valid RootOfTrust instance is required")
+        current = self._trusted_root_of_trust
+        if current is not None and (
+            current.owner_id != root.owner_id
+            or current.public_key_b64 != root.public_key_b64
+        ):
+            raise RuntimeError("the configured RootOfTrust cannot be replaced")
+        self._trusted_root_of_trust = root
 
     def configure_canonical_ledger(self, session_factory) -> PostgreSQLAtomicLedger:
         """Attach the production Canonical Ledger boundary."""
@@ -369,6 +380,7 @@ class GerchainRuntime:
         timestamp: str,
         evidence: Any,
         root: RootOfTrust | None = None,
+        signed_change: SignedChange | None = None,
         owner_id: str | None = None,
         authorized: bool = False,
         evidence_verified: bool = False,
@@ -376,8 +388,18 @@ class GerchainRuntime:
         source: str | None = None,
         idempotency_key: str | None = None,
     ):
-        if root is None or owner_id is None or trinity_proof is None:
-            raise ValueError("DEE authorization context is required for release")
+        if signed_change is None or owner_id is None or trinity_proof is None:
+            raise ValueError("cryptographically signed DEE authorization is required for release")
+        trusted_root = self._trusted_root_of_trust
+        if trusted_root is None:
+            raise RuntimeError("a pinned RootOfTrust is required before RELEASE")
+        if root is not None and (
+            not isinstance(root, RootOfTrust)
+            or root.owner_id != trusted_root.owner_id
+            or root.public_key_b64 != trusted_root.public_key_b64
+        ):
+            raise ValueError("caller-supplied RootOfTrust does not match the pinned trust anchor")
+        root = trusted_root
 
         if self.is_canonical_ledger_authoritative:
             from persistence.release_escrow import release_escrow_in_transaction
@@ -391,7 +413,9 @@ class GerchainRuntime:
                     amount=self.escrow_engine.amount,
                     currency=self.escrow_engine.currency,
                     decision_status="APPROVE",
-                    authorization_status="AUTHORIZED" if authorized else "DENIED",
+                    root=root,
+                    signed_change=signed_change,
+                    owner_id=owner_id,
                     trust=trinity_proof.get("trust") is True,
                     transparency=trinity_proof.get("transparency") is True,
                     performance=trinity_proof.get("performance") is True,
@@ -407,21 +431,53 @@ class GerchainRuntime:
                 return result
 
         self._require_test_memory_fallback("RELEASE")
-        return self.escrow_service.release(
+        from persistence.signed_change_authorization import (
+            canonical_release_payload,
+            verify_signed_change,
+        )
+
+        release_payload = canonical_release_payload(
+            transaction_id=transaction_id,
+            escrow_id=self.escrow_engine.escrow_id,
+            source=self.escrow_engine.escrow_id,
+            destination=destination,
+            amount=self.escrow_engine.amount,
+            currency=self.escrow_engine.currency,
+            decision_status="APPROVE",
+            trust=trinity_proof.get("trust") is True,
+            transparency=trinity_proof.get("transparency") is True,
+            performance=trinity_proof.get("performance") is True,
+            evidence_verified=evidence_verified,
+            evidence=evidence,
+        )
+        authorization_digest = verify_signed_change(
+            root=root,
+            signed_change=signed_change,
+            owner_id=owner_id,
+            expected_payload=release_payload,
+        )
+        previous_digest = self._consumed_authorization_change_ids.get(signed_change.change_id)
+        if previous_digest is not None and previous_digest != authorization_digest:
+            raise ValueError("signed RELEASE change_id has already been consumed for another payload")
+        result = self.escrow_service.release(
             transaction_id=transaction_id,
             destination=destination,
             timestamp=timestamp,
             evidence=evidence,
             root=root,
             owner_id=owner_id,
-            authorized=authorized,
+            authorized=True,
             evidence_verified=evidence_verified,
             trinity_proof=trinity_proof,
         )
+        self._consumed_authorization_change_ids[signed_change.change_id] = authorization_digest
+        return result
 
     def release_postgres(self, request: ReleaseRequest):
-        self.require_postgresql_authority()
-        return self._postgres_release.execute(request)
+        raise RuntimeError(
+            "legacy PostgreSQL release adapter is disabled; use canonical RELEASE "
+            "with SignedChange authorization"
+        )
 
     def refund(
         self,
@@ -431,48 +487,88 @@ class GerchainRuntime:
         timestamp: str,
         evidence: Any,
         root: RootOfTrust | None = None,
+        signed_change: SignedChange | None = None,
         owner_id: str | None = None,
         authorized: bool = False,
-        evidence_verified: bool = False,
+        transparency: bool = False,
+        dispute_or_cancellation_verified: bool = False,
         trinity_proof: Mapping[str, bool] | None = None,
     ):
-        if root is None or owner_id is None or trinity_proof is None:
-            raise ValueError("DEE authorization context is required for refund")
+        if signed_change is None or owner_id is None:
+            raise ValueError("signed REFUND authorization is required")
+        if authorized is not True:
+            raise ValueError("REFUND requires authorized approval")
+        if transparency is not True:
+            raise ValueError("REFUND requires transparent evidence")
+        if dispute_or_cancellation_verified is not True:
+            raise ValueError("REFUND requires verified dispute or cancellation evidence")
+
+        trusted_root = self._trusted_root_of_trust
+        if trusted_root is None:
+            raise RuntimeError("a pinned RootOfTrust is required before REFUND")
+        if root is not None and (
+            not isinstance(root, RootOfTrust)
+            or root.owner_id != trusted_root.owner_id
+            or root.public_key_b64 != trusted_root.public_key_b64
+        ):
+            raise ValueError("caller-supplied RootOfTrust does not match the pinned trust anchor")
+        root = trusted_root
+        if owner_id != root.owner_id or signed_change.owner_id != root.owner_id:
+            raise ValueError("REFUND signer does not match the pinned owner")
+        root.require_valid(signed_change)
 
         if self.is_canonical_ledger_authoritative:
+            from persistence.escrow_aggregate import get_escrow
             from persistence.refund_escrow import refund_escrow_in_transaction
+            from persistence.signed_change_authorization import (
+                canonical_refund_payload,
+                require_pinned_root,
+                verify_signed_change,
+            )
 
             with self._session_factory() as session:
+                escrow = get_escrow(session, self.escrow_engine.escrow_id)
+                refund_payload = canonical_refund_payload(
+                    transaction_id=transaction_id,
+                    escrow_id=self.escrow_engine.escrow_id,
+                    source=self.escrow_engine.escrow_id,
+                    destination=escrow.refund_destination,
+                    amount=self.escrow_engine.amount,
+                    currency=self.escrow_engine.currency,
+                    authorized=authorized,
+                    transparency=transparency,
+                    dispute_or_cancellation_verified=dispute_or_cancellation_verified,
+                    evidence=evidence,
+                )
+                verify_signed_change(
+                    root=require_pinned_root(root),
+                    signed_change=signed_change,
+                    owner_id=owner_id,
+                    expected_payload=refund_payload,
+                )
                 result = refund_escrow_in_transaction(
                     session,
                     transaction_id=transaction_id,
                     escrow_id=self.escrow_engine.escrow_id,
                     amount=self.escrow_engine.amount,
                     currency=self.escrow_engine.currency,
+                    root=root,
+                    signed_change=signed_change,
+                    owner_id=owner_id,
+                    authorized=authorized,
+                    transparency=transparency,
+                    dispute_or_cancellation_verified=dispute_or_cancellation_verified,
                     payload={
                         "timestamp": timestamp,
                         "evidence": evidence,
-                        "owner_id": owner_id,
-                        "authorized": authorized,
-                        "evidence_verified": evidence_verified,
-                        "trinity_proof": dict(trinity_proof),
-                        "requested_destination": destination,
                     },
                 )
                 session.commit()
                 return result
 
         self._require_test_memory_fallback("REFUND")
-        return self.escrow_service.refund(
-            transaction_id=transaction_id,
-            destination=destination,
-            timestamp=timestamp,
-            evidence=evidence,
-            root=root,
-            owner_id=owner_id,
-            authorized=authorized,
-            evidence_verified=evidence_verified,
-            trinity_proof=trinity_proof,
+        raise RuntimeError(
+            "REFUND requires Canonical Ledger authority for durable one-time SignedChange consumption"
         )
 
     def cancel(self, *, transaction_id: str, timestamp: str, evidence: Any):

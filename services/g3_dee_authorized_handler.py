@@ -4,7 +4,7 @@ from __future__ import annotations
 from typing import Mapping
 
 from architecture.contracts import AdapterContract, BoundaryError, BoundaryRequest, BoundaryResponse
-from dee_security import AuthorizationPolicy, ReleaseAuthorization, RootOfTrust, authorize_release
+from dee_security import AuthorizationPolicy, ReleaseAuthorization, RootOfTrust, SignedChange, authorize_release
 from dee_security.signing import SignedRelease
 from services.g3_core_handler import G3CoreRuntimeHandler
 
@@ -37,6 +37,9 @@ class G3DEEAuthorizedHandler(AdapterContract):
             raise BoundaryError("DEE release requires SignedRelease")
         if not isinstance(manifest, Mapping):
             raise BoundaryError("DEE release requires signed manifest")
+        signed_change = payload.get("signed_change")
+        if not isinstance(signed_change, SignedChange):
+            raise BoundaryError("DEE release requires operation-bound SignedChange")
 
         try:
             authorize_release(root=self._root, policy=self._policy, release=release, manifest=manifest, gate=self._gate)
@@ -59,6 +62,7 @@ class G3DEEAuthorizedHandler(AdapterContract):
         authorized_payload["_dee_context"] = {
             "root": self._root,
             "owner_id": release.owner_id,
+            "signed_change": signed_change,
         }
 
         forwarded = BoundaryRequest(
