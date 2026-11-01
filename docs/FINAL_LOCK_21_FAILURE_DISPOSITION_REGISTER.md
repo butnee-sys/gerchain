@@ -83,9 +83,9 @@ Evidence:
 | 16 | `tests.test_shuud_measurement_summary::test_measurement_summary_combines_timing_and_economics` passed in product JUnit. | PASS |
 | 17 | `tests.test_shuud_measurement_summary::test_measurement_summary_can_measure_timing_without_money_assumptions` passed in product JUnit. | PASS |
 | 18 | `tests.test_shuud_measurement_summary::test_measurement_summary_requires_complete_economic_inputs` passed in product JUnit. | PASS |
-| 19 | `tests.test_shuud_process_restart_e2e::test_shuud_survives_real_process_restart` passed in product JUnit. | PASS — non-PostgreSQL restart |
-| 20 | `tests.test_shuud_sandbox_config::test_day0_rejects_invalid_window_and_threshold_order` passed in product JUnit. | PASS |
-| 21 | Historical contract row is covered by the replacement test in row 1; no claim is made that the obsolete test name itself ran. | PASS — replacement contract |
+| 19 | `tests.test_shuud_operational_timing::test_operational_timing_tracks_full_lifecycle_and_durations` passed in product JUnit. | PASS |
+| 20 | `tests.test_shuud_process_restart_e2e::test_shuud_survives_real_process_restart` passed in product JUnit. | PASS — non-PostgreSQL restart |
+| 21 | `tests.test_shuud_sandbox_config::test_day0_rejects_invalid_window_and_threshold_order` passed in product JUnit. | PASS |
 
 ### Separate skipped test — not one of the 21 historical failures
 
