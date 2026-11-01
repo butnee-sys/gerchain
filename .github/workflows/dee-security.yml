@@ -110,6 +110,7 @@ jobs:
           python - <<'PY'
           import hashlib, json, os, subprocess, xml.etree.ElementTree as ET
           from pathlib import Path
+          Path("artifacts/dee-security").mkdir(parents=True, exist_ok=True)
           canonical = os.environ["CANONICAL_COMMIT_SHA"]
           checked_out = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
           junit = sorted(p.as_posix() for p in Path("artifacts/dee-security").glob("*.junit.xml"))
