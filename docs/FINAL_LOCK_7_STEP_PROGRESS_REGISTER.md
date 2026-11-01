@@ -177,3 +177,41 @@ This checkpoint improves the evidence state but does not close MG-07–MG-14. In
 **MASTER GATE = OPEN. PRODUCTION READY = NOT VERIFIED. FINAL LOCK = OPEN.**
 
 This register commit itself creates a new repository revision. All mandatory workflows must be rerun against the resulting exact commit SHA before that revision can be considered the final candidate. No evidence from a different SHA may be silently carried forward as exact-SHA proof.
+
+
+## Candidate checkpoint — 2026-11-01 — `ac7a1c6f85854366c376a902d10e7362332fc066`
+
+Evidence below is retained for this exact candidate only. It does not grant production readiness or final lock.
+
+### Exact-SHA results
+
+- [Production PostgreSQL Gate run 41276494658](https://github.com/butnee-sys/gerchain/actions/runs/41276494658), [artifact 13071312615](https://github.com/butnee-sys/gerchain/actions/runs/41276494658/artifacts/13071312615): `PASS_CANDIDATE`; `commit_sha=checked_out_head_sha=tested_commit=ac7a1c6f85854366c376a902d10e7362332fc066`; 13/13 scoped source hashes complete; no missing files; clean worktree; all 17 migration files match applied versions/checksums; lifecycle JUnit 6 passed, no failures/errors/skips. All 36 reported PostgreSQL constraints are validated. Detached SHA-256 of migration-lifecycle-report.json: `5d616a0f743ae922a847bea466f8ad485eb2d5a995619023c8a798d58b98a77a`, matching its detached checksum file.
+- [Production Gate run 41276494600](https://github.com/butnee-sys/gerchain/actions/runs/41276494600), [artifact 13071439059](https://github.com/butnee-sys/gerchain/actions/runs/41276494600/artifacts/13071439059): `PASS_CANDIDATE`; gate failure count 0; all 681 enumerated source hashes complete; no missing files; candidate/checkout SHA match. The final-lock contract JUnit reports 5 passed, 0 failures/errors.
+- [CORE gates run 41276494626](https://github.com/butnee-sys/gerchain/actions/runs/41276494626), artifact 13071388474: success. EAI regression JUnit in artifact 13071312615: 1,212 tests, 0 failures, 0 errors, 18 skipped. Skips remain visible.
+- [EAI PostgreSQL re-performance run 41276494599](https://github.com/butnee-sys/gerchain/actions/runs/41276494599), [artifact 13070409176](https://github.com/butnee-sys/gerchain/actions/runs/41276494599/artifacts/13070409176): success.
+- [PostgreSQL production re-performance run 41276494623](https://github.com/butnee-sys/gerchain/actions/runs/41276494623), [artifact 13070518762](https://github.com/butnee-sys/gerchain/actions/runs/41276494623/artifacts/13070518762): success.
+- [Independent automated EAI audit run 41276494617](https://github.com/butnee-sys/gerchain/actions/runs/41276494617), [artifact 13071473110](https://github.com/butnee-sys/gerchain/actions/runs/41276494617/artifacts/13071473110): candidate SHA and PostgreSQL 16 recorded; collection and EAI tests succeeded. Audit verdict explicitly says this is automated evidence, not production-ready certification.
+- [SHUUD/SANDBOX product suite run 41276494659](https://github.com/butnee-sys/gerchain/actions/runs/41276494659), [artifact 13071616006](https://github.com/butnee-sys/gerchain/actions/runs/41276494659/artifacts/13071616006): 108 passed, 0 failures/errors/skips, including the PostgreSQL process-restart test.
+- [Exact-SHA EAI/CORE run 41276494709](https://github.com/butnee-sys/gerchain/actions/runs/41276494709), [artifact 13071229644](https://github.com/butnee-sys/gerchain/actions/runs/41276494709/artifacts/13071229644): both jobs succeeded and manifest binds to candidate SHA.
+- CI Test Suite 41276494611, canonical migration 41276494718, PostgreSQL migration proof 41276494696, migration idempotency 41276494682, DEE Security 41276494669, CodeQL 41276494734 and Production Readiness Gates 41276494625 all completed successfully on this SHA.
+
+### Previous 21 failures — new-candidate evidence cross-reference
+
+The preceding checkpoint at `ebfa794fa02d7027614b63ad274f85bbd79599c5` retains the detailed failure causes and previous per-test evidence. The new product JUnit at artifact 13071616006 contains and passes the 20 SHUUD tests in rows 2–21 of that register. Their exact names are: (2) `test_full_sandbox_lifecycle_reaches_payment_release`; (3) `test_http_incident_to_escrow_release`; (4) `test_shuud_api_recovers_after_in_memory_state_loss`; (5) `test_shuud_app_exposes_lifecycle_and_sandbox_routes`; (6) `test_shuud_app_keeps_static_mount_last`; (7) `test_shuud_dee_end_to_end_proves_trust_transparency_performance`; (8–12) `test_economic_impact_validates_inputs[kwargs0..4]`; (13) `test_kpi_counts_one_canonical_snapshot_once_and_aggregates_persisted_economics`; (14) `test_updated_economic_measurement_replaces_previous_value_without_double_count`; (15) `test_measurement_summary_api_exposes_timing_and_economics`; (16) `test_measurement_summary_combines_timing_and_economics`; (17) `test_measurement_summary_can_measure_timing_without_money_assumptions`; (18) `test_measurement_summary_requires_complete_economic_inputs`; (19) `test_operational_timing_tracks_full_lifecycle_and_durations`; (20) `test_shuud_survives_real_process_restart`; (21) `test_day0_rejects_invalid_window_and_threshold_order`. All report passed in that JUnit.
+  
+Row 1's old workflow-isolation assertion has been replaced by the explicit manual-entrypoint boundary contract. In artifact 13071439059, `tests__test_final_lock_contract.py.junit.xml` reports 5/5 passed, including `test_shuud_workflows_are_separate_manual_entrypoints` and `test_core_gate_excludes_shuud_product_tests_but_keeps_boundary_tests`. This is a passing successor contract; the old test name is not claimed to remain present. No historical failure is waived as an EAI scope exclusion.
+
+### Still-open production requirements
+
+- **MG-07 Legacy authority write-freeze: OPEN** — no production DB privilege/deny-write proof or negative operational test retained.
+- **MG-08 IAM/MFA and privileged access: OPEN** — no identity-provider MFA policy export, privileged-account inventory, access review or authorized sign-off.
+- **MG-09 Observability/recovery: OPEN** — automated lifecycle evidence is bounded; no production monitoring/alert evidence or operational no-duplicate-movement recovery drill.
+- **MG-10 Performance/concurrency: OPEN** — CI concurrency tests are not an accepted production-like load/latency report with thresholds.
+- **MG-11 Backup/restore/DR: OPEN** — no retained backup integrity, restore rehearsal, post-restore reconciliation or RPO/RTO drill.
+- **MG-12 CI/release governance: UNVERIFIED** — successful exact-SHA CI does not replace branch ruleset, release authorization/signing and deployment-to-SHA evidence.
+- **MG-13 Independent re-performance: PARTIAL / OPEN** — automated audit and CI re-performance passed; independent human reviewer and signed acceptance on final immutable SHA are absent.
+- **MG-14 Evidence index / authorized final decision: OPEN** — no named authorized approver or explicit final decision record.
+
+This register update creates a new commit. The evidence above belongs to `ac7a1c6f85854366c376a902d10e7362332fc066` and must not be treated as exact-SHA evidence for the new register commit; required workflows must run again on that resulting SHA.
+
+**MASTER GATE = OPEN. PRODUCTION READY = NOT VERIFIED. FINAL LOCK = OPEN.**
