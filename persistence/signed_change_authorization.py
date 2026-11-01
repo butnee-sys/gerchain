@@ -106,6 +106,56 @@ def canonical_release_payload(
     }
 
 
+
+def canonical_refund_payload(
+    *,
+    transaction_id: str,
+    escrow_id: str,
+    source: str,
+    destination: str,
+    amount: int,
+    currency: str,
+    authorized: bool,
+    transparency: bool,
+    dispute_or_cancellation_verified: bool,
+    evidence: Any,
+) -> dict[str, Any]:
+    """Build the exact REFUND facts and independent refund-policy flags."""
+    if not all(isinstance(value, str) and value for value in (
+        transaction_id, escrow_id, source, destination, currency
+    )):
+        raise SecurityError("REFUND authorization identifiers are required")
+    if isinstance(amount, bool) or not isinstance(amount, int) or amount <= 0:
+        raise SecurityError("REFUND authorization amount must be a positive integer")
+    normalized_currency = currency.upper()
+    if not re.fullmatch(r"[A-Z]{3}", normalized_currency):
+        raise SecurityError("REFUND authorization currency must be an ISO 4217 code")
+    if authorized is not True:
+        raise SecurityError("REFUND requires authorized approval")
+    if transparency is not True:
+        raise SecurityError("REFUND requires transparent evidence")
+    if dispute_or_cancellation_verified is not True:
+        raise SecurityError("REFUND requires verified dispute or cancellation evidence")
+    evidence_hash = hashlib.sha256(_canonical_json_bytes(evidence)).hexdigest()
+    return {
+        "schema_version": 1,
+        "operation": "REFUND",
+        "transaction_id": transaction_id,
+        "escrow_id": escrow_id,
+        "source": source,
+        "destination": destination,
+        "amount": amount,
+        "currency": normalized_currency,
+        "expected_state": "LOCKED",
+        "new_state": "REFUNDED",
+        "authorized": True,
+        "transparency": True,
+        "dispute_or_cancellation_verified": True,
+        "already_released": False,
+        "evidence_hash": evidence_hash,
+    }
+
+
 def canonical_payload_hash(payload: Mapping[str, Any]) -> str:
     return hashlib.sha256(_canonical_json_bytes(dict(payload))).hexdigest()
 
@@ -143,7 +193,7 @@ def verify_signed_change(
     root.require_valid(signed_change)
     expected_hash = canonical_payload_hash(expected_payload)
     if not hmac.compare_digest(signed_change.payload_hash, expected_hash):
-        raise SecurityError("signed change payload does not match the RELEASE request")
+        raise SecurityError("signed change payload does not match the protected operation request")
     return expected_hash
 
 
@@ -159,8 +209,8 @@ def consume_signed_change_in_transaction(
     expected_payload: Mapping[str, Any],
 ) -> str:
     """Verify and persist one-time authorization in the caller's value transaction."""
-    if operation != "RELEASE":
-        raise SecurityError("C-01 authorization consumer only accepts RELEASE")
+    if operation not in {"RELEASE", "REFUND", "CANCEL"}:
+        raise SecurityError("unsupported signed authorization operation")
     if expected_payload.get("operation") != operation:
         raise SecurityError("signed authorization operation mismatch")
     if expected_payload.get("transaction_id") != transaction_id:
@@ -196,6 +246,7 @@ __all__ = [
     "AuthorizationBase",
     "SignedChangeAuthorization",
     "canonical_release_payload",
+    "canonical_refund_payload",
     "canonical_payload_hash",
     "require_pinned_root",
     "verify_signed_change",
