@@ -62,6 +62,8 @@ jobs:
           python -m pip install -r requirements-dee-security.txt
           python -m pip install 'psycopg[binary]' pytest
 
+      - name: Configure ephemeral CI Root of Trust
+        uses: ./.github/actions/setup-ci-root-of-trust
       - name: Verify live PostgreSQL connection
         run: |
           python - <<'PY'
