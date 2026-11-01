@@ -69,3 +69,25 @@ This register is diagnostic evidence only. It does not prove production readines
 
 - `FINAL LOCK = OPEN`
 - `PRODUCTION READY = NOT VERIFIED`
+
+
+## Same-SHA re-performance update — 2026-11-01 — candidate `e543ba112ff2c311b50ec7b7a8697b326e6d6b23`
+
+This update supplements, and does not erase, the original historical failure record above.
+
+- **#2–#21: RE-PASSED at test level.** Dedicated SHUUD/SANDBOX Product MVP run [41288774986](https://github.com/butnee-sys/gerchain/actions/runs/41288774986), artifact 13076670356, contains all 20 exact historical test node IDs; 108 tests passed, 0 failures, 0 errors, 0 skips.
+- **#1: REPLACED CONTRACT PASSED.** The prior `test_shuud_workflows_are_path_isolated` assertion was replaced by `test_shuud_workflows_are_separate_manual_entrypoints`. Production Gate run [41288774980](https://github.com/butnee-sys/gerchain/actions/runs/41288774980), artifact 13076497382, per-file JUnit for `tests.test_final_lock_contract` records five tests, all passing, including the replacement contract. The original old test node ID did not run unchanged.
+- The product test results are separate from EAI acceptance and do not certify SHUUD/SANDBOX production deployment.
+- No historical failure is represented as retroactively passing on its original SHA. The new results apply only to `e543ba112ff2c311b50ec7b7a8697b326e6d6b23`.
+
+### Current row dispositions
+
+| Rows | Same-SHA evidence | Status |
+|---|---|---|
+| #1 | Revised manual-entrypoint contract in Production Gate per-file JUnit, artifact 13076497382 | **REPLACED CONTRACT PASSED** |
+| #2–#21 | Exact test cases individually passed in Product MVP JUnit, artifact 13076670356 | **FIXED/RE-PASSED AT TEST LEVEL** |
+
+This is a test-level disposition only. Product-level operational acceptance, deployment controls and any separately required SHUUD release approval remain outside the EAI final-lock decision. The 18 skipped EAI diagnostic tests are tracked separately in `docs/PRODUCTION_FINAL_LOCK_AUDIT_2026-11-01_e543ba1.md`.
+
+**EAI final-lock impact:** this register's 21 historical test failures no longer constitute a failing test result at candidate `e543ba112ff2c311b50ec7b7a8697b326e6d6b23`; however `core-gates` is pending and MG-07–MG-14 remain open/partial.  
+**FINAL LOCK = OPEN; PRODUCTION READY = NOT VERIFIED.**

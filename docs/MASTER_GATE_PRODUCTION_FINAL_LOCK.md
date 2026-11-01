@@ -212,3 +212,20 @@ Independent SHA-256 recomputation from the GitHub contents at this SHA matched a
 MG-07 physical legacy-store freeze, MG-08 independently verified IAM/MFA and privileged access, MG-09 operational observability/alerting/recovery, MG-10 production-like performance/load, MG-11 PostgreSQL backup/restore/DR, MG-12 branch/ruleset governance, MG-13 signed independent re-performance, and MG-14 complete evidence index/authorized approval remain OPEN or PARTIAL. See the audit addendum for itemized reasons.
 
 **MASTER GATE = OPEN; PRODUCTION READY = NOT VERIFIED; FINAL LOCK = OPEN.**
+
+
+## Exact-SHA evidence audit — 2026-11-01 — candidate `e543ba112ff2c311b50ec7b7a8697b326e6d6b23`
+
+This checkpoint supersedes earlier branch-candidate snapshots for this SHA only. Full itemized evidence and remaining controls are recorded in [the exact-SHA audit](PRODUCTION_FINAL_LOCK_AUDIT_2026-11-01_e543ba1.md).
+
+- Production PostgreSQL Gate 41288774828 / artifact 13076058399: `PASS_CANDIDATE`, 13/13 source hashes complete, 17/17 migration hashes/history exact, lifecycle JUnit 6/6.
+- Production Gate 41288774980 / artifact 13076497382: 0 reported EAI diagnostic failures and 18 environment-gated skips; per-file JUnit retained.
+- EAI PostgreSQL Re-performance 41288774705: core 56/56 and deep reconciliation 24/24.
+- PostgreSQL Production Re-performance 41288774805 / artifact 13076387227: same-SHA `PASS_CANDIDATE`, 25 PostgreSQL tests passed, production boot PASS; empty-baseline reconciliation limitation remains.
+- SHUUD/SANDBOX Product MVP 41288774986 / artifact 13076670356: 108/108 passed; all 20 historical #2–#21 cases passed; #1's replacement manual-entrypoint contract passed in Production Gate per-file JUnit.
+- Independent Production Audit 41288774878 passed as an automated audit only; its verdict disclaims production certification.
+- core-gates 41288774875 remains **PENDING**, with no jobs/artifact.
+
+MG-07–MG-14 remain OPEN or PARTIAL as itemized in the audit. The 18 diagnostic skips remain NOT RUN in that job; 17 have overlapping dedicated PostgreSQL evidence and DEE concurrent rotation remains unverified. The prior SHA-mismatched artifact 12457545216 remains quarantined; replacement artifact 13076387227 is bound to this candidate.
+
+**MASTER GATE = OPEN; PRODUCTION READY = NOT VERIFIED; FINAL LOCK = OPEN.**
