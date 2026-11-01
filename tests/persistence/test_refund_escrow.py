@@ -16,7 +16,7 @@ from persistence.durable_idempotency import DurableIdempotencyRecord, Idempotenc
 from persistence.escrow_aggregate import CanonicalEscrow, EscrowBase, EscrowState
 from persistence.recovery_outbox import OutboxBase, OutboxEvent
 from persistence.refund_escrow import refund_escrow_in_transaction
-from persistence.signed_change_authorization import AuthorizationBase, canonical_refund_payload, canonical_payload_hash
+from persistence.signed_change_authorization import AuthorizationBase, SignedChangeAuthorization, canonical_refund_payload, canonical_payload_hash
 from dee_security.root_of_trust import RootOfTrust, SignedChange
 
 
@@ -106,6 +106,7 @@ def test_refund_uses_authoritative_destination(monkeypatch):
         assert session.query(LedgerMovementModel).count() == 1
         assert session.query(TransactionWitness).count() == 1
         assert session.query(OutboxEvent).count() == 1
+        assert session.query(SignedChangeAuthorization).count() == 1
 
 
 def test_refund_rejects_caller_controlled_destination(monkeypatch):
@@ -150,6 +151,7 @@ def test_refund_replay_does_not_move_value_twice(monkeypatch):
         result = refund_escrow_in_transaction(
             session, transaction_id="RF1", escrow_id="E1",
             amount=100, currency="MNT",
+            payload={"evidence": {"reason": "not_performed"}}, **auth,
         )
         assert result["replayed"] is True
 
