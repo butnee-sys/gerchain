@@ -13,7 +13,7 @@ from persistence.atomic_value_transaction import TransactionWitness, WitnessBase
 from persistence.durable_idempotency import IdempotencyBase
 from persistence.escrow_aggregate import EscrowBase, CanonicalEscrow, EscrowState
 from persistence.recovery_outbox import OutboxBase, OutboxEvent
-from persistence.signed_change_authorization import canonical_payload_hash, canonical_refund_payload
+from persistence.signed_change_authorization import AuthorizationBase, canonical_payload_hash, canonical_refund_payload
 from services.gerchain_runtime import GerchainRuntime
 
 
@@ -48,7 +48,7 @@ def _signed_refund(evidence):
 
 def test_production_runtime_refund_uses_authoritative_refund_destination(monkeypatch):
     engine = create_engine("sqlite+pysqlite:///:memory:")
-    for base in (AtomicLedgerBase, EscrowBase, WitnessBase, IdempotencyBase, OutboxBase):
+    for base in (AtomicLedgerBase, EscrowBase, WitnessBase, IdempotencyBase, OutboxBase, AuthorizationBase):
         base.metadata.create_all(engine)
     sf = sessionmaker(bind=engine)
     now = datetime.now(timezone.utc)
