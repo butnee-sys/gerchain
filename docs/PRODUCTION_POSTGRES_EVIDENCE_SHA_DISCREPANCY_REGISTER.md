@@ -59,3 +59,20 @@ At the time of this addendum, [Production PostgreSQL Gate 41029049056](https://g
 The new evidence does not rewrite or rehabilitate the historical mismatched artifact, and it does not change the decision:
 - `FINAL LOCK = OPEN`
 - `PRODUCTION READY = NOT VERIFIED`
+
+
+## Current exact-SHA replacement evidence — 2026-11-01 — `8850c6488ad11930488b62c9d1b7a6c7ccaadb74`
+
+The earlier artifact `12457545216` remains quarantined and immutable; its embedded `e872ba14...` SHA does not match the old run head. It is excluded from this current evidence set.
+
+Correct-SHA artifacts collected and inspected:
+
+- Production Gate run 41283229336 / artifact 13073608390: `commit_sha == checked_out_head_sha == pull_request_head_sha == 8850c6488ad11930488b62c9d1b7a6c7ccaadb74`; `evidence_status=PASS_CANDIDATE`; 681 source files, no missing source files; JUnit 313 suites, 0 failures/errors, 18 skipped; gate-file failure count 0.
+- Production PostgreSQL Gate run 41283229283 / artifact 13074725186: `commit_sha == checked_out_head_sha == tested_commit == 8850c6488ad11930488b62c9d1b7a6c7ccaadb74`; `evidence_status=PASS_CANDIDATE`; 17/17 migrations; 13/13 source hashes complete; clean source worktree; lifecycle JUnit 6/6.
+- EAI PostgreSQL Re-performance run 41283229290 / artifact 13074167648: commit and final SHA equal `8850c6488ad11930488b62c9d1b7a6c7ccaadb74`; core 56/56 and deep reconciliation 24/24.
+- PostgreSQL Production Re-performance run 41283229289 / artifact 13074031998: `github_sha == checked_out_sha == tested_commit == 8850c6488ad11930488b62c9d1b7a6c7ccaadb74`; `evidence_status=PASS_CANDIDATE`. Its reconciliation report is an empty-baseline check and must not be described as a populated production transaction graph.
+- Independent Production Audit run 41283229297 / artifact 13073579731: automated audit success bound to `8850c6488ad11930488b62c9d1b7a6c7ccaadb74`; its verdict explicitly says this is not production-ready certification or independent sign-off.
+
+The 17 migration and 13 source files listed in the PostgreSQL lifecycle report were separately fetched at ref `8850c6488ad11930488b62c9d1b7a6c7ccaadb74` and SHA-256 recomputed. All 30/30 matched the artifact's hashes. The broad EAI regression JUnit still has 18 environment-gated skips; see the 2026-11-01 evidence audit for exact skip reasons and remaining controls.
+
+**This replacement corrects the prior SHA-binding gap for the listed artifacts only. It does not close MG-07–MG-14 or grant FINAL LOCK.**

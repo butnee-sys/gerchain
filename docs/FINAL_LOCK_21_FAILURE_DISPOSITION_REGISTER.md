@@ -97,3 +97,36 @@ The same product JUnit skipped `tests.test_shuud_process_restart_postgres_e2e::t
 - The EAI regression JUnit separately reports 1,212 tests, 0 failures, 0 errors, 18 skipped; environment-gated tests remain skipped in that broad job and are not relabelled PASS.
 - No remaining IAM/MFA, legacy-store freeze, observability/recovery, performance, backup/restore/DR, or authorized lock-approval requirement is waived by these results.
 - Re-run all mandatory checks after the documentation/workflow updates on one final exact SHA before using these results for a final lock decision.
+
+
+## Same-SHA row-by-row recheck — 2026-11-01 — `8850c6488ad11930488b62c9d1b7a6c7ccaadb74`
+
+Evidence source: SHUUD/SANDBOX Product MVP run [41283229307](https://github.com/butnee-sys/gerchain/actions/runs/41283229307), artifact [13074212633](https://github.com/butnee-sys/gerchain/actions/runs/41283229307/artifacts/13074212633), product JUnit 108 passed / 0 failed / 0 errors / 0 skipped; and Production Gate run [41283229336](https://github.com/butnee-sys/gerchain/actions/runs/41283229336), artifact [13073608390](https://github.com/butnee-sys/gerchain/actions/runs/41283229336/artifacts/13073608390), per-file JUnit.
+
+| Historical row | Same-SHA result | Disposition |
+|---:|---|---|
+| 1 | `tests.test_final_lock_contract::test_shuud_workflows_are_separate_manual_entrypoints` and `test_core_gate_excludes_shuud_product_tests_but_keeps_boundary_tests` passed (5/5 tests in that file). | PASS — superseding boundary contract; old node replaced, not silently equated. |
+| 2 | `tests.test_shuud_api::test_full_sandbox_lifecycle_reaches_payment_release` passed. | PASS |
+| 3 | `tests.test_shuud_api_e2e::test_http_incident_to_escrow_release` passed. | PASS |
+| 4 | `tests.test_shuud_api_persistence_e2e::test_shuud_api_recovers_after_in_memory_state_loss` passed. | PASS |
+| 5 | `tests.test_shuud_app::test_shuud_app_exposes_lifecycle_and_sandbox_routes` passed. | PASS |
+| 6 | `tests.test_shuud_app::test_shuud_app_keeps_static_mount_last` passed. | PASS |
+| 7 | `tests.test_shuud_dee_e2e_proof::test_shuud_dee_end_to_end_proves_trust_transparency_performance` passed. | PASS — product test only; not a separate security certification. |
+| 8 | `tests.test_shuud_economics::test_economic_impact_validates_inputs[kwargs0]` passed. | PASS |
+| 9 | `tests.test_shuud_economics::test_economic_impact_validates_inputs[kwargs1]` passed. | PASS |
+| 10 | `tests.test_shuud_economics::test_economic_impact_validates_inputs[kwargs2]` passed. | PASS |
+| 11 | `tests.test_shuud_economics::test_economic_impact_validates_inputs[kwargs3]` passed. | PASS |
+| 12 | `tests.test_shuud_economics::test_economic_impact_validates_inputs[kwargs4]` passed. | PASS |
+| 13 | `tests.test_shuud_kpi_integrity::test_kpi_counts_one_canonical_snapshot_once_and_aggregates_persisted_economics` passed. | PASS |
+| 14 | `tests.test_shuud_kpi_integrity::test_updated_economic_measurement_replaces_previous_value_without_double_count` passed. | PASS |
+| 15 | `tests.test_shuud_measurement_api::test_measurement_summary_api_exposes_timing_and_economics` passed. | PASS |
+| 16 | `tests.test_shuud_measurement_summary::test_measurement_summary_combines_timing_and_economics` passed. | PASS |
+| 17 | `tests.test_shuud_measurement_summary::test_measurement_summary_can_measure_timing_without_money_assumptions` passed. | PASS |
+| 18 | `tests.test_shuud_measurement_summary::test_measurement_summary_requires_complete_economic_inputs` passed. | PASS |
+| 19 | `tests.test_shuud_operational_timing::test_operational_timing_tracks_full_lifecycle_and_durations` passed. | PASS |
+| 20 | `tests.test_shuud_process_restart_e2e::test_shuud_survives_real_process_restart` passed. | PASS |
+| 21 | `tests.test_shuud_sandbox_config::test_day0_rejects_invalid_window_and_threshold_order` passed. | PASS |
+
+Additional confirmation: `tests.test_shuud_process_restart_postgres_e2e::test_shuud_survives_postgres_process_restart` also passed on this SHA (it was not one of the historical 21 failures). This supersedes the older note that its DSN-backed run was pending.
+
+These results resolve the historical 21 test nodes at test level on `8850c6488ad11930488b62c9d1b7a6c7ccaadb74`; they do not certify SHUUD production readiness and do not close the EAI Master Gate. EAI regression still reports 18 environment-gated skips, which remain skips. Overall final lock remains OPEN.

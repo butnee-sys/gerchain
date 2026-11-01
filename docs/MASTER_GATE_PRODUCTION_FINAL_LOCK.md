@@ -199,3 +199,16 @@ MG-07 legacy authority-store physical write freeze; MG-08 IAM/MFA and privileged
 The plan and failure-register updates, plus the PostgreSQL restart workflow configuration, create a new candidate SHA. The `c0086ba...` artifacts are evidence only for that checkpoint. All mandatory gates, source hashes, JUnit, PostgreSQL restart and independent re-performance must be rerun/reconciled against the final post-documentation SHA.
 
 **MASTER GATE = OPEN; PRODUCTION READY = NOT VERIFIED; FINAL LOCK = OPEN.**
+
+
+## Exact-SHA evidence audit — 2026-11-01 — candidate `8850c6488ad11930488b62c9d1b7a6c7ccaadb74`
+
+This addendum supersedes prior candidate snapshots for the current branch evidence only. It does not close the Master Gate or grant production readiness. The full run/artifact review and MG-07–MG-14 assessment is retained in [the 2026-11-01 evidence audit](evidence/PRODUCTION_FINAL_LOCK_AUDIT_2026-11-01_8850c64.md).
+
+Same-SHA completed workflows include Production Gate run 41283229336 (`PASS_CANDIDATE`, 313 JUnit suites, 0 failures/errors, 18 skipped), Production PostgreSQL Gate run 41283229283 (`PASS_CANDIDATE`, 17 migrations, 13 source hashes complete, lifecycle JUnit 6/6), core-gates run 41283229268 (56/56 core and 24/24 deep reconciliation), SHUUD/SANDBOX Product MVP run 41283229307 (108/108), EAI PostgreSQL Re-performance run 41283229290, PostgreSQL Production Re-performance run 41283229289, and Independent Production Audit run 41283229297. Each run's head SHA is `8850c6488ad11930488b62c9d1b7a6c7ccaadb74`.
+
+Independent SHA-256 recomputation from the GitHub contents at this SHA matched all 17 migration hashes and all 13 source hashes in the PostgreSQL lifecycle report. The broad EAI regression JUnit still has 18 environment-gated skips; these are not relabelled PASS. PostgreSQL production reconciliation is an empty-baseline report, not a populated transaction graph.
+
+MG-07 physical legacy-store freeze, MG-08 independently verified IAM/MFA and privileged access, MG-09 operational observability/alerting/recovery, MG-10 production-like performance/load, MG-11 PostgreSQL backup/restore/DR, MG-12 branch/ruleset governance, MG-13 signed independent re-performance, and MG-14 complete evidence index/authorized approval remain OPEN or PARTIAL. See the audit addendum for itemized reasons.
+
+**MASTER GATE = OPEN; PRODUCTION READY = NOT VERIFIED; FINAL LOCK = OPEN.**
