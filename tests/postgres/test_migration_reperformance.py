@@ -14,7 +14,7 @@ import psycopg
 import pytest
 from sqlalchemy.engine import make_url
 
-from postgres.migrations import apply_migrations, checksum
+from postgres.migrations import CANONICAL_MIGRATION_NAMES, apply_migrations, checksum
 
 DATABASE_URL = os.environ.get("GERCHAIN_TEST_DATABASE_URL")
 pytestmark = pytest.mark.skipif(
@@ -22,6 +22,7 @@ pytestmark = pytest.mark.skipif(
     reason="GERCHAIN_TEST_DATABASE_URL must point to an expendable PostgreSQL database",
 )
 MIGRATION_DIR = Path(__file__).resolve().parents[2] / "postgres" / "migrations"
+CANONICAL_VERSIONS = tuple(CANONICAL_MIGRATION_NAMES)
 
 
 def _schema_url(schema: str) -> str:
@@ -48,7 +49,7 @@ def _snapshot_escrow(conn):
     return rows
 
 
-def test_seventeen_migrations_preserve_existing_escrow_truth_and_fill_only_missing_created_at():
+def test_canonical_migrations_preserve_existing_escrow_truth_and_fill_only_missing_created_at():
     assert DATABASE_URL
     schema = "mig_preserve_" + uuid4().hex[:16]
     admin_url = make_url(DATABASE_URL).set(drivername="postgresql").render_as_string(hide_password=False)
@@ -92,7 +93,7 @@ def test_seventeen_migrations_preserve_existing_escrow_truth_and_fill_only_missi
         migration_url = _schema_url(schema)
         with psycopg.connect(migration_url) as conn:
             applied = apply_migrations(conn, MIGRATION_DIR)
-            assert applied == tuple(range(1, 18))
+            assert applied == CANONICAL_VERSIONS
 
         with psycopg.connect(migration_url) as conn:
             after = _snapshot_escrow(conn)
@@ -118,8 +119,8 @@ def test_seventeen_migrations_preserve_existing_escrow_truth_and_fill_only_missi
             versions = conn.execute(
                 "SELECT version, checksum, applied_at FROM schema_version ORDER BY version"
             ).fetchall()
-            assert [row[0] for row in versions] == list(range(1, 18))
-            assert len({row[0] for row in versions}) == 17
+            assert [row[0] for row in versions] == list(CANONICAL_VERSIONS)
+            assert len({row[0] for row in versions}) == len(CANONICAL_VERSIONS)
             assert all(row[1] for row in versions)
             assert all(row[2] is not None for row in versions)
             assert all(
@@ -151,15 +152,15 @@ def test_two_concurrent_migration_runners_publish_each_version_once_and_stably()
 
         with ThreadPoolExecutor(max_workers=2) as pool:
             results = list(pool.map(lambda _: run_once(), range(2)))
-        assert sorted(results, key=len) == [(), tuple(range(1, 18))]
+        assert sorted(results, key=len) == [(), CANONICAL_VERSIONS]
 
         with psycopg.connect(_schema_url(schema)) as conn:
             before = conn.execute(
                 "SELECT version, checksum, applied_at, COUNT(*) OVER (PARTITION BY version) "
                 "FROM schema_version ORDER BY version"
             ).fetchall()
-            assert len(before) == 17
-            assert [row[0] for row in before] == list(range(1, 18))
+            assert len(before) == len(CANONICAL_VERSIONS)
+            assert [row[0] for row in before] == list(CANONICAL_VERSIONS)
             assert all(row[3] == 1 for row in before)
             assert all(row[1] for row in before)
             assert all(row[2] is not None for row in before)
