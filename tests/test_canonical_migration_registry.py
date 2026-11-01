@@ -12,4 +12,4 @@ def test_canonical_migration_registry_is_contiguous_through_version_17():
     assert [path.name for path in selected] == [
         CANONICAL_MIGRATION_NAMES[version] for version in range(1, 18)
     ]
-    assert selected[-1].name == "017_ea35_created_witness_event.sql"
+    assert selected[-1].name == "018_eai_signed_change_authorization.sql"

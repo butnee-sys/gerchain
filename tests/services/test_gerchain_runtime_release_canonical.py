@@ -11,7 +11,7 @@ from persistence.recovery_outbox import OutboxBase, OutboxEvent
 from services.gerchain_runtime import GerchainRuntime
 
 
-def test_production_runtime_release_uses_canonical_ledger():
+def test_production_runtime_release_uses_canonical_ledger(monkeypatch):
     engine = create_engine("sqlite+pysqlite:///:memory:")
     AtomicLedgerBase.metadata.create_all(engine)
     EscrowBase.metadata.create_all(engine)

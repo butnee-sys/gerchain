@@ -25,7 +25,9 @@ def test_factory_requires_postgresql_url() -> None:
         raise AssertionError("SQLite must never be accepted as production runtime storage")
 
 
-def test_factory_creates_canonical_ledger_runtime() -> None:
+def test_factory_creates_canonical_ledger_runtime(monkeypatch) -> None:
+    monkeypatch.setenv("GERCHAIN_AUTH_OWNER_ID", "factory-owner")
+    monkeypatch.setenv("GERCHAIN_AUTH_PUBLIC_KEY_B64", "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=")
     config = ProductionRuntimeConfig(
         database_url="postgresql+psycopg://example",
         escrow_id="esc-1",

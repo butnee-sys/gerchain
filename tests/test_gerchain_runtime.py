@@ -1,17 +1,71 @@
-from dee_security.root_of_trust import RootOfTrust
+import base64
+import json
+
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+
+from dee_security.root_of_trust import RootOfTrust, SignedChange
+from persistence.signed_change_authorization import canonical_release_payload, canonical_payload_hash
 from services.gerchain_runtime import GerchainRuntime
 
 
-_TEST_PUBLIC_KEY_B64 = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+def _test_root():
+    private_key = Ed25519PrivateKey.from_private_bytes(bytes(range(32)))
+    public_key = private_key.public_key().public_bytes(
+        serialization.Encoding.Raw,
+        serialization.PublicFormat.Raw,
+    )
+    return RootOfTrust(
+        owner_id="runtime-test-owner",
+        public_key_b64=base64.b64encode(public_key).decode("ascii"),
+    )
 
 
-def _authorized_release_kwargs():
+def _authorized_release_kwargs(transaction_id, destination, evidence):
+    private_key = Ed25519PrivateKey.from_private_bytes(bytes(range(32)))
+    root = _test_root()
+    proof = {"trust": True, "transparency": True, "performance": True}
+    payload = canonical_release_payload(
+        transaction_id=transaction_id,
+        escrow_id="ESCROW-RUNTIME-001",
+        source="ESCROW-RUNTIME-001",
+        destination=destination,
+        amount=1_000_000,
+        currency="MNT",
+        decision_status="APPROVE",
+        trust=proof["trust"],
+        transparency=proof["transparency"],
+        performance=proof["performance"],
+        evidence_verified=True,
+        evidence=evidence,
+    )
+    unsigned = SignedChange(
+        owner_id="runtime-test-owner",
+        change_id=f"CHANGE-{transaction_id}",
+        version=1,
+        payload_hash=canonical_payload_hash(payload),
+        signature="",
+    )
+    signing_bytes = json.dumps(
+        unsigned.signing_payload(),
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+    ).encode("utf-8")
+    signed_change = SignedChange(
+        owner_id=unsigned.owner_id,
+        change_id=unsigned.change_id,
+        version=unsigned.version,
+        payload_hash=unsigned.payload_hash,
+        signature=base64.b64encode(private_key.sign(signing_bytes)).decode("ascii"),
+    )
     return {
-        "root": RootOfTrust(owner_id="runtime-test-owner", public_key_b64=_TEST_PUBLIC_KEY_B64),
+        "root": root,
+        "signed_change": signed_change,
         "owner_id": "runtime-test-owner",
-        "authorized": True,
+        "authorized": False,
         "evidence_verified": True,
-        "trinity_proof": {"trust": True, "transparency": True, "performance": True},
+        "trinity_proof": proof,
     }
 
 
@@ -31,6 +85,7 @@ def build_runtime():
         },
     )
 
+    runtime.configure_root_of_trust(_test_root())
     runtime.create_account("BUYER", 2_000_000)
     runtime.create_account("ESCROW-RUNTIME-001", 0)
     runtime.create_account("SELLER", 0)
@@ -60,7 +115,7 @@ def test_runtime_full_escrow_lifecycle():
         destination="SELLER",
         timestamp="2026-09-08T10:02:00Z",
         evidence={"type": "RELEASE", "reference": "TEST-RELEASE-001"},
-        **_authorized_release_kwargs(),
+        **_authorized_release_kwargs("TX-RELEASE-001", "SELLER", {"type": "RELEASE", "reference": "TEST-RELEASE-001"}),
     )
     assert runtime.get_escrow_state()["state"] == "RELEASED"
     assert runtime.get_balance("BUYER") == 1_000_000
@@ -77,7 +132,7 @@ def test_runtime_bundle_is_independently_verified():
         destination="SELLER",
         timestamp="2026-09-08T11:02:00Z",
         evidence={"type": "RELEASE", "reference": "TEST-RELEASE-002"},
-        **_authorized_release_kwargs(),
+        **_authorized_release_kwargs("TX-RELEASE-002", "SELLER", {"type": "RELEASE", "reference": "TEST-RELEASE-002"}),
     )
     assert runtime.verify() is True
     report = runtime.verify_report()
@@ -96,7 +151,7 @@ def test_runtime_witness_sequence_is_authoritative():
         destination="SELLER",
         timestamp="2026-09-08T12:02:00Z",
         evidence={"type": "RELEASE", "reference": "TEST-RELEASE-003"},
-        **_authorized_release_kwargs(),
+        **_authorized_release_kwargs("TX-RELEASE-003", "SELLER", {"type": "RELEASE", "reference": "TEST-RELEASE-003"}),
     )
     entries = runtime.witness_chain.entries
     assert len(entries) == 6
@@ -120,7 +175,7 @@ def test_runtime_invalid_lifecycle_is_rejected():
             destination="SELLER",
             timestamp="2026-09-08T13:00:00Z",
             evidence={"type": "INVALID"},
-            **_authorized_release_kwargs(),
+            **_authorized_release_kwargs("TX-INVALID-001", "SELLER", {"type": "INVALID"}),
         )
     except ValueError as exc:
         assert "LOCKED" in str(exc)

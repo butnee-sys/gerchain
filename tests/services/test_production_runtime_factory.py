@@ -34,7 +34,9 @@ def _postgres_engine():
     return engine
 
 
-def test_factory_create_configures_canonical_ledger_authority() -> None:
+def test_factory_create_configures_canonical_ledger_authority(monkeypatch) -> None:
+    monkeypatch.setenv("GERCHAIN_AUTH_OWNER_ID", "production-test-owner")
+    monkeypatch.setenv("GERCHAIN_AUTH_PUBLIC_KEY_B64", "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=")
     engine = _postgres_engine()
     factory = _NoopFactory(_config(), engine=engine)
 

@@ -27,11 +27,19 @@ def build_production_runtime():
     escrow_id = os.environ.get("GERCHAIN_ESCROW_ID")
     currency = os.environ.get("GERCHAIN_CURRENCY")
     witness_id = os.environ.get("GERCHAIN_WITNESS_ID")
+    auth_owner_id = os.environ.get("GERCHAIN_AUTH_OWNER_ID")
+    auth_public_key = os.environ.get("GERCHAIN_AUTH_PUBLIC_KEY_B64")
     amount_raw = os.environ.get("GERCHAIN_ESCROW_AMOUNT")
     if not all((escrow_id, currency, witness_id, amount_raw)):
         raise RuntimeError(
             "production entrypoint requires GERCHAIN_ESCROW_ID, "
             "GERCHAIN_ESCROW_AMOUNT, GERCHAIN_CURRENCY, and GERCHAIN_WITNESS_ID"
+        )
+
+    if not auth_owner_id or not auth_public_key:
+        raise RuntimeError(
+            "production entrypoint requires GERCHAIN_AUTH_OWNER_ID and "
+            "GERCHAIN_AUTH_PUBLIC_KEY_B64"
         )
 
     try:

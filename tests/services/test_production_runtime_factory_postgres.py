@@ -8,7 +8,9 @@ from postgres.migrations import _canonical_migration_files
 from services.gerchain_runtime_factory import ProductionRuntimeConfig, ProductionRuntimeFactory
 
 
-def test_production_runtime_factory_establishes_canonical_authority():
+def test_production_runtime_factory_establishes_canonical_authority(monkeypatch):
+    monkeypatch.setenv("GERCHAIN_AUTH_OWNER_ID", "production-test-owner")
+    monkeypatch.setenv("GERCHAIN_AUTH_PUBLIC_KEY_B64", "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=")
     database_url = os.environ["GERCHAIN_TEST_DATABASE_URL"]
     engine = create_engine(database_url, pool_pre_ping=True)
     factory = ProductionRuntimeFactory(
@@ -34,6 +36,7 @@ def test_production_runtime_factory_establishes_canonical_authority():
         "gerchain_transaction_witnesses",
         "gerchain_outbox_events",
         "gerchain_idempotency_records",
+        "gerchain_authorization_changes",
     }.issubset(tables)
 
     with engine.connect() as connection:
