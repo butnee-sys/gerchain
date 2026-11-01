@@ -52,3 +52,48 @@ All rows remain **OPEN / NOT RESOLVED** until a subsequent run on the same candi
 6. Keep `FINAL LOCK = OPEN` and `PRODUCTION READY = NOT VERIFIED` until all gates and authorized sign-off are evidenced.
 
 **No production-ready certification or final lock is granted by this register.**
+
+
+## Same-SHA regression evidence checkpoint — 2026-11-01 — `c0086ba9b5ab068d75631966635569037bed6598`
+
+The previous 21 failures were rechecked against run-scoped JUnit artifacts on this exact SHA. They are no longer observed as failures, but this does not grant SHUUD production readiness or close the overall EAI production master gate.
+
+Evidence:
+- SHUUD/SANDBOX Product MVP run [41272250554](https://github.com/butnee-sys/gerchain/actions/runs/41272250554), artifact `13069727795`: 108 tests, 0 failures, 0 errors, 1 skipped.
+- Production Gate run [41272250561](https://github.com/butnee-sys/gerchain/actions/runs/41272250561), artifact `13070002412`: replacement workflow contract test passed; 1,206 per-file JUnit cases, 0 failures, 0 errors, 18 skipped; file-failure count 0.
+- Both artifacts are from the same commit `c0086ba9b5ab068d75631966635569037bed6598`.
+
+| Historical row | Current test-level evidence on `c0086ba...` | Result |
+|---:|---|---|
+| 1 | `tests.test_final_lock_contract::test_shuud_workflows_are_separate_manual_entrypoints` passed in Production Gate per-file JUnit (the old path-isolation assertion was superseded by this explicit manual-entrypoint contract). | PASS — replacement contract |
+| 2 | `tests.test_shuud_api::test_full_sandbox_lifecycle_reaches_payment_release` passed in product JUnit. | PASS |
+| 3 | `tests.test_shuud_api_e2e::test_http_incident_to_escrow_release` passed in product JUnit. | PASS |
+| 4 | `tests.test_shuud_api_persistence_e2e::test_shuud_api_recovers_after_in_memory_state_loss` passed in product JUnit. | PASS |
+| 5 | `tests.test_shuud_app::test_shuud_app_exposes_lifecycle_and_sandbox_routes` passed in product JUnit. | PASS |
+| 6 | `tests.test_shuud_app::test_shuud_app_keeps_static_mount_last` passed in product JUnit. | PASS |
+| 7 | `tests.test_shuud_dee_e2e_proof::test_shuud_dee_end_to_end_proves_trust_transparency_performance` passed in product JUnit. | PASS |
+| 8 | `tests.test_shuud_economics::test_economic_impact_validates_inputs[kwargs0]` passed in product JUnit. | PASS |
+| 9 | `tests.test_shuud_economics::test_economic_impact_validates_inputs[kwargs1]` passed in product JUnit. | PASS |
+| 10 | `tests.test_shuud_economics::test_economic_impact_validates_inputs[kwargs2]` passed in product JUnit. | PASS |
+| 11 | `tests.test_shuud_economics::test_economic_impact_validates_inputs[kwargs3]` passed in product JUnit. | PASS |
+| 12 | `tests.test_shuud_economics::test_economic_impact_validates_inputs[kwargs4]` passed in product JUnit. | PASS |
+| 13 | `tests.test_shuud_kpi_integrity::test_kpi_counts_one_canonical_snapshot_once_and_aggregates_persisted_economics` passed in product JUnit. | PASS |
+| 14 | `tests.test_shuud_kpi_integrity::test_updated_economic_measurement_replaces_previous_value_without_double_count` passed in product JUnit. | PASS |
+| 15 | `tests.test_shuud_measurement_api::test_measurement_summary_api_exposes_timing_and_economics` passed in product JUnit. | PASS |
+| 16 | `tests.test_shuud_measurement_summary::test_measurement_summary_combines_timing_and_economics` passed in product JUnit. | PASS |
+| 17 | `tests.test_shuud_measurement_summary::test_measurement_summary_can_measure_timing_without_money_assumptions` passed in product JUnit. | PASS |
+| 18 | `tests.test_shuud_measurement_summary::test_measurement_summary_requires_complete_economic_inputs` passed in product JUnit. | PASS |
+| 19 | `tests.test_shuud_process_restart_e2e::test_shuud_survives_real_process_restart` passed in product JUnit. | PASS — non-PostgreSQL restart |
+| 20 | `tests.test_shuud_sandbox_config::test_day0_rejects_invalid_window_and_threshold_order` passed in product JUnit. | PASS |
+| 21 | Historical contract row is covered by the replacement test in row 1; no claim is made that the obsolete test name itself ran. | PASS — replacement contract |
+
+### Separate skipped test — not one of the 21 historical failures
+
+The same product JUnit skipped `tests.test_shuud_process_restart_postgres_e2e::test_shuud_survives_postgres_process_restart` because `SHUUD_POSTGRES_DSN` was absent. This PostgreSQL-backed restart proof remains **OPEN / NOT VERIFIED**. Commit `0024117681c2bc004ed24e548f5526f3e8ab333e` adds the DSN alias to the product workflow; its execution and JUnit result are pending on the next candidate SHA.
+
+### Scope and limits
+
+- The 21 rows are test-level PASS on the checkpoint SHA, not an approval to release SHUUD/SANDBOX.
+- The EAI regression JUnit separately reports 1,212 tests, 0 failures, 0 errors, 18 skipped; environment-gated tests remain skipped in that broad job and are not relabelled PASS.
+- No remaining IAM/MFA, legacy-store freeze, observability/recovery, performance, backup/restore/DR, or authorized lock-approval requirement is waived by these results.
+- Re-run all mandatory checks after the documentation/workflow updates on one final exact SHA before using these results for a final lock decision.
