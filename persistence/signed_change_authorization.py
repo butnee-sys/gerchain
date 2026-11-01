@@ -209,7 +209,7 @@ def consume_signed_change_in_transaction(
     expected_payload: Mapping[str, Any],
 ) -> str:
     """Verify and persist one-time authorization in the caller's value transaction."""
-    if operation not in {"RELEASE", "REFUND", "CANCEL"}:
+    if operation not in {"RELEASE", "REFUND"}:
         raise SecurityError("unsupported signed authorization operation")
     if expected_payload.get("operation") != operation:
         raise SecurityError("signed authorization operation mismatch")
