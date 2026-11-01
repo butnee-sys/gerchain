@@ -2,7 +2,6 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import StaticPool
 
 import gerchain.web_ui as web_ui
 from gerchain.database import Base
@@ -10,15 +9,16 @@ from gerchain.models import EscrowAccount, AuditTrail, MilestoneEvidence
 
 
 @pytest.fixture
-def api_db(monkeypatch):
+def api_db(monkeypatch, tmp_path):
     """
-    API invariant tests use an isolated in-memory database.
+    API invariant tests use an isolated file-backed SQLite database.
+    File-backed SQLite gives concurrent request threads independent pooled
+    connections; StaticPool with one in-memory connection is not thread-safe.
     Production gerchain.db is never touched.
     """
     engine = create_engine(
-        "sqlite://",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
+        f"sqlite:///{tmp_path / 'escrow-api-invariants.db'}",
+        connect_args={"check_same_thread": False, "timeout": 10},
     )
 
     Base.metadata.create_all(bind=engine)

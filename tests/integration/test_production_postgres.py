@@ -48,6 +48,10 @@ def test_production_postgres_full_value_flow():
             ("beneficiary-release", 0),
             ("settlement-destination", 0),
             ("settlement-source", 50),
+            # FUND transfers value into each canonical escrow ledger account.
+            ("it-esc-release", 0),
+            ("it-esc-refund", 0),
+            ("it-esc-cancel", 0),
         ]
         for account_id, balance in accounts:
             runtime._canonical_ledger.create_account(

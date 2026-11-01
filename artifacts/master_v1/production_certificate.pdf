@@ -1,80 +1,51 @@
 %PDF-1.4
-%“Œ‹ž ReportLab Generated PDF document (opensource)
 1 0 obj
-<<
-/F1 2 0 R /F2 3 0 R /F3 4 0 R
->>
+<< /Type /Catalog /Pages 2 0 R >>
 endobj
 2 0 obj
-<<
-/BaseFont /Helvetica /Encoding /WinAnsiEncoding /Name /F1 /Subtype /Type1 /Type /Font
->>
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
 endobj
 3 0 obj
-<<
-/BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding /Name /F2 /Subtype /Type1 /Type /Font
->>
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>
 endobj
 4 0 obj
-<<
-/BaseFont /Helvetica-Oblique /Encoding /WinAnsiEncoding /Name /F3 /Subtype /Type1 /Type /Font
->>
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
 endobj
 5 0 obj
-<<
-/Contents 9 0 R /MediaBox [ 0 0 612 792 ] /Parent 8 0 R /Resources <<
-/Font 1 0 R /ProcSet [ /PDF /Text /ImageB /ImageC /ImageI ]
->> /Rotate 0 /Trans <<
-
->> 
-  /Type /Page
->>
-endobj
-6 0 obj
-<<
-/PageMode /UseNone /Pages 8 0 R /Type /Catalog
->>
-endobj
-7 0 obj
-<<
-/Author (anonymous) /CreationDate (D:20261022231650+08'00') /Creator (anonymous) /Keywords () /ModDate (D:20261022231650+08'00') /Producer (ReportLab PDF Library - \(opensource\)) 
-  /Subject (unspecified) /Title (untitled) /Trapped /False
->>
-endobj
-8 0 obj
-<<
-/Count 1 /Kids [ 5 0 R ] /Type /Pages
->>
-endobj
-9 0 obj
-<<
-/Filter [ /ASCII85Decode /FlateDecode ] /Length 807
->>
+<< /Length 519 >>
 stream
-Gat$u?#QH&'Rf^Wgo!m$6okFfQZ!S;-#;$2D6o(U)2H&6MdQa._uBMGU1nSQh./<u1$G-ScFN+'J`*7#Vq;)6,]NcSJa/>-5afV7R7!'p1eMVCfq;3#fFA!X2lL.(TQ[(C9ELN^K8I&W!_Pe&2aRp8piDLp"*I@p3n:;>,!MokiAL^@a,,/QR0A`QjFmtD7EaqRT7kAkpd(-tO.l"g_(?qi+h>5?n!T?1WW%*@E^id5g;sQY-Z=SQ3$V0J(q1NVVH_+%mT*GMaFm*nQGn!PAZ<`TUGQF@NfKij9;lWs9OKc`L?ed1l^ET?S9`%Yh8hal8sO&"i([OCn-(otjItP/O:\nu4]gJ#5BYs\HMfY.D0Y2&7)<*(I__uAj^dRd'R8)FnEe+c&Ad*Vq?j:6[t#]WoaN_FR/q:P&,#emR_`BtkmV00.>]##[.WL3^3L/3gfcDfG`1fu^@]/Ee'C=^!N7+6jKkTW#uOnn31YTYg9,3GU8.,AS%(o1l@6*M"2J#r<om$\?CU'dqVfCJnldS'Y:oK9&:"fF4A<U7rZ"ZT_P'^2OVH>CWX]g^aZ;(qM$s6sNe/*&K7tCpq!^<=eb8R)3nkO<NSL(<:B7;*Gp-r_p3t1!N]B>CH*!JNn1o]7f>qs&s,sVLNHcP"f60rT"jJbqh8Kq8PRZ)lBQe8G2Kk/\pXLi<53L1@^96lo>;a=KWJURd-?HFlR`S7_3gU0^UM0@)I+97+$Dea!0cid2?(ur#+*h1OrM$=^qask&.seb4PGr&Z8L<5=?@lPCM^0i0KlL/gT2s'b.N&*gO7YI.~>endstream
+BT
+/F1 20 Tf
+50 720 Td
+(HISTORICAL EVIDENCE ONLY) Tj
+0 -32 Td
+(FINAL LOCK NOT GRANTED) Tj
+/F1 12 Tf
+0 -55 Td
+(WITHDRAWN - NOT A CURRENT PRODUCTION-READINESS CERTIFICATE) Tj
+0 -30 Td
+(The production master gate remains OPEN.) Tj
+0 -20 Td
+(No PRODUCTION READY status or FINAL LOCK is granted.) Tj
+0 -35 Td
+(Historical target SHA: 10a408dc4a7821db85a9bc68cfccdb66a20b4dcf) Tj
+0 -20 Td
+(Historical workflow run ID: 39799640206) Tj
+0 -35 Td
+(This record does not certify the current main branch or a current release.) Tj
+ET
+endstream
 endobj
 xref
-0 10
+0 6
 0000000000 65535 f 
-0000000061 00000 n 
-0000000112 00000 n 
-0000000219 00000 n 
-0000000331 00000 n 
-0000000446 00000 n 
-0000000639 00000 n 
-0000000707 00000 n 
-0000000968 00000 n 
-0000001027 00000 n 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+0000000241 00000 n 
+0000000311 00000 n 
 trailer
-<<
-/ID 
-[<4c6c6943cc4b3a972213b77cc862cc69><4c6c6943cc4b3a972213b77cc862cc69>]
-% ReportLab generated PDF document -- digest (opensource)
-
-/Info 7 0 R
-/Root 6 0 R
-/Size 10
->>
+<< /Size 6 /Root 1 0 R >>
 startxref
-1924
+880
 %%EOF

@@ -4,9 +4,12 @@ Exercises the actual FastAPI route sequence through release. The test uses
 explicit PASS gates because approval must never be the API default.
 """
 
+from datetime import datetime, timedelta, timezone
+
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+import shuud.api as shuud_api
 from shuud.api import router
 
 
@@ -15,11 +18,14 @@ app.include_router(router)
 client = TestClient(app)
 
 
-def test_http_incident_to_escrow_release():
+def test_http_incident_to_escrow_release(monkeypatch):
+    base_time = datetime.now(timezone.utc)
+    monkeypatch.setattr(shuud_api, "_now", lambda: base_time)
     incident = client.post(
         "/api/v1/shuud/incidents",
         json={
             "location": "Ulaanbaatar",
+            "occurred_at": (base_time - timedelta(seconds=60)).isoformat(),
             "vehicle_a": "1234ABC",
             "vehicle_b": "5678DEF",
         },
@@ -91,8 +97,6 @@ def test_http_incident_to_escrow_release():
         "/api/v1/shuud/metrics/clearance",
         json={
             "incident_id": incident_id,
-            "incident_time": "2026-09-12T00:00:00+00:00",
-            "clearance_time": "2026-09-12T00:01:00+00:00",
         },
     )
     assert metric.status_code == 200

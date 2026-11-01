@@ -94,3 +94,79 @@ A documentation merge alone does not satisfy these criteria. If a required contr
 **PRODUCTION READY / FINAL LOCK: NOT GRANTED by this plan revision.**
 
 This is an evidence-closure plan, not authorization to redesign, rewrite, or broaden scope. Proceed only with the remaining unverified gates and retain the no-repeat rule.
+
+
+## Exact-SHA evidence checkpoint — 2026-11-01 — candidate `c0086ba9b5ab068d75631966635569037bed6598`
+
+This is a bounded evidence checkpoint, not a final release candidate or lock approval. The original repository snapshot stated in the header is historical; this section records the later observed candidate and its run-scoped evidence.
+
+### Same-SHA workflow results
+
+All listed workflows completed successfully against `c0086ba9b5ab068d75631966635569037bed6598` (attempt 1):
+
+- [Production Gate #41272250561](https://github.com/butnee-sys/gerchain/actions/runs/41272250561): success; artifact `13070002412`.
+- [Production PostgreSQL Gate #41272250520](https://github.com/butnee-sys/gerchain/actions/runs/41272250520): success; artifacts `13069168501` and `13069512710`.
+- [core-gates #41272250545](https://github.com/butnee-sys/gerchain/actions/runs/41272250545): success; artifact `13070310283`.
+- [SHUUD/SANDBOX Product MVP Tests #41272250554](https://github.com/butnee-sys/gerchain/actions/runs/41272250554): success; artifact `13069727795`.
+- [Independent Production Audit #41272250536](https://github.com/butnee-sys/gerchain/actions/runs/41272250536): success; artifact `13068968898`.
+- [EAI PostgreSQL Re-performance #41272250524](https://github.com/butnee-sys/gerchain/actions/runs/41272250524): success.
+- [PostgreSQL Production Re-performance #41272250570](https://github.com/butnee-sys/gerchain/actions/runs/41272250570): success; artifact `13069113745`.
+- [FINAL EAI/CORE Exact-SHA Gate #41272250607](https://github.com/butnee-sys/gerchain/actions/runs/41272250607): success; artifact `13069667808`.
+- [PostgreSQL Migration and Production Proof #41272250633](https://github.com/butnee-sys/gerchain/actions/runs/41272250633): success.
+
+The successful workflow conclusions are not a blanket statement that every test in every suite executed: the retained JUnit files contain skipped tests, detailed below.
+
+### Verified artifacts
+
+**Production Gate — artifact `13070002412`:**
+- `canonical-evidence-manifest.json` records `evidence_status=PASS_CANDIDATE`.
+- `commit_sha` and `checked_out_head_sha` both equal `c0086ba9b5ab068d75631966635569037bed6598`.
+- `source_hashes_complete=true`; 681 tracked source files are hashed.
+- Per-file logs/JUnit: 1,206 test cases, 0 failures, 0 errors, 18 skipped; file-failure count 0.
+- The replacement contract test `tests.test_final_lock_contract::test_shuud_workflows_are_separate_manual_entrypoints` passed.
+
+**Production PostgreSQL Gate — artifact `13069168501`:**
+- `migration-lifecycle-report.json`: `evidence_status=PASS_CANDIDATE`.
+- `commit_sha` = `checked_out_head_sha` = `c0086ba9b5ab068d75631966635569037bed6598`.
+- `source_hashes_complete=true`; `source_missing=[]`.
+- 17 migration files, 17 applied versions (001–017), file/database checksums match, SHA-256 lengths valid.
+- Lifecycle JUnit: 6 tests, 0 failures, 0 errors, 0 skipped.
+- `migration-history.json` has contiguous versions 1–17 with non-null `applied_at`; PostgreSQL catalog/constraint evidence is retained.
+
+**Canonical EAI regression — same Production PostgreSQL Gate artifact:**
+- 1,212 tests, 0 failures, 0 errors, 18 skipped; `failure-count.txt=0`.
+- The 18 skips are explicit environment-gated PostgreSQL/DEE tests in this broad regression job. They are not counted as passed by this JUnit. Separate PostgreSQL workflows supply overlapping migration, concurrency, boot, and re-performance evidence; the DEE PostgreSQL concurrent-rotation test remains unverified by this broad job.
+
+**SHUUD/SANDBOX product workflow — artifact `13069727795`:**
+- 108 tests, 0 failures, 0 errors, 1 skipped.
+- The 20 SHUUD product cases corresponding to historical failure-register rows 2–21 all passed, including real-process restart (non-PostgreSQL), API lifecycle, timing, route registration, DEE protection, economics, KPI persistence, and sandbox configuration.
+- `test_shuud_survives_postgres_process_restart` was skipped because `SHUUD_POSTGRES_DSN` was not configured. This is a separate unresolved PostgreSQL process-restart proof; do not mark it passed.
+
+**core-gates and independent evidence:**
+- core-gates artifact `13070310283`: core contract JUnit 56/56 passed; deep-reconciliation JUnit 24/24 passed.
+- Independent audit artifact `13068968898` identifies the result as automated EAI evidence, not production-ready certification.
+- PostgreSQL production re-performance artifact `13069113745` binds `github_sha`, `checked_out_sha`, and `tested_commit` to `c0086ba9b5ab068d75631966635569037bed6598`; migration versions/checksums and production boot are recorded. Its reconciliation is explicitly an empty-baseline check (zero movements, witnesses, outbox, idempotency, and escrows), not a populated live-transaction graph.
+- Exact-SHA artifact `13069667808` has `git_status_porcelain=[]` and all 17 migration file hashes.
+
+### Historical 21-failure disposition at this checkpoint
+
+The 21 historical test cases are no longer observed as failures on `c0086ba9b5ab068d75631966635569037bed6598`: row 1 is superseded by the passing manual-entrypoint contract test in Production Gate JUnit; rows 2–21 pass in the isolated SHUUD/SANDBOX product JUnit. This is test-level regression evidence only, not a production certification. The separate PostgreSQL process-restart test remains skipped and open.
+
+### Changes since this checkpoint and exact-SHA rule
+
+Commit `0024117681c2bc004ed24e548f5526f3e8ab333e` adds `SHUUD_POSTGRES_DSN` to the isolated SHUUD product workflow so the skipped PostgreSQL restart test can execute. That commit is not covered by the `c0086ba9b5ab068d75631966635569037bed6598` artifacts. The documentation/evidence-register updates that follow will create a new candidate SHA; therefore every mandatory workflow and the PostgreSQL restart test must be rerun against the final documentation/code SHA, with run-scoped artifacts inspected again.
+
+### Remaining mandatory production controls
+
+The following are not closed by the current artifacts:
+- physical legacy-authority write freeze and no-write proof;
+- IAM/MFA, privileged access, and accountable approval;
+- production observability, alerting, recovery, restart and no-duplicate-movement proof;
+- production-like load/performance and application concurrency;
+- backup/restore/DR drill and post-restore reconciliation with recovery objectives;
+- release/branch governance and final exact-SHA evidence index;
+- populated PostgreSQL value-truth reconciliation across a representative transaction graph;
+- SHUUD PostgreSQL process-restart test (currently skipped; new workflow configuration awaits execution);
+- independent review/acceptance and explicit authorized final-lock decision.
+
+**Disposition remains: MASTER GATE = OPEN; PRODUCTION READY = NOT VERIFIED; FINAL LOCK = OPEN.**

@@ -45,3 +45,173 @@ This register deliberately does **not** invent a percentage. Progress is reporte
 7. Restart the runtime and re-check balances, movement count, witness, outbox and idempotency for duplicate or missing effects.
 
 **No green claim until those results are actually returned. No production lock until independent re-performance.**
+
+## Exact-SHA failure disposition register — candidate `a8fd6092ace34dcd63a763f505af9be93d549574`
+
+**Evidence reviewed:** PostgreSQL Production Gate run [40046489334](https://github.com/butnee-sys/gerchain/actions/runs/40046489334), artifact [12541582297](https://github.com/butnee-sys/gerchain/actions/runs/40046489334/artifacts/12541582297); segmented diagnostic artifact [12541189019](https://github.com/butnee-sys/gerchain/actions/runs/40046489334/artifacts/12541189019); independent EAI audit run [40046489318](https://github.com/butnee-sys/gerchain/actions/runs/40046489318).
+
+The production PostgreSQL JSON report is valid on this candidate and its detached SHA-256 file matches the report bytes. The report records `PASS_CANDIDATE`, matching `commit_sha` / `checked_out_head_sha`, all 13 listed source files hashed, no missing source paths, all 17 migration files matched to the 17 applied migration checksums, exact migration history, and lifecycle JUnit with 6 tests / 0 failures / 0 errors / 0 skipped. This is limited PostgreSQL lifecycle evidence, not final production certification.
+
+The broad diagnostic currently reports **20 failed, 900 passed, 50 skipped**. The previous workflow-isolation failure is no longer in the failure list. The 20 remaining failures below are all in the separate SHUUD/SANDBOX product test surface. The EAI production audit explicitly excludes SHUUD/SANDBOX, and the Master Gate defines SHUUD as a separate, out-of-scope application. This is a scope disposition for the EAI gate only; it is **not** a claim that the SHUUD failures are fixed or that its own release is ready. Root causes and same-SHA targeted re-performance remain open for the SHUUD workstream.
+
+| # | Failing test | Observed failure | Requirement / scope mapping | Current disposition | Closure evidence still required |
+|---:|---|---|---|---|---|
+| 1 | `tests/test_shuud_api.py::test_full_sandbox_lifecycle_reaches_payment_release` | `ValueError: operational milestones cannot move backward in time` | SHUUD lifecycle timing; separate app, outside EAI gate | Not waived; SHUUD backlog | Identify which supplied milestone ordering is invalid; correct code or fixture; targeted rerun |
+| 2 | `tests/test_shuud_api_e2e.py::test_http_incident_to_escrow_release` | Same backward-time validation error | SHUUD HTTP-to-escrow lifecycle | Not waived; SHUUD backlog | Trace timestamp ordering through HTTP flow; targeted rerun |
+| 3 | `tests/test_shuud_api_persistence_e2e.py::test_shuud_api_recovers_after_in_memory_state_loss` | `KeyError: 'incident_id'` | SHUUD persistence/recovery API contract | Not waived; SHUUD backlog | Verify persisted response/schema contract and restart recovery; targeted rerun |
+| 4 | `tests/test_shuud_app.py::test_shuud_app_exposes_lifecycle_and_sandbox_routes` | `AttributeError: '_IncludedRouter' object has no attribute 'path'` | SHUUD route-registration test | Not waived; SHUUD backlog | Update route inspection to supported framework API or correct router setup; targeted rerun |
+| 5 | `tests/test_shuud_app.py::test_shuud_app_keeps_static_mount_last` | Same `_IncludedRouter.path` attribute error | SHUUD route ordering | Not waived; SHUUD backlog | Verify route order using supported router representation; targeted rerun |
+| 6 | `tests/test_shuud_dee_e2e_proof.py::test_shuud_dee_end_to_end_proves_trust_transparency_performance` | `SecurityError: release contains an unprotected DEE path` | SHUUD DEE release-path protection | Not waived; SHUUD backlog | Identify unprotected path and enforce protection or update a demonstrably stale fixture; security test must pass |
+| 7 | `tests/test_shuud_economics.py::test_economic_impact_validates_inputs[kwargs0]` | Missing required `affected_vehicles` and `vehicle_value_per_minute_mnt` arguments | SHUUD economics input validation | Not waived; SHUUD backlog | Align validation API and test input contract; targeted rerun |
+| 8 | `tests/test_shuud_economics.py::test_economic_impact_validates_inputs[kwargs1]` | Same missing required arguments | SHUUD economics input validation | Not waived; SHUUD backlog | Same as row 7; demonstrate intended invalid-input behavior |
+| 9 | `tests/test_shuud_economics.py::test_economic_impact_validates_inputs[kwargs2]` | Same missing required arguments | SHUUD economics input validation | Not waived; SHUUD backlog | Same as row 7; targeted rerun |
+| 10 | `tests/test_shuud_economics.py::test_economic_impact_validates_inputs[kwargs3]` | Missing `vehicle_value_per_minute_mnt` | SHUUD economics input validation | Not waived; SHUUD backlog | Align signature and test case; targeted rerun |
+| 11 | `tests/test_shuud_economics.py::test_economic_impact_validates_inputs[kwargs4]` | Missing `affected_vehicles` | SHUUD economics input validation | Not waived; SHUUD backlog | Align signature and test case; targeted rerun |
+| 12 | `tests/test_shuud_kpi_integrity.py::test_kpi_counts_one_canonical_snapshot_once_and_aggregates_persisted_economics` | Expected count 1, observed 0 | SHUUD KPI persistence/aggregation | Not waived; SHUUD backlog | Trace snapshot persistence and aggregation query; targeted rerun |
+| 13 | `tests/test_shuud_kpi_integrity.py::test_updated_economic_measurement_replaces_previous_value_without_double_count` | Expected count 1, observed 0 | SHUUD KPI update/no-double-count | Not waived; SHUUD backlog | Trace update identity and aggregation; targeted rerun |
+| 14 | `tests/test_shuud_measurement_api.py::test_measurement_summary_api_exposes_timing_and_economics` | Backward-time validation error | SHUUD measurement API | Not waived; SHUUD backlog | Correct milestone ordering/validation contract; targeted rerun |
+| 15 | `tests/test_shuud_measurement_summary.py::test_measurement_summary_combines_timing_and_economics` | Backward-time validation error | SHUUD measurement summary | Not waived; SHUUD backlog | Trace timestamps supplied to summary; targeted rerun |
+| 16 | `tests/test_shuud_measurement_summary.py::test_measurement_summary_can_measure_timing_without_money_assumptions` | Backward-time validation error | SHUUD timing-only measurement | Not waived; SHUUD backlog | Separate timing validation from optional economics assumptions where required; targeted rerun |
+| 17 | `tests/test_shuud_measurement_summary.py::test_measurement_summary_requires_complete_economic_inputs` | Expected “must be supplied together”; got backward-time error first | SHUUD economics validation order | Not waived; SHUUD backlog | Make validation ordering deterministic and assert the intended incomplete-input error; targeted rerun |
+| 18 | `tests/test_shuud_operational_timing.py::test_operational_timing_tracks_full_lifecycle_and_durations` | Backward-time validation error | SHUUD operational timing invariants | Not waived; SHUUD backlog | Verify event chronology and duration calculation; targeted rerun |
+| 19 | `tests/test_shuud_process_restart_e2e.py::test_shuud_survives_real_process_restart` | HTTP 404 for expected route | SHUUD process-restart endpoint | Not waived; SHUUD backlog | Confirm mounted route and restart test configuration; targeted rerun |
+| 20 | `tests/test_shuud_sandbox_config.py::test_day0_rejects_invalid_window_and_threshold_order` | `SandboxConfig.__init__()` missing required `status` | SHUUD sandbox configuration validation | Not waived; SHUUD backlog | Align configuration constructor/defaults and invalid-config test; targeted rerun |
+
+**EAI release decision:** these failures do not by themselves change the explicitly frozen EAI scope, but they must not be represented as resolved. Keep the broad diagnostic result visible and retain the EAI-specific audit boundary. Any change to the scope boundary requires an explicit architecture decision and new tests.
+
+**Still blocking FINAL LOCK:** the `core-gates` workflow has not produced a completed passing run on this candidate; current automated PostgreSQL evidence is bounded; IAM/MFA and privileged-access proof, legacy authority-store write-freeze proof, observability/recovery/no-duplicate-movement, production-like performance/concurrency, backup/restore/DR, release governance, complete evidence index, independent re-performance at the final immutable SHA, and authorized final approval remain open.
+
+**Disposition remains: `FINAL LOCK = OPEN`; `PRODUCTION READY = NOT VERIFIED`.**
+
+
+
+## Exact-SHA disposition and MG-07–MG-14 checkpoint — 2026-11-01 — candidate `ebfa794fa02d7027614b63ad274f85bbd79599c5`
+
+This checkpoint records evidence collected from retained GitHub Actions artifacts for the exact candidate SHA above. It does not grant production readiness or final lock.
+
+### 1. Previous 21 regression failures — exact test disposition
+
+The earlier segmented diagnostic at `d9c8af8d7b9498ff6c814543112a06d11f73602b` recorded 21 failures. Those failures are now reconciled against fresh evidence on candidate `ebfa794fa02d7027614b63ad274f85bbd79599c5`.
+
+**Disposition rule:** `FIXED` means the exact previously failing test was rerun and passed on this candidate. It does not mean that a separate product has received production certification. `OUT OF SCOPE` is not used to hide a failed test.
+
+| # | Exact previously failing test | Previous cause | Current disposition | Same-candidate evidence |
+|---:|---|---|---|---|
+| 1 | `tests/test_final_lock_contract.py::test_shuud_workflows_are_path_isolated` | Workflow contract expected a `paths:` filter while the SHUUD workflow was `workflow_dispatch`-only | **FIXED** | Production Gate run 41229008898, artifact 13052613044; `tests__test_final_lock_contract.py.junit.xml`: 5 tests, 0 failures, 0 errors |
+| 2 | `tests/test_shuud_api.py::test_full_sandbox_lifecycle_reaches_payment_release` | Backward operational milestone timestamp rejected | **FIXED** | Product run 41229008774, artifact 13052483916; exact test passed |
+| 3 | `tests/test_shuud_api_e2e.py::test_http_incident_to_escrow_release` | Backward operational milestone timestamp rejected | **FIXED** | Product run 41229008774, artifact 13052483916; exact test passed |
+| 4 | `tests/test_shuud_api_persistence_e2e.py::test_shuud_api_recovers_after_in_memory_state_loss` | Missing `incident_id` in persisted API response | **FIXED** | Product run 41229008774, artifact 13052483916; exact test passed |
+| 5 | `tests/test_shuud_app.py::test_shuud_app_exposes_lifecycle_and_sandbox_routes` | Test assumed `_IncludedRouter.path` exists | **FIXED** | Product run 41229008774, artifact 13052483916; exact test passed |
+| 6 | `tests/test_shuud_app.py::test_shuud_app_keeps_static_mount_last` | Test assumed `_IncludedRouter.path` exists | **FIXED** | Product run 41229008774, artifact 13052483916; exact test passed |
+| 7 | `tests/test_shuud_dee_e2e_proof.py::test_shuud_dee_end_to_end_proves_trust_transparency_performance` | Unprotected DEE release path detected | **FIXED** | Product run 41229008774, artifact 13052483916; exact test passed |
+| 8 | `tests/test_shuud_economics.py::test_economic_impact_validates_inputs[kwargs0]` | Required economic input arguments missing | **FIXED** | Product run 41229008774, artifact 13052483916; exact parametrized case passed |
+| 9 | `tests/test_shuud_economics.py::test_economic_impact_validates_inputs[kwargs1]` | Required economic input arguments missing | **FIXED** | Product run 41229008774, artifact 13052483916; exact parametrized case passed |
+| 10 | `tests/test_shuud_economics.py::test_economic_impact_validates_inputs[kwargs2]` | Required economic input arguments missing | **FIXED** | Product run 41229008774, artifact 13052483916; exact parametrized case passed |
+| 11 | `tests/test_shuud_economics.py::test_economic_impact_validates_inputs[kwargs3]` | `vehicle_value_per_minute_mnt` missing | **FIXED** | Product run 41229008774, artifact 13052483916; exact parametrized case passed |
+| 12 | `tests/test_shuud_economics.py::test_economic_impact_validates_inputs[kwargs4]` | `affected_vehicles` missing | **FIXED** | Product run 41229008774, artifact 13052483916; exact parametrized case passed |
+| 13 | `tests/test_shuud_kpi_integrity.py::test_kpi_counts_one_canonical_snapshot_once_and_aggregates_persisted_economics` | Persisted KPI aggregate returned zero instead of one | **FIXED** | Product run 41229008774, artifact 13052483916; exact test passed |
+| 14 | `tests/test_shuud_kpi_integrity.py::test_updated_economic_measurement_replaces_previous_value_without_double_count` | Updated measurement aggregate returned zero instead of one | **FIXED** | Product run 41229008774, artifact 13052483916; exact test passed |
+| 15 | `tests/test_shuud_measurement_api.py::test_measurement_summary_api_exposes_timing_and_economics` | Backward operational milestone timestamp rejected | **FIXED** | Product run 41229008774, artifact 13052483916; exact test passed |
+| 16 | `tests/test_shuud_measurement_summary.py::test_measurement_summary_combines_timing_and_economics` | Backward operational milestone timestamp rejected | **FIXED** | Product run 41229008774, artifact 13052483916; exact test passed |
+| 17 | `tests/test_shuud_measurement_summary.py::test_measurement_summary_can_measure_timing_without_money_assumptions` | Backward operational milestone timestamp rejected | **FIXED** | Product run 41229008774, artifact 13052483916; exact test passed |
+| 18 | `tests/test_shuud_measurement_summary.py::test_measurement_summary_requires_complete_economic_inputs` | Validation order surfaced timestamp error before incomplete-input error | **FIXED** | Product run 41229008774, artifact 13052483916; exact test passed |
+| 19 | `tests/test_shuud_operational_timing.py::test_operational_timing_tracks_full_lifecycle_and_durations` | Backward operational milestone timestamp rejected | **FIXED** | Product run 41229008774, artifact 13052483916; exact test passed |
+| 20 | `tests/test_shuud_process_restart_e2e.py::test_shuud_survives_real_process_restart` | Expected route returned HTTP 404 | **FIXED** | Product run 41229008774, artifact 13052483916; exact test passed |
+| 21 | `tests/test_shuud_sandbox_config.py::test_day0_rejects_invalid_window_and_threshold_order` | `SandboxConfig` required `status` argument | **FIXED** | Product run 41229008774, artifact 13052483916; exact test passed |
+
+Product workflow result on this SHA: **107 passed, 1 skipped**. The skipped case is the separate `tests/test_shuud_process_restart_postgres_e2e.py::test_shuud_survives_postgres_process_restart`; it is not one of the 21 historical failures. It remains an OPEN product-level PostgreSQL restart item and must not be called fixed. The production gate's contract JUnit also passed all 5 tests, including the workflow-isolation contract.
+
+The EAI scope boundary remains unchanged: SHUUD/SANDBOX are separate product MVPs and are not EAI acceptance components. Their product tests are run in a separate workflow. This scope separation is not used as the disposition for the 20 failures: each exact historical test passed in the separate product workflow on this candidate.
+
+### 2. Candidate evidence and SHA reconciliation
+
+Primary candidate PostgreSQL evidence:
+- Production PostgreSQL run: [41229008828](https://github.com/butnee-sys/gerchain/actions/runs/41229008828), artifact **13052827184** (`production-postgres-evidence-ebfa794fa02d7027614b63ad274f85bbd79599c5`).
+- EAI/CORE exact-SHA run: [41229009018](https://github.com/butnee-sys/gerchain/actions/runs/41229009018), artifact **13052552479**.
+- Production Gate run: [41229008898](https://github.com/butnee-sys/gerchain/actions/runs/41229008898), artifact **13052613044**.
+- Independent automated EAI audit: [41229008907](https://github.com/butnee-sys/gerchain/actions/runs/41229008907), artifact **13052637303**.
+- SHUUD/SANDBOX product workflow: [41229008774](https://github.com/butnee-sys/gerchain/actions/runs/41229008774), artifact **13052483916**.
+
+Verified from artifact 13052827184:
+- `commit_sha` = `checked_out_head_sha` = `tested_commit` = `ebfa794fa02d7027614b63ad274f85bbd79599c5`.
+- `evidence_status=PASS_CANDIDATE`.
+- `source_file_count=13`, `source_hashes_complete=true`, `source_missing=[]`, `source_worktree_clean=true`.
+- All 17 migration files are listed and match the 17 applied database migration versions and checksums; versions are exactly 1–17.
+- The separate `migration-history.json` contains non-null `applied_at` for all 17 rows.
+- Lifecycle JUnit: 6 tests, 0 failures, 0 errors, 0 skipped.
+- Detached SHA-256 for `migration-lifecycle-report.json` matches the report bytes: `1420d615fa8c6d1d955e773f08f36e7b41a59b4b1192860a7820492a18df9ade`.
+
+Verified from artifact 13052613044:
+- `canonical_commit_sha` = `checked_out_head_sha` = `commit_sha` = candidate SHA.
+- `evidence_status=PASS_CANDIDATE`, `gate_file_failure_count=0`.
+- The manifest's `github_event_sha` is `bcdc2f7f51c8594a6872b3323e402840027e1f32`, the GitHub PR merge/event SHA, and is intentionally distinct from the checked-out PR head. It is not to be substituted for the candidate SHA. All canonical candidate identity fields above match.
+- Production Gate per-file JUnit totals: 1,206 tests, 0 failures, 0 errors, 18 skipped.
+
+Verified from artifact 13052827184 segmented EAI regression:
+- 1,212 tests, 0 failures, 0 errors, 18 skipped.
+- Scope disposition explicitly records SHUUD/SANDBOX as separate product MVPs and excludes them from EAI acceptance.
+
+Verified from artifact 13052637303:
+- Independent audit metadata binds to candidate SHA and PostgreSQL 16.
+- Audit verdict says collection and EAI tests succeeded, while explicitly describing the result as automated evidence, not production-ready certification. This is bounded automated audit evidence, not independent final approval.
+
+### 3. MG-07–MG-14 evidence and ownership register
+
+No human evidence owner or authorized approver is inferred. Where the repository has not recorded a named accountable owner, this register states **Owner: not assigned in retained evidence**.
+
+| Gate | Requirement | Evidence at candidate SHA | Owner / verification | Status and remaining closure evidence |
+|---|---|---|---|---|
+| MG-07 | Legacy authority-store write freeze | Architecture and scope documentation; EAI tests and audit pass | Owner: not assigned; physical read-only/write-denial verification not retained | **OPEN** — prove all production routes cannot write legacy stores; retain negative tests and database privilege evidence |
+| MG-08 | Security, IAM/MFA, privileged access | CodeQL success and automated code checks only | Owner: not assigned; no IAM/MFA or privileged-access review attached | **OPEN** — current identity-provider policy export, MFA enforcement, privileged account inventory and review approval |
+| MG-09 | Observability and operational recovery | Lifecycle/reperformance tests provide bounded restart and consistency evidence | Owner: not assigned; no production monitoring/alert or no-duplicate movement operational drill attached | **OPEN** — health/readiness, alerting, restart/recovery, abandoned-processing recovery and duplicate-movement proof |
+| MG-10 | Production-like performance and concurrency | PostgreSQL concurrency/migration tests passed in CI; no production-like workload report attached | Owner: not assigned; CI test is not a load-test acceptance report | **OPEN** — reproducible load profile, concurrency/latency/error measurements and accepted thresholds |
+| MG-11 | Backup, restore and disaster recovery | No retained restore/DR drill artifact identified | Owner: not assigned | **OPEN** — backup integrity, restore drill, post-restore reconciliation and documented RPO/RTO evidence |
+| MG-12 | CI/release governance | Exact-SHA workflows and CI checks passed on candidate | Owner: repository/release authority not formally named; protected-branch and release approval evidence not retained | **UNVERIFIED** — attach branch protection/ruleset export, required checks, release signing/approval and deployment-to-SHA binding |
+| MG-13 | Independent re-performance | Automated audit run 41229008907 and PostgreSQL re-performance runs passed on candidate | Audit is automated and bounded; independent human reviewer/sign-off not recorded | **OPEN** — independent reviewer re-run, retained method/results, findings and signed acceptance on immutable final SHA |
+| MG-14 | Evidence index and authorized final approval | This checkpoint maps the retained artifacts to the candidate SHA | Authorized approver not identified; no final decision record | **OPEN** — complete evidence index, all MG-07–MG-13 closures, named authorized approver and explicit final decision |
+
+### 4. Candidate decision
+
+This checkpoint improves the evidence state but does not close MG-07–MG-14. In particular, the automated audit is not an authorized final approval; CI success is not a substitute for IAM/MFA, operational monitoring, load, backup/restore, and deployment governance evidence.
+
+**MASTER GATE = OPEN. PRODUCTION READY = NOT VERIFIED. FINAL LOCK = OPEN.**
+
+This register commit itself creates a new repository revision. All mandatory workflows must be rerun against the resulting exact commit SHA before that revision can be considered the final candidate. No evidence from a different SHA may be silently carried forward as exact-SHA proof.
+
+
+## Candidate checkpoint — 2026-11-01 — `ac7a1c6f85854366c376a902d10e7362332fc066`
+
+Evidence below is retained for this exact candidate only. It does not grant production readiness or final lock.
+
+### Exact-SHA results
+
+- [Production PostgreSQL Gate run 41276494658](https://github.com/butnee-sys/gerchain/actions/runs/41276494658), [artifact 13071312615](https://github.com/butnee-sys/gerchain/actions/runs/41276494658/artifacts/13071312615): `PASS_CANDIDATE`; `commit_sha=checked_out_head_sha=tested_commit=ac7a1c6f85854366c376a902d10e7362332fc066`; 13/13 scoped source hashes complete; no missing files; clean worktree; all 17 migration files match applied versions/checksums; lifecycle JUnit 6 passed, no failures/errors/skips. All 36 reported PostgreSQL constraints are validated. Detached SHA-256 of migration-lifecycle-report.json: `5d616a0f743ae922a847bea466f8ad485eb2d5a995619023c8a798d58b98a77a`, matching its detached checksum file.
+- [Production Gate run 41276494600](https://github.com/butnee-sys/gerchain/actions/runs/41276494600), [artifact 13071439059](https://github.com/butnee-sys/gerchain/actions/runs/41276494600/artifacts/13071439059): `PASS_CANDIDATE`; gate failure count 0; all 681 enumerated source hashes complete; no missing files; candidate/checkout SHA match. The final-lock contract JUnit reports 5 passed, 0 failures/errors.
+- [CORE gates run 41276494626](https://github.com/butnee-sys/gerchain/actions/runs/41276494626), artifact 13071388474: success. EAI regression JUnit in artifact 13071312615: 1,212 tests, 0 failures, 0 errors, 18 skipped. Skips remain visible.
+- [EAI PostgreSQL re-performance run 41276494599](https://github.com/butnee-sys/gerchain/actions/runs/41276494599), [artifact 13070409176](https://github.com/butnee-sys/gerchain/actions/runs/41276494599/artifacts/13070409176): success.
+- [PostgreSQL production re-performance run 41276494623](https://github.com/butnee-sys/gerchain/actions/runs/41276494623), [artifact 13070518762](https://github.com/butnee-sys/gerchain/actions/runs/41276494623/artifacts/13070518762): success.
+- [Independent automated EAI audit run 41276494617](https://github.com/butnee-sys/gerchain/actions/runs/41276494617), [artifact 13071473110](https://github.com/butnee-sys/gerchain/actions/runs/41276494617/artifacts/13071473110): candidate SHA and PostgreSQL 16 recorded; collection and EAI tests succeeded. Audit verdict explicitly says this is automated evidence, not production-ready certification.
+- [SHUUD/SANDBOX product suite run 41276494659](https://github.com/butnee-sys/gerchain/actions/runs/41276494659), [artifact 13071616006](https://github.com/butnee-sys/gerchain/actions/runs/41276494659/artifacts/13071616006): 108 passed, 0 failures/errors/skips, including the PostgreSQL process-restart test.
+- [Exact-SHA EAI/CORE run 41276494709](https://github.com/butnee-sys/gerchain/actions/runs/41276494709), [artifact 13071229644](https://github.com/butnee-sys/gerchain/actions/runs/41276494709/artifacts/13071229644): both jobs succeeded and manifest binds to candidate SHA.
+- CI Test Suite 41276494611, canonical migration 41276494718, PostgreSQL migration proof 41276494696, migration idempotency 41276494682, DEE Security 41276494669, CodeQL 41276494734 and Production Readiness Gates 41276494625 all completed successfully on this SHA.
+
+### Previous 21 failures — new-candidate evidence cross-reference
+
+The preceding checkpoint at `ebfa794fa02d7027614b63ad274f85bbd79599c5` retains the detailed failure causes and previous per-test evidence. The new product JUnit at artifact 13071616006 contains and passes the 20 SHUUD tests in rows 2–21 of that register. Their exact names are: (2) `test_full_sandbox_lifecycle_reaches_payment_release`; (3) `test_http_incident_to_escrow_release`; (4) `test_shuud_api_recovers_after_in_memory_state_loss`; (5) `test_shuud_app_exposes_lifecycle_and_sandbox_routes`; (6) `test_shuud_app_keeps_static_mount_last`; (7) `test_shuud_dee_end_to_end_proves_trust_transparency_performance`; (8–12) `test_economic_impact_validates_inputs[kwargs0..4]`; (13) `test_kpi_counts_one_canonical_snapshot_once_and_aggregates_persisted_economics`; (14) `test_updated_economic_measurement_replaces_previous_value_without_double_count`; (15) `test_measurement_summary_api_exposes_timing_and_economics`; (16) `test_measurement_summary_combines_timing_and_economics`; (17) `test_measurement_summary_can_measure_timing_without_money_assumptions`; (18) `test_measurement_summary_requires_complete_economic_inputs`; (19) `test_operational_timing_tracks_full_lifecycle_and_durations`; (20) `test_shuud_survives_real_process_restart`; (21) `test_day0_rejects_invalid_window_and_threshold_order`. All report passed in that JUnit.
+  
+Row 1's old workflow-isolation assertion has been replaced by the explicit manual-entrypoint boundary contract. In artifact 13071439059, `tests__test_final_lock_contract.py.junit.xml` reports 5/5 passed, including `test_shuud_workflows_are_separate_manual_entrypoints` and `test_core_gate_excludes_shuud_product_tests_but_keeps_boundary_tests`. This is a passing successor contract; the old test name is not claimed to remain present. No historical failure is waived as an EAI scope exclusion.
+
+### Still-open production requirements
+
+- **MG-07 Legacy authority write-freeze: OPEN** — no production DB privilege/deny-write proof or negative operational test retained.
+- **MG-08 IAM/MFA and privileged access: OPEN** — no identity-provider MFA policy export, privileged-account inventory, access review or authorized sign-off.
+- **MG-09 Observability/recovery: OPEN** — automated lifecycle evidence is bounded; no production monitoring/alert evidence or operational no-duplicate-movement recovery drill.
+- **MG-10 Performance/concurrency: OPEN** — CI concurrency tests are not an accepted production-like load/latency report with thresholds.
+- **MG-11 Backup/restore/DR: OPEN** — no retained backup integrity, restore rehearsal, post-restore reconciliation or RPO/RTO drill.
+- **MG-12 CI/release governance: UNVERIFIED** — successful exact-SHA CI does not replace branch ruleset, release authorization/signing and deployment-to-SHA evidence.
+- **MG-13 Independent re-performance: PARTIAL / OPEN** — automated audit and CI re-performance passed; independent human reviewer and signed acceptance on final immutable SHA are absent.
+- **MG-14 Evidence index / authorized final decision: OPEN** — no named authorized approver or explicit final decision record.
+
+This register update creates a new commit. The evidence above belongs to `ac7a1c6f85854366c376a902d10e7362332fc066` and must not be treated as exact-SHA evidence for the new register commit; required workflows must run again on that resulting SHA.
+
+**MASTER GATE = OPEN. PRODUCTION READY = NOT VERIFIED. FINAL LOCK = OPEN.**

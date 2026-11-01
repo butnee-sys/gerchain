@@ -99,7 +99,7 @@ def test_policy_rejects_unprotected_paths():
     private = Ed25519PrivateKey.generate()
     with pytest.raises(SecurityError, match="protected DEE paths"):
         AuthorizationPolicy().check(
-            root=_root(private), change=_change(private), paths=["shuud/app.py"], change_kind="source"
+            root=_root(private), change=_change(private), paths=["unmanaged/report.txt"], change_kind="source"
         )
 
 

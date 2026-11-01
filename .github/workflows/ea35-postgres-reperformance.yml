@@ -729,7 +729,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: ea35-postgres-evidence-${{ github.sha }}
+          name: ea35-postgres-evidence-${{ github.event.pull_request.head.sha || github.sha }}
           path: artifacts/ea35/
           if-no-files-found: warn
           retention-days: 90

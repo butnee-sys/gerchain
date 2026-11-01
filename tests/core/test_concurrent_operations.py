@@ -1,4 +1,5 @@
 from threading import Barrier, Event
+from time import sleep
 
 import pytest
 
@@ -80,3 +81,34 @@ def test_invalid_worker_count_is_rejected():
 
 def test_empty_batch_returns_empty_results():
     assert execute_concurrently([]) == []
+
+
+def test_later_operation_cannot_overtake_earlier_pending_shared_resource():
+    first_pending_finished = Event()
+
+    def hold_account_a():
+        sleep(0.05)
+        return "active-A"
+
+    def first_a_and_b():
+        first_pending_finished.set()
+        return "first-A-B"
+
+    def later_b():
+        assert first_pending_finished.is_set()
+        return "later-B"
+
+    results = execute_concurrently(
+        [
+            OperationSpec("active", frozenset({"account:A"}), hold_account_a),
+            OperationSpec("first", frozenset({"account:A", "ledger:B"}), first_a_and_b),
+            OperationSpec("later", frozenset({"ledger:B"}), later_b),
+        ],
+        max_workers=2,
+    )
+
+    assert [(result.operation_id, result.status, result.value) for result in results] == [
+        ("active", "SUCCEEDED", "active-A"),
+        ("first", "SUCCEEDED", "first-A-B"),
+        ("later", "SUCCEEDED", "later-B"),
+    ]

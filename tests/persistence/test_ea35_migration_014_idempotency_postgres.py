@@ -8,7 +8,7 @@ import psycopg
 import pytest
 
 
-DATABASE_URL = os.getenv("GERCHAIN_TEST_DATABASE_URL")
+DATABASE_URL = (os.getenv("GERCHAIN_TEST_DATABASE_URL") or "").replace("postgresql+psycopg://", "postgresql://", 1)
 pytestmark = pytest.mark.skipif(
     not DATABASE_URL,
     reason="GERCHAIN_TEST_DATABASE_URL must point to a disposable PostgreSQL database",

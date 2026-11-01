@@ -17,7 +17,7 @@ import pytest
 from postgres.migrations import apply_migrations
 
 
-DATABASE_URL = os.environ.get("GERCHAIN_TEST_DATABASE_URL")
+DATABASE_URL = (os.environ.get("GERCHAIN_TEST_DATABASE_URL") or "").replace("postgresql+psycopg://", "postgresql://", 1)
 pytestmark = pytest.mark.skipif(
     not DATABASE_URL,
     reason="GERCHAIN_TEST_DATABASE_URL is required for real PostgreSQL migration tests",

@@ -2,6 +2,9 @@ from __future__ import annotations
 
 import os
 from datetime import datetime, timezone
+from pathlib import Path
+
+import psycopg
 
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker
@@ -21,11 +24,10 @@ from postgres.migrations import apply_migrations
 def _session_factory():
     url = os.environ["GERCHAIN_DATABASE_URL"]
     engine = create_engine(url, pool_pre_ping=True)
-    with engine.begin() as connection:
-        apply_migrations(
-            connection,
-            os.path.join(os.path.dirname(__file__), "..", "..", "postgres", "schema"),
-        )
+    native_url = url.replace("postgresql+psycopg://", "postgresql://", 1)
+    migration_dir = Path(__file__).resolve().parents[2] / "postgres" / "migrations"
+    with psycopg.connect(native_url) as connection:
+        apply_migrations(connection, migration_dir)
     return engine, sessionmaker(bind=engine, expire_on_commit=False)
 
 

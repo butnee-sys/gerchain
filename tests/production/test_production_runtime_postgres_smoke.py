@@ -51,9 +51,10 @@ def test_production_factory_boots_and_uses_canonical_ledger(canonical_postgresql
         )
         session.commit()
 
-    read = CanonicalLedgerRead(factory.session_factory())
-    assert read.get_balance("SMOKE-SOURCE", "USD") == 1000
-    assert read.get_balance("SMOKE-DEST", "USD") == 0
+    with factory.session_factory() as read_session:
+        read = CanonicalLedgerRead(read_session)
+        assert read.get_balance("SMOKE-SOURCE", "USD") == 1000
+        assert read.get_balance("SMOKE-DEST", "USD") == 0
 
 
     with factory.session_factory() as session:
@@ -124,9 +125,10 @@ def test_production_factory_boots_and_uses_canonical_ledger(canonical_postgresql
         report = deep_reconcile_value_truth(session)
         assert report.matched, [f"{i.code}: {i.detail}" for i in report.issues]
 
-    read = CanonicalLedgerRead(factory.session_factory())
-    assert read.get_balance("SMOKE-SOURCE", "USD") == 900
-    assert read.get_balance("SMOKE-DEST", "USD") == 100
+    with factory.session_factory() as read_session:
+        read = CanonicalLedgerRead(read_session)
+        assert read.get_balance("SMOKE-SOURCE", "USD") == 900
+        assert read.get_balance("SMOKE-DEST", "USD") == 100
 
 
 def test_production_factory_executes_refund_cancel_and_settlement_on_real_postgresql(canonical_postgresql_engine):

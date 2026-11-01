@@ -5,7 +5,7 @@ EXPECTED = {
     "escrows_state_canonical_check": (
         "state", "created", "funded", "locked", "released", "refunded", "cancelled"
     ),
-    "gerchain_ledger_balance_nonnegative": ("balance", ">=", "0"),
+    "gerchain_ledger_balance_nonnegative": ("balance", ">=0"),
 }
 
 

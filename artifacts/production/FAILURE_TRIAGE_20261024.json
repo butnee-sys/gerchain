@@ -1,0 +1,184 @@
+{
+  "schema_version": "1.0",
+  "record_type": "production_gate_failure_triage",
+  "status": "OPEN_NOT_CLEARED",
+  "candidate_sha": "d9c8af8d7b9498ff6c814543112a06d11f73602b",
+  "source_run": {
+    "workflow": "Production PostgreSQL Gate",
+    "run_id": 39849400091,
+    "url": "https://github.com/butnee-sys/gerchain/actions/runs/39849400091",
+    "artifact_id": 12456921635,
+    "artifact": "production-postgres-evidence-e872ba14c40be0904260308e626aaab8d0a4c6f7",
+    "segmented_diagnostic_summary": "21 failed, 899 passed, 50 skipped",
+    "caveat": "Segmented root-test log is diagnostic evidence and does not establish that every failure belongs to the production EAI scope. Each item remains unresolved until ownership, requirement applicability, corrective action, and a rerun are documented."
+  },
+  "failures": [
+    [
+      "tests/test_final_lock_contract.py::test_shuud_workflows_are_path_isolated",
+      "AssertionError: expected 'paths:' but workflow currently uses workflow_dispatch and contains a disabled sandbox-smoke job",
+      "CI/workflow isolation contract",
+      "UNRESOLVED"
+    ],
+    [
+      "tests/test_shuud_api.py::test_full_sandbox_lifecycle_reaches_payment_release",
+      "ValueError: operational milestones cannot move backward in time",
+      "SHUUD lifecycle timestamp ordering",
+      "UNRESOLVED"
+    ],
+    [
+      "tests/test_shuud_api_e2e.py::test_http_incident_to_escrow_release",
+      "ValueError: operational milestones cannot move backward in time",
+      "SHUUD HTTP lifecycle and escrow release",
+      "UNRESOLVED"
+    ],
+    [
+      "tests/test_shuud_api_persistence_e2e.py::test_shuud_api_recovers_after_in_memory_state_loss",
+      "KeyError: 'incident_id'",
+      "SHUUD API persistence/restart recovery",
+      "UNRESOLVED"
+    ],
+    [
+      "tests/test_shuud_app.py::test_shuud_app_exposes_lifecycle_and_sandbox_routes",
+      "AttributeError: '_IncludedRouter' object has no attribute 'path'",
+      "SHUUD route registration/API contract",
+      "UNRESOLVED"
+    ],
+    [
+      "tests/test_shuud_app.py::test_shuud_app_keeps_static_mount_last",
+      "AttributeError: '_IncludedRouter' object has no attribute 'path'",
+      "SHUUD route ordering/static mount contract",
+      "UNRESOLVED"
+    ],
+    [
+      "tests/test_shuud_dee_e2e_proof.py::test_shuud_dee_end_to_end_proves_trust_transparency_performance",
+      "SecurityError: release contains an unprotected DEE path",
+      "DEE release path protection",
+      "UNRESOLVED"
+    ],
+    [
+      "tests/test_shuud_economics.py::test_economic_impact_validates_inputs[kwargs0]",
+      "TypeError: missing keyword-only arguments affected_vehicles and vehicle_value_per_minute_mnt",
+      "SHUUD economic measurement input validation",
+      "UNRESOLVED"
+    ],
+    [
+      "tests/test_shuud_economics.py::test_economic_impact_validates_inputs[kwargs1]",
+      "TypeError: missing keyword-only arguments affected_vehicles and vehicle_value_per_minute_mnt",
+      "SHUUD economic measurement input validation",
+      "UNRESOLVED"
+    ],
+    [
+      "tests/test_shuud_economics.py::test_economic_impact_validates_inputs[kwargs2]",
+      "TypeError: missing keyword-only arguments affected_vehicles and vehicle_value_per_minute_mnt",
+      "SHUUD economic measurement input validation",
+      "UNRESOLVED"
+    ],
+    [
+      "tests/test_shuud_economics.py::test_economic_impact_validates_inputs[kwargs3]",
+      "TypeError: missing keyword-only argument vehicle_value_per_minute_mnt",
+      "SHUUD economic measurement input validation",
+      "UNRESOLVED"
+    ],
+    [
+      "tests/test_shuud_economics.py::test_economic_impact_validates_inputs[kwargs4]",
+      "TypeError: missing keyword-only argument affected_vehicles",
+      "SHUUD economic measurement input validation",
+      "UNRESOLVED"
+    ],
+    [
+      "tests/test_shuud_kpi_integrity.py::test_kpi_counts_one_canonical_snapshot_once_and_aggregates_persisted_economics",
+      "AssertionError: expected one canonical snapshot; observed 0",
+      "KPI snapshot uniqueness and persisted economics",
+      "UNRESOLVED"
+    ],
+    [
+      "tests/test_shuud_kpi_integrity.py::test_updated_economic_measurement_replaces_previous_value_without_double_count",
+      "AssertionError: expected updated snapshot count; observed 0",
+      "KPI update/idempotency and no-double-count contract",
+      "UNRESOLVED"
+    ],
+    [
+      "tests/test_shuud_measurement_api.py::test_measurement_summary_api_exposes_timing_and_economics",
+      "ValueError: operational milestones cannot move backward in time",
+      "Measurement summary API/timestamp ordering",
+      "UNRESOLVED"
+    ],
+    [
+      "tests/test_shuud_measurement_summary.py::test_measurement_summary_combines_timing_and_economics",
+      "ValueError: operational milestones cannot move backward in time",
+      "Measurement summary timestamp ordering",
+      "UNRESOLVED"
+    ],
+    [
+      "tests/test_shuud_measurement_summary.py::test_measurement_summary_can_measure_timing_without_money_assumptions",
+      "ValueError: operational milestones cannot move backward in time",
+      "Timing-only measurement summary",
+      "UNRESOLVED"
+    ],
+    [
+      "tests/test_shuud_measurement_summary.py::test_measurement_summary_requires_complete_economic_inputs",
+      "AssertionError: expected validation regex did not match",
+      "Measurement summary economic-input validation",
+      "UNRESOLVED"
+    ],
+    [
+      "tests/test_shuud_operational_timing.py::test_operational_timing_tracks_full_lifecycle_and_durations",
+      "ValueError: operational milestones cannot move backward in time",
+      "Operational timing lifecycle ordering",
+      "UNRESOLVED"
+    ],
+    [
+      "tests/test_shuud_process_restart_e2e.py::test_shuud_survives_real_process_restart",
+      "AssertionError: HTTP 404 Not Found",
+      "SHUUD process restart and route persistence",
+      "UNRESOLVED"
+    ],
+    [
+      "tests/test_shuud_sandbox_config.py::test_day0_rejects_invalid_window_and_threshold_order",
+      "TypeError: SandboxConfig.__init__ missing required positional argument status",
+      "Sandbox configuration validation",
+      "UNRESOLVED"
+    ]
+  ],
+  "resolution_fields_required_for_each_failure": [
+    "confirmed owning component and applicable requirement/control identifier",
+    "root-cause analysis supported by source/log evidence",
+    "fix commit SHA or documented scope-based disposition approved by the responsible owner",
+    "targeted regression test result and full relevant-suite result on the same candidate SHA",
+    "reviewer and review timestamp"
+  ],
+  "evidence_integrity_findings": [
+    {
+      "id": "ARTIFACT-JSON-001",
+      "severity": "BLOCKER",
+      "artifact": "production-postgres/migration-lifecycle-report.json",
+      "run_id": 39849400091,
+      "finding": "The downloaded report is not valid JSON as stored: its final line contains a literal backslash-n sequence after the closing brace, and strict JSON parsing reports extra data.",
+      "implication": "Do not treat the artifact's PASS_CANDIDATE label as accepted evidence until the report is regenerated, JSON parsing succeeds, and the SHA-256 sidecar is recomputed against the exact corrected bytes.",
+      "disposition": "OPEN"
+    },
+    {
+      "id": "RUN-CANCEL-001",
+      "severity": "BLOCKER",
+      "run_id": 39849399966,
+      "workflow": "Production Gate",
+      "sha": "d9c8af8d7b9498ff6c814543112a06d11f73602b",
+      "conclusion": "cancelled",
+      "implication": "No final successful gate verdict; rerun required.",
+      "disposition": "OPEN"
+    },
+    {
+      "id": "RUN-CANCEL-002",
+      "severity": "BLOCKER",
+      "run_id": 39849400130,
+      "workflow": "core-gates",
+      "sha": "d9c8af8d7b9498ff6c814543112a06d11f73602b",
+      "conclusion": "cancelled",
+      "implication": "No final successful core-gates verdict; rerun required.",
+      "disposition": "OPEN"
+    }
+  ],
+  "final_lock": "OPEN",
+  "production_ready": "NOT_VERIFIED",
+  "final_lock_granted": false
+}

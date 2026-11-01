@@ -139,14 +139,25 @@ jobs:
                       outcomes[name] = 'evidence_bundle_invalid'
           output = Path('artifacts/ea35/production-gate-decision.json')
           output.parent.mkdir(parents=True, exist_ok=True)
+          # Never reuse a downloaded or pre-existing decision. Recompute it for
+          # this run, then fail closed unless both recorded SHAs equal the target.
+          output.unlink(missing_ok=True)
           subprocess.run([
               'python', 'scripts/production_gate_controller.py',
               '--manifest', 'artifacts/ea35/manifest.json',
               '--output', str(output),
-              '--expected-sha', os.environ['GITHUB_SHA'],
+              '--expected-source-sha', target_sha,
               '--outcomes-json', json.dumps(outcomes, sort_keys=True),
           ], check=False)
+          if not output.is_file():
+              raise SystemExit('NOT_LOCKED: controller did not produce a fresh decision report')
           report = json.loads(output.read_text(encoding='utf-8'))
+          if report.get('source_commit_sha') != target_sha:
+              report['decision'] = 'NOT_LOCKED'
+              report.setdefault('failures', []).append('DECISION_SOURCE_SHA_MISMATCH')
+          if report.get('checked_out_head_sha') != target_sha:
+              report['decision'] = 'NOT_LOCKED'
+              report.setdefault('failures', []).append('DECISION_CHECKED_OUT_HEAD_SHA_MISMATCH')
           report['postgres_gate_run_id'] = os.environ.get('SOURCE_RUN_ID') or None
           report['postgres_gate_conclusion'] = conclusion
           output.write_text(json.dumps(report, indent=2, sort_keys=True) + '\n', encoding='utf-8')

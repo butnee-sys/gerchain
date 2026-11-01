@@ -1,78 +1,138 @@
 {
-  "checked_out_head_sha": "5e5193511b47f0815f28a2c6c76fb9f60634b695",
-  "commit_sha_matches_head": true,
-  "created_at_utc": "2026-10-21T09:40:40.088597+00:00",
-  "decision": "NOT_LOCKED",
-  "expected_commit_sha": "5e5193511b47f0815f28a2c6c76fb9f60634b695",
-  "failures": [
-    "GATE_INVENTORY_MAP_MISSING",
-    "GATE_ERROR_DUPLICATE_EXCESS_MISSING",
-    "GATE_CROSS_STORE_RECONCILIATION_MISSING",
-    "GATE_AUTHORITY_BOUNDARY_MISSING",
-    "GATE_CORE_CORRECTNESS_MISSING",
-    "GATE_ADAPTER_BOUNDARIES_MISSING",
-    "GATE_EAI_G3_GOVERNANCE_MISSING",
-    "GATE_TRANSACTION_CORRECTNESS_MISSING",
-    "GATE_RECOVERY_MISSING",
-    "GATE_AUDITABILITY_MISSING",
-    "GATE_SECURITY_IAM_MFA_MISSING",
-    "GATE_OBSERVABILITY_MISSING",
-    "GATE_PERFORMANCE_STRESS_MISSING",
-    "GATE_DISASTER_RECOVERY_MISSING",
-    "GATE_CI_RELEASE_GOVERNANCE_MISSING",
-    "GATE_INDEPENDENT_REPERFORMANCE_MISSING",
-    "GATE_FINAL_EVIDENCE_BUNDLE_MISSING",
-    "GATE_COMPILE_MISSING",
-    "GATE_REGRESSION_MISSING",
-    "GATE_POSTGRES_CONNECTION_MISSING",
-    "GATE_MIGRATION_ATOMICITY_MISSING",
-    "GATE_LEGACY_UPGRADE_MISSING",
-    "GATE_LIFECYCLE_MISSING",
-    "GATE_MIGRATION_CONCURRENCY_MISSING",
-    "GATE_PUBLICATION_INTEGRITY_MISSING",
-    "GATE_ENTRYPOINT_MISSING",
-    "GATE_PRODUCTION_BOOT_MISSING",
-    "GATE_MIGRATION_CATALOG_MISSING",
-    "GATE_DEEP_RECONCILIATION_MISSING",
-    "GATE_MANIFEST_MISSING",
-    "MANIFEST_SHA_MISMATCH",
-    "CANONICAL_MIGRATION_CHAIN_NOT_EXACTLY_17",
-    "DATABASE_SCHEMA_VERSION_ROWS_NOT_EXACTLY_1_TO_17"
+  "schema_version": "1.0",
+  "purpose": "Source template for the fail-closed GerChain/EAI production master gate. Run-specific SHA, evidence, and decision data must be emitted into a retained workflow artifact, never baked into this tracked template.",
+  "policy": "FAIL_CLOSED",
+  "manifest_mode": "source_template",
+  "sha_binding_rule": "The workflow must bind the decision artifact to SOURCE_SHA and checked-out HEAD. A mismatch blocks the gate. This source template intentionally contains no candidate SHA.",
+  "architecture_criteria": [
+    {
+      "id": "inventory_map",
+      "required_evidence": "Exact-SHA runtime, store, writer/reader, entrypoint, and adapter inventory."
+    },
+    {
+      "id": "error_duplicate_excess",
+      "required_evidence": "Duplicate-authority and failure-mode register with closure evidence."
+    },
+    {
+      "id": "cross_store_reconciliation",
+      "required_evidence": "PostgreSQL deep reconciliation report with no unexplained mismatches."
+    },
+    {
+      "id": "authority_boundary",
+      "required_evidence": "Evidence that canonical Ledger, Escrow, Witness, and Outbox are authoritative."
+    },
+    {
+      "id": "core_correctness",
+      "required_evidence": "Lifecycle, conservation, idempotency, replay, rollback, and transaction-boundary tests."
+    },
+    {
+      "id": "adapter_boundaries",
+      "required_evidence": "Exact-SHA tests for every declared cross-layer adapter boundary."
+    },
+    {
+      "id": "eai_g3_governance",
+      "required_evidence": "G3 policy, authorization/release separation, and fail-closed negative tests."
+    },
+    {
+      "id": "transaction_correctness",
+      "required_evidence": "Real PostgreSQL atomicity, concurrency, rollback, and single-movement proof."
+    },
+    {
+      "id": "recovery",
+      "required_evidence": "Crash/restart recovery and no-duplicate-movement proof."
+    },
+    {
+      "id": "auditability",
+      "required_evidence": "Movement-to-witness/outbox/idempotency reconciliation artifact."
+    },
+    {
+      "id": "security_iam_mfa",
+      "required_evidence": "External IAM/MFA, privileged-access review, least-privilege, and revocation evidence."
+    },
+    {
+      "id": "observability",
+      "required_evidence": "Readiness/liveness, logs, metrics, alert, and recovery verification."
+    },
+    {
+      "id": "performance_stress",
+      "required_evidence": "Repeatable production-like load/concurrency report with defined thresholds."
+    },
+    {
+      "id": "disaster_recovery",
+      "required_evidence": "Backup/restore drill with RPO/RTO and post-restore integrity reconciliation."
+    },
+    {
+      "id": "ci_release_governance",
+      "required_evidence": "Exact-SHA required checks, protected branch, approval, artifact provenance, and rollback evidence."
+    },
+    {
+      "id": "independent_reperformance",
+      "required_evidence": "Independent operator reproduces critical tests from a clean environment and records exact SHA/results."
+    },
+    {
+      "id": "final_evidence_bundle",
+      "required_evidence": "Complete integrity-checked evidence index tied to one immutable candidate SHA."
+    }
   ],
-  "gate_outcomes": {},
-  "manifest_path": "docs\\production-master-gate-manifest.json",
-  "meaning": "At least one required gate or evidence condition is missing, failed, or mismatched.",
-  "repository": "local",
-  "required_gates": [
-    "inventory_map",
-    "error_duplicate_excess",
-    "cross_store_reconciliation",
-    "authority_boundary",
-    "core_correctness",
-    "adapter_boundaries",
-    "eai_g3_governance",
-    "transaction_correctness",
-    "recovery",
-    "auditability",
-    "security_iam_mfa",
-    "observability",
-    "performance_stress",
-    "disaster_recovery",
-    "ci_release_governance",
-    "independent_reperformance",
-    "final_evidence_bundle",
-    "compile",
-    "regression",
-    "postgres_connection",
-    "migration_atomicity",
-    "legacy_upgrade",
-    "lifecycle",
-    "migration_concurrency",
-    "publication_integrity",
-    "entrypoint",
-    "production_boot",
-    "migration_catalog",
-    "deep_reconciliation",
-    "manifest"
-  ]
+  "postgres_checks": [
+    {
+      "id": "compile",
+      "required_evidence": "Compileall result from the exact candidate SHA."
+    },
+    {
+      "id": "regression",
+      "required_evidence": "In-scope EAI/CORE JUnit report with zero failures and errors."
+    },
+    {
+      "id": "postgres_connection",
+      "required_evidence": "Real PostgreSQL 16 connection and production entrypoint boot proof."
+    },
+    {
+      "id": "migration_atomicity",
+      "required_evidence": "Failed migration leaves no partial schema or history publication."
+    },
+    {
+      "id": "legacy_upgrade",
+      "required_evidence": "Supported legacy schema upgrade preserves canonical data and constraints."
+    },
+    {
+      "id": "lifecycle",
+      "required_evidence": "Canonical lifecycle JUnit and PostgreSQL value-flow evidence."
+    },
+    {
+      "id": "migration_concurrency",
+      "required_evidence": "Concurrent runners serialize and publish each migration exactly once."
+    },
+    {
+      "id": "publication_integrity",
+      "required_evidence": "Migration registry and applied history contain no duplicate/conflicting publication."
+    },
+    {
+      "id": "entrypoint",
+      "required_evidence": "Production entrypoint/factory starts on PostgreSQL and rejects unsafe fallbacks."
+    },
+    {
+      "id": "production_boot",
+      "required_evidence": "Production-mode startup/readiness proof against PostgreSQL."
+    },
+    {
+      "id": "migration_catalog",
+      "required_evidence": "Contiguous migration versions and file/database checksum match."
+    },
+    {
+      "id": "deep_reconciliation",
+      "required_evidence": "Deep value-truth reconciliation JUnit/report from PostgreSQL."
+    },
+    {
+      "id": "manifest",
+      "required_evidence": "Evidence manifest and detached checksums verify, including exact SHA and complete source hashes."
+    }
+  ],
+  "decision_rule": {
+    "all_gates_must_pass": true,
+    "same_commit_required": true,
+    "missing_or_unbound_evidence_means": "BLOCKED",
+    "aggregate_success_cannot_substitute_for_per_gate_evidence": true,
+    "lock_authorized_only_after_independent_reperformance_and_explicit_approval": true
+  }
 }

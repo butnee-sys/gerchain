@@ -184,6 +184,35 @@ def _connection_in_transaction(conn) -> bool:
     return value() if callable(value) else bool(value)
 
 
+def _prepare_legacy_movement_constraints_for_v1(conn) -> None:
+    """Make frozen migration 001 safe for a pre-existing canonical movement table.
+
+    Migration 001 predates the frozen migration runner and unconditionally adds
+    four named CHECK constraints after CREATE TABLE IF NOT EXISTS. If an older
+    bootstrap already created one of those names, PostgreSQL raises
+    DuplicateObject before migrations 002/010 can reconcile the definition.
+    Remove only these four runner-owned names immediately before applying v1;
+    migration 001 then recreates them and later migrations apply the strict
+    canonical definitions. The SQL file and its published checksum stay intact.
+    """
+    movement_table_exists = _execute(
+        conn, "SELECT to_regclass('gerchain_ledger_movements') IS NOT NULL"
+    ).fetchone()[0]
+    if not movement_table_exists:
+        return
+
+    _execute(
+        conn,
+        """
+        ALTER TABLE gerchain_ledger_movements
+            DROP CONSTRAINT IF EXISTS gerchain_movement_amount_check,
+            DROP CONSTRAINT IF EXISTS gerchain_movement_operation_check,
+            DROP CONSTRAINT IF EXISTS gerchain_movement_integrity_hash_check,
+            DROP CONSTRAINT IF EXISTS gerchain_movement_escrow_binding_check
+        """,
+    )
+
+
 
 def _canonical_migration_files(path: Path) -> list[Path]:
     """Select one authoritative SQL file per numeric migration version.
@@ -402,6 +431,12 @@ def apply_migrations(conn, migration_dir: str | Path) -> None:
                                 WHERE currency IS NULL
                                 """,
                             )
+
+                # Frozen v1 unconditionally adds these named CHECKs. A legacy
+                # bootstrap may already own the same names; reconcile them before
+                # v1 rather than editing its published SQL/checksum.
+                if version == 1:
+                    _prepare_legacy_movement_constraints_for_v1(conn)
 
                 migration_sql = sql.replace("BEGIN;", "").replace("COMMIT;", "")
                 _execute(conn, migration_sql)

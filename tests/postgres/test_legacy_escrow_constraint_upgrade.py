@@ -65,7 +65,38 @@ def test_full_17_migration_chain_repairs_legacy_constraint_without_losing_escrow
                 )
             conn.commit()
 
+            # Reproduce a pre-canonical movement table whose named CHECK already
+            # exists. Frozen migration 001 uses CREATE TABLE IF NOT EXISTS followed
+            # by an unconditional ADD CONSTRAINT, so the runner must reconcile this
+            # exact legacy state before applying the immutable migration.
+            conn.execute("""
+                CREATE TABLE gerchain_ledger_movements (
+                    id BIGSERIAL PRIMARY KEY,
+                    transaction_id VARCHAR(128) NOT NULL UNIQUE,
+                    source VARCHAR(128) NOT NULL,
+                    destination VARCHAR(128) NOT NULL,
+                    amount BIGINT NOT NULL,
+                    currency VARCHAR(16) NOT NULL,
+                    operation VARCHAR(32) NOT NULL,
+                    escrow_id VARCHAR(128),
+                    integrity_hash VARCHAR(128),
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+                    CONSTRAINT gerchain_movement_amount_check CHECK (amount > 0)
+                )
+            """)
+            conn.commit()
+
             apply_migrations(conn, migration_dir)
+
+            movement_checks = conn.execute("""
+                SELECT conname, pg_get_constraintdef(oid), convalidated
+                FROM pg_constraint
+                WHERE conrelid = 'gerchain_ledger_movements'::regclass
+                  AND conname = 'gerchain_movement_amount_check'
+            """).fetchall()
+            assert len(movement_checks) == 1, movement_checks
+            assert "amount > 0" in movement_checks[0][1], movement_checks
+            assert movement_checks[0][2] is True, movement_checks
 
             actual_rows = conn.execute("""
                 SELECT id, sender_address, receiver_address, amount::bigint,

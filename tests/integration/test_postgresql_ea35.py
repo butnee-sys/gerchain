@@ -33,7 +33,8 @@ def test_postgresql_atomic_value_graph():
 
     with factory() as session:
         PostgreSQLAtomicLedger.create_account_in_transaction(session, "PG-SOURCE", "USD", 100)
-        PostgreSQLAtomicLedger.create_account_in_transaction(session, escrow_id, "USD", 0)
+        PostgreSQLAtomicLedger.create_account_in_transaction(session, escrow_id, "USD", 40)
+        PostgreSQLAtomicLedger.create_account_in_transaction(session, "PG-DEST", "USD", 0)
         session.add(CanonicalEscrow(
             id=escrow_id,
             sender_address="PG-SOURCE",

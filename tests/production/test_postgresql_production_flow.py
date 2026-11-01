@@ -1,5 +1,7 @@
+import os
 from datetime import datetime, timezone
 
+import pytest
 from sqlalchemy import select
 
 from persistence.atomic_value_transaction import TransactionWitness
@@ -13,7 +15,9 @@ from services.gerchain_runtime_factory import ProductionRuntimeConfig, Productio
 
 
 def test_postgresql_production_boot_and_canonical_value_flow():
-    database_url = "postgresql+psycopg://gerchain:gerchain@localhost:5432/gerchain"
+    database_url = os.environ.get("GERCHAIN_DATABASE_URL")
+    if not database_url:
+        pytest.skip("GERCHAIN_DATABASE_URL is required for PostgreSQL integration evidence")
     factory = ProductionRuntimeFactory(
         ProductionRuntimeConfig(
             database_url=database_url,

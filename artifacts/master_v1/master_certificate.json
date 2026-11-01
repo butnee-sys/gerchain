@@ -1,14 +1,29 @@
 {
-  "certificate_title": "GERCHAIN PRODUCTION READINESS CERTIFICATE",
+  "certificate_title": "GERCHAIN PRODUCTION READINESS EVIDENCE RECORD",
   "work_plan": "PRODUCTION READY MASTER WORK PLAN v1",
   "target_release_sha": "10a408dc4a7821db85a9bc68cfccdb66a20b4dcf",
   "ci_workflow_run_id": 39799640206,
-  "status": "VERIFIED_AND_LOCKED",
+  "status": "HISTORICAL_EVIDENCE_ONLY",
+  "final_lock_granted": false,
+  "disposition": "WITHDRAWN_AS_CURRENT_PRODUCTION_READINESS_CERTIFICATE",
+  "notice": "This record documents historical evidence associated with the stated target SHA and workflow run only. It does not certify the current main branch or a current production deployment. The repository master gate remains OPEN until all mandatory gates are evidenced against one exact release candidate SHA, independently re-performed, and explicitly approved by the accountable authority.",
   "verification_summary": {
     "total_steps": 43,
-    "acceptance_matrix": "PASSED_100_PERCENT",
-    "security_audit": "PASSED_NO_VULNERABILITIES",
-    "state_recovery": "PASSED_RESILIENCE_VERIFIED",
-    "postgresql_migration": "VERIFIED_27_FILES_EXACT_MATCH"
-  }
+    "acceptance_matrix": "HISTORICAL_RECORDED_RESULT_REQUIRES_SCOPE_AND_SHA_REVIEW",
+    "security_audit": "HISTORICAL_RECORDED_RESULT_REQUIRES_SCOPE_AND_SHA_REVIEW",
+    "state_recovery": "HISTORICAL_RECORDED_RESULT_REQUIRES_SCOPE_AND_SHA_REVIEW",
+    "postgresql_migration": "HISTORICAL_RECORDED_RESULT_REQUIRES_SCOPE_AND_SHA_REVIEW"
+  },
+  "current_blockers": [
+    "Legacy authority stores write-freeze proof",
+    "IAM/MFA and privileged-access evidence",
+    "Observability, restart/recovery, and no-duplicate-movement proof",
+    "Production-like performance and concurrency proof",
+    "Backup/restore and disaster-recovery drill",
+    "Independent re-performance",
+    "Complete evidence index tied to one immutable candidate SHA",
+    "Explicit authorized final-lock decision",
+    "Retained PostgreSQL deep value-truth reconciliation report"
+  ],
+  "rule": "Do not infer current production readiness from historical CI or certificate status. PRODUCTION READY / FINAL LOCK is NOT GRANTED."
 }

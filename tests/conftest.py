@@ -1,7 +1,11 @@
 from __future__ import annotations
 
 import os
+import uuid
+
+import psycopg
 import pytest
+from sqlalchemy.engine import make_url
 from sqlalchemy import create_engine, text
 
 from persistence.atomic_release import initialize_atomic_release_schema
@@ -15,11 +19,16 @@ from persistence.recovery_outbox import initialize_outbox_schema
 
 
 @pytest.fixture(autouse=True)
-def isolate_postgresql_core_state():
+def isolate_postgresql_core_state(request):
     """Keep PostgreSQL integration tests independent on the shared CI database.
 
     This is test-only isolation. Production state is never reset by this fixture.
     """
+    # Dedicated-database tests bypass shared-table TRUNCATE to avoid lock coupling.
+    if request.node.get_closest_marker("isolated_postgresql_database"):
+        yield
+        return
+
     url = os.getenv("GERCHAIN_TEST_DATABASE_URL")
     if not url or not url.startswith("postgresql"):
         yield
@@ -67,3 +76,28 @@ def canonical_postgresql_engine():
     engine = create_engine(url, pool_pre_ping=True)
     yield engine
     engine.dispose()
+
+
+@pytest.fixture
+def isolated_postgresql_database(monkeypatch):
+    """Create a disposable PostgreSQL database for production runtime boot tests."""
+    raw_url = os.getenv("GERCHAIN_DATABASE_URL") or os.getenv("GERCHAIN_TEST_DATABASE_URL")
+    if not raw_url or not raw_url.startswith("postgresql"):
+        pytest.skip("a PostgreSQL service URL is required")
+
+    base_url = make_url(raw_url)
+    database_name = f"gerchain_isolated_{uuid.uuid4().hex[:12]}"
+    admin_dsn = base_url.set(database="postgres").render_as_string(hide_password=False)
+    admin_dsn = admin_dsn.replace("postgresql+psycopg://", "postgresql://", 1)
+    with psycopg.connect(admin_dsn, autocommit=True) as admin:
+        admin.execute("CREATE DATABASE \"" + database_name + "\"")
+
+    test_url = base_url.set(database=database_name).render_as_string(hide_password=False)
+    monkeypatch.setenv("GERCHAIN_DATABASE_URL", test_url)
+    monkeypatch.setenv("GERCHAIN_TEST_DATABASE_URL", test_url)
+    monkeypatch.setenv("DATABASE_URL", test_url)
+    try:
+        yield test_url
+    finally:
+        with psycopg.connect(admin_dsn, autocommit=True) as admin:
+            admin.execute("DROP DATABASE IF EXISTS \"" + database_name + "\" WITH (FORCE)")

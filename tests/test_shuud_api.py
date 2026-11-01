@@ -143,19 +143,19 @@ def test_full_sandbox_lifecycle_reaches_payment_release():
     assert escrow.status_code == 200
     assert escrow.json()["state"] == "LOCKED"
 
-    clearance = client.post(
-        "/api/v1/shuud/metrics/clearance",
-        json={"incident_id": incident_id},
-    )
-    assert clearance.status_code == 200
-    assert "elapsed_seconds" in clearance.json()
-
     release = client.post(
         "/api/v1/shuud/release",
         json={"incident_id": incident_id, "escrow_id": escrow_id},
     )
     assert release.status_code == 200
     assert release.json()["new_state"] == "RELEASED"
+
+    clearance = client.post(
+        "/api/v1/shuud/metrics/clearance",
+        json={"incident_id": incident_id},
+    )
+    assert clearance.status_code == 200
+    assert "elapsed_seconds" in clearance.json()
 
     metrics = client.get(f"/api/v1/shuud/metrics/{incident_id}")
     assert metrics.status_code == 200

@@ -37,6 +37,7 @@ jobs:
       GERCHAIN_POSTGRES_DSN: postgresql+psycopg://gerchain:gerchain@127.0.0.1:5432/gerchain_test
       GERCHAIN_MIGRATION_TEST_DSN: postgresql://gerchain:gerchain@127.0.0.1:5432/gerchain_migration_proof
       PYTHONPATH: .
+      PYTHONPYCACHEPREFIX: /tmp/gerchain-pycache
     steps:
       - uses: actions/checkout@v4
         with:
@@ -121,10 +122,28 @@ jobs:
                   connection.commit()
                   apply_migrations(connection, migration_dir)
                   after = connection.execute("SELECT version, checksum FROM schema_version ORDER BY version").fetchall()
-                  assert [row[0] for row in after] == list(range(1, 17)), after
+                  assert [row[0] for row in after] == list(range(1, 18)), after
                   assert after[:14] == before, {"before": before, "after": after}
                   assert after[14][1] == checksum((migration_dir / "015_repair_escrow_state_constraint_drift.sql").read_text(encoding="utf-8"))
                   assert after[15][1] == checksum((migration_dir / "016_reconcile_escrow_state_constraint.sql").read_text(encoding="utf-8"))
+                  migration_017 = migration_dir / "017_ea35_created_witness_event.sql"
+                  migration_017_checksum = checksum(migration_017.read_text(encoding="utf-8"))
+                  assert migration_017_checksum == "6f8bf1a7c7d97e74c5a4fd1f86db068b6cf953d803b1a305a24e88f66cf0b8f8", migration_017_checksum
+                  assert after[16][1] == migration_017_checksum, {"stored": after[16][1], "expected": migration_017_checksum}
+                  witness_constraints = connection.execute("""
+                    SELECT conname, convalidated, pg_get_constraintdef(oid)
+                    FROM pg_constraint
+                    WHERE conrelid = 'gerchain_transaction_witnesses'::regclass
+                      AND conname = 'gerchain_witness_event_type_check'
+                      AND contype = 'c'
+                  """).fetchall()
+                  assert len(witness_constraints) == 1, witness_constraints
+                  assert witness_constraints[0][1] is True, witness_constraints
+                  assert 'GERCHAIN_CREATED' in witness_constraints[0][2], witness_constraints
+                  assert all(event in witness_constraints[0][2] for event in (
+                      'GERCHAIN_FUNDED', 'GERCHAIN_LOCKED', 'GERCHAIN_RELEASED',
+                      'GERCHAIN_REFUNDED', 'GERCHAIN_CANCELLED', 'GERCHAIN_SETTLED'
+                  )), witness_constraints
                   preservation_after = connection.execute("""
                     SELECT id, sender_address, receiver_address, amount, state,
                            condition_desc, refund_destination, currency, version,
@@ -153,7 +172,9 @@ jobs:
                   assert second == (), second
                   print(f"MIGRATION_CHECKSUMS_001_014_PRESERVED={after[:14] == before}")
                   print("MIGRATION_ESCROW_ROW_PRESERVED=PASS")
-                  print("MIGRATION_REGISTRY_001_016=PASS")
+                  print("MIGRATION_REGISTRY_001_017=PASS")
+                  print(f"MIGRATION_017_CHECKSUM={after[16][1]}")
+                  print("MIGRATION_017_GERCHAIN_CREATED_CONSTRAINT=PASS")
                   print(f"MIGRATION_015_CHECKSUM={after[14][1]}")
                   print("MIGRATION_015_016_STATE_CONSTRAINT_VALIDATED=PASS")
                   print("MIGRATION_SECOND_RUN_NOOP=PASS")
@@ -298,6 +319,9 @@ jobs:
       - name: Build exact-SHA evidence manifest
         if: always()
         run: |
+          # Restore historically tracked Python bytecode before recording the
+          # source-tree state in the immutable manifest.
+          git restore --worktree -- '**/__pycache__/*.pyc' || true
           python - <<'PY'
           import hashlib, json, os, platform, subprocess
           from pathlib import Path
@@ -330,11 +354,25 @@ jobs:
           (out / "commit-sha.txt").write_text(manifest["commit_sha"] + "\n", encoding="utf-8")
           print(json.dumps(manifest, indent=2))
           PY
+      - name: Require clean source checkout after verification
+        if: always()
+        run: |
+          # Python bytecode is tracked historically in this repository. Restore
+          # those generated files after compile/test execution before auditing
+          # source cleanliness. The evidence bundle is an intentional output.
+          git restore --worktree -- '**/__pycache__/*.pyc' || true
+          dirty="$(git status --porcelain --untracked-files=all -- . ':!artifacts/final-eai-core-evidence')"
+          if [ -n "$dirty" ]; then
+            echo "FAIL: verification modified tracked or unignored source files"
+            printf '%s\n' "$dirty"
+            exit 1
+          fi
+          echo "SOURCE_CHECKOUT_CLEAN=PASS"
       - name: Upload exact-SHA evidence bundle
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: final-eai-core-evidence-${{ github.sha }}
+          name: final-eai-core-evidence-${{ github.event.pull_request.head.sha || github.sha }}
           path: artifacts/final-eai-core-evidence/
           if-no-files-found: warn
           retention-days: 90

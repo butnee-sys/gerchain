@@ -40,14 +40,15 @@ def test_diagnose_reports_all_wiring_drift_at_once():
 def test_repair_rewrites_only_the_approved_legacy_constructor_pattern():
     legacy = """
 from services.gerchain_runtime_factory import ProductionRuntimeFactory
-runtime = ProductionRuntimeFactory.create(
-    escrow_id=escrow_id,
-    amount=amount,
-    currency=currency,
-    witness_id=witness_id,
-    engine=engine,
-    session_factory=session_factory,
-)
+def main():
+    runtime = ProductionRuntimeFactory.create(
+        escrow_id=escrow_id,
+        amount=amount,
+        currency=currency,
+        witness_id=witness_id,
+        engine=engine,
+        session_factory=session_factory,
+    )
 """
     fixed, changed = repair_entrypoint(legacy)
     assert changed

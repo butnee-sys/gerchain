@@ -1,24 +1,36 @@
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 from unittest.mock import patch
 
+from postgres.migrations import _canonical_migration_files, checksum
 from scripts.production_gate_controller import REQUIRED_GATES, decide
 
 
 def _manifest(sha: str) -> dict:
+    root = Path.cwd()
     migrations = []
     rows = []
-    for version in range(1, 18):
-        checksum = f"checksum-{version}"
-        migrations.append({"version": version, "runner_checksum": checksum})
-        rows.append({"version": version, "checksum": checksum, "applied_at": "2026-10-19T00:00:00+00:00"})
+    for path in _canonical_migration_files(root / "postgres/migrations"):
+        version = int(path.name.split("_", 1)[0])
+        migrations.append({
+            "version": version,
+            "path": str(path.relative_to(root)),
+            "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+            "runner_checksum": checksum(path.read_text(encoding="utf-8")),
+        })
+        rows.append({
+            "version": version,
+            "checksum": checksum(path.read_text(encoding="utf-8")),
+            "applied_at": "2026-10-19T00:00:00+00:00",
+        })
     return {
         "commit_sha": sha,
         "checked_out_head_sha": sha,
         "commit_sha_matches_head": True,
-        "canonical_migration_count": 17,
+        "canonical_migration_count": len(migrations),
         "canonical_migrations": migrations,
         "schema_version_rows": rows,
         "database_manifest_error": None,
@@ -68,3 +80,14 @@ def test_controller_fails_closed_when_manifest_is_missing(tmp_path: Path) -> Non
         report = decide(tmp_path / "missing.json", "abc123", _outcomes())
     assert report["decision"] == "NOT_LOCKED"
     assert any(item.startswith("MANIFEST_UNREADABLE_") for item in report["failures"])
+
+
+def test_controller_rejects_manifest_when_checked_out_sha_flag_is_false(tmp_path: Path) -> None:
+    data = _manifest("abc123")
+    data["commit_sha_matches_head"] = False
+    manifest = tmp_path / "manifest.json"
+    manifest.write_text(json.dumps(data), encoding="utf-8")
+    with patch("scripts.production_gate_controller._head_sha", return_value="abc123"):
+        report = decide(manifest, "abc123", _outcomes())
+    assert report["decision"] == "NOT_LOCKED"
+    assert "MANIFEST_COMMIT_SHA_MATCH_FLAG_FALSE" in report["failures"]

@@ -60,6 +60,11 @@ class G3CoreRuntimeHandler:
             and bool(asset.get("verification_id"))
             and bool(asset.get("valuation_id"))
         )
+        if not evidence_verified:
+            return self._deny(
+                request,
+                "NEF asset validation evidence is not verified",
+            )
 
         result = self._runtime.release(
             transaction_id=str(transaction_id),

@@ -9,7 +9,7 @@ from postgres.migrations import apply_migrations
 from pathlib import Path
 
 DATABASE_URL = os.environ.get("GERCHAIN_POSTGRES_DSN")
-MIGRATION_DIR = Path(__file__).resolve().parents[1] / "schema"
+MIGRATION_DIR = Path(__file__).resolve().parents[1] / "migrations"
 
 pytestmark = pytest.mark.skipif(
     not DATABASE_URL,
@@ -50,7 +50,7 @@ def test_canonical_escrow_schema_migration_is_applied():
             SELECT pg_get_constraintdef(oid)
             FROM pg_constraint
             WHERE conrelid = 'escrows'::regclass
-              AND conname = 'escrows_state_check'
+              AND conname = 'escrows_state_canonical_check'
             """
         ).fetchone()
         assert state_constraint is not None
@@ -62,4 +62,4 @@ def test_canonical_escrow_schema_migration_is_applied():
             int(row[0])
             for row in conn.execute("SELECT version FROM schema_version").fetchall()
         }
-        assert {1, 2} <= versions
+        assert versions == set(range(1, 18))

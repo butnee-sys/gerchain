@@ -266,6 +266,8 @@ jobs:
           manifest = {
               "commit_sha": expected,
               "checkout_head_sha": actual,
+              "run_id": os.environ["GITHUB_RUN_ID"],
+              "run_attempt": os.environ["GITHUB_RUN_ATTEMPT"],
               "workflow_sha256": hashlib.sha256(workflow_path.read_bytes()).hexdigest(),
               "migration_files": [
                   {"path": str(p), "sha256": hashlib.sha256(p.read_bytes()).hexdigest()}
@@ -280,7 +282,14 @@ jobs:
                   if (root / "postgres-migration-junit.xml").is_file() else None
               ),
           }
-          (root / "migration-manifest.json").write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\\n")
+          (root / "migration-manifest.json").write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+          # Parse the exact persisted bytes so malformed JSON cannot enter the evidence bundle.
+          persisted_manifest = json.loads((root / "migration-manifest.json").read_text(encoding="utf-8"))
+          assert persisted_manifest["commit_sha"] == expected
+          assert persisted_manifest["checkout_head_sha"] == actual
+          assert persisted_manifest["run_id"] == os.environ["GITHUB_RUN_ID"]
+          assert persisted_manifest["run_attempt"] == os.environ["GITHUB_RUN_ATTEMPT"]
+          assert len(persisted_manifest["migration_files"]) == 17
           print(json.dumps(manifest, indent=2))
           PY
           files=()

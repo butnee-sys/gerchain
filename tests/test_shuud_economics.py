@@ -48,4 +48,5 @@ def test_economic_impact_does_not_claim_negative_savings() -> None:
 )
 def test_economic_impact_validates_inputs(kwargs: dict) -> None:
     with pytest.raises(ValueError):
-        measure_economic_impact(**kwargs)
+        payload = {"affected_vehicles": 1, "vehicle_value_per_minute_mnt": 0, **kwargs}
+        measure_economic_impact(**payload)
