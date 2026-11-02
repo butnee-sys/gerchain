@@ -84,7 +84,7 @@
     {
       "id": "regression",
       "required_evidence": "Complete CORE foundation regression suite and retained JUnit result.",
-      "evidence_path": "logs/pytest-collection.log"
+      "evidence_path": "logs/core-regression.log"
     },
     {
       "id": "postgres_connection",
@@ -124,7 +124,7 @@
     {
       "id": "production_boot",
       "required_evidence": "Production runtime boot and canonical schema validation evidence.",
-      "evidence_path": "logs/production-runtime-boot.log"
+      "evidence_path": "logs/postgres-connection-runtime.log"
     },
     {
       "id": "migration_catalog",
@@ -181,5 +181,13 @@
     "missing_or_stale_evidence_means_pass": false,
     "external_organizational_evidence_required": true,
     "production_lock_authorized": false
+  },
+  "migration_registry": {
+    "canonical_source": "postgres/migrations/__init__.py",
+    "canonical_version_range": "1..17",
+    "canonical_migration_count": 17,
+    "baseline_main_sha": "8f800f7d911d9011e8534ae6be1495e3e1d359a3",
+    "disposition": "MAIN_CANONICAL_BASELINE",
+    "note": "The 018 migration appears in unmerged PR #115 only; it is not part of the main baseline and is not promoted by this RCA-05/08 remediation branch."
   }
 }
