@@ -46,8 +46,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          rm -rf artifacts/postgres-migration/postgres-migration
-          mkdir -p artifacts/postgres-migration/postgres-migration
+          rm -rf artifacts/postgres-migration
+          mkdir -p artifacts/postgres-migration
           git rev-parse HEAD | tee artifacts/postgres-migration/commit.txt
           find postgres/schema -type f -name '*.sql' -print0 2>/dev/null \
             | sort -z \
@@ -152,6 +152,7 @@ jobs:
           workflow_sha = os.environ["WORKFLOW_SHA"]
           report = {
               "status": "PASS",
+              "evidence_role": "SUPPLEMENTAL_MIGRATION_REPERFORMANCE_NOT_MASTER_AUTHORITY",
               "commit_sha": candidate_sha,
               "candidate_head_sha": candidate_sha,
               "workflow_sha": workflow_sha,
