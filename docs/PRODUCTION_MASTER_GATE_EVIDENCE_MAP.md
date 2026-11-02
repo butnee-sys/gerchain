@@ -36,7 +36,7 @@ The master controller requires the 17 architecture-level gates below plus 13 tec
 
 ## Technical PostgreSQL gates (13)
 
-These keys are required by `scripts/production_gate_controller.py` and are currently populated by the master workflow from the overall conclusion of the canonical PostgreSQL workflow:
+These 13 keys are required by `scripts/production_gate_controller.py`. The canonical PostgreSQL workflow now exports each key independently in `postgres-gates.json`, with the exact commit SHA, workflow run ID/attempt, step outcome, evidence path, and SHA-256 digest. The master workflow accepts a technical gate only after validating that exact run binding and re-hashing every referenced evidence file. An aggregate workflow conclusion alone is not sufficient:
 
 - `compile`
 - `regression`
@@ -52,13 +52,13 @@ These keys are required by `scripts/production_gate_controller.py` and are curre
 - `deep_reconciliation`
 - `manifest`
 
-**Mapping limitation:** these 13 values are currently inferred from one aggregate workflow conclusion, rather than each being extracted from its own named step outcome. This is fail-closed at workflow level (a failed job cannot become success), but loses diagnostic precision. A future workflow improvement should export individual step outcomes and bind each gate to its specific step and artifact.
+**Evidence rule:** a gate is successful only when its own named step concluded `success`, its evidence file exists inside the downloaded artifact, the file SHA-256 matches the record, and the record's commit SHA, workflow run ID, and run attempt match the master candidate. Missing or malformed per-gate evidence remains blocking.
 
 ## Required workflow corrections / follow-up
 
 1. Add a machine-readable architecture-evidence manifest with one entry per architecture gate: status, evidence path or artifact, commit SHA, workflow run ID, and verifier.
 2. The master controller must read those entries explicitly; missing evidence remains blocking.
-3. Export per-step outcomes from the PostgreSQL workflow rather than mapping its single conclusion to all 13 technical gates.
+3. Preserve and validate `postgres-gates.json` per-step outcomes and evidence checksums for all 13 technical gates.
 4. Confirm `artifacts/ea35/manifest.json` and all logs/artifacts are present in the same exact-SHA run before invoking the controller.
 5. Add exact-SHA evidence for IAM/MFA, privileged access review, branch governance, observability, performance/stress, disaster recovery and independent re-performance.
 6. Run the master gate again on the same commit and retain its decision JSON and run IDs.
