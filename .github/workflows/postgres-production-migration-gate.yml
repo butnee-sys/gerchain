@@ -48,7 +48,7 @@ jobs:
           set -euo pipefail
           rm -rf artifacts/postgres-migration/postgres-migration
           mkdir -p artifacts/postgres-migration/postgres-migration
-          git rev-parse HEAD | tee artifacts/postgres-migration/postgres-migration/commit.txt
+          git rev-parse HEAD | tee artifacts/postgres-migration/commit.txt
           find postgres/schema -type f -name '*.sql' -print0 2>/dev/null \
             | sort -z \
             | xargs -0 -r sha256sum | tee artifacts/postgres-migration/sql-checksums-before.txt
