@@ -2,6 +2,7 @@ name: Canonical PostgreSQL production gate
 
 on:
   workflow_dispatch:
+  pull_request:
   push:
     branches:
       - feat/ea21-transaction-aware-ledger
@@ -32,6 +33,8 @@ jobs:
       GERCHAIN_WITNESS_ID: ci-witness
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
@@ -44,19 +47,24 @@ jobs:
         if: always()
         run: mkdir -p artifacts/ea35/logs
       - name: Compile production and persistence modules
+        id: postgres_compile
         run: set -o pipefail; python -m compileall -q production_entrypoint.py persistence services core postgres 2>&1 | tee artifacts/ea35/logs/python-compile.log
       - name: Collect CORE foundation regression tests separately
         run: set -o pipefail; pytest --collect-only -q tests/services/test_gerchain_runtime_atomic_lifecycle.py tests/services/test_gerchain_runtime_canonical_ledger.py tests/services/test_gerchain_runtime_factory.py tests/persistence/test_deep_value_reconciliation.py tests/postgres/test_migrations.py tests/postgres/test_migration_manifest.py 2>&1 | tee artifacts/ea35/logs/pytest-collection.log
       - name: Run CORE foundation regression tests
-        run: >-
-          pytest -q
-          tests/services/test_gerchain_runtime_atomic_lifecycle.py
-          tests/services/test_gerchain_runtime_canonical_ledger.py
-          tests/services/test_gerchain_runtime_factory.py
-          tests/persistence/test_deep_value_reconciliation.py
-          tests/postgres/test_migrations.py
-          tests/postgres/test_migration_manifest.py
+        id: postgres_regression
+        run: |
+          set -o pipefail
+          pytest -q \
+            tests/services/test_gerchain_runtime_atomic_lifecycle.py \
+            tests/services/test_gerchain_runtime_canonical_ledger.py \
+            tests/services/test_gerchain_runtime_factory.py \
+            tests/persistence/test_deep_value_reconciliation.py \
+            tests/postgres/test_migrations.py \
+            tests/postgres/test_migration_manifest.py \
+            2>&1 | tee artifacts/ea35/logs/core-regression.log
       - name: Verify PostgreSQL connection
+        id: postgres_connection
         run: |
           python - <<'PY'
           import os
@@ -74,16 +82,22 @@ jobs:
                   Path("artifacts/ea35/logs/postgres-connection-primary.log").write_text(line + "\n", encoding="utf-8")
           PY
       - name: Validate checksum atomicity and duplicate migration publication
+        id: postgres_migration_atomicity
         run: set -o pipefail; pytest -vv -s postgres/tests/test_migration_checksum_atomicity.py tests/postgres/test_migration_runner_concurrency.py 2>&1 | tee artifacts/ea35/logs/checksum-atomicity-concurrency.log
       - name: Re-perform legacy escrow constraint upgrade and data preservation
+        id: postgres_legacy_upgrade
         run: set -o pipefail; pytest -vv -s tests/postgres/test_legacy_escrow_constraint_upgrade.py 2>&1 | tee artifacts/ea35/logs/legacy-escrow-upgrade.log
       - name: Re-perform canonical PostgreSQL escrow lifecycle
+        id: postgres_lifecycle
         run: set -o pipefail; pytest -vv -s tests/postgres/test_production_postgres_reperformance.py 2>&1 | tee artifacts/ea35/logs/production-lifecycle.log
       - name: Re-perform PostgreSQL migration concurrency and checksum gate
+        id: postgres_migration_concurrency
         run: set -o pipefail; python -m pytest -vv -s postgres/tests/test_concurrency.py 2>&1 | tee artifacts/ea35/logs/migration-concurrency.log
       - name: Re-perform duplicate publication and checksum fail-closed cases on PostgreSQL
+        id: postgres_publication_integrity
         run: set -o pipefail; pytest -vv -s postgres/tests/test_migration_publication_integrity.py 2>&1 | tee artifacts/ea35/logs/migration-publication-integrity.log
       - name: Bind all 17 migration checksums and validate canonical constraints from PostgreSQL catalog
+        id: postgres_migration_catalog
         run: |
           python - <<'PY'
           import hashlib
@@ -193,9 +207,10 @@ jobs:
           PY
 
       - name: Build canonical migration evidence manifest
+        id: postgres_manifest
         if: always()
         env:
-          EVIDENCE_COMMIT_SHA: ${{ github.sha }}
+          EVIDENCE_COMMIT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
           EVIDENCE_RUN_ID: ${{ github.run_id }}
           EVIDENCE_RUN_ATTEMPT: ${{ github.run_attempt }}
         run: |
@@ -308,8 +323,10 @@ jobs:
           PY
 
       - name: Test production entrypoint contract
+        id: postgres_entrypoint
         run: set -o pipefail; pytest -vv -s tests/services/test_production_entrypoint.py 2>&1 | tee artifacts/ea35/logs/production-entrypoint.log
       - name: Boot real PostgreSQL production runtime and validate schema
+        id: postgres_production_boot
         run: |
           python - <<'PY'
           from sqlalchemy import create_engine, inspect, text
@@ -407,6 +424,7 @@ jobs:
               engine.dispose()
           PY
       - name: Deep value-truth reconciliation tests on PostgreSQL
+        id: postgres_deep_reconciliation
         run: set -o pipefail; pytest -vv -s tests/persistence/test_deep_value_reconciliation_postgres.py 2>&1 | tee artifacts/ea35/logs/deep-value-reconciliation.log
 
       - name: Verify error duplicate excess invariants on exact SHA
@@ -493,7 +511,20 @@ jobs:
       - name: Finalize exact-SHA architecture gates and evidence bundle
         if: always()
         env:
-          EVIDENCE_COMMIT_SHA: ${{ github.sha }}
+          EVIDENCE_COMMIT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          POSTGRES_COMPILE_OUTCOME: ${{ steps.postgres_compile.outcome }}
+          POSTGRES_REGRESSION_OUTCOME: ${{ steps.postgres_regression.outcome }}
+          POSTGRES_CONNECTION_OUTCOME: ${{ steps.postgres_connection.outcome }}
+          POSTGRES_MIGRATION_ATOMICITY_OUTCOME: ${{ steps.postgres_migration_atomicity.outcome }}
+          POSTGRES_LEGACY_UPGRADE_OUTCOME: ${{ steps.postgres_legacy_upgrade.outcome }}
+          POSTGRES_LIFECYCLE_OUTCOME: ${{ steps.postgres_lifecycle.outcome }}
+          POSTGRES_MIGRATION_CONCURRENCY_OUTCOME: ${{ steps.postgres_migration_concurrency.outcome }}
+          POSTGRES_PUBLICATION_INTEGRITY_OUTCOME: ${{ steps.postgres_publication_integrity.outcome }}
+          POSTGRES_MIGRATION_CATALOG_OUTCOME: ${{ steps.postgres_migration_catalog.outcome }}
+          POSTGRES_MANIFEST_OUTCOME: ${{ steps.postgres_manifest.outcome }}
+          POSTGRES_ENTRYPOINT_OUTCOME: ${{ steps.postgres_entrypoint.outcome }}
+          POSTGRES_PRODUCTION_BOOT_OUTCOME: ${{ steps.postgres_production_boot.outcome }}
+          POSTGRES_DEEP_RECONCILIATION_OUTCOME: ${{ steps.postgres_deep_reconciliation.outcome }}
           DUPLICATE_EXCESS_OUTCOME: ${{ steps.duplicate_excess_evidence.outcome }}
           CROSS_STORE_OUTCOME: ${{ steps.cross_store_evidence.outcome }}
           AUTHORITY_BOUNDARY_OUTCOME: ${{ steps.authority_boundary_evidence.outcome }}
@@ -651,6 +682,57 @@ jobs:
               encoding="utf-8",
           )
 
+          # Export each PostgreSQL gate independently; aggregate workflow
+          # success is never a substitute for an individual step result.
+          postgres_specs = {
+              "compile": ("POSTGRES_COMPILE_OUTCOME", ["logs/python-compile.log"]),
+              "regression": ("POSTGRES_REGRESSION_OUTCOME", ["logs/core-regression.log"]),
+              "postgres_connection": ("POSTGRES_CONNECTION_OUTCOME", ["logs/postgres-connection-primary.log"]),
+              "migration_atomicity": ("POSTGRES_MIGRATION_ATOMICITY_OUTCOME", ["logs/checksum-atomicity-concurrency.log"]),
+              "legacy_upgrade": ("POSTGRES_LEGACY_UPGRADE_OUTCOME", ["logs/legacy-escrow-upgrade.log"]),
+              "lifecycle": ("POSTGRES_LIFECYCLE_OUTCOME", ["logs/production-lifecycle.log"]),
+              "migration_concurrency": ("POSTGRES_MIGRATION_CONCURRENCY_OUTCOME", ["logs/migration-concurrency.log"]),
+              "publication_integrity": ("POSTGRES_PUBLICATION_INTEGRITY_OUTCOME", ["logs/migration-publication-integrity.log"]),
+              "entrypoint": ("POSTGRES_ENTRYPOINT_OUTCOME", ["logs/production-entrypoint.log"]),
+              "production_boot": ("POSTGRES_PRODUCTION_BOOT_OUTCOME", ["logs/postgres-connection-runtime.log"]),
+              "migration_catalog": ("POSTGRES_MIGRATION_CATALOG_OUTCOME", ["migration-history-summary.md"]),
+              "deep_reconciliation": ("POSTGRES_DEEP_RECONCILIATION_OUTCOME", ["logs/deep-value-reconciliation.log"]),
+              "manifest": ("POSTGRES_MANIFEST_OUTCOME", ["manifest.json", "commit-sha.txt"]),
+          }
+          postgres_records = {}
+          for gate_name, (env_name, evidence_paths) in postgres_specs.items():
+              step_outcome = os.environ.get(env_name, "missing")
+              evidence = []
+              for relative in evidence_paths:
+                  path = root / relative
+                  if path.is_file() and path.stat().st_size > 0:
+                      evidence.append({
+                          "path": relative,
+                          "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+                      })
+              outcome = "success" if step_outcome == "success" and len(evidence) == len(evidence_paths) else (
+                  step_outcome if step_outcome in {"failure", "cancelled"} else "missing_evidence"
+              )
+              postgres_records[gate_name] = {
+                  "outcome": outcome,
+                  "step_outcome": step_outcome,
+                  "evidence": evidence,
+              }
+          postgres_bundle = {
+              "schema_version": "1.0",
+              "commit_sha": expected,
+              "checked_out_head_sha": head,
+              "workflow_run_id": int(os.environ["EVIDENCE_RUN_ID"]),
+              "workflow_run_attempt": int(os.environ["EVIDENCE_RUN_ATTEMPT"]),
+              "gates": postgres_records,
+              "overall_status": "PASS" if all(
+                  record["outcome"] == "success" for record in postgres_records.values()
+              ) else "BLOCKED",
+          }
+          (root / "postgres-gates.json").write_text(
+              json.dumps(postgres_bundle, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+          )
+
           # Final checksum index includes both architecture-gates.json and the
           # bundle report. The index itself is separately bound by MANIFEST.SHA256.
           sums_path = root / "SHA256SUMS"
@@ -687,7 +769,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: ea35-${{ github.sha }}
+          name: ea35-${{ github.event.pull_request.head.sha || github.sha }}
           path: artifacts/ea35/
           if-no-files-found: error
           retention-days: 90
