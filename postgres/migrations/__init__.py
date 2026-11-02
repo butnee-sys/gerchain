@@ -41,7 +41,8 @@ CANONICAL_MIGRATION_NAMES = {version: name for version, name in enumerate(_CANON
 # rows. The migration runner and inventory audit both consume these exact values.
 # Frozen v1 digests were accepted by the original runner before the canonical
 # migration file was finalized; preserve them explicitly for safe upgrades.
-FROZEN_CHECKSUMS: dict[int, frozenset[str]] = {
+FROZEN_CHECKSUMS: dict[int, frozenset[str]] = {}
+LEGACY_CHECKSUMS: dict[int, frozenset[str]] = {
     1: frozenset({
         "6eea24dae8b3ac9aa9413a32da1617250f14725bdb19f50e5d8300308ad173d4",
         "538e0f5132ec775ec8963a2a72072dd00e81afa37383a6c5f6a8f54259716a31",
@@ -50,7 +51,6 @@ FROZEN_CHECKSUMS: dict[int, frozenset[str]] = {
         "6766267c9e939a320bf6ac28ee516c4c11fe537ef2b6a7778d94ca6e3cd5b246",
     }),
 }
-LEGACY_CHECKSUMS: dict[int, frozenset[str]] = {}
 
 
 
