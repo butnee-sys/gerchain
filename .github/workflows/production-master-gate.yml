@@ -71,7 +71,7 @@ jobs:
         id: decision
         if: always()
         env:
-          GITHUB_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          CANDIDATE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           GATE_CONCLUSION: ${{ steps.source_run.outputs.conclusion || 'missing' }}
           SOURCE_RUN_ID: ${{ steps.source_run.outputs.run_id || '' }}
@@ -99,7 +99,7 @@ jobs:
           )
           conclusion = os.environ.get('GATE_CONCLUSION', 'missing')
           source_run_id = os.environ.get('SOURCE_RUN_ID', '')
-          target_sha = os.environ['GITHUB_SHA']
+          target_sha = os.environ['CANDIDATE_SHA']
           outcomes = {name: 'missing' for name in (*postgres_gates, *architecture_gates)}
 
           # Verify the downloaded artifact's detached checksum index before
@@ -228,7 +228,7 @@ jobs:
               'python', 'scripts/production_gate_controller.py',
               '--manifest', 'artifacts/ea35/manifest.json',
               '--output', str(output),
-              '--expected-sha', os.environ['GITHUB_SHA'],
+              '--expected-sha', os.environ['CANDIDATE_SHA'],
               '--outcomes-json', json.dumps(outcomes, sort_keys=True),
           ], check=False)
           report = json.loads(output.read_text(encoding='utf-8'))
@@ -239,7 +239,7 @@ jobs:
           summary.write_text(
               '# Production master gate\n\n'
               + f"**Decision:** `{report.get('decision', 'NOT_LOCKED')}`\n\n"
-              + f"**Commit:** `{os.environ['GITHUB_SHA']}`\n\n"
+              + f"**Commit:** `{os.environ['CANDIDATE_SHA']}`\n\n"
               + f"**PostgreSQL gate:** `{conclusion}` (run `{os.environ.get('SOURCE_RUN_ID') or 'missing'}`)\n\n"
               + '## Blocking findings\n'
               + ''.join(f'- `{failure}`\n' for failure in report.get('failures', [])),
