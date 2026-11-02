@@ -148,7 +148,8 @@ jobs:
               except (OSError, json.JSONDecodeError, AttributeError, TypeError):
                   outcomes.update({name: 'evidence_bundle_invalid' for name in postgres_gates})
           else:
-              outcomes.update({name: conclusion if conclusion else 'missing' for name in postgres_gates})
+              postgres_status = conclusion if conclusion and conclusion != 'success' else 'missing_evidence'
+              outcomes.update({name: postgres_status for name in postgres_gates})
 
           # Architecture gates must come from an explicit evidence file in the
           # downloaded bundle. Never infer their success from PostgreSQL tests.
