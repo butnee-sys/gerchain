@@ -678,7 +678,13 @@ jobs:
                   "evidence": "final-evidence-bundle.json",
               }
           (root / "architecture-gates.json").write_text(
-              json.dumps({"commit_sha": expected, "gates": records}, indent=2, sort_keys=True) + "\n",
+              json.dumps({
+                  "commit_sha": expected,
+                  "checked_out_head_sha": head,
+                  "workflow_run_id": int(os.environ["EVIDENCE_RUN_ID"]),
+                  "workflow_run_attempt": int(os.environ["EVIDENCE_RUN_ATTEMPT"]),
+                  "gates": records,
+              }, indent=2, sort_keys=True) + "\n",
               encoding="utf-8",
           )
 
