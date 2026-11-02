@@ -190,14 +190,14 @@ def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Production Gate Controller (strict enterprise fail-closed)"
     )
-    parser.add_argument("--manifest", default="artifacts/ea35/manifest.json")
+    parser.add_argument("--manifest", default="artifacts/ea35-current/manifest.json")
     parser.add_argument(
         "--expected-sha",
         "--expected-source-sha",
         dest="expected_source_sha",
         default=os.environ.get("GITHUB_SHA", ""),
     )
-    parser.add_argument("--output", default="artifacts/ea35/production-gate-decision.json")
+    parser.add_argument("--output", default="artifacts/ea35-current/production-gate-decision.json")
     parser.add_argument("--outcomes-json", default="{}")
     return parser.parse_args()
 
