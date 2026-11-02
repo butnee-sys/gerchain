@@ -1,48 +1,147 @@
 {
-  "checked_out_head_sha": "5e5193511b47f0815f28a2c6c76fb9f60634b695",
-  "commit_sha_matches_head": true,
-  "created_at_utc": "2026-10-21T09:40:40.088597+00:00",
-  "decision": "NOT_LOCKED",
-  "expected_commit_sha": "5e5193511b47f0815f28a2c6c76fb9f60634b695",
-  "failures": [
-    "GATE_INVENTORY_MAP_MISSING",
-    "GATE_ERROR_DUPLICATE_EXCESS_MISSING",
-    "GATE_CROSS_STORE_RECONCILIATION_MISSING",
-    "GATE_AUTHORITY_BOUNDARY_MISSING",
-    "GATE_CORE_CORRECTNESS_MISSING",
-    "GATE_ADAPTER_BOUNDARIES_MISSING",
-    "GATE_EAI_G3_GOVERNANCE_MISSING",
-    "GATE_TRANSACTION_CORRECTNESS_MISSING",
-    "GATE_RECOVERY_MISSING",
-    "GATE_AUDITABILITY_MISSING",
-    "GATE_SECURITY_IAM_MFA_MISSING",
-    "GATE_OBSERVABILITY_MISSING",
-    "GATE_PERFORMANCE_STRESS_MISSING",
-    "GATE_DISASTER_RECOVERY_MISSING",
-    "GATE_CI_RELEASE_GOVERNANCE_MISSING",
-    "GATE_INDEPENDENT_REPERFORMANCE_MISSING",
-    "GATE_FINAL_EVIDENCE_BUNDLE_MISSING",
-    "GATE_COMPILE_MISSING",
-    "GATE_REGRESSION_MISSING",
-    "GATE_POSTGRES_CONNECTION_MISSING",
-    "GATE_MIGRATION_ATOMICITY_MISSING",
-    "GATE_LEGACY_UPGRADE_MISSING",
-    "GATE_LIFECYCLE_MISSING",
-    "GATE_MIGRATION_CONCURRENCY_MISSING",
-    "GATE_PUBLICATION_INTEGRITY_MISSING",
-    "GATE_ENTRYPOINT_MISSING",
-    "GATE_PRODUCTION_BOOT_MISSING",
-    "GATE_MIGRATION_CATALOG_MISSING",
-    "GATE_DEEP_RECONCILIATION_MISSING",
-    "GATE_MANIFEST_MISSING",
-    "MANIFEST_SHA_MISMATCH",
-    "CANONICAL_MIGRATION_CHAIN_NOT_EXACTLY_17",
-    "DATABASE_SCHEMA_VERSION_ROWS_NOT_EXACTLY_1_TO_17"
+  "schema_version": "1.0",
+  "gate": "PRODUCTION_MASTER_GATE",
+  "policy": "FAIL_CLOSED",
+  "manifest_mode": "source_template",
+  "status": "IN_PROGRESS_NOT_LOCKED",
+  "description": "Canonical source template for 17 architecture gates and 13 PostgreSQL gates. Runtime evidence is generated per exact workflow run and commit SHA; this file contains no PASS decisions.",
+  "architecture_criteria": [
+    {
+      "id": "inventory_map",
+      "required_evidence": "Dated runtime, store, table, reader/writer, entrypoint and adapter-boundary inventory bound to exact SHA."
+    },
+    {
+      "id": "error_duplicate_excess",
+      "required_evidence": "Duplicate-authority and error inventory with disposition evidence for every finding."
+    },
+    {
+      "id": "cross_store_reconciliation",
+      "required_evidence": "PostgreSQL reconciliation report with zero unexplained mismatches, tied to exact run and SHA."
+    },
+    {
+      "id": "authority_boundary",
+      "required_evidence": "Evidence that canonical Ledger, Escrow, Witness and Outbox remain authoritative and legacy paths fail closed."
+    },
+    {
+      "id": "core_correctness",
+      "required_evidence": "Lifecycle, value conservation, idempotency, replay/conflict, rollback and transaction-boundary evidence."
+    },
+    {
+      "id": "adapter_boundaries",
+      "required_evidence": "Evidence that cross-component operations use approved adapters and reject bypasses."
+    },
+    {
+      "id": "eai_g3_governance",
+      "required_evidence": "G3 TRUST, TRANSPARENCY and PERFORMANCE/TRIUMPH governance evidence, including negative cases."
+    },
+    {
+      "id": "transaction_correctness",
+      "required_evidence": "Real PostgreSQL atomicity, concurrency, rollback, replay and no-duplicate-movement evidence."
+    },
+    {
+      "id": "recovery",
+      "required_evidence": "Interrupted-transaction and restart recovery evidence with no duplicate value movement."
+    },
+    {
+      "id": "auditability",
+      "required_evidence": "Movement-to-escrow, witness, outbox, idempotency and integrity evidence."
+    },
+    {
+      "id": "security_iam_mfa",
+      "required_evidence": "Organizational IAM/MFA and privileged-access review evidence; source tests alone are insufficient."
+    },
+    {
+      "id": "observability",
+      "required_evidence": "Readiness/liveness, structured logs, metrics, alerts and failure-mode evidence."
+    },
+    {
+      "id": "performance_stress",
+      "required_evidence": "Repeatable production-like workload, concurrency/load profile, thresholds and retained results."
+    },
+    {
+      "id": "disaster_recovery",
+      "required_evidence": "Backup/restore drill, recovery objectives and post-restore integrity reconciliation."
+    },
+    {
+      "id": "ci_release_governance",
+      "required_evidence": "Exact-SHA required checks, branch governance, release approval and review evidence."
+    },
+    {
+      "id": "independent_reperformance",
+      "required_evidence": "Attributed independent reproduction of migration, lifecycle, reconciliation and recovery."
+    },
+    {
+      "id": "final_evidence_bundle",
+      "required_evidence": "Manifest, run IDs, exact SHA, logs, migration checksums, decision and retained artifacts."
+    }
   ],
-  "gate_outcomes": {},
-  "manifest_path": "docs\\production-master-gate-manifest.json",
-  "meaning": "At least one required gate or evidence condition is missing, failed, or mismatched.",
-  "repository": "local",
+  "postgres_checks": [
+    {
+      "id": "compile",
+      "required_evidence": "Compile production, persistence, services, CORE and PostgreSQL source on exact SHA.",
+      "evidence_path": "logs/python-compile.log"
+    },
+    {
+      "id": "regression",
+      "required_evidence": "Complete CORE foundation regression suite and retained JUnit result.",
+      "evidence_path": "logs/pytest-collection.log"
+    },
+    {
+      "id": "postgres_connection",
+      "required_evidence": "Successful connection to the isolated PostgreSQL instance and recorded server identity.",
+      "evidence_path": "logs/postgres-connection-primary.log"
+    },
+    {
+      "id": "migration_atomicity",
+      "required_evidence": "Atomic migration application and checksum rollback/publication evidence.",
+      "evidence_path": "logs/checksum-atomicity-concurrency.log"
+    },
+    {
+      "id": "legacy_upgrade",
+      "required_evidence": "Supported legacy schema upgrade and data-preservation evidence.",
+      "evidence_path": "logs/legacy-escrow-upgrade.log"
+    },
+    {
+      "id": "lifecycle",
+      "required_evidence": "Canonical PostgreSQL escrow lifecycle re-performance evidence.",
+      "evidence_path": "logs/production-lifecycle.log"
+    },
+    {
+      "id": "migration_concurrency",
+      "required_evidence": "Concurrent migration runner and no-duplicate-publication evidence.",
+      "evidence_path": "logs/migration-concurrency.log"
+    },
+    {
+      "id": "publication_integrity",
+      "required_evidence": "Duplicate publication and checksum fail-closed evidence.",
+      "evidence_path": "logs/migration-publication-integrity.log"
+    },
+    {
+      "id": "entrypoint",
+      "required_evidence": "Production entrypoint contract evidence.",
+      "evidence_path": "logs/production-entrypoint.log"
+    },
+    {
+      "id": "production_boot",
+      "required_evidence": "Production runtime boot and canonical schema validation evidence.",
+      "evidence_path": "logs/production-runtime-boot.log"
+    },
+    {
+      "id": "migration_catalog",
+      "required_evidence": "Actual PostgreSQL migration catalog, 17-version history and checksum evidence.",
+      "evidence_path": "migration-history-summary.md"
+    },
+    {
+      "id": "deep_reconciliation",
+      "required_evidence": "PostgreSQL deep value-truth reconciliation evidence.",
+      "evidence_path": "logs/deep-value-reconciliation.log"
+    },
+    {
+      "id": "manifest",
+      "required_evidence": "Exact-SHA migration manifest, applied rows and checksum index evidence.",
+      "evidence_path": "manifest.json"
+    }
+  ],
   "required_gates": [
     "inventory_map",
     "error_duplicate_excess",
@@ -74,5 +173,13 @@
     "migration_catalog",
     "deep_reconciliation",
     "manifest"
-  ]
+  ],
+  "lock_policy": {
+    "all_30_gates_must_pass": true,
+    "same_exact_commit_sha_required": true,
+    "workflow_run_and_attempt_required": true,
+    "missing_or_stale_evidence_means_pass": false,
+    "external_organizational_evidence_required": true,
+    "production_lock_authorized": false
+  }
 }
