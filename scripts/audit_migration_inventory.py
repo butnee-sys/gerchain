@@ -99,7 +99,7 @@ def main() -> int:
             "applied_history": {"status": "NOT_EVALUATED"},
         }
         OUTPUT.parent.mkdir(parents=True, exist_ok=True)
-        OUTPUT.write_text(json.dumps(report, indent=2, sort_keys=True) + "\\n", encoding="utf-8")
+        OUTPUT.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
         print(json.dumps(report, indent=2, sort_keys=True))
         return 1
     canonical_by_version = {
