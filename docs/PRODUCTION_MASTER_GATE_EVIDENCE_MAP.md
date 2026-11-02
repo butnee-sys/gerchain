@@ -6,6 +6,14 @@
 **Technical evidence workflow:** `.github/workflows/canonical-postgres-gate.yml`  
 **Decision controller:** `scripts/production_gate_controller.py`
 
+## RCA-05 — canonical migration registry baseline
+
+The `main` baseline inspected for this remediation is `8f800f7d911d9011e8534ae6be1495e3e1d359a3`. Its canonical runner in `postgres/migrations/__init__.py` and its `postgres/migrations.py` compatibility module both define versions 1–17. The `postgres/migrations/` directory on that baseline contains the 17 numbered canonical SQL files.
+
+The 018 signed-change-authorization migration is present on the unmerged PR #115 head (`bdab3d947ff670142de22479b68faf4393e6f699`), not on `main`. It is therefore not silently promoted into the canonical chain by this RCA-05/08 remediation. PR #115 remains separate and is not merged. Any future adoption of migration 018 requires its own explicit scope decision and exact-SHA migration-history proof.
+
+For this remediation, the controller verifies the 17 canonical migration files against the checked-out runner inventory, file SHA-256, runner checksum, PostgreSQL `schema_version` rows, database checksum values, and non-null `applied_at` values.
+
 ## Binding rule
 
 A passing PostgreSQL workflow is evidence only for the technical checks actually executed by that workflow. It is **not** evidence that organizational controls, architecture review, independent re-performance, disaster recovery, or performance/stress checks passed. No criterion may be marked successful solely because another workflow succeeded.
