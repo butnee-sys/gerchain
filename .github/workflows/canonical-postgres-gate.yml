@@ -217,6 +217,7 @@ jobs:
         if: always()
         env:
           EVIDENCE_COMMIT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          EVIDENCE_WORKFLOW_SHA: ${{ github.sha }}
           EVIDENCE_RUN_ID: ${{ github.run_id }}
           EVIDENCE_RUN_ATTEMPT: ${{ github.run_attempt }}
         run: |
@@ -271,6 +272,8 @@ jobs:
           manifest = {
               'repository': os.environ.get('GITHUB_REPOSITORY'),
               'commit_sha': os.environ['EVIDENCE_COMMIT_SHA'],
+              'candidate_head_sha': os.environ['EVIDENCE_COMMIT_SHA'],
+              'workflow_sha': os.environ['EVIDENCE_WORKFLOW_SHA'],
               'workflow_run_id': os.environ['EVIDENCE_RUN_ID'],
               'workflow_run_attempt': os.environ['EVIDENCE_RUN_ATTEMPT'],
               'python': platform.python_version(),
@@ -281,7 +284,9 @@ jobs:
           }
           head_sha = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
           manifest['checked_out_head_sha'] = head_sha
-          manifest['commit_sha_matches_head'] = manifest['commit_sha'] == head_sha
+          manifest['candidate_head_matches_checkout'] = manifest['candidate_head_sha'] == head_sha
+          manifest['workflow_sha_recorded'] = bool(manifest['workflow_sha'])
+          manifest['commit_sha_matches_head'] = manifest['candidate_head_matches_checkout']
           manifest['git_status_porcelain'] = subprocess.run(['git', 'status', '--porcelain', '--untracked-files=no'], capture_output=True, text=True, check=False).stdout.splitlines()
           out = root / 'artifacts/ea35-current'
           out.mkdir(parents=True, exist_ok=True)
@@ -319,8 +324,8 @@ jobs:
               digest, relative = line.split('  ', 1)
               if hashlib.sha256((out / relative).read_bytes()).hexdigest() != digest:
                   raise SystemExit(f'SHA256SUMS verification failed: {relative}')
-          if manifest['commit_sha'] != head_sha:
-              raise SystemExit(f"evidence SHA mismatch: target={manifest['commit_sha']} HEAD={head_sha}")
+          if manifest['candidate_head_sha'] != head_sha or not manifest['workflow_sha_recorded']:
+              raise SystemExit(f"evidence SHA mismatch: candidate={manifest['candidate_head_sha']} HEAD={head_sha}")
           if database_error:
               raise SystemExit(f"PostgreSQL migration evidence unavailable: {database_error}")
           if database_rows and any(row['checksum'] != item['runner_checksum'] for row, item in zip(database_rows, canonical)):
@@ -575,6 +580,8 @@ jobs:
           sha_bound = (
               head == expected
               and manifest.get("commit_sha") == expected
+              and manifest.get("candidate_head_sha") == expected
+              and bool(manifest.get("workflow_sha"))
               and manifest.get("checked_out_head_sha") == expected
               and manifest.get("commit_sha_matches_head") is True
               and migration.get("commit_sha") == expected
@@ -622,6 +629,8 @@ jobs:
           bundle_report = {
               "schema_version": "1.0",
               "commit_sha": expected,
+              "candidate_head_sha": expected,
+              "workflow_sha": os.environ["EVIDENCE_WORKFLOW_SHA"],
               "checked_out_head_sha": head,
               "commit_sha_matches_head": head == expected,
               "status": "PASS" if bundle_complete else "BLOCKED",
@@ -688,6 +697,8 @@ jobs:
           (root / "architecture-gates.json").write_text(
               json.dumps({
                   "commit_sha": expected,
+                  "candidate_head_sha": expected,
+                  "workflow_sha": os.environ["EVIDENCE_WORKFLOW_SHA"],
                   "checked_out_head_sha": head,
                   "workflow_run_id": int(os.environ["EVIDENCE_RUN_ID"]),
                   "workflow_run_attempt": int(os.environ["EVIDENCE_RUN_ATTEMPT"]),
@@ -735,6 +746,8 @@ jobs:
           postgres_bundle = {
               "schema_version": "1.0",
               "commit_sha": expected,
+              "candidate_head_sha": expected,
+              "workflow_sha": os.environ["EVIDENCE_WORKFLOW_SHA"],
               "checked_out_head_sha": head,
               "workflow_run_id": int(os.environ["EVIDENCE_RUN_ID"]),
               "workflow_run_attempt": int(os.environ["EVIDENCE_RUN_ATTEMPT"]),
@@ -767,6 +780,8 @@ jobs:
           sums_valid = sums_valid and hashlib.sha256(sums_path.read_bytes()).hexdigest() == sums_hash
           print(json.dumps({
               "commit_sha": expected,
+              "candidate_head_sha": expected,
+              "workflow_sha": os.environ["EVIDENCE_WORKFLOW_SHA"],
               "checked_out_head_sha": head,
               "sha_bound": sha_bound,
               "duplicate_excess_step": os.environ.get("DUPLICATE_EXCESS_OUTCOME"),
