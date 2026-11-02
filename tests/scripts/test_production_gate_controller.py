@@ -4,6 +4,7 @@ import hashlib
 import json
 from pathlib import Path
 from unittest.mock import patch
+import sys
 
 from postgres.migrations import _canonical_migration_files
 from scripts.production_gate_controller import REQUIRED_GATES, decide
@@ -119,3 +120,15 @@ def test_controller_fails_closed_when_manifest_is_missing(tmp_path: Path) -> Non
         report = decide(tmp_path / "missing.json", "abc123", _outcomes())
     assert report["decision"] == "NOT_LOCKED"
     assert any(item.startswith("MANIFEST_UNREADABLE_") for item in report["failures"])
+
+
+def test_controller_cli_accepts_expected_sha_alias() -> None:
+    from scripts.production_gate_controller import _parse_args
+
+    with patch.object(sys, "argv", [
+        "production_gate_controller.py",
+        "--expected-sha",
+        "candidate-sha",
+    ]):
+        args = _parse_args()
+    assert args.expected_source_sha == "candidate-sha"
