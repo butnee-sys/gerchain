@@ -6,6 +6,7 @@ import json
 import os
 import pathlib
 import subprocess
+import sys
 
 ARCHITECTURE_GATES = [
     "inventory_map", "error_duplicate_excess", "cross_store_reconciliation",
@@ -40,6 +41,11 @@ def _migration_failures(manifest: dict, repo_root: pathlib.Path) -> list[str]:
     """Verify the generated PostgreSQL migration evidence against checked-out files and DB rows."""
     failures: list[str] = []
     try:
+        # When invoked as `python scripts/production_gate_controller.py`, Python
+        # places scripts/ (not the repository root) at sys.path[0].
+        root_string = str(repo_root.resolve())
+        if root_string not in sys.path:
+            sys.path.insert(0, root_string)
         from postgres.migrations import _canonical_migration_files
         canonical_paths = _canonical_migration_files(repo_root / "postgres" / "migrations")
     except Exception as exc:
