@@ -62,7 +62,7 @@ jobs:
         if: always() && steps.source_run.outputs.run_id != ''
         uses: actions/download-artifact@v4
         with:
-          name: ea35-${{ github.event.pull_request.head.sha || github.sha }}
+          name: ea35-${{ github.event.pull_request.head.sha || github.sha }}-${{ steps.source_run.outputs.run_id }}-${{ steps.source_run.outputs.run_attempt }}
           path: artifacts/ea35-current
           github-token: ${{ secrets.GITHUB_TOKEN }}
           run-id: ${{ steps.source_run.outputs.run_id }}
