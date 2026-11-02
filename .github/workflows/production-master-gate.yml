@@ -117,6 +117,12 @@ jobs:
                   and hashlib.sha256(sums_bytes).hexdigest() == detached_line[0]
               )
               if artifact_integrity_ok:
+                  # Historical master_v1 certificates are never valid inputs to a
+                  # current candidate decision, even if accidentally copied in.
+                  if any(p.is_file() for p in artifact_root.rglob('master_certificate.json')):
+                      artifact_integrity_ok = False
+                  if any(p.is_dir() for p in artifact_root.rglob('master_v1')):
+                      artifact_integrity_ok = False
                   for line in sums_bytes.decode('utf-8').splitlines():
                       digest, relative_name = line.split('  ', 1)
                       relative_path = Path(relative_name)
@@ -139,6 +145,8 @@ jobs:
                   bundle_matches = (
                       artifact_integrity_ok
                       and postgres_bundle.get('commit_sha') == target_sha
+                      and postgres_bundle.get('candidate_head_sha') == target_sha
+                      and bool(postgres_bundle.get('workflow_sha'))
                       and postgres_bundle.get('checked_out_head_sha') == target_sha
                       and str(postgres_bundle.get('workflow_run_id')) == source_run_id
                       and str(postgres_bundle.get('workflow_run_attempt')) == os.environ.get('SOURCE_RUN_ATTEMPT', '')
@@ -191,6 +199,8 @@ jobs:
                   architecture_bundle_matches = (
                       artifact_integrity_ok
                       and architecture_bundle.get('commit_sha') == target_sha
+                      and architecture_bundle.get('candidate_head_sha') == target_sha
+                      and bool(architecture_bundle.get('workflow_sha'))
                       and architecture_bundle.get('checked_out_head_sha') == target_sha
                       and str(architecture_bundle.get('workflow_run_id')) == source_run_id
                       and str(architecture_bundle.get('workflow_run_attempt')) == os.environ.get('SOURCE_RUN_ATTEMPT', '')
@@ -234,6 +244,7 @@ jobs:
           report = json.loads(output.read_text(encoding='utf-8'))
           report['postgres_gate_run_id'] = os.environ.get('SOURCE_RUN_ID') or None
           report['postgres_gate_conclusion'] = conclusion
+          report['historical_master_certificates_accepted'] = False
           output.write_text(json.dumps(report, indent=2, sort_keys=True) + '\n', encoding='utf-8')
           summary = Path(os.environ['GITHUB_STEP_SUMMARY'])
           summary.write_text(
