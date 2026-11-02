@@ -102,6 +102,34 @@ jobs:
           target_sha = os.environ['GITHUB_SHA']
           outcomes = {name: 'missing' for name in (*postgres_gates, *architecture_gates)}
 
+          # Verify the downloaded artifact's detached checksum index before
+          # accepting any per-gate evidence from it.
+          artifact_root = Path('artifacts/ea35')
+          artifact_integrity_ok = False
+          try:
+              sums_path = artifact_root / 'SHA256SUMS'
+              detached_path = artifact_root / 'MANIFEST.SHA256'
+              detached_line = detached_path.read_text(encoding='utf-8').strip().split('  ', 1)
+              sums_bytes = sums_path.read_bytes()
+              artifact_integrity_ok = (
+                  len(detached_line) == 2
+                  and detached_line[1] == 'SHA256SUMS'
+                  and hashlib.sha256(sums_bytes).hexdigest() == detached_line[0]
+              )
+              if artifact_integrity_ok:
+                  for line in sums_bytes.decode('utf-8').splitlines():
+                      digest, relative_name = line.split('  ', 1)
+                      relative_path = Path(relative_name)
+                      if relative_path.is_absolute() or '..' in relative_path.parts:
+                          artifact_integrity_ok = False
+                          break
+                      evidence_path = artifact_root / relative_path
+                      if not evidence_path.is_file() or hashlib.sha256(evidence_path.read_bytes()).hexdigest() != digest:
+                          artifact_integrity_ok = False
+                          break
+          except (OSError, ValueError, UnicodeDecodeError):
+              artifact_integrity_ok = False
+
           # PostgreSQL gates are accepted individually from the exact-SHA,
           # exact-run artifact. Aggregate workflow success alone is insufficient.
           postgres_file = Path('artifacts/ea35/postgres-gates.json')
@@ -109,7 +137,8 @@ jobs:
               try:
                   postgres_bundle = json.loads(postgres_file.read_text(encoding='utf-8'))
                   bundle_matches = (
-                      postgres_bundle.get('commit_sha') == target_sha
+                      artifact_integrity_ok
+                      and postgres_bundle.get('commit_sha') == target_sha
                       and postgres_bundle.get('checked_out_head_sha') == target_sha
                       and str(postgres_bundle.get('workflow_run_id')) == source_run_id
                       and str(postgres_bundle.get('workflow_run_attempt')) == os.environ.get('SOURCE_RUN_ATTEMPT', '')
@@ -159,7 +188,14 @@ jobs:
           if architecture_file.is_file():
               try:
                   architecture_bundle = json.loads(architecture_file.read_text(encoding='utf-8'))
-                  if architecture_bundle.get('commit_sha') == target_sha:
+                  architecture_bundle_matches = (
+                      artifact_integrity_ok
+                      and architecture_bundle.get('commit_sha') == target_sha
+                      and architecture_bundle.get('checked_out_head_sha') == target_sha
+                      and str(architecture_bundle.get('workflow_run_id')) == source_run_id
+                      and str(architecture_bundle.get('workflow_run_attempt')) == os.environ.get('SOURCE_RUN_ATTEMPT', '')
+                  )
+                  if architecture_bundle_matches:
                       gate_records = architecture_bundle.get('gates', {})
                       for name in architecture_gates:
                           record = gate_records.get(name)
@@ -173,7 +209,10 @@ jobs:
                                       outcomes[name] = 'invalid_evidence_path'
                                   elif (Path('artifacts/ea35') / evidence_path).is_file():
                                       outcomes[name] = 'success'
-                                  elif evidence.startswith(('https://', 'urn:')):
+                                  elif (
+                                      evidence.startswith(f"https://github.com/{os.environ['GITHUB_REPOSITORY']}/blob/{target_sha}/")
+                                      or (evidence.startswith('urn:') and target_sha in evidence)
+                                  ):
                                       outcomes[name] = 'success'
                               elif isinstance(outcome, str):
                                   outcomes[name] = outcome
