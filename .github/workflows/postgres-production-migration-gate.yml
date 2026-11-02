@@ -31,23 +31,27 @@ jobs:
           --health-timeout 5s
           --health-retries 20
     env:
+      CANDIDATE_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      WORKFLOW_SHA: ${{ github.sha }}
       GERCHAIN_DATABASE_URL: postgresql+psycopg://gerchain:gerchain_test@localhost:5432/gerchain_test
       PYTHONUNBUFFERED: "1"
     steps:
-      - name: Checkout exact commit
+      - name: Checkout exact candidate HEAD
         uses: actions/checkout@v4
         with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
 
       - name: Record commit and SQL migration checksums
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p artifacts
-          git rev-parse HEAD | tee artifacts/commit.txt
+          rm -rf artifacts/postgres-migration/postgres-migration
+          mkdir -p artifacts/postgres-migration/postgres-migration
+          git rev-parse HEAD | tee artifacts/postgres-migration/postgres-migration/commit.txt
           find postgres/schema -type f -name '*.sql' -print0 2>/dev/null \
             | sort -z \
-            | xargs -0 -r sha256sum | tee artifacts/sql-checksums-before.txt
+            | xargs -0 -r sha256sum | tee artifacts/postgres-migration/sql-checksums-before.txt
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -143,10 +147,15 @@ jobs:
           if actual_pairs != expected_pairs:
               raise SystemExit(f"PostgreSQL history/checksum mismatch: expected={expected_pairs}; actual={actual_pairs}")
           commit_sha = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+          candidate_sha = os.environ["CANDIDATE_HEAD_SHA"]
+          checked_out_sha = commit_sha
+          workflow_sha = os.environ["WORKFLOW_SHA"]
           report = {
               "status": "PASS",
-              "commit_sha": commit_sha,
-              "workflow_sha": os.environ.get("GITHUB_SHA", ""),
+              "commit_sha": candidate_sha,
+              "candidate_head_sha": candidate_sha,
+              "workflow_sha": workflow_sha,
+              "checked_out_head_sha": checked_out_sha,
               "workflow_run_id": os.environ.get("GITHUB_RUN_ID", ""),
               "workflow_run_attempt": os.environ.get("GITHUB_RUN_ATTEMPT", ""),
               "migration_count_expected": 17,
@@ -163,12 +172,13 @@ jobs:
                   "sequence_1_to_17": True,
                   "no_duplicate_versions": True,
                   "checksums_match": True,
-                  "commit_sha_matches_workflow": bool(os.environ.get("GITHUB_SHA")) and commit_sha == os.environ["GITHUB_SHA"],
+                  "candidate_head_matches_checkout": bool(candidate_sha) and candidate_sha == checked_out_sha,
+                  "workflow_sha_recorded": bool(workflow_sha),
               },
           }
-          if not report["checks"]["commit_sha_matches_workflow"]:
+          if not report["checks"]["candidate_head_matches_checkout"] or not report["checks"]["workflow_sha_recorded"]:
               report["status"] = "FAIL"
-          out = Path("artifacts/migration-gate-report.json")
+          out = Path("artifacts/postgres-migration/migration-gate-report.json")
           out.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
           print(json.dumps(report, indent=2, sort_keys=True))
           if report["status"] != "PASS":
@@ -197,14 +207,14 @@ jobs:
           PY
 
       - name: Run deep value-truth reconciliation tests with JUnit evidence
-        run: python -m pytest -q --junitxml=artifacts/lifecycle-junit.xml tests/persistence/test_deep_value_reconciliation.py
+        run: python -m pytest -q --junitxml=artifacts/postgres-migration/lifecycle-junit.xml tests/persistence/test_deep_value_reconciliation.py
 
       - name: Build exact-SHA lifecycle evidence report
         if: always()
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p artifacts/production-postgres
+          mkdir -p artifacts/postgres-migration/production-postgres
           python - <<'PY'
           import hashlib
           import json
@@ -215,7 +225,7 @@ jobs:
 
           commit = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
           workflow_sha = os.environ.get("GITHUB_SHA", "")
-          junit_path = Path("artifacts/lifecycle-junit.xml")
+          junit_path = Path("artifacts/postgres-migration/lifecycle-junit.xml")
           suites = []
           if junit_path.exists():
               root = ET.parse(junit_path).getroot()
@@ -229,7 +239,7 @@ jobs:
               "services/gerchain_runtime_factory.py",
               "persistence/deep_value_reconciliation.py",
               "tests/persistence/test_deep_value_reconciliation.py",
-              "postgres/migrations.py",
+              "postgres/migrations/__init__.py",
               ".github/workflows/postgres-production-migration-gate.yml",
           ]
           sources = []
@@ -239,9 +249,11 @@ jobs:
                   raise SystemExit(f"required evidence source missing: {name}")
               sources.append({"path": name, "sha256": hashlib.sha256(path.read_bytes()).hexdigest()})
           report = {
-              "commit_sha": commit,
-              "workflow_sha": workflow_sha,
-              "sha_match": bool(workflow_sha) and commit == workflow_sha,
+              "commit_sha": os.environ["CANDIDATE_HEAD_SHA"],
+              "candidate_head_sha": os.environ["CANDIDATE_HEAD_SHA"],
+              "workflow_sha": os.environ["WORKFLOW_SHA"],
+              "checked_out_head_sha": commit,
+              "sha_match": bool(os.environ["CANDIDATE_HEAD_SHA"]) and commit == os.environ["CANDIDATE_HEAD_SHA"],
               "workflow_run_id": os.environ.get("GITHUB_RUN_ID"),
               "workflow_run_attempt": os.environ.get("GITHUB_RUN_ATTEMPT"),
               "lifecycle_junit": {
@@ -259,7 +271,7 @@ jobs:
                   for path in sorted(Path("postgres/migrations").glob("*.sql"))
               ],
           }
-          output = Path("artifacts/production-postgres/migration-lifecycle-report.json")
+          output = Path("artifacts/postgres-migration/production-postgres/migration-lifecycle-report.json")
           output.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
           serialized = json.dumps(report, indent=2, sort_keys=True) + "\n"
           output.write_text(serialized, encoding="utf-8")
@@ -279,13 +291,13 @@ jobs:
           set -euo pipefail
           find postgres/schema -type f -name '*.sql' -print0 2>/dev/null \
             | sort -z \
-            | xargs -0 -r sha256sum | tee artifacts/sql-checksums-after.txt
-          diff -u artifacts/sql-checksums-before.txt artifacts/sql-checksums-after.txt
+            | xargs -0 -r sha256sum | tee artifacts/postgres-migration/sql-checksums-after.txt
+          diff -u artifacts/postgres-migration/sql-checksums-before.txt artifacts/postgres-migration/sql-checksums-after.txt
           PGPASSWORD=gerchain_test psql \
             "postgresql://gerchain@localhost:5432/gerchain_test" \
             -v ON_ERROR_STOP=1 -c \
             "SELECT version, checksum, applied_at FROM schema_version ORDER BY version" \
-            > artifacts/schema-version-history.txt
+            > artifacts/postgres-migration/schema-version-history.txt
 
       - name: Final artifact-to-PostgreSQL evidence reconciliation
         if: always()
@@ -299,14 +311,18 @@ jobs:
           import psycopg
           from sqlalchemy.engine import make_url
 
-          report_path = Path("artifacts/migration-gate-report.json")
+          report_path = Path("artifacts/postgres-migration/migration-gate-report.json")
           if not report_path.is_file():
               raise SystemExit("migration-gate-report.json missing; refusing to close migration gate")
           report = json.loads(report_path.read_text(encoding="utf-8"))
           if report.get("status") != "PASS":
               raise SystemExit(f"migration report status is not PASS: {report.get('status')}")
-          if report.get("commit_sha") != os.environ.get("GITHUB_SHA"):
-              raise SystemExit("report commit_sha does not match workflow GITHUB_SHA")
+          if report.get("candidate_head_sha") != os.environ.get("CANDIDATE_HEAD_SHA"):
+              raise SystemExit("report candidate_head_sha does not match PR candidate HEAD")
+          if report.get("checked_out_head_sha") != os.environ.get("CANDIDATE_HEAD_SHA"):
+              raise SystemExit("report checked_out_head_sha does not match PR candidate HEAD")
+          if not report.get("workflow_sha"):
+              raise SystemExit("report workflow_sha is missing")
           if report.get("workflow_run_id") != os.environ.get("GITHUB_RUN_ID"):
               raise SystemExit("report workflow_run_id mismatch")
           if report.get("workflow_run_attempt") != os.environ.get("GITHUB_RUN_ATTEMPT"):
@@ -333,6 +349,6 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: postgres-migration-gate-${{ github.sha }}
-          path: artifacts/
+          name: postgres-migration-gate-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: artifacts/postgres-migration/
           if-no-files-found: warn
