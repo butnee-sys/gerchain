@@ -83,7 +83,8 @@ def test_applied_history_accepts_exact_versions_checksums_and_timestamps():
 
 
 def test_historical_checksum_registry_is_shared_and_importable():
-    assert FROZEN_CHECKSUMS[1] == frozenset({
+    assert FROZEN_CHECKSUMS == {}
+    assert LEGACY_CHECKSUMS[1] == frozenset({
         "6eea24dae8b3ac9aa9413a32da1617250f14725bdb19f50e5d8300308ad173d4",
         "538e0f5132ec775ec8963a2a72072dd00e81afa37383a6c5f6a8f54259716a31",
         "ab6838b3e69a9a9faa28bdd82c98fe579921763be8b5dd56e1c686b77c098596",
@@ -94,7 +95,7 @@ def test_historical_checksum_registry_is_shared_and_importable():
 
 
 def test_applied_history_accepts_registered_frozen_historical_checksum():
-    historical = next(iter(FROZEN_CHECKSUMS[1]))
+    historical = next(iter(LEGACY_CHECKSUMS[1]))
     history, valid = _build_applied_history(
         [(1, historical, datetime(2026, 11, 3, tzinfo=timezone.utc))],
         {1: "a" * 64},
