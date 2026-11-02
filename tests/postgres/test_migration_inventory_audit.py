@@ -8,6 +8,7 @@ from pathlib import Path
 from datetime import datetime, timezone
 
 from scripts.audit_migration_inventory import _build_applied_history
+from postgres.migrations import FROZEN_CHECKSUMS, LEGACY_CHECKSUMS
 
 
 def test_migration_inventory_fails_closed_when_live_history_is_required_but_missing(tmp_path):
@@ -79,3 +80,27 @@ def test_applied_history_accepts_exact_versions_checksums_and_timestamps():
     assert history["status"] == "CAPTURED"
     assert history["missing_applied_at_versions"] == []
     assert history["versions"] == [1, 2]
+
+
+def test_historical_checksum_registry_is_shared_and_importable():
+    assert FROZEN_CHECKSUMS[1] == frozenset({
+        "6eea24dae8b3ac9aa9413a32da1617250f14725bdb19f50e5d8300308ad173d4",
+        "538e0f5132ec775ec8963a2a72072dd00e81afa37383a6c5f6a8f54259716a31",
+        "ab6838b3e69a9a9faa28bdd82c98fe579921763be8b5dd56e1c686b77c098596",
+        "494763e210c8a3839972ba21e8705dcf2e6564e5abca9c76161f2f49c6664ec8",
+        "6766267c9e939a320bf6ac28ee516c4c11fe537ef2b6a7778d94ca6e3cd5b246",
+    })
+    assert isinstance(LEGACY_CHECKSUMS, dict)
+
+
+def test_applied_history_accepts_registered_frozen_historical_checksum():
+    historical = next(iter(FROZEN_CHECKSUMS[1]))
+    history, valid = _build_applied_history(
+        [(1, historical, datetime(2026, 11, 3, tzinfo=timezone.utc))],
+        {1: "a" * 64},
+        [1],
+        {version: set(values) for version, values in FROZEN_CHECKSUMS.items()},
+        {version: set(values) for version, values in LEGACY_CHECKSUMS.items()},
+    )
+    assert valid is True
+    assert history["checksum_mismatches"] == []
