@@ -63,7 +63,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: ea35-${{ github.event.pull_request.head.sha || github.sha }}
-          path: artifacts/ea35
+          path: artifacts/ea35-current
           github-token: ${{ secrets.GITHUB_TOKEN }}
           run-id: ${{ steps.source_run.outputs.run_id }}
 
@@ -104,7 +104,7 @@ jobs:
 
           # Verify the downloaded artifact's detached checksum index before
           # accepting any per-gate evidence from it.
-          artifact_root = Path('artifacts/ea35')
+          artifact_root = Path('artifacts/ea35-current')
           artifact_integrity_ok = False
           try:
               sums_path = artifact_root / 'SHA256SUMS'
@@ -132,7 +132,7 @@ jobs:
 
           # PostgreSQL gates are accepted individually from the exact-SHA,
           # exact-run artifact. Aggregate workflow success alone is insufficient.
-          postgres_file = Path('artifacts/ea35/postgres-gates.json')
+          postgres_file = Path('artifacts/ea35-current/postgres-gates.json')
           if conclusion == 'success' and source_run_id and postgres_file.is_file():
               try:
                   postgres_bundle = json.loads(postgres_file.read_text(encoding='utf-8'))
@@ -163,7 +163,7 @@ jobs:
                               if relative.is_absolute() or '..' in relative.parts:
                                   valid = False
                                   break
-                              evidence_path = Path('artifacts/ea35') / relative
+                              evidence_path = Path('artifacts/ea35-current') / relative
                               if not evidence_path.is_file():
                                   valid = False
                                   break
@@ -184,7 +184,7 @@ jobs:
           # downloaded bundle. Never infer their success from PostgreSQL tests.
           # Required shape:
           # {"commit_sha":"<exact SHA>","gates":{"inventory_map":{"outcome":"success","evidence":"path-or-URI"}, ...}}
-          architecture_file = Path('artifacts/ea35/architecture-gates.json')
+          architecture_file = Path('artifacts/ea35-current/architecture-gates.json')
           if architecture_file.is_file():
               try:
                   architecture_bundle = json.loads(architecture_file.read_text(encoding='utf-8'))
@@ -207,7 +207,7 @@ jobs:
                                   # Local evidence paths must resolve inside the downloaded artifact.
                                   if evidence_path.is_absolute() or '..' in evidence_path.parts:
                                       outcomes[name] = 'invalid_evidence_path'
-                                  elif (Path('artifacts/ea35') / evidence_path).is_file():
+                                  elif (Path('artifacts/ea35-current') / evidence_path).is_file():
                                       outcomes[name] = 'success'
                                   elif (
                                       evidence.startswith(f"https://github.com/{os.environ['GITHUB_REPOSITORY']}/blob/{target_sha}/")
@@ -222,11 +222,11 @@ jobs:
               except (OSError, json.JSONDecodeError, AttributeError, TypeError):
                   for name in architecture_gates:
                       outcomes[name] = 'evidence_bundle_invalid'
-          output = Path('artifacts/ea35/production-gate-decision.json')
+          output = Path('artifacts/ea35-current/production-gate-decision.json')
           output.parent.mkdir(parents=True, exist_ok=True)
           subprocess.run([
               'python', 'scripts/production_gate_controller.py',
-              '--manifest', 'artifacts/ea35/manifest.json',
+              '--manifest', 'artifacts/ea35-current/manifest.json',
               '--output', str(output),
               '--expected-sha', os.environ['CANDIDATE_SHA'],
               '--outcomes-json', json.dumps(outcomes, sort_keys=True),
@@ -254,7 +254,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: production-master-gate-${{ github.event.pull_request.head.sha || github.sha }}
-          path: artifacts/ea35/production-gate-decision.json
+          path: artifacts/ea35-current/production-gate-decision.json
           if-no-files-found: error
           retention-days: 90
 
@@ -264,7 +264,7 @@ jobs:
           python - <<'PY'
           import json
           from pathlib import Path
-          path = Path('artifacts/ea35/production-gate-decision.json')
+          path = Path('artifacts/ea35-current/production-gate-decision.json')
           if not path.exists():
               raise SystemExit('NOT_LOCKED: decision evidence missing')
           report = json.loads(path.read_text(encoding='utf-8'))
