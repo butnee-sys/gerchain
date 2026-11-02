@@ -799,7 +799,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: ea35-${{ github.event.pull_request.head.sha || github.sha }}
+          name: ea35-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: artifacts/ea35-current/
           if-no-files-found: error
           retention-days: 90
