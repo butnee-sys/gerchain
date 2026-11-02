@@ -10,6 +10,7 @@ on:
 jobs:
   production-gate:
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     services:
       postgres:
         image: postgres:16
@@ -59,6 +60,7 @@ jobs:
           python -m pytest --import-mode=importlib -q --junitxml=production-evidence/junit.xml
 
       - name: Apply canonical migrations and capture PostgreSQL evidence
+        if: always()
         env:
           GERCHAIN_MIGRATION_TEST_DSN: postgresql://gerchain:gerchain@localhost:5432/gerchain_migration_test
           SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}

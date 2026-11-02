@@ -32,12 +32,76 @@ def git_sha() -> str:
         return os.environ.get("GITHUB_SHA", "UNKNOWN")
 
 
+def _build_applied_history(
+    rows_db,
+    canonical_digests: dict[int, str],
+    expected_versions: list[int],
+    frozen_checksums: dict[int, set[str]] | None = None,
+    legacy_checksums: dict[int, set[str]] | None = None,
+) -> tuple[dict, bool]:
+    """Build a lossless DB-history report and explicitly fail incomplete rows."""
+    frozen_checksums = frozen_checksums or {}
+    legacy_checksums = legacy_checksums or {}
+    applied_versions = [row[0] for row in rows_db]
+    duplicates = sorted(
+        version for version in set(applied_versions)
+        if applied_versions.count(version) > 1
+    )
+    checksum_mismatches = []
+    missing_applied_at = []
+    report_rows = []
+    for version, digest, applied_at in rows_db:
+        accepted = {canonical_digests.get(version)}
+        accepted.update(frozen_checksums.get(version, set()))
+        accepted.update(legacy_checksums.get(version, set()))
+        if digest not in accepted:
+            checksum_mismatches.append({
+                "version": version,
+                "applied_checksum": digest,
+                "accepted_checksums": sorted(item for item in accepted if item),
+            })
+        if applied_at is None:
+            missing_applied_at.append(version)
+        report_rows.append({
+            "version": version,
+            "checksum": digest,
+            "applied_at": applied_at.isoformat() if applied_at is not None else None,
+        })
+    valid = (
+        applied_versions == expected_versions
+        and not duplicates
+        and not checksum_mismatches
+        and not missing_applied_at
+    )
+    return ({
+        "status": "CAPTURED" if valid else "HISTORY_MISMATCH",
+        "rows": report_rows,
+        "versions": applied_versions,
+        "duplicate_versions": duplicates,
+        "checksum_mismatches": checksum_mismatches,
+        "missing_applied_at_versions": missing_applied_at,
+    }, valid)
+
+
 def main() -> int:
     files = sorted(
         (p for p in MIGRATION_DIR.glob("*.sql") if p.name[:3].isdigit()),
         key=lambda p: (int(p.name.split("_", 1)[0]), p.name),
     )
-    canonical = _canonical_migration_files(MIGRATION_DIR)
+    try:
+        canonical = _canonical_migration_files(MIGRATION_DIR)
+    except Exception as exc:
+        report = {
+            "status": "FAIL",
+            "commit_sha": git_sha(),
+            "migration_directory": "postgres/migrations",
+            "migration_inventory_error": f"{type(exc).__name__}: {exc}",
+            "applied_history": {"status": "NOT_EVALUATED"},
+        }
+        OUTPUT.parent.mkdir(parents=True, exist_ok=True)
+        OUTPUT.write_text(json.dumps(report, indent=2, sort_keys=True) + "\\n", encoding="utf-8")
+        print(json.dumps(report, indent=2, sort_keys=True))
+        return 1
     canonical_by_version = {
         int(path.name.split("_", 1)[0]): path for path in canonical
     }
@@ -56,7 +120,6 @@ def main() -> int:
             "duplicate_version_count": len(groups[version]),
             "duplicate_version_filenames": [p.name for p in groups[version]],
             "sha256": checksum(sql),
-            "git_blob_sha": None,
         })
 
     expected_versions = list(range(1, len(canonical) + 1))
@@ -109,42 +172,19 @@ def main() -> int:
                 rows_db = connection.execute(
                     "SELECT version, checksum, applied_at FROM schema_version ORDER BY version"
                 ).fetchall()
-            applied_versions = [row[0] for row in rows_db]
-            duplicates = sorted(
-                version for version in set(applied_versions)
-                if applied_versions.count(version) > 1
-            )
             canonical_digests = {
                 int(path.name.split("_", 1)[0]): checksum(path.read_text(encoding="utf-8"))
                 for path in canonical
             }
-            checksum_mismatches = []
-            for version, digest, _applied_at in rows_db:
-                accepted = {canonical_digests.get(version)}
-                accepted.update(FROZEN_CHECKSUMS.get(version, set()))
-                accepted.update(LEGACY_CHECKSUMS.get(version, set()))
-                if digest not in accepted:
-                    checksum_mismatches.append({
-                        "version": version,
-                        "applied_checksum": digest,
-                        "accepted_checksums": sorted(item for item in accepted if item),
-                    })
-            report["applied_history"] = {
-                "status": "CAPTURED",
-                "rows": [
-                    {"version": version, "checksum": digest, "applied_at": applied_at.isoformat()}
-                    for version, digest, applied_at in rows_db
-                ],
-                "versions": applied_versions,
-                "duplicate_versions": duplicates,
-                "checksum_mismatches": checksum_mismatches,
-            }
-            if (
-                applied_versions != actual_versions
-                or duplicates
-                or checksum_mismatches
-            ):
-                report["applied_history"]["status"] = "HISTORY_MISMATCH"
+            history, history_ok = _build_applied_history(
+                rows_db,
+                canonical_digests,
+                actual_versions,
+                FROZEN_CHECKSUMS,
+                LEGACY_CHECKSUMS,
+            )
+            report["applied_history"] = history
+            if not history_ok:
                 report["status"] = "FAIL"
         except Exception as exc:
             report["applied_history"] = {

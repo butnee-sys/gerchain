@@ -17,6 +17,7 @@ on:
 jobs:
   core-gates:
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     services:
       postgres:
         image: postgres:16
@@ -97,6 +98,7 @@ jobs:
           GERCHAIN_TEST_POSTGRES_URL: postgresql://gerchain:gerchain@127.0.0.1:5432/gerchain_test
         run: pytest -q --import-mode=importlib
       - name: Audit canonical migration inventory and applied history
+        if: always()
         env:
           GERCHAIN_MIGRATION_AUDIT_DATABASE_URL: postgresql://gerchain:gerchain@127.0.0.1:5432/gerchain_test
           REQUIRE_MIGRATION_HISTORY: "1"
