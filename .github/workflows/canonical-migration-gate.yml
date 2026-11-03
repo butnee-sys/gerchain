@@ -1,27 +1,10 @@
 name: Canonical PostgreSQL Migration Gate
 
+# Manual supplemental migration scenario runner only.
+# PR/master authority is .github/workflows/canonical-postgres-gate.yml;
+# this workflow is deliberately excluded from automatic candidate decisions.
 on:
   workflow_dispatch:
-  pull_request:
-    paths:
-      - "postgres/migrations/**"
-      - "postgres/migrations.py"
-      - "postgres/migration_runner.py"
-      - "scripts/postgres_migration_runner.py"
-      - "scripts/verify_canonical_migrations.py"
-      - ".github/workflows/canonical-migration-gate.yml"
-      - "services/gerchain_runtime_factory.py"
-      - "production_entrypoint.py"
-  push:
-    paths:
-      - "postgres/migrations/**"
-      - "postgres/migrations.py"
-      - "postgres/migration_runner.py"
-      - "scripts/postgres_migration_runner.py"
-      - "scripts/verify_canonical_migrations.py"
-      - ".github/workflows/canonical-migration-gate.yml"
-      - "services/gerchain_runtime_factory.py"
-      - "production_entrypoint.py"
 
 permissions:
   contents: read
@@ -92,7 +75,10 @@ jobs:
           report_path = Path("migration-gate-report.json")
           report = json.loads(report_path.read_text()) if report_path.exists() else {"status": "MISSING"}
           report["commit_sha"] = expected
+          report["candidate_head_sha"] = expected
+          report["workflow_sha"] = os.environ["EXPECTED_COMMIT_SHA"]
           report["checked_out_head_sha"] = head
+          report["evidence_role"] = "MANUAL_SUPPLEMENTAL_MIGRATION_SCENARIOS_NOT_MASTER_AUTHORITY"
           report["workflow_run_id"] = os.environ["EVIDENCE_RUN_ID"]
           report["workflow_run_attempt"] = int(os.environ["EVIDENCE_RUN_ATTEMPT"])
           report["commit_sha_matches_head"] = expected == head
@@ -126,7 +112,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: canonical-migration-gate-${{ github.sha }}
+          name: canonical-migration-gate-manual-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
             migration-gate-report.json
             migration-gate-junit.xml

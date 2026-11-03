@@ -2,6 +2,7 @@ name: Canonical PostgreSQL production gate
 
 on:
   workflow_dispatch:
+  pull_request:
   push:
     branches:
       - feat/ea21-transaction-aware-ledger
@@ -24,6 +25,7 @@ jobs:
           --health-timeout 5s
           --health-retries 20
     env:
+      PYTHONDONTWRITEBYTECODE: "1"
       GERCHAIN_TEST_DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/gerchain_test
       GERCHAIN_DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/gerchain_test
       GERCHAIN_ESCROW_ID: ci-escrow
@@ -32,6 +34,8 @@ jobs:
       GERCHAIN_WITNESS_ID: ci-witness
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
@@ -40,23 +44,36 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements-dee-security.txt -r postgres/requirements-test.txt
-      - name: Prepare migration evidence directory
+      - name: Prepare clean migration evidence directory
         if: always()
-        run: mkdir -p artifacts/ea35/logs
+        run: |
+          rm -rf artifacts/ea35-current
+          mkdir -p artifacts/ea35-current/logs
       - name: Compile production and persistence modules
-        run: set -o pipefail; python -m compileall -q production_entrypoint.py persistence services core postgres 2>&1 | tee artifacts/ea35/logs/python-compile.log
+        id: postgres_compile
+        run: |
+          set -o pipefail
+          python -X pycache_prefix=/tmp/gerchain-pycache -m compileall -q production_entrypoint.py persistence services core postgres 2>&1 | tee artifacts/ea35-current/logs/python-compile.log
+          echo "PASS: compileall completed on the exact checked-out source." | tee -a artifacts/ea35-current/logs/python-compile.log
       - name: Collect CORE foundation regression tests separately
-        run: set -o pipefail; pytest --collect-only -q tests/services/test_gerchain_runtime_atomic_lifecycle.py tests/services/test_gerchain_runtime_canonical_ledger.py tests/services/test_gerchain_runtime_factory.py tests/persistence/test_deep_value_reconciliation.py tests/postgres/test_migrations.py tests/postgres/test_migration_manifest.py 2>&1 | tee artifacts/ea35/logs/pytest-collection.log
+        run: set -o pipefail; pytest --collect-only -q tests/services/test_gerchain_runtime_atomic_lifecycle.py tests/services/test_gerchain_runtime_canonical_ledger.py tests/services/test_gerchain_runtime_factory.py tests/persistence/test_deep_value_reconciliation.py tests/postgres/test_migrations.py tests/postgres/test_migration_manifest.py 2>&1 | tee artifacts/ea35-current/logs/pytest-collection.log
+      - name: Run migration inventory audit unit tests
+        id: migration_inventory_audit_tests
+        run: set -o pipefail; pytest -q tests/postgres/test_migration_inventory_audit.py 2>&1 | tee artifacts/ea35-current/logs/migration-inventory-audit-tests.log
       - name: Run CORE foundation regression tests
-        run: >-
-          pytest -q
-          tests/services/test_gerchain_runtime_atomic_lifecycle.py
-          tests/services/test_gerchain_runtime_canonical_ledger.py
-          tests/services/test_gerchain_runtime_factory.py
-          tests/persistence/test_deep_value_reconciliation.py
-          tests/postgres/test_migrations.py
-          tests/postgres/test_migration_manifest.py
+        id: postgres_regression
+        run: |
+          set -o pipefail
+          pytest -q \
+            tests/services/test_gerchain_runtime_atomic_lifecycle.py \
+            tests/services/test_gerchain_runtime_canonical_ledger.py \
+            tests/services/test_gerchain_runtime_factory.py \
+            tests/persistence/test_deep_value_reconciliation.py \
+            tests/postgres/test_migrations.py \
+            tests/postgres/test_migration_manifest.py \
+            2>&1 | tee artifacts/ea35-current/logs/core-regression.log
       - name: Verify PostgreSQL connection
+        id: postgres_connection
         run: |
           python - <<'PY'
           import os
@@ -71,19 +88,25 @@ jobs:
                   line = f"PASS: PostgreSQL connection: {database}; {version}"
                   print(line)
                   from pathlib import Path
-                  Path("artifacts/ea35/logs/postgres-connection-primary.log").write_text(line + "\n", encoding="utf-8")
+                  Path("artifacts/ea35-current/logs/postgres-connection-primary.log").write_text(line + "\n", encoding="utf-8")
           PY
       - name: Validate checksum atomicity and duplicate migration publication
-        run: set -o pipefail; pytest -vv -s postgres/tests/test_migration_checksum_atomicity.py tests/postgres/test_migration_runner_concurrency.py 2>&1 | tee artifacts/ea35/logs/checksum-atomicity-concurrency.log
+        id: postgres_migration_atomicity
+        run: set -o pipefail; pytest -vv -s postgres/tests/test_migration_checksum_atomicity.py tests/postgres/test_migration_runner_concurrency.py 2>&1 | tee artifacts/ea35-current/logs/checksum-atomicity-concurrency.log
       - name: Re-perform legacy escrow constraint upgrade and data preservation
-        run: set -o pipefail; pytest -vv -s tests/postgres/test_legacy_escrow_constraint_upgrade.py 2>&1 | tee artifacts/ea35/logs/legacy-escrow-upgrade.log
+        id: postgres_legacy_upgrade
+        run: set -o pipefail; pytest -vv -s tests/postgres/test_legacy_escrow_constraint_upgrade.py 2>&1 | tee artifacts/ea35-current/logs/legacy-escrow-upgrade.log
       - name: Re-perform canonical PostgreSQL escrow lifecycle
-        run: set -o pipefail; pytest -vv -s tests/postgres/test_production_postgres_reperformance.py 2>&1 | tee artifacts/ea35/logs/production-lifecycle.log
+        id: postgres_lifecycle
+        run: set -o pipefail; pytest -vv -s tests/postgres/test_production_postgres_reperformance.py 2>&1 | tee artifacts/ea35-current/logs/production-lifecycle.log
       - name: Re-perform PostgreSQL migration concurrency and checksum gate
-        run: set -o pipefail; python -m pytest -vv -s postgres/tests/test_concurrency.py 2>&1 | tee artifacts/ea35/logs/migration-concurrency.log
+        id: postgres_migration_concurrency
+        run: set -o pipefail; python -m pytest -vv -s postgres/tests/test_concurrency.py 2>&1 | tee artifacts/ea35-current/logs/migration-concurrency.log
       - name: Re-perform duplicate publication and checksum fail-closed cases on PostgreSQL
-        run: set -o pipefail; pytest -vv -s postgres/tests/test_migration_publication_integrity.py 2>&1 | tee artifacts/ea35/logs/migration-publication-integrity.log
+        id: postgres_publication_integrity
+        run: set -o pipefail; pytest -vv -s postgres/tests/test_migration_publication_integrity.py 2>&1 | tee artifacts/ea35-current/logs/migration-publication-integrity.log
       - name: Bind all 17 migration checksums and validate canonical constraints from PostgreSQL catalog
+        id: postgres_migration_catalog
         run: |
           python - <<'PY'
           import hashlib
@@ -193,9 +216,11 @@ jobs:
           PY
 
       - name: Build canonical migration evidence manifest
+        id: postgres_manifest
         if: always()
         env:
-          EVIDENCE_COMMIT_SHA: ${{ github.sha }}
+          EVIDENCE_COMMIT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          EVIDENCE_WORKFLOW_SHA: ${{ github.sha }}
           EVIDENCE_RUN_ID: ${{ github.run_id }}
           EVIDENCE_RUN_ATTEMPT: ${{ github.run_attempt }}
         run: |
@@ -225,7 +250,7 @@ jobs:
                   with psycopg.connect(dsn) as conn:
                       identity = conn.execute("SELECT current_database(), current_user, version()").fetchone()
                       connection_line = f"PASS: PostgreSQL migration-evidence connection: database={identity[0]}; user={identity[1]}; server={identity[2]}"
-                      (root / 'artifacts/ea35/logs/postgres-connection-migration-evidence.log').write_text(connection_line + '\n', encoding='utf-8')
+                      (root / 'artifacts/ea35-current/logs/postgres-connection-migration-evidence.log').write_text(connection_line + '\n', encoding='utf-8')
                       exists = conn.execute("SELECT to_regclass('public.schema_version')").fetchone()[0]
                       if exists:
                           database_rows = [
@@ -236,10 +261,9 @@ jobs:
                   database_error = f'{type(exc).__name__}: {exc}'
           expected_versions = list(range(1, 18))
           actual_versions = [row['version'] for row in database_rows]
-          if database_error:
-              raise SystemExit(f'PostgreSQL migration evidence unavailable: {database_error}')
-          if actual_versions != expected_versions:
-              raise SystemExit(f'expected schema_version rows {expected_versions}; got {actual_versions}')
+          # Always write a traceable manifest, even when the live database
+          # history is incomplete. The recorded FAIL state remains fail-closed;
+          # this preserves diagnostics for the downstream master gate.
           db_by_version = {row['version']: row['checksum'] for row in database_rows}
           for item in canonical:
               item['database_checksum'] = db_by_version.get(item['version'])
@@ -250,19 +274,37 @@ jobs:
           manifest = {
               'repository': os.environ.get('GITHUB_REPOSITORY'),
               'commit_sha': os.environ['EVIDENCE_COMMIT_SHA'],
+              'candidate_head_sha': os.environ['EVIDENCE_COMMIT_SHA'],
+              'workflow_sha': os.environ['EVIDENCE_WORKFLOW_SHA'],
               'workflow_run_id': os.environ['EVIDENCE_RUN_ID'],
               'workflow_run_attempt': os.environ['EVIDENCE_RUN_ATTEMPT'],
               'python': platform.python_version(),
               'canonical_migration_count': len(canonical),
               'canonical_migrations': canonical,
               'schema_version_rows': database_rows,
+              'schema_version_history_status': (
+                  'PASS' if actual_versions == expected_versions
+                  and all(row['applied_at'] is not None for row in database_rows)
+                  else 'FAIL'
+              ),
+              'schema_version_history_error': (
+                  database_error
+                  or (
+                      f'expected schema_version rows {expected_versions}; got {actual_versions}'
+                      if actual_versions != expected_versions else
+                      'one or more schema_version rows have null applied_at'
+                      if any(row['applied_at'] is None for row in database_rows) else None
+                  )
+              ),
               'database_manifest_error': database_error,
           }
           head_sha = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
           manifest['checked_out_head_sha'] = head_sha
-          manifest['commit_sha_matches_head'] = manifest['commit_sha'] == head_sha
-          manifest['git_status_porcelain'] = subprocess.run(['git', 'status', '--porcelain'], capture_output=True, text=True, check=False).stdout.splitlines()
-          out = root / 'artifacts/ea35'
+          manifest['candidate_head_matches_checkout'] = manifest['candidate_head_sha'] == head_sha
+          manifest['workflow_sha_recorded'] = bool(manifest['workflow_sha'])
+          manifest['commit_sha_matches_head'] = manifest['candidate_head_matches_checkout']
+          manifest['git_status_porcelain'] = subprocess.run(['git', 'status', '--porcelain', '--untracked-files=no'], capture_output=True, text=True, check=False).stdout.splitlines()
+          out = root / 'artifacts/ea35-current'
           out.mkdir(parents=True, exist_ok=True)
           (out / 'manifest.json').write_text(json.dumps(manifest, indent=2) + '\n', encoding='utf-8')
           (out / 'commit-sha.txt').write_text(manifest['commit_sha'] + '\n', encoding='utf-8')
@@ -298,18 +340,24 @@ jobs:
               digest, relative = line.split('  ', 1)
               if hashlib.sha256((out / relative).read_bytes()).hexdigest() != digest:
                   raise SystemExit(f'SHA256SUMS verification failed: {relative}')
-          if manifest['commit_sha'] != head_sha:
-              raise SystemExit(f"evidence SHA mismatch: target={manifest['commit_sha']} HEAD={head_sha}")
+          if manifest['candidate_head_sha'] != head_sha or not manifest['workflow_sha_recorded']:
+              raise SystemExit(f"evidence SHA mismatch: candidate={manifest['candidate_head_sha']} HEAD={head_sha}")
           if database_error:
               raise SystemExit(f"PostgreSQL migration evidence unavailable: {database_error}")
-          if database_rows and any(row['checksum'] != item['runner_checksum'] for row, item in zip(database_rows, canonical)):
+          if actual_versions != expected_versions:
+              raise SystemExit(f'expected schema_version rows {expected_versions}; got {actual_versions}')
+          if any(row['applied_at'] is None for row in database_rows):
+              raise SystemExit('one or more schema_version rows have null applied_at')
+          if any(row['checksum'] != item['runner_checksum'] for row, item in zip(database_rows, canonical)):
               raise SystemExit('database migration checksum differs from canonical manifest')
-          print(json.dumps({'commit_sha': manifest['commit_sha'], 'checked_out_head_sha': head_sha, 'commit_sha_matches_head': manifest['commit_sha_matches_head'], 'canonical_migration_count': len(canonical), 'schema_version_rows': len(database_rows), 'sha256sums': str(out / 'SHA256SUMS'), 'manifest': str(out / 'manifest.json')}, indent=2))
+          print(json.dumps({'commit_sha': manifest['commit_sha'], 'checked_out_head_sha': head_sha, 'commit_sha_matches_head': manifest['commit_sha_matches_head'], 'canonical_migration_count': len(canonical), 'schema_version_rows': len(database_rows), 'schema_version_history_status': manifest['schema_version_history_status'], 'sha256sums': str(out / 'SHA256SUMS'), 'manifest': str(out / 'manifest.json')}, indent=2))
           PY
 
       - name: Test production entrypoint contract
-        run: set -o pipefail; pytest -vv -s tests/services/test_production_entrypoint.py 2>&1 | tee artifacts/ea35/logs/production-entrypoint.log
+        id: postgres_entrypoint
+        run: set -o pipefail; pytest -vv -s tests/services/test_production_entrypoint.py 2>&1 | tee artifacts/ea35-current/logs/production-entrypoint.log
       - name: Boot real PostgreSQL production runtime and validate schema
+        id: postgres_production_boot
         run: |
           python - <<'PY'
           from sqlalchemy import create_engine, inspect, text
@@ -365,7 +413,7 @@ jobs:
                   line = f"PASS: runtime PostgreSQL connection: database={identity[0]}; user={identity[1]}; tables={len(actual)}; canonical_authority={runtime.is_canonical_ledger_authoritative}"
                   print(line)
                   from pathlib import Path
-                  Path("artifacts/ea35/logs/postgres-connection-runtime.log").write_text(line + "\n", encoding="utf-8")
+                  Path("artifacts/ea35-current/logs/postgres-connection-runtime.log").write_text(line + "\n", encoding="utf-8")
               print("PASS: real PostgreSQL boot and canonical authority verified")
           finally:
               engine.dispose()
@@ -377,16 +425,16 @@ jobs:
           PGPASSWORD: postgres
         run: |
           set -euo pipefail
-          mkdir -p artifacts/ea35/logs
+          mkdir -p artifacts/ea35-current/logs
           export PGPASSWORD=postgres
           SOURCE_DSN="postgresql://postgres:postgres@localhost:5432/gerchain_test"
           RESTORE_DSN="postgresql://postgres:postgres@localhost:5432/gerchain_restore_test"
-          pg_dump --format=custom --no-owner --no-privileges --file artifacts/ea35/postgres-backup.dump "$SOURCE_DSN"
-          test -s artifacts/ea35/postgres-backup.dump
+          pg_dump --format=custom --no-owner --no-privileges --file artifacts/ea35-current/postgres-backup.dump "$SOURCE_DSN"
+          test -s artifacts/ea35-current/postgres-backup.dump
           dropdb --if-exists --host=localhost --username=postgres gerchain_restore_test
           createdb --host=localhost --username=postgres gerchain_restore_test
-          pg_restore --no-owner --no-privileges --dbname="$RESTORE_DSN" artifacts/ea35/postgres-backup.dump
-          python - <<'PY' | tee artifacts/ea35/logs/disaster-recovery-restore.log
+          pg_restore --no-owner --no-privileges --dbname="$RESTORE_DSN" artifacts/ea35-current/postgres-backup.dump
+          python - <<'PY' | tee artifacts/ea35-current/logs/disaster-recovery-restore.log
           from sqlalchemy import create_engine, inspect, text
           url = "postgresql+psycopg://postgres:postgres@localhost:5432/gerchain_restore_test"
           engine = create_engine(url, pool_pre_ping=True)
@@ -407,13 +455,14 @@ jobs:
               engine.dispose()
           PY
       - name: Deep value-truth reconciliation tests on PostgreSQL
-        run: set -o pipefail; pytest -vv -s tests/persistence/test_deep_value_reconciliation_postgres.py 2>&1 | tee artifacts/ea35/logs/deep-value-reconciliation.log
+        id: postgres_deep_reconciliation
+        run: set -o pipefail; pytest -vv -s tests/persistence/test_deep_value_reconciliation_postgres.py 2>&1 | tee artifacts/ea35-current/logs/deep-value-reconciliation.log
 
       - name: Verify error duplicate excess invariants on exact SHA
         id: duplicate_excess_evidence
         if: always()
         run: |
-          mkdir -p artifacts/ea35/logs
+          mkdir -p artifacts/ea35-current/logs
           set -o pipefail
           pytest -q \
             tests/test_core_structure.py \
@@ -425,75 +474,91 @@ jobs:
             tests/test_nef_gerchain_port.py \
             tests/test_postgres_atomic_ledger.py \
             tests/persistence/test_deep_value_reconciliation_postgres.py \
-            --junitxml=artifacts/ea35/junit-duplicate-excess.xml \
-            2>&1 | tee artifacts/ea35/logs/duplicate-excess-review.log
+            --junitxml=artifacts/ea35-current/junit-duplicate-excess.xml \
+            2>&1 | tee artifacts/ea35-current/logs/duplicate-excess-review.log
       - name: Verify cross-store reconciliation invariants
         id: cross_store_evidence
         if: always()
         run: |
-          mkdir -p artifacts/ea35/logs
+          mkdir -p artifacts/ea35-current/logs
           set -o pipefail
-          pytest -q tests/persistence/test_deep_value_reconciliation.py tests/persistence/test_value_reconciliation.py tests/test_operating_reconciliation.py 2>&1 | tee artifacts/ea35/logs/cross-store-reconciliation.log
+          pytest -q tests/persistence/test_deep_value_reconciliation.py tests/persistence/test_value_reconciliation.py tests/test_operating_reconciliation.py 2>&1 | tee artifacts/ea35-current/logs/cross-store-reconciliation.log
       - name: Verify canonical authority boundaries
         id: authority_boundary_evidence
         if: always()
         run: |
-          mkdir -p artifacts/ea35/logs
+          mkdir -p artifacts/ea35-current/logs
           set -o pipefail
-          pytest -q tests/test_nef_gerchain_boundary.py tests/test_nef_gerchain_port.py tests/test_postgresql_runtime_authority.py tests/test_g3_core_boundary.py 2>&1 | tee artifacts/ea35/logs/authority-boundary.log
+          pytest -q tests/test_nef_gerchain_boundary.py tests/test_nef_gerchain_port.py tests/test_postgresql_runtime_authority.py tests/test_g3_core_boundary.py 2>&1 | tee artifacts/ea35-current/logs/authority-boundary.log
       - name: Verify CORE correctness
         id: core_correctness_evidence
         if: always()
         run: |
-          mkdir -p artifacts/ea35/logs
+          mkdir -p artifacts/ea35-current/logs
           set -o pipefail
-          pytest -q tests/test_core_structure.py tests/test_transaction_lifecycle.py tests/test_transaction_manager.py tests/services/test_gerchain_runtime_atomic_lifecycle.py tests/services/test_gerchain_runtime_canonical_ledger.py 2>&1 | tee artifacts/ea35/logs/core-correctness.log
+          pytest -q tests/test_core_structure.py tests/test_transaction_lifecycle.py tests/test_transaction_manager.py tests/services/test_gerchain_runtime_atomic_lifecycle.py tests/services/test_gerchain_runtime_canonical_ledger.py 2>&1 | tee artifacts/ea35-current/logs/core-correctness.log
       - name: Verify adapter boundaries
         id: adapter_boundaries_evidence
         if: always()
         run: |
-          mkdir -p artifacts/ea35/logs
+          mkdir -p artifacts/ea35-current/logs
           set -o pipefail
-          pytest -q tests/test_boundary_adapters.py tests/test_governed_flow_adapters.py tests/test_release_adapter.py tests/test_de_dee_adapter.py 2>&1 | tee artifacts/ea35/logs/adapter-boundaries.log
+          pytest -q tests/test_boundary_adapters.py tests/test_governed_flow_adapters.py tests/test_release_adapter.py tests/test_de_dee_adapter.py 2>&1 | tee artifacts/ea35-current/logs/adapter-boundaries.log
       - name: Verify EAI G3 governance boundary
         id: eai_g3_evidence
         if: always()
         run: |
-          mkdir -p artifacts/ea35/logs
+          mkdir -p artifacts/ea35-current/logs
           set -o pipefail
-          pytest -q tests/test_g3_core_runtime_e2e.py tests/test_g3_dee_authorized_handler.py tests/test_nef_g3_dee_gerchain_e2e.py tests/test_dee_settlement_governance.py 2>&1 | tee artifacts/ea35/logs/eai-g3-governance.log
+          pytest -q tests/test_g3_core_runtime_e2e.py tests/test_g3_dee_authorized_handler.py tests/test_nef_g3_dee_gerchain_e2e.py tests/test_dee_settlement_governance.py 2>&1 | tee artifacts/ea35-current/logs/eai-g3-governance.log
       - name: Verify transaction correctness
         id: transaction_correctness_evidence
         if: always()
         run: |
-          mkdir -p artifacts/ea35/logs
+          mkdir -p artifacts/ea35-current/logs
           set -o pipefail
-          pytest -q tests/persistence/test_atomic_ledger_transaction_boundary.py tests/persistence/test_atomic_value_transaction.py tests/persistence/test_transactional_outbox.py tests/test_transaction_lifecycle.py 2>&1 | tee artifacts/ea35/logs/transaction-correctness.log
+          pytest -q tests/persistence/test_atomic_ledger_transaction_boundary.py tests/persistence/test_atomic_value_transaction.py tests/persistence/test_transactional_outbox.py tests/test_transaction_lifecycle.py 2>&1 | tee artifacts/ea35-current/logs/transaction-correctness.log
       - name: Verify restart and failure recovery
         id: recovery_evidence
         if: always()
         run: |
-          mkdir -p artifacts/ea35/logs
+          mkdir -p artifacts/ea35-current/logs
           set -o pipefail
-          pytest -q tests/persistence/test_ea35_restart_recovery.py tests/test_dee_recovery_governance.py tests/test_nef_state_recovery.py tests/test_postgres_outbox_recovery.py tests/test_release_processing_recovery.py tests/test_release_crash_recovery_contract.py 2>&1 | tee artifacts/ea35/logs/recovery.log
+          pytest -q tests/persistence/test_ea35_restart_recovery.py tests/test_dee_recovery_governance.py tests/test_nef_state_recovery.py tests/test_postgres_outbox_recovery.py tests/test_release_processing_recovery.py tests/test_release_crash_recovery_contract.py 2>&1 | tee artifacts/ea35-current/logs/recovery.log
       - name: Verify auditability and observability controls
         id: auditability_evidence
         if: always()
         run: |
-          mkdir -p artifacts/ea35/logs
+          mkdir -p artifacts/ea35-current/logs
           set -o pipefail
-          pytest -q tests/test_operating_reconciliation.py tests/persistence/test_value_reconciliation.py tests/test_dee_runtime_governance.py tests/test_dee_security.py 2>&1 | tee artifacts/ea35/logs/auditability-observability.log
+          pytest -q tests/test_operating_reconciliation.py tests/persistence/test_value_reconciliation.py tests/test_dee_runtime_governance.py tests/test_dee_security.py 2>&1 | tee artifacts/ea35-current/logs/auditability-observability.log
       - name: Verify load and stress behavior
         id: performance_stress_evidence
         if: always()
         run: |
-          mkdir -p artifacts/ea35/logs
+          mkdir -p artifacts/ea35-current/logs
           set -o pipefail
-          pytest -q tests/test_nef_load_stress.py tests/test_v860_load_stress.py tests/test_v861_consensus_load_stress.py 2>&1 | tee artifacts/ea35/logs/performance-stress.log
+          pytest -q tests/test_nef_load_stress.py tests/test_v860_load_stress.py tests/test_v861_consensus_load_stress.py 2>&1 | tee artifacts/ea35-current/logs/performance-stress.log
       - name: Finalize exact-SHA architecture gates and evidence bundle
         if: always()
         env:
-          EVIDENCE_COMMIT_SHA: ${{ github.sha }}
+          EVIDENCE_COMMIT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          EVIDENCE_WORKFLOW_SHA: ${{ github.sha }}
+          EVIDENCE_RUN_ID: ${{ github.run_id }}
+          EVIDENCE_RUN_ATTEMPT: ${{ github.run_attempt }}
+          POSTGRES_COMPILE_OUTCOME: ${{ steps.postgres_compile.outcome }}
+          POSTGRES_REGRESSION_OUTCOME: ${{ steps.postgres_regression.outcome }}
+          POSTGRES_CONNECTION_OUTCOME: ${{ steps.postgres_connection.outcome }}
+          POSTGRES_MIGRATION_ATOMICITY_OUTCOME: ${{ steps.postgres_migration_atomicity.outcome }}
+          POSTGRES_LEGACY_UPGRADE_OUTCOME: ${{ steps.postgres_legacy_upgrade.outcome }}
+          POSTGRES_LIFECYCLE_OUTCOME: ${{ steps.postgres_lifecycle.outcome }}
+          POSTGRES_MIGRATION_CONCURRENCY_OUTCOME: ${{ steps.postgres_migration_concurrency.outcome }}
+          POSTGRES_PUBLICATION_INTEGRITY_OUTCOME: ${{ steps.postgres_publication_integrity.outcome }}
+          POSTGRES_MIGRATION_CATALOG_OUTCOME: ${{ steps.postgres_migration_catalog.outcome }}
+          POSTGRES_MANIFEST_OUTCOME: ${{ steps.postgres_manifest.outcome }}
+          POSTGRES_ENTRYPOINT_OUTCOME: ${{ steps.postgres_entrypoint.outcome }}
+          POSTGRES_PRODUCTION_BOOT_OUTCOME: ${{ steps.postgres_production_boot.outcome }}
+          POSTGRES_DEEP_RECONCILIATION_OUTCOME: ${{ steps.postgres_deep_reconciliation.outcome }}
           DUPLICATE_EXCESS_OUTCOME: ${{ steps.duplicate_excess_evidence.outcome }}
           CROSS_STORE_OUTCOME: ${{ steps.cross_store_evidence.outcome }}
           AUTHORITY_BOUNDARY_OUTCOME: ${{ steps.authority_boundary_evidence.outcome }}
@@ -510,7 +575,7 @@ jobs:
           import hashlib, json, os, subprocess, xml.etree.ElementTree as ET
           from pathlib import Path
 
-          root = Path("artifacts/ea35")
+          root = Path("artifacts/ea35-current")
           root.mkdir(parents=True, exist_ok=True)
           expected = os.environ["EVIDENCE_COMMIT_SHA"]
           head = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
@@ -536,6 +601,8 @@ jobs:
           sha_bound = (
               head == expected
               and manifest.get("commit_sha") == expected
+              and manifest.get("candidate_head_sha") == expected
+              and bool(manifest.get("workflow_sha"))
               and manifest.get("checked_out_head_sha") == expected
               and manifest.get("commit_sha_matches_head") is True
               and migration.get("commit_sha") == expected
@@ -583,6 +650,8 @@ jobs:
           bundle_report = {
               "schema_version": "1.0",
               "commit_sha": expected,
+              "candidate_head_sha": expected,
+              "workflow_sha": os.environ["EVIDENCE_WORKFLOW_SHA"],
               "checked_out_head_sha": head,
               "commit_sha_matches_head": head == expected,
               "status": "PASS" if bundle_complete else "BLOCKED",
@@ -647,8 +716,69 @@ jobs:
                   "evidence": "final-evidence-bundle.json",
               }
           (root / "architecture-gates.json").write_text(
-              json.dumps({"commit_sha": expected, "gates": records}, indent=2, sort_keys=True) + "\n",
+              json.dumps({
+                  "commit_sha": expected,
+                  "candidate_head_sha": expected,
+                  "workflow_sha": os.environ["EVIDENCE_WORKFLOW_SHA"],
+                  "checked_out_head_sha": head,
+                  "workflow_run_id": int(os.environ["EVIDENCE_RUN_ID"]),
+                  "workflow_run_attempt": int(os.environ["EVIDENCE_RUN_ATTEMPT"]),
+                  "gates": records,
+              }, indent=2, sort_keys=True) + "\n",
               encoding="utf-8",
+          )
+
+          # Export each PostgreSQL gate independently; aggregate workflow
+          # success is never a substitute for an individual step result.
+          postgres_specs = {
+              "compile": ("POSTGRES_COMPILE_OUTCOME", ["logs/python-compile.log"]),
+              "regression": ("POSTGRES_REGRESSION_OUTCOME", ["logs/core-regression.log"]),
+              "postgres_connection": ("POSTGRES_CONNECTION_OUTCOME", ["logs/postgres-connection-primary.log"]),
+              "migration_atomicity": ("POSTGRES_MIGRATION_ATOMICITY_OUTCOME", ["logs/checksum-atomicity-concurrency.log"]),
+              "legacy_upgrade": ("POSTGRES_LEGACY_UPGRADE_OUTCOME", ["logs/legacy-escrow-upgrade.log"]),
+              "lifecycle": ("POSTGRES_LIFECYCLE_OUTCOME", ["logs/production-lifecycle.log"]),
+              "migration_concurrency": ("POSTGRES_MIGRATION_CONCURRENCY_OUTCOME", ["logs/migration-concurrency.log"]),
+              "publication_integrity": ("POSTGRES_PUBLICATION_INTEGRITY_OUTCOME", ["logs/migration-publication-integrity.log"]),
+              "entrypoint": ("POSTGRES_ENTRYPOINT_OUTCOME", ["logs/production-entrypoint.log"]),
+              "production_boot": ("POSTGRES_PRODUCTION_BOOT_OUTCOME", ["logs/postgres-connection-runtime.log"]),
+              "migration_catalog": ("POSTGRES_MIGRATION_CATALOG_OUTCOME", ["migration-history-summary.md"]),
+              "deep_reconciliation": ("POSTGRES_DEEP_RECONCILIATION_OUTCOME", ["logs/deep-value-reconciliation.log"]),
+              "manifest": ("POSTGRES_MANIFEST_OUTCOME", ["manifest.json", "commit-sha.txt"]),
+          }
+          postgres_records = {}
+          for gate_name, (env_name, evidence_paths) in postgres_specs.items():
+              step_outcome = os.environ.get(env_name, "missing")
+              evidence = []
+              for relative in evidence_paths:
+                  path = root / relative
+                  if path.is_file() and path.stat().st_size > 0:
+                      evidence.append({
+                          "path": relative,
+                          "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+                      })
+              outcome = "success" if step_outcome == "success" and len(evidence) == len(evidence_paths) else (
+                  step_outcome if step_outcome in {"failure", "cancelled"} else "missing_evidence"
+              )
+              postgres_records[gate_name] = {
+                  "outcome": outcome,
+                  "step_outcome": step_outcome,
+                  "evidence": evidence,
+              }
+          postgres_bundle = {
+              "schema_version": "1.0",
+              "commit_sha": expected,
+              "candidate_head_sha": expected,
+              "workflow_sha": os.environ["EVIDENCE_WORKFLOW_SHA"],
+              "checked_out_head_sha": head,
+              "workflow_run_id": int(os.environ["EVIDENCE_RUN_ID"]),
+              "workflow_run_attempt": int(os.environ["EVIDENCE_RUN_ATTEMPT"]),
+              "gates": postgres_records,
+              "overall_status": "PASS" if all(
+                  record["outcome"] == "success" for record in postgres_records.values()
+              ) else "BLOCKED",
+          }
+          (root / "postgres-gates.json").write_text(
+              json.dumps(postgres_bundle, indent=2, sort_keys=True) + "\n", encoding="utf-8"
           )
 
           # Final checksum index includes both architecture-gates.json and the
@@ -671,6 +801,8 @@ jobs:
           sums_valid = sums_valid and hashlib.sha256(sums_path.read_bytes()).hexdigest() == sums_hash
           print(json.dumps({
               "commit_sha": expected,
+              "candidate_head_sha": expected,
+              "workflow_sha": os.environ["EVIDENCE_WORKFLOW_SHA"],
               "checked_out_head_sha": head,
               "sha_bound": sha_bound,
               "duplicate_excess_step": os.environ.get("DUPLICATE_EXCESS_OUTCOME"),
@@ -687,7 +819,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: ea35-${{ github.sha }}
-          path: artifacts/ea35/
+          name: ea35-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: artifacts/ea35-current/
           if-no-files-found: error
           retention-days: 90

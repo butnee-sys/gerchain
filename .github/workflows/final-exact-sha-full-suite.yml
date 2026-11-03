@@ -121,10 +121,11 @@ jobs:
                   connection.commit()
                   apply_migrations(connection, migration_dir)
                   after = connection.execute("SELECT version, checksum FROM schema_version ORDER BY version").fetchall()
-                  assert [row[0] for row in after] == list(range(1, 17)), after
+                  assert [row[0] for row in after] == list(range(1, 18)), after
                   assert after[:14] == before, {"before": before, "after": after}
                   assert after[14][1] == checksum((migration_dir / "015_repair_escrow_state_constraint_drift.sql").read_text(encoding="utf-8"))
                   assert after[15][1] == checksum((migration_dir / "016_reconcile_escrow_state_constraint.sql").read_text(encoding="utf-8"))
+                  assert after[16][1] == checksum((migration_dir / "017_ea35_created_witness_event.sql").read_text(encoding="utf-8"))
                   preservation_after = connection.execute("""
                     SELECT id, sender_address, receiver_address, amount, state,
                            condition_desc, refund_destination, currency, version,
@@ -153,11 +154,11 @@ jobs:
                   assert second == (), second
                   print(f"MIGRATION_CHECKSUMS_001_014_PRESERVED={after[:14] == before}")
                   print("MIGRATION_ESCROW_ROW_PRESERVED=PASS")
-                  print("MIGRATION_REGISTRY_001_016=PASS")
+                  print("MIGRATION_REGISTRY_001_017=PASS")
                   print(f"MIGRATION_015_CHECKSUM={after[14][1]}")
                   print("MIGRATION_015_016_STATE_CONSTRAINT_VALIDATED=PASS")
                   print("MIGRATION_SECOND_RUN_NOOP=PASS")
-          print("MIGRATION_BASELINE_001_014_AND_REPAIR_015_016=PASS")
+          print("MIGRATION_BASELINE_001_014_REPAIR_015_016_AND_WITNESS_017=PASS")
           PY
       - name: Verify canonical fundamental architecture gates (SHUUD excluded)
         run: |

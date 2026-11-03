@@ -5,13 +5,24 @@ import os
 import subprocess
 import sys
 from pathlib import Path
+from datetime import datetime, timezone
+
+from scripts.audit_migration_inventory import _build_applied_history
+from postgres.migrations import FROZEN_CHECKSUMS, LEGACY_CHECKSUMS
 
 
 def test_migration_inventory_fails_closed_when_live_history_is_required_but_missing(tmp_path):
     root = Path(__file__).resolve().parents[2]
     report_path = tmp_path / "migration-inventory-report.json"
     env = os.environ.copy()
-    env.pop("GERCHAIN_MIGRATION_AUDIT_DATABASE_URL", None)
+    # Remove every supported database URL so this subprocess exercises the
+    # explicit REQUIRED_BUT_NOT_CONFIGURED fail-closed path.
+    for key in (
+        "GERCHAIN_MIGRATION_AUDIT_DATABASE_URL",
+        "GERCHAIN_TEST_DATABASE_URL",
+        "GERCHAIN_DATABASE_URL",
+    ):
+        env.pop(key, None)
     env["REQUIRE_MIGRATION_HISTORY"] = "1"
     env["MIGRATION_INVENTORY_REPORT"] = str(report_path)
 
@@ -24,7 +35,89 @@ def test_migration_inventory_fails_closed_when_live_history_is_required_but_miss
         check=False,
     )
 
-    assert result.returncode == 1, result.stdout + result.stderr
+    diagnostic = (
+        f"subprocess returncode: {result.returncode}\\n"
+        f"stdout:\\n{result.stdout}\\n"
+        f"stderr:\\n{result.stderr}"
+    )
+    assert report_path.is_file(), (
+        "migration audit did not create its report file; " + diagnostic
+    )
+    assert result.returncode == 1, diagnostic
+
     report = json.loads(report_path.read_text(encoding="utf-8"))
-    assert report["status"] == "FAIL"
-    assert report["applied_history"]["status"] == "REQUIRED_BUT_NOT_CONFIGURED"
+    assert report["status"] == "FAIL", diagnostic
+    assert report["applied_history"]["status"] == "REQUIRED_BUT_NOT_CONFIGURED", diagnostic
+
+
+def test_applied_history_reports_null_applied_at_without_crashing():
+    history, valid = _build_applied_history(
+        [(1, "a" * 64, None)],
+        {1: "a" * 64},
+        [1],
+    )
+
+    assert valid is False
+    assert history["status"] == "HISTORY_MISMATCH"
+    assert history["missing_applied_at_versions"] == [1]
+    assert history["rows"][0]["applied_at"] is None
+
+
+def test_applied_history_reports_duplicate_versions_and_checksum_mismatch():
+    history, valid = _build_applied_history(
+        [
+            (1, "a" * 64, datetime(2026, 11, 3, tzinfo=timezone.utc)),
+            (1, "b" * 64, datetime(2026, 11, 3, tzinfo=timezone.utc)),
+        ],
+        {1: "a" * 64},
+        [1],
+    )
+
+    assert valid is False
+    assert history["duplicate_versions"] == [1]
+    assert history["checksum_mismatches"] == [
+        {
+            "version": 1,
+            "applied_checksum": "b" * 64,
+            "accepted_checksums": ["a" * 64],
+        }
+    ]
+
+
+def test_applied_history_accepts_exact_versions_checksums_and_timestamps():
+    applied_at = datetime(2026, 11, 3, tzinfo=timezone.utc)
+    history, valid = _build_applied_history(
+        [(1, "a" * 64, applied_at), (2, "b" * 64, applied_at)],
+        {1: "a" * 64, 2: "b" * 64},
+        [1, 2],
+    )
+
+    assert valid is True
+    assert history["status"] == "CAPTURED"
+    assert history["missing_applied_at_versions"] == []
+    assert history["versions"] == [1, 2]
+
+
+def test_historical_checksum_registry_is_shared_and_importable():
+    assert FROZEN_CHECKSUMS == {}
+    assert LEGACY_CHECKSUMS[1] == frozenset({
+        "6eea24dae8b3ac9aa9413a32da1617250f14725bdb19f50e5d8300308ad173d4",
+        "538e0f5132ec775ec8963a2a72072dd00e81afa37383a6c5f6a8f54259716a31",
+        "ab6838b3e69a9a9faa28bdd82c98fe579921763be8b5dd56e1c686b77c098596",
+        "494763e210c8a3839972ba21e8705dcf2e6564e5abca9c76161f2f49c6664ec8",
+        "6766267c9e939a320bf6ac28ee516c4c11fe537ef2b6a7778d94ca6e3cd5b246",
+    })
+    assert isinstance(LEGACY_CHECKSUMS, dict)
+
+
+def test_applied_history_accepts_registered_frozen_historical_checksum():
+    historical = next(iter(LEGACY_CHECKSUMS[1]))
+    history, valid = _build_applied_history(
+        [(1, historical, datetime(2026, 11, 3, tzinfo=timezone.utc))],
+        {1: "a" * 64},
+        [1],
+        {version: set(values) for version, values in FROZEN_CHECKSUMS.items()},
+        {version: set(values) for version, values in LEGACY_CHECKSUMS.items()},
+    )
+    assert valid is True
+    assert history["checksum_mismatches"] == []
