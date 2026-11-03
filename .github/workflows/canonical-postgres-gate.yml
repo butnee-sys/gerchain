@@ -57,6 +57,9 @@ jobs:
           echo "PASS: compileall completed on the exact checked-out source." | tee -a artifacts/ea35-current/logs/python-compile.log
       - name: Collect CORE foundation regression tests separately
         run: set -o pipefail; pytest --collect-only -q tests/services/test_gerchain_runtime_atomic_lifecycle.py tests/services/test_gerchain_runtime_canonical_ledger.py tests/services/test_gerchain_runtime_factory.py tests/persistence/test_deep_value_reconciliation.py tests/postgres/test_migrations.py tests/postgres/test_migration_manifest.py 2>&1 | tee artifacts/ea35-current/logs/pytest-collection.log
+      - name: Run migration inventory audit unit tests
+        id: migration_inventory_audit_tests
+        run: set -o pipefail; pytest -q tests/postgres/test_migration_inventory_audit.py 2>&1 | tee artifacts/ea35-current/logs/migration-inventory-audit-tests.log
       - name: Run CORE foundation regression tests
         id: postgres_regression
         run: |
