@@ -261,10 +261,9 @@ jobs:
                   database_error = f'{type(exc).__name__}: {exc}'
           expected_versions = list(range(1, 18))
           actual_versions = [row['version'] for row in database_rows]
-          if database_error:
-              raise SystemExit(f'PostgreSQL migration evidence unavailable: {database_error}')
-          if actual_versions != expected_versions:
-              raise SystemExit(f'expected schema_version rows {expected_versions}; got {actual_versions}')
+          # Always write a traceable manifest, even when the live database
+          # history is incomplete. The recorded FAIL state remains fail-closed;
+          # this preserves diagnostics for the downstream master gate.
           db_by_version = {row['version']: row['checksum'] for row in database_rows}
           for item in canonical:
               item['database_checksum'] = db_by_version.get(item['version'])
@@ -283,6 +282,20 @@ jobs:
               'canonical_migration_count': len(canonical),
               'canonical_migrations': canonical,
               'schema_version_rows': database_rows,
+              'schema_version_history_status': (
+                  'PASS' if actual_versions == expected_versions
+                  and all(row['applied_at'] is not None for row in database_rows)
+                  else 'FAIL'
+              ),
+              'schema_version_history_error': (
+                  database_error
+                  or (
+                      f'expected schema_version rows {expected_versions}; got {actual_versions}'
+                      if actual_versions != expected_versions else
+                      'one or more schema_version rows have null applied_at'
+                      if any(row['applied_at'] is None for row in database_rows) else None
+                  )
+              ),
               'database_manifest_error': database_error,
           }
           head_sha = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
@@ -331,9 +344,13 @@ jobs:
               raise SystemExit(f"evidence SHA mismatch: candidate={manifest['candidate_head_sha']} HEAD={head_sha}")
           if database_error:
               raise SystemExit(f"PostgreSQL migration evidence unavailable: {database_error}")
-          if database_rows and any(row['checksum'] != item['runner_checksum'] for row, item in zip(database_rows, canonical)):
+          if actual_versions != expected_versions:
+              raise SystemExit(f'expected schema_version rows {expected_versions}; got {actual_versions}')
+          if any(row['applied_at'] is None for row in database_rows):
+              raise SystemExit('one or more schema_version rows have null applied_at')
+          if any(row['checksum'] != item['runner_checksum'] for row, item in zip(database_rows, canonical)):
               raise SystemExit('database migration checksum differs from canonical manifest')
-          print(json.dumps({'commit_sha': manifest['commit_sha'], 'checked_out_head_sha': head_sha, 'commit_sha_matches_head': manifest['commit_sha_matches_head'], 'canonical_migration_count': len(canonical), 'schema_version_rows': len(database_rows), 'sha256sums': str(out / 'SHA256SUMS'), 'manifest': str(out / 'manifest.json')}, indent=2))
+          print(json.dumps({'commit_sha': manifest['commit_sha'], 'checked_out_head_sha': head_sha, 'commit_sha_matches_head': manifest['commit_sha_matches_head'], 'canonical_migration_count': len(canonical), 'schema_version_rows': len(database_rows), 'schema_version_history_status': manifest['schema_version_history_status'], 'sha256sums': str(out / 'SHA256SUMS'), 'manifest': str(out / 'manifest.json')}, indent=2))
           PY
 
       - name: Test production entrypoint contract
