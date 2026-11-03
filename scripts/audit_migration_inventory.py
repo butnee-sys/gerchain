@@ -11,6 +11,13 @@ from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
 
+# Resolve the repository root before importing project packages. When this file
+# is executed directly, Python otherwise places only scripts/ at sys.path[0].
+ROOT = Path(__file__).resolve().parents[1]
+ROOT_STR = str(ROOT)
+if ROOT_STR not in sys.path:
+    sys.path.insert(0, ROOT_STR)
+
 from postgres.migrations import (
     FROZEN_CHECKSUMS,
     LEGACY_CHECKSUMS,
@@ -18,7 +25,6 @@ from postgres.migrations import (
     checksum,
 )
 
-ROOT = Path(__file__).resolve().parents[1]
 MIGRATION_DIR = ROOT / "postgres" / "migrations"
 OUTPUT = Path(os.environ.get("MIGRATION_INVENTORY_REPORT", "migration-inventory-report.json"))
 
