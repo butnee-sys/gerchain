@@ -15,7 +15,14 @@ def test_migration_inventory_fails_closed_when_live_history_is_required_but_miss
     root = Path(__file__).resolve().parents[2]
     report_path = tmp_path / "migration-inventory-report.json"
     env = os.environ.copy()
-    env.pop("GERCHAIN_MIGRATION_AUDIT_DATABASE_URL", None)
+    # Remove every supported database URL so this subprocess exercises the
+    # explicit REQUIRED_BUT_NOT_CONFIGURED fail-closed path.
+    for key in (
+        "GERCHAIN_MIGRATION_AUDIT_DATABASE_URL",
+        "GERCHAIN_TEST_DATABASE_URL",
+        "GERCHAIN_DATABASE_URL",
+    ):
+        env.pop(key, None)
     env["REQUIRE_MIGRATION_HISTORY"] = "1"
     env["MIGRATION_INVENTORY_REPORT"] = str(report_path)
 
@@ -28,10 +35,19 @@ def test_migration_inventory_fails_closed_when_live_history_is_required_but_miss
         check=False,
     )
 
-    assert result.returncode == 1, result.stdout + result.stderr
+    diagnostic = (
+        f"subprocess returncode: {result.returncode}\\n"
+        f"stdout:\\n{result.stdout}\\n"
+        f"stderr:\\n{result.stderr}"
+    )
+    assert report_path.is_file(), (
+        "migration audit did not create its report file; " + diagnostic
+    )
+    assert result.returncode == 1, diagnostic
+
     report = json.loads(report_path.read_text(encoding="utf-8"))
-    assert report["status"] == "FAIL"
-    assert report["applied_history"]["status"] == "REQUIRED_BUT_NOT_CONFIGURED"
+    assert report["status"] == "FAIL", diagnostic
+    assert report["applied_history"]["status"] == "REQUIRED_BUT_NOT_CONFIGURED", diagnostic
 
 
 def test_applied_history_reports_null_applied_at_without_crashing():
