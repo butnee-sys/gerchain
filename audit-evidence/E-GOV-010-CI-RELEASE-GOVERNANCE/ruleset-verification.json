@@ -1,0 +1,38 @@
+{
+  "schema_version": "1.0",
+  "evidence_id": "E-GOV-010-CI-RELEASE-GOVERNANCE",
+  "repository": "butnee-sys/gerchain",
+  "ruleset_id": 26338044,
+  "ruleset_name": "Protect main branch",
+  "observed_at": "2026-11-04",
+  "source": "GitHub Rulesets API read after user saved the Ruleset",
+  "enforcement": "active",
+  "target": "default branch main",
+  "rules": {
+    "pull_request_required": true,
+    "required_approving_review_count": 0,
+    "deletion_restricted": true,
+    "non_fast_forward_blocked": true,
+    "required_status_checks_rule_present": true,
+    "strict_required_status_checks_policy": true,
+    "do_not_enforce_on_create": false,
+    "required_status_checks": [
+      "master-gate"
+    ]
+  },
+  "bypass": {
+    "actor": "Repository admin",
+    "mode": "always"
+  },
+  "disposition": {
+    "status": "configured",
+    "verified_master_gate_job_name": "master-gate",
+    "required_check_integration_id": 15368
+  },
+  "limitations": [
+    "Ruleset configuration is confirmed by a live API read on 2026-11-04.",
+    "Repository administrator bypass remains enabled.",
+    "This evidence confirms branch protection configuration, not independent professional validation."
+  ],
+  "independent_professional_validation": "pending"
+}

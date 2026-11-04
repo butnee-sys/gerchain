@@ -133,6 +133,13 @@ jobs:
         if: always()
         run: |
           { echo '# Automated EAI Production Audit'; echo; echo 'SHUUD and SANDBOX are separate projects and are excluded from this EAI test scope.'; echo 'This is automated evidence, not a production-ready certification.'; echo; echo "Commit: $(git rev-parse HEAD)"; echo "Collection: ${{ steps.collect.outcome }}"; echo "EAI tests: ${{ steps.eai.outcome }}"; } | tee audit-artifacts/audit-verdict.md
+      - name: Create detached audit evidence checksums
+        if: always()
+        run: |
+          set -euo pipefail
+          cd audit-artifacts
+          sha256sum audit-metadata.txt audit-verdict.md postgres-preflight.txt pytest-collect.log pytest-eai.log > SHA256SUMS
+
       - name: Upload audit evidence
         if: always()
         uses: actions/upload-artifact@v4

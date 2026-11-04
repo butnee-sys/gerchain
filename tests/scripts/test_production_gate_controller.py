@@ -7,7 +7,7 @@ from unittest.mock import patch
 import sys
 
 from postgres.migrations import _canonical_migration_files
-from scripts.production_gate_controller import REQUIRED_GATES, decide
+from scripts.production_gate_controller import REQUIRED_GATES, decide, resolve_artifact_evidence
 
 
 def _manifest(sha: str) -> dict:
@@ -51,6 +51,31 @@ def _write_manifest(tmp_path: Path, value: dict) -> Path:
     path = tmp_path / "manifest.json"
     path.write_text(json.dumps(value), encoding="utf-8")
     return path
+
+
+
+def test_artifact_evidence_accepts_only_confined_local_files(tmp_path: Path) -> None:
+    artifact_root = tmp_path / "artifact"
+    (artifact_root / "logs").mkdir(parents=True)
+    evidence = artifact_root / "logs" / "proof.txt"
+    evidence.write_text("verified evidence", encoding="utf-8")
+
+    assert resolve_artifact_evidence(artifact_root, "logs/proof.txt") == evidence.resolve()
+    assert resolve_artifact_evidence(artifact_root, "https://github.com/acme/repo/blob/abc123/proof.txt") is None
+    assert resolve_artifact_evidence(artifact_root, "urn:evidence:abc123:proof") is None
+    assert resolve_artifact_evidence(artifact_root, "../outside.txt") is None
+    assert resolve_artifact_evidence(artifact_root, str(evidence.resolve())) is None
+    assert resolve_artifact_evidence(artifact_root, "logs/missing.txt") is None
+
+
+def test_artifact_evidence_rejects_symlink_escape(tmp_path: Path) -> None:
+    artifact_root = tmp_path / "artifact"
+    artifact_root.mkdir()
+    outside = tmp_path / "outside.txt"
+    outside.write_text("outside", encoding="utf-8")
+    (artifact_root / "escape.txt").symlink_to(outside)
+
+    assert resolve_artifact_evidence(artifact_root, "escape.txt") is None
 
 
 def test_controller_locks_only_when_every_gate_and_migration_evidence_match(tmp_path: Path) -> None:

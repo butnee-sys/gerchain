@@ -27,6 +27,28 @@ POSTGRES_GATES = [
 REQUIRED_GATES = ARCHITECTURE_GATES + POSTGRES_GATES
 
 
+
+def resolve_artifact_evidence(artifact_root: pathlib.Path, evidence: object) -> pathlib.Path | None:
+    """Resolve only an existing local evidence file confined to the artifact root.
+
+    Remote URLs and URNs are deliberately rejected: a candidate-SHA substring
+    is not proof that remote evidence content was fetched or authenticated.
+    """
+    if not isinstance(evidence, str) or not evidence.strip():
+        return None
+    relative = pathlib.Path(evidence)
+    if relative.is_absolute() or ".." in relative.parts:
+        return None
+    try:
+        root = artifact_root.resolve(strict=True)
+        candidate = (root / relative).resolve(strict=True)
+    except (OSError, RuntimeError):
+        return None
+    if not candidate.is_relative_to(root) or not candidate.is_file():
+        return None
+    return candidate
+
+
 def _head_sha() -> str:
     try:
         result = subprocess.run(
