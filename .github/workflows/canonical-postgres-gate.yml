@@ -677,11 +677,14 @@ jobs:
               "independent_reperformance", "final_evidence_bundle",
           )
           records = {name: {"outcome": "open", "evidence": ""} for name in gates}
-          if (Path("docs/PRODUCTION_DATA_AUTHORITY_ADAPTER_MAP.md").is_file()
-              and Path("docs/DEE_ARCHITECTURE_FREEZE.md").is_file()):
+          map_source = Path("docs/PRODUCTION_DATA_AUTHORITY_ADAPTER_MAP.md")
+          map_target = root / "docs/PRODUCTION_DATA_AUTHORITY_ADAPTER_MAP.md"
+          if map_source.is_file() and Path("docs/DEE_ARCHITECTURE_FREEZE.md").is_file():
+              map_target.parent.mkdir(parents=True, exist_ok=True)
+              map_target.write_bytes(map_source.read_bytes())
               records["inventory_map"] = {
                   "outcome": "success",
-                  "evidence": f"https://github.com/{repo}/blob/{expected}/docs/PRODUCTION_DATA_AUTHORITY_ADAPTER_MAP.md",
+                  "evidence": "docs/PRODUCTION_DATA_AUTHORITY_ADAPTER_MAP.md",
               }
           if duplicate_pass:
               records["error_duplicate_excess"] = {
