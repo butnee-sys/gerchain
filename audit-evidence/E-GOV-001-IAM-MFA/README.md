@@ -1,73 +1,44 @@
-# E-GOV-001 — IAM/MFA Audit Evidence Package
+# E-GOV-001 — IAM / MFA Evidence
 
-Status: **GREEN / CLOSED**
+Status: **OWNER-ATTESTED — INDEPENDENT VALIDATION PENDING**
 
-## 1. Organization & Scope
-* **Repository:** [butnee-sys/gerchain](https://github.com/butnee-sys/gerchain)
-* **Entity / Company:** МЕГА ЭРЭГ ИНВЕСТМЕНТ ХХК (MEGA BANK INVESTMENT LLC)
-* **Responsible Owner:** Доржсүрэнгийн Энх-Амгалан (Enkh-Amgalan Dorjsuren)
-* **Contact Email:** butnee@gmail.com / enkh-amgalan@megabankinvestment.com
-* **Phone:** +976 90090804
+## Scope
 
----
+Repository: `butnee-sys/gerchain`  
+Evidence date: 2026-11-04  
+Evidence owner: repository owner (`@butnee-sys`)
 
-## 2. Privileged Account / Access Evidence
-* **Хэн privileged эрхтэй вэ?:** 
-  * Доржсүрэнгийн Энх-Амгалан (GitHub Owner / Lead Architect)
-* **Ямар эрхтэй вэ?:** 
-  * Full Administrative Access (`Admin`, `Maintain`) to `butnee-sys/gerchain` repository.
-* **Эрхийн үндэслэл:** 
-  * Системийн архитектур болон блокчэйн дэд бүтцийн хөгжүүлэлт, аюулгүй байдлыг хангах үүрэг бүхий үүсгэн байгуулагч.
-* **Access Review хийсэн огноо:** 2026-10-08
-  
+## Account security evidence
 
----
+The repository owner supplied the current GitHub account-security settings:
 
-## 3. MFA Enforcement Evidence
-* **Privileged account-д MFA идэвхтэй эсэх:** Тийм (Enforced & Verified)
-* **Enforcement харагдах байдал:** 
-  * GitHub Security Policy-ийн дагуу бүх privileged болон contributor эрхтэй хэрэглэгчдэд Two-Factor Authentication (2FA) заавал байхаар тохируулагдсан.
-* **Evidence огноо:** 2026-10-08
-* **Аудитад хадгалах файлууд:** `exports/` хавтсанд байршуулсан компанийн Улсын бүртгэлийн гэрчилгээ болон барааны тэмдгийн гэрчилгээ.
-* **Бодит нотолгооны зураг (Screenshot):** [GitHub 2FA / Security Settings Proof](дэлгэцний%20зраг.jpg)
-# E-GOV-001 — IAM/MFA Audit Evidence Package
+- Authenticator app: configured.
+- GitHub Mobile: configured (one device).
+- SMS: configured and identified by GitHub as less secure.
+- Recovery codes: viewed.
+- Security-key enrollment: not evidenced in the supplied settings.
 
-Status: **GREEN / CLOSED**
+## Repository access review
 
-## 1. Organization & Scope
-* **Repository:** [butnee-sys/gerchain](https://github.com/butnee-sys/gerchain)
-* **Entity / Company:** МЕГА ЭРЭГ ИНВЕСТМЕНТ ХХК (MEGA BANK INVESTMENT LLC)
-* **Responsible Owner:** Доржсүрэнгийн Энх-Амгалан (Enkh-Amgalan Dorjsuren)
-* **Contact Email:** butnee@gmail.com / enkh-amgalan@megabankinvestment.com
-* **Phone:** +976 90090804
+The repository owner supplied the repository access page dated 2026-11-04:
 
----
+- Direct collaborators: 0.
+- The owner attests that they are the sole administrator and contributor.
+- This records the direct repository access view; it is not a complete audit of third-party app grants, sessions, or inherited access.
 
-## 2. Privileged Account / Access Evidence
-* **Хэн privileged эрхтэй вэ?:**
-  * Доржсүрэнгийн Энх-Амгалан (GitHub Owner / Lead Architect)
-* **Ямар эрхтэй вэ?:**
-  * Full Administrative Access (`Admin`, `Maintain`) to `butnee-sys/gerchain` repository.
-* **Эрхийн үндэслэл:**
-  * Системийн архитектур болон блокчэйн дэд бүтцийн хөгжүүлэлт, аюулгүй байдлыг хангах үүрэг бүхий үүсгэн байгуулагч.
-* **Access Review хийсэн огноо:** 2026-10-08
+## Evidence files
 
----
+- `owner-attestation.json` — structured record of the owner-supplied account-security and access-review facts, including scope and limitations.
+- `дэлгэцний зураг.jpg` — previously stored account-security screenshot dated 2026-10-08; it is historical evidence and must not be treated as the 2026-11-04 screen.
+- The 2026-11-04 settings were supplied in the conversation as text because a new screenshot could not be uploaded.
 
-## 3. MFA Enforcement Evidence
-* **Privileged account-д MFA идэвхтэй эсэх:** Тийм (Enforced & Verified)
-* **Enforcement харагдах байдал:**
-  * GitHub Security Policy-ийн дагуу бүх privileged болон contributor эрхтэй хэрэглэгчдэд Two-Factor Authentication (2FA) заавал байхаар тохируулагдсан.
-* **Бодит нотолгооны зураг (Screenshot):** [GitHub 2FA Enforcement Proof](дэлгэцний%20зраг.jpg)
-* **Evidence огноо:** 2026-10-08
+## Assurance boundary
 
----
+This package supports an **owner-attested account-level MFA and direct-access review**. It does not claim:
 
-## 4. Data Source & Authority Matrix (Өгөгдлийн эх сурвалж ба эрх мэдлийн зураглал)
+- organization-wide MFA enforcement (the repository owner is a GitHub user account, not a GitHub organization);
+- independent verification of the account identity or settings;
+- security-key enrollment or recovery-code restore testing;
+- full audit of sessions, OAuth applications, deploy keys, or all indirect access paths.
 
-| Даваа / Бүрэлдэхүүн | Өгөгдлийн эх сурвалж (Data Source) | Баталгаажуулах механизм | Эрх мэдлийн эзэн (Data / System Authority) | Хариуцах байгууллага / Нэгж |
-| :--- | :--- | :--- | :--- | :--- |
-| **Identity & IAM** | GitHub Account Security Log | 2FA / WebAuthn Enforced | Доржсүрэнгийн Энх-Амгалан (`@butnee-sys`) | МЕГА ЭРЭГ ИНВЕСТМЕНТ ХХК |
-| **Code & Architecture** | `butnee-sys/gerchain` Repository | Signed Commits / Main Ruleset | Lead Architect (`@butnee-sys`) | МҮННХ НҮТББ / IONH |
-| **Corporate Identity** | Улсын Бүртгэлийн Ерөнхий Газар | Хуулийн этгээдийн гэрчилгээ | Гүйцэтгэх захирал | МЕГА ЭРЭГ ИНВЕСТМЕНТ ХХК |
-| **System Ledger / State** | Gerchain Node Persistence (`postgres/`) | EXIM Escrow Boundary & State Machine | Core System Authority | Gerchain Governance Engine |
+Independent professional validation is planned as a subsequent assurance stage. Until then, do not describe this package as independently audited or fully closed.
