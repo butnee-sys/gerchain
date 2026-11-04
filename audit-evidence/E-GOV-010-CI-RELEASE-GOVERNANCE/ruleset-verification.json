@@ -1,0 +1,37 @@
+{
+  "schema_version": "1.0",
+  "evidence_id": "E-GOV-010-CI-RELEASE-GOVERNANCE",
+  "repository": "butnee-sys/gerchain",
+  "ruleset_id": 26338044,
+  "ruleset_name": "Protect main branch",
+  "observed_at": "2026-11-04T21:27:44.782+08:00",
+  "source": "GitHub Rulesets API read",
+  "enforcement": "active",
+  "target": "default branch main",
+  "rules": {
+    "pull_request_required": true,
+    "required_approving_review_count": 0,
+    "required_review_thread_resolution": false,
+    "deletion_restricted": true,
+    "non_fast_forward_blocked": true,
+    "required_status_checks_rule_present": true,
+    "strict_required_status_checks_policy": true,
+    "do_not_enforce_on_create": false,
+    "required_status_checks": []
+  },
+  "bypass": {
+    "actor": "Repository admin",
+    "mode": "always"
+  },
+  "disposition": {
+    "status": "partially_configured",
+    "remaining_action": "Add the exact master-gate status check after the master gate passes on the final candidate SHA.",
+    "verified_master_gate_job_name": "master-gate"
+  },
+  "limitations": [
+    "This API snapshot confirms the Ruleset configuration at the observation time only.",
+    "The required status-check list is currently empty, so the master-gate check is not yet enforced by this Ruleset.",
+    "Repository administrator bypass remains enabled."
+  ],
+  "independent_professional_validation": "pending"
+}
