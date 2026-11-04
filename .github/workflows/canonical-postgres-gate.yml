@@ -707,9 +707,67 @@ jobs:
                       "outcome": "success",
                       "evidence": evidence_path,
                   }
-          # Organizational controls and independent review remain open until
-          # independently verifiable evidence is supplied; tests/docs alone do
-          # not prove MFA enforcement, branch rules, backup restoration, or reviewer independence.
+          # Bind the owner-attested account MFA/access review and the live-read
+          # Ruleset snapshot into this exact-SHA evidence bundle. The IAM gate is
+          # explicitly owner-attested (not independent); external validation remains pending.
+          iam_source = Path("audit-evidence/E-GOV-001-IAM-MFA/owner-attestation.json")
+          iam_target = root / "org-evidence/iam-mfa-owner-attestation.json"
+          iam_valid = False
+          try:
+              iam_record = json.loads(iam_source.read_text(encoding="utf-8"))
+              iam_valid = (
+                  iam_record.get("schema_version") == "1.0"
+                  and iam_record.get("evidence_id") == "E-GOV-001-IAM-MFA"
+                  and iam_record.get("repository") == repo
+                  and iam_record.get("assurance_level") == "repository_owner_attestation"
+                  and iam_record.get("account_mfa", {}).get("authenticator_app") == "configured"
+                  and iam_record.get("account_mfa", {}).get("github_mobile") == "configured"
+                  and iam_record.get("repository_access_review", {}).get("direct_collaborators") == 0
+                  and iam_record.get("independent_professional_validation") == "pending"
+              )
+              if iam_valid:
+                  iam_target.parent.mkdir(parents=True, exist_ok=True)
+                  iam_target.write_text(json.dumps(iam_record, indent=2, sort_keys=True) + "\\n", encoding="utf-8")
+          except (OSError, json.JSONDecodeError, AttributeError, TypeError):
+              iam_valid = False
+          if iam_valid:
+              records["security_iam_mfa"] = {
+                  "outcome": "success",
+                  "evidence": "org-evidence/iam-mfa-owner-attestation.json",
+              }
+
+          # CI/release governance closes only when the exact master-gate job is
+          # required by the active main-branch Ruleset. An empty required-check
+          # list remains OPEN; no workflow-name guessing or bulk check imports.
+          ruleset_source = Path("audit-evidence/E-GOV-010-CI-RELEASE-GOVERNANCE/ruleset-verification.json")
+          ruleset_target = root / "org-evidence/main-ruleset-verification.json"
+          ci_governance_valid = False
+          try:
+              ruleset_record = json.loads(ruleset_source.read_text(encoding="utf-8"))
+              rules = ruleset_record.get("rules", {})
+              ci_governance_valid = (
+                  ruleset_record.get("schema_version") == "1.0"
+                  and ruleset_record.get("evidence_id") == "E-GOV-010-CI-RELEASE-GOVERNANCE"
+                  and ruleset_record.get("repository") == repo
+                  and ruleset_record.get("enforcement") == "active"
+                  and ruleset_record.get("target") == "default branch main"
+                  and rules.get("pull_request_required") is True
+                  and rules.get("deletion_restricted") is True
+                  and rules.get("non_fast_forward_blocked") is True
+                  and rules.get("strict_required_status_checks_policy") is True
+                  and rules.get("do_not_enforce_on_create") is False
+                  and "master-gate" in rules.get("required_status_checks", [])
+              )
+              ruleset_target.parent.mkdir(parents=True, exist_ok=True)
+              ruleset_target.write_text(json.dumps(ruleset_record, indent=2, sort_keys=True) + "\\n", encoding="utf-8")
+          except (OSError, json.JSONDecodeError, AttributeError, TypeError):
+              ci_governance_valid = False
+          if ci_governance_valid:
+              records["ci_release_governance"] = {
+                  "outcome": "success",
+                  "evidence": "org-evidence/main-ruleset-verification.json",
+              }
+
           if bundle_complete:
               records["final_evidence_bundle"] = {
                   "outcome": "success",
