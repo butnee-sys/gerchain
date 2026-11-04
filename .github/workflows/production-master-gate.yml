@@ -127,6 +127,7 @@ jobs:
           python - <<'PY'
           import hashlib, json, os, subprocess
           from pathlib import Path
+          from scripts.production_gate_controller import resolve_artifact_evidence
           postgres_gates = (
               'compile', 'regression', 'postgres_connection', 'migration_atomicity',
               'legacy_upgrade', 'lifecycle', 'migration_concurrency',
@@ -261,16 +262,17 @@ jobs:
                               evidence = record.get('evidence')
                               if outcome == 'success' and isinstance(evidence, str) and evidence.strip():
                                   evidence_path = Path(evidence)
-                                  # Local evidence paths must resolve inside the downloaded artifact.
-                                  if evidence_path.is_absolute() or '..' in evidence_path.parts:
+                                  # Accept only an existing file confined to the downloaded artifact.
+                                  # Remote URLs and URNs are never proof unless their content is fetched and authenticated.
+                                  resolved_evidence = resolve_artifact_evidence(
+                                      Path('artifacts/ea35-current'), evidence
+                                  )
+                                  if resolved_evidence is not None:
+                                      outcomes[name] = 'success'
+                                  elif evidence_path.is_absolute() or '..' in evidence_path.parts:
                                       outcomes[name] = 'invalid_evidence_path'
-                                  elif (Path('artifacts/ea35-current') / evidence_path).is_file():
-                                      outcomes[name] = 'success'
-                                  elif (
-                                      evidence.startswith(f"https://github.com/{os.environ['GITHUB_REPOSITORY']}/blob/{target_sha}/")
-                                      or (evidence.startswith('urn:') and target_sha in evidence)
-                                  ):
-                                      outcomes[name] = 'success'
+                                  else:
+                                      outcomes[name] = 'unverified_or_missing_evidence'
                               elif isinstance(outcome, str):
                                   outcomes[name] = outcome
                   else:
