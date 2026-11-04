@@ -314,8 +314,8 @@ jobs:
               collected_log = (independent_root / 'pytest-collect.log').read_text(encoding='utf-8')
               test_log = (independent_root / 'pytest-eai.log').read_text(encoding='utf-8')
               import re
-              collected = re.search(r'(\\d+) tests? collected', collected_log)
-              passed = re.search(r'(\\d+) passed(?: in [^\\n]+)?', test_log)
+              collected = re.search(r'(\d+) tests? collected', collected_log)
+              passed = re.search(r'(\d+) passed(?: in [^\n]+)?', test_log)
               independent_valid = (
                   independent_conclusion == 'success'
                   and bool(independent_run_id)
