@@ -18,7 +18,7 @@ from services.gerchain_runtime_factory import (
 )
 
 
-def test_production_postgres_factory_and_value_flow():
+def test_production_postgres_factory_and_value_flow(signed_change_factory):
     dsn = os.environ["GERCHAIN_POSTGRES_DSN"]
     engine = create_engine(dsn, pool_pre_ping=True)
     factory = ProductionRuntimeFactory(
@@ -74,6 +74,10 @@ def test_production_postgres_factory_and_value_flow():
             escrow_id="eai-pg-smoke",
         )
 
+    root, signed_change, owner_id = signed_change_factory(
+        operation="RELEASE", transaction_id="pg-release-1", escrow_id="eai-pg-smoke",
+        destination="BEN", amount=40, currency="MNT", evidence=None,
+    )
     with factory.session_factory.begin() as session:
         release_escrow_in_transaction(
             session,
@@ -83,7 +87,9 @@ def test_production_postgres_factory_and_value_flow():
             amount=40,
             currency="MNT",
             decision_status="APPROVE",
-            authorization_status="AUTHORIZED",
+            root=root,
+            signed_change=signed_change,
+            owner_id=owner_id,
             trust=True,
             transparency=True,
             performance=True,
