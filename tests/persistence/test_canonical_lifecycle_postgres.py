@@ -12,7 +12,6 @@ import base64
 import os
 import uuid
 from pathlib import Path
-from pathlib import Path
 
 import psycopg
 from cryptography.hazmat.primitives import serialization
@@ -22,7 +21,11 @@ from sqlalchemy import create_engine, select, text
 from sqlalchemy.orm import sessionmaker
 
 from persistence.atomic_ledger import AtomicLedgerBase, LedgerAccountModel, LedgerMovementModel, PostgreSQLAtomicLedger
-from persistence.signed_change_authorization import (\n    SignedChangeAuthorization, canonical_release_payload, canonical_refund_payload, canonical_payload_hash,\n)\nfrom dee_security.root_of_trust import RootOfTrust, SignedChange\nfrom persistence.atomic_value_transaction import TransactionWitness
+from persistence.signed_change_authorization import (
+    SignedChangeAuthorization, canonical_release_payload, canonical_refund_payload, canonical_payload_hash,
+)
+from dee_security.root_of_trust import RootOfTrust, SignedChange
+from persistence.atomic_value_transaction import TransactionWitness
 from persistence.cancel_escrow import cancel_escrow_in_transaction
 from persistence.deep_value_reconciliation import deep_reconcile_value_truth
 from persistence.durable_idempotency import DurableIdempotencyRecord, IdempotencyBase
@@ -81,7 +84,8 @@ def _signed_authorization(*, operation, transaction_id, escrow_id, destination, 
     return root, signed_change, owner_id
 
 
-@pytest.fixture()\ndef pg_factory():
+@pytest.fixture()
+def pg_factory():
     url = os.environ.get("GERCHAIN_TEST_DATABASE_URL")
     if not url:
         pytest.skip("GERCHAIN_TEST_DATABASE_URL is not configured")
@@ -332,6 +336,12 @@ def test_postgres_18_migrations_and_full_value_flow_reconcile(pg_factory, monkey
         assert len(witness_rows) == 10
         assert len(outbox_rows) == 10
         assert len(idempotency_rows) == 10
+        authorization_rows = list(session.execute(
+            select(SignedChangeAuthorization).where(
+                SignedChangeAuthorization.transaction_id.in_((release_tx_id, refund_tx_id))
+            )
+        ).scalars())
+        assert len(authorization_rows) == 2
         assert all(row.state == "COMPLETED" for row in idempotency_rows)
 
         evidence = {
@@ -368,6 +378,7 @@ def test_postgres_18_migrations_and_full_value_flow_reconcile(pg_factory, monkey
                 for row in outbox_rows
             ],
             "idempotency_count": len(idempotency_rows),
+            "signed_authorization_count": len(authorization_rows),
             "idempotency": [
                 {"key": row.key, "fingerprint": row.fingerprint, "state": row.state}
                 for row in idempotency_rows
@@ -387,7 +398,8 @@ def test_postgres_18_migrations_and_full_value_flow_reconcile(pg_factory, monkey
         evidence_dir = Path(os.environ.get("GERCHAIN_EVIDENCE_DIR", "artifacts/ea35"))
         evidence_dir.mkdir(parents=True, exist_ok=True)
         evidence_path = evidence_dir / "postgres-value-flow-evidence.json"
-        evidence_path.write_text(json.dumps(evidence, indent=2, sort_keys=True, default=str) + "\n", encoding="utf-8")
+        evidence_path.write_text(json.dumps(evidence, indent=2, sort_keys=True, default=str) + "
+", encoding="utf-8")
         print(f"POSTGRES_VALUE_FLOW_EVIDENCE={evidence_path}")
         print(
             "EA35_POSTGRES_LIFECYCLE=PASS "
