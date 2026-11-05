@@ -16,7 +16,7 @@ import psycopg
 import pytest
 from psycopg import sql
 
-from postgres.migrations import CANONICAL_MIGRATION_NAMES, _canonical_migration_files, apply_migrations
+from postgres.migrations import CANONICAL_MIGRATION_NAMES, _canonical_migration_files, apply_migrations, checksum
 from services.gerchain_runtime_factory import assert_canonical_production_schema
 from sqlalchemy import create_engine
 from persistence.atomic_ledger import AtomicLedgerBase
@@ -356,5 +356,51 @@ def test_postgres_migration_018_rejects_incompatible_preexisting_authorization_t
             assert conn.execute(
                 "SELECT to_regclass('gerchain_authorization_changes')"
             ).fetchone()[0] is not None
+    finally:
+        _drop_schema(schema)
+
+
+
+def test_postgres_migration_018_repairs_legacy_checksum_and_missing_constraint():
+    schema = _schema()
+    legacy_checksum = "26b1e2a7a7398e493fa36292e67ea47e7ff7d5af0a9036419838565852108a34"
+    try:
+        with _connect(schema) as conn:
+            assert apply_migrations(conn, MIGRATIONS) == CANONICAL_VERSIONS
+
+        with _connect(schema) as conn:
+            conn.execute(
+                "ALTER TABLE gerchain_authorization_changes "
+                "DROP CONSTRAINT gerchain_authorization_signature_check"
+            )
+            conn.execute(
+                "UPDATE schema_version SET checksum = %s WHERE version = 18",
+                (legacy_checksum,),
+            )
+            conn.commit()
+
+        with _connect(schema) as conn:
+            assert apply_migrations(conn, MIGRATIONS) == ()
+
+        with _connect(schema) as conn:
+            check_names = {
+                row[0]
+                for row in conn.execute(
+                    """
+                    SELECT conname
+                    FROM pg_constraint
+                    WHERE conrelid = 'gerchain_authorization_changes'::regclass
+                      AND contype = 'c'
+                    """
+                ).fetchall()
+            }
+            assert "gerchain_authorization_signature_check" in check_names
+            expected_checksum = checksum(
+                (MIGRATIONS / "018_eai_signed_change_authorization.sql").read_text(encoding="utf-8")
+            )
+            actual_checksum = conn.execute(
+                "SELECT checksum FROM schema_version WHERE version = 18"
+            ).fetchone()[0]
+            assert actual_checksum == expected_checksum
     finally:
         _drop_schema(schema)
