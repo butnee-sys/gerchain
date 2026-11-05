@@ -37,7 +37,7 @@ def _seed_escrow(session, escrow_id: str, *, sender: str, refund_destination: st
     )
 
 
-def test_eai_postgresql_canonical_value_lifecycle_and_reconciliation():
+def test_eai_postgresql_canonical_value_lifecycle_and_reconciliation(signed_change_factory):
     url = os.environ["GERCHAIN_DATABASE_URL"]
     engine = create_engine(url, future=True)
     factory = sessionmaker(bind=engine, expire_on_commit=False)
@@ -78,11 +78,16 @@ def test_eai_postgresql_canonical_value_lifecycle_and_reconciliation():
                 payload={"test": "lock"},
             )
             session.commit()
+        release_root, release_change, release_owner = signed_change_factory(
+            operation="RELEASE", transaction_id="eai-release-tx", escrow_id="eai-release",
+            destination="BENEFICIARY", amount=100, currency="MNT", evidence=None,
+        )
         with factory() as session:
             release_escrow_in_transaction(
                 session, transaction_id="eai-release-tx", escrow_id="eai-release",
                 beneficiary="BENEFICIARY", amount=100, currency="MNT",
-                decision_status="APPROVE", authorization_status="AUTHORIZED",
+                decision_status="APPROVE", root=release_root,
+                signed_change=release_change, owner_id=release_owner,
                 trust=True, transparency=True, performance=True,
                 evidence_verified=True, payload={"test": "release"},
             )
@@ -99,10 +104,16 @@ def test_eai_postgresql_canonical_value_lifecycle_and_reconciliation():
                 payload={"test": "lock"},
             )
             session.commit()
+        refund_root, refund_change, refund_owner = signed_change_factory(
+            operation="REFUND", transaction_id="eai-refund-tx", escrow_id="eai-refund",
+            destination="REFUND", amount=100, currency="MNT", evidence=None,
+        )
         with factory() as session:
             refund_escrow_in_transaction(
                 session, transaction_id="eai-refund-tx", escrow_id="eai-refund",
-                amount=100, currency="MNT",
+                amount=100, currency="MNT", root=refund_root,
+                signed_change=refund_change, owner_id=refund_owner,
+                authorized=True, transparency=True, dispute_or_cancellation_verified=True,
                 payload={"test": "refund", "requested_destination": "ATTACKER"},
             )
             session.commit()
