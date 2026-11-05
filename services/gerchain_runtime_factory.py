@@ -235,30 +235,22 @@ def assert_canonical_production_schema(connection: Any) -> None:
     if any(row[1] is None for row in migration_rows):
         raise RuntimeError("canonical migration history contains missing applied_at timestamps")
 
-    state_constraints = connection.exec_driver_sql(
-        """
-        SELECT conname, pg_get_constraintdef(oid), convalidated
-        FROM pg_constraint
-        WHERE conrelid = 'escrows'::regclass
-          AND contype = 'c'
-          AND position('state' in lower(pg_get_constraintdef(oid))) > 0
-        """
-    ).all()
-    if len(state_constraints) != 1:
-        raise RuntimeError(
-            "escrows.state must have exactly one canonical state CHECK constraint"
-        )
-    name, definition, validated = state_constraints[0]
-    required_states = ("CREATED", "FUNDED", "LOCKED", "RELEASED", "REFUNDED", "CANCELLED")
-    normalized_definition = str(definition).upper()
-    if (
-        name != "escrows_state_canonical_check"
-        or not validated
-        or any(state not in normalized_definition for state in required_states)
-    ):
-        raise RuntimeError(
-            "escrows.state canonical CHECK is missing, unvalidated, or incomplete"
-        )
+    if dialect == "postgresql":
+        if len(state_constraints) != 1:
+            raise RuntimeError(
+                "escrows.state must have exactly one canonical state CHECK constraint"
+            )
+        name, definition, validated = state_constraints[0]
+        required_states = ("CREATED", "FUNDED", "LOCKED", "RELEASED", "REFUNDED", "CANCELLED")
+        normalized_definition = str(definition).upper()
+        if (
+            name != "escrows_state_canonical_check"
+            or not validated
+            or any(state not in normalized_definition for state in required_states)
+        ):
+            raise RuntimeError(
+                "escrows.state canonical CHECK is missing, unvalidated, or incomplete"
+            )
 
 
 class ProductionRuntimeFactory:

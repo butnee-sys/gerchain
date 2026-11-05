@@ -11,10 +11,11 @@ import pytest
 from psycopg import sql
 from psycopg.conninfo import make_conninfo
 
-from postgres.migration_runner import apply_migrations
+from postgres.migration_runner import _canonical_migration_files, apply_migrations
 
 
 MIGRATION_DIR = Path(__file__).resolve().parents[1] / "migrations"
+CANONICAL_VERSIONS = tuple(range(1, len(_canonical_migration_files(MIGRATION_DIR)) + 1))
 
 
 def _admin_dsn() -> str:
@@ -103,7 +104,7 @@ def _version_13_checksum() -> str:
 
 
 def test_identical_legacy_duplicate_publication_is_collapsed(isolated_database):
-    """Byte-identical legacy duplicates are repaired; versions 1..17 remain unique."""
+    """Byte-identical legacy duplicates are repaired; versions in the canonical registry remain unique."""
     with psycopg.connect(isolated_database) as conn:
         # Apply the real schema first so the test exercises duplicate history
         # repair without falsely marking an unapplied migration as complete.
@@ -120,10 +121,10 @@ def test_identical_legacy_duplicate_publication_is_collapsed(isolated_database):
         conn.commit()
         apply_migrations(conn, MIGRATION_DIR)
         rows = conn.execute("SELECT version, checksum FROM schema_version ORDER BY version").fetchall()
-        assert [row[0] for row in rows] == list(range(1, 18))
-        assert len({row[0] for row in rows}) == 17
-        assert len({row[0] for row in rows}) == 17
-        assert len(rows) == 17
+        assert [row[0] for row in rows] == list(CANONICAL_VERSIONS)
+        assert len({row[0] for row in rows}) == len(CANONICAL_VERSIONS)
+        assert len({row[0] for row in rows}) == len(CANONICAL_VERSIONS)
+        assert len(rows) == len(CANONICAL_VERSIONS)
 
 
 def test_conflicting_duplicate_checksums_fail_closed_without_repair(isolated_database):
@@ -160,10 +161,10 @@ def test_applied_checksum_mismatch_rolls_back_and_preserves_history(isolated_dat
         assert conn.execute("SELECT to_regclass('public.escrows')").fetchone()[0] is None
 
 
-def test_real_fourteen_migration_registry_is_idempotent_and_checksum_failure_is_atomic(
+def test_real_canonical_migration_registry_is_idempotent_and_checksum_failure_is_atomic(
     isolated_database, tmp_path
 ):
-    """Run versions 1..17 twice on PostgreSQL, then prove v13 tampering rolls back."""
+    """Run the full canonical migration chain twice on PostgreSQL, then prove v13 tampering rolls back."""
     import shutil
 
     migration_copy = tmp_path / "canonical_migrations"
@@ -176,8 +177,8 @@ def test_real_fourteen_migration_registry_is_idempotent_and_checksum_failure_is_
         first_rows = conn.execute(
             "SELECT version, checksum FROM schema_version ORDER BY version"
         ).fetchall()
-        assert [version for version, _ in first_rows] == list(range(1, 18))
-        assert len({version for version, _ in first_rows}) == 17
+        assert [version for version, _ in first_rows] == list(CANONICAL_VERSIONS)
+        assert len({version for version, _ in first_rows}) == len(CANONICAL_VERSIONS)
         first_schema = _public_schema_fingerprint(conn)
         conn.commit()
 

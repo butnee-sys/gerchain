@@ -321,6 +321,7 @@ def test_postgres_migration_018_reconciles_compatible_preexisting_authorization_
                 "gerchain_authorization_payload_hash_check",
                 "gerchain_authorization_signature_check",
             }
+            conn.commit()
             assert apply_migrations(conn, MIGRATIONS) == ()
 
         engine = create_engine(
