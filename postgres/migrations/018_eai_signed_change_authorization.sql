@@ -188,7 +188,7 @@ BEGIN
         RAISE EXCEPTION 'SignedChange signature CHECK is missing or weakened';
     END IF;
 END
-$;
+$$;
 
 ALTER TABLE gerchain_authorization_changes
     ALTER COLUMN created_at SET DEFAULT now();
