@@ -123,6 +123,8 @@ jobs:
           INDEPENDENT_RUN_ID: ${{ steps.independent_run.outputs.run_id || '' }}
           INDEPENDENT_RUN_ATTEMPT: ${{ steps.independent_run.outputs.run_attempt || '' }}
           INDEPENDENT_CONCLUSION: ${{ steps.independent_run.outputs.conclusion || 'missing' }}
+          GERCHAIN_ORG_EVIDENCE_KEY_ID: ${{ vars.GERCHAIN_ORG_EVIDENCE_KEY_ID }}
+          GERCHAIN_ORG_EVIDENCE_PUBLIC_KEY_B64: ${{ secrets.GERCHAIN_ORG_EVIDENCE_PUBLIC_KEY_B64 }}
         run: |
           python - <<'PY'
           import hashlib, json, os, subprocess

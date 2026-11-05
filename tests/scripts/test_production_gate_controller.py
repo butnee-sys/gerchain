@@ -1,13 +1,40 @@
 from __future__ import annotations
 
+import base64
 import hashlib
 import json
+import os
 from pathlib import Path
 from unittest.mock import patch
+
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 import sys
 
 from postgres.migrations import _canonical_migration_files
 from scripts.production_gate_controller import REQUIRED_GATES, decide, resolve_artifact_evidence
+
+
+_TEST_ORG_PRIVATE_KEY = Ed25519PrivateKey.from_private_bytes(bytes(range(32)))
+_TEST_ORG_PUBLIC_KEY_B64 = base64.b64encode(
+    _TEST_ORG_PRIVATE_KEY.public_key().public_bytes(
+        serialization.Encoding.Raw,
+        serialization.PublicFormat.Raw,
+    )
+).decode("ascii")
+_TEST_ORG_KEY_ID = "test-organization-evidence-key"
+
+
+def _sign_test_external_evidence(attestation: dict) -> dict:
+    unsigned = {key: value for key, value in attestation.items() if key != "signature_b64"}
+    message = json.dumps(
+        unsigned, sort_keys=True, separators=(",", ":"), ensure_ascii=False
+    ).encode("utf-8")
+    signed = dict(unsigned)
+    signed["signature_b64"] = base64.b64encode(
+        _TEST_ORG_PRIVATE_KEY.sign(message)
+    ).decode("ascii")
+    return signed
 
 
 def _manifest(sha: str) -> dict:
@@ -47,6 +74,14 @@ def _outcomes() -> dict[str, str]:
     return {gate: "success" for gate in REQUIRED_GATES}
 
 
+def _decide_with_test_trust_anchor(manifest: Path, sha: str, outcomes: dict[str, str]) -> dict:
+    with patch.dict(os.environ, {
+        "GERCHAIN_ORG_EVIDENCE_KEY_ID": _TEST_ORG_KEY_ID,
+        "GERCHAIN_ORG_EVIDENCE_PUBLIC_KEY_B64": _TEST_ORG_PUBLIC_KEY_B64,
+    }):
+        return decide(manifest, sha, outcomes)
+
+
 def _write_manifest(tmp_path: Path, value: dict) -> Path:
     value.setdefault("lock_policy", {
         "all_30_gates_must_pass": True,
@@ -80,15 +115,16 @@ def _write_manifest(tmp_path: Path, value: dict) -> Path:
                 "path": relative_path.as_posix(),
                 "sha256": hashlib.sha256(evidence_file.read_bytes()).hexdigest(),
             })
-        value["external_organizational_evidence"] = {
+        value["external_organizational_evidence"] = _sign_test_external_evidence({
             "status": "VERIFIED",
             "commit_sha": value.get("commit_sha"),
+            "key_id": _TEST_ORG_KEY_ID,
             "verified_by": "test-independent-reviewer",
             "verified_at": "2026-11-05T00:00:00+00:00",
             "authorized_by": "test-authorized-approver",
             "authorized_at": "2026-11-05T00:01:00+00:00",
             "evidence": records,
-        }
+        })
     path = tmp_path / "manifest.json"
     path.write_text(json.dumps(value), encoding="utf-8")
     return path
@@ -122,7 +158,7 @@ def test_artifact_evidence_rejects_symlink_escape(tmp_path: Path) -> None:
 def test_controller_locks_only_when_every_gate_and_migration_evidence_match(tmp_path: Path) -> None:
     manifest = _write_manifest(tmp_path, _manifest("abc123"))
     with patch("scripts.production_gate_controller._head_sha", return_value="abc123"):
-        report = decide(manifest, "abc123", _outcomes())
+        report = _decide_with_test_trust_anchor(manifest, "abc123", _outcomes())
     assert report["decision"] == "LOCKED"
     assert report["failures"] == []
     assert report["passed_gate_count"] == 30
@@ -145,7 +181,7 @@ def test_controller_fails_closed_on_stale_sha_and_database_checksum_mismatch(tmp
     data["schema_version_rows"][4]["checksum"] = "tampered"
     manifest = _write_manifest(tmp_path, data)
     with patch("scripts.production_gate_controller._head_sha", return_value="newsha"):
-        report = decide(manifest, "newsha", _outcomes())
+        report = _decide_with_test_trust_anchor(manifest, "newsha", _outcomes())
     assert report["decision"] == "NOT_LOCKED"
     assert "MANIFEST_SHA_MISMATCH" in report["failures"]
     assert "MIGRATION_DATABASE_CHECKSUM_MISMATCH_VERSION_5" in report["failures"]
@@ -156,7 +192,7 @@ def test_controller_fails_closed_when_migration_file_hash_is_tampered(tmp_path: 
     data["canonical_migrations"][0]["sha256"] = "tampered"
     manifest = _write_manifest(tmp_path, data)
     with patch("scripts.production_gate_controller._head_sha", return_value="abc123"):
-        report = decide(manifest, "abc123", _outcomes())
+        report = _decide_with_test_trust_anchor(manifest, "abc123", _outcomes())
     assert report["decision"] == "NOT_LOCKED"
     assert "MIGRATION_FILE_SHA256_MISMATCH_VERSION_1" in report["failures"]
 
@@ -166,7 +202,7 @@ def test_controller_fails_closed_when_applied_at_is_missing(tmp_path: Path) -> N
     data["schema_version_rows"][0]["applied_at"] = None
     manifest = _write_manifest(tmp_path, data)
     with patch("scripts.production_gate_controller._head_sha", return_value="abc123"):
-        report = decide(manifest, "abc123", _outcomes())
+        report = _decide_with_test_trust_anchor(manifest, "abc123", _outcomes())
     assert report["decision"] == "NOT_LOCKED"
     assert "MIGRATION_APPLIED_AT_MISSING_VERSION_1" in report["failures"]
 
@@ -176,14 +212,14 @@ def test_controller_fails_closed_when_schema_version_rows_are_incomplete(tmp_pat
     data["schema_version_rows"].pop()
     manifest = _write_manifest(tmp_path, data)
     with patch("scripts.production_gate_controller._head_sha", return_value="abc123"):
-        report = decide(manifest, "abc123", _outcomes())
+        report = _decide_with_test_trust_anchor(manifest, "abc123", _outcomes())
     assert report["decision"] == "NOT_LOCKED"
     assert "SCHEMA_VERSION_ROWS_NOT_CONTIGUOUS" in report["failures"]
 
 
 def test_controller_fails_closed_when_manifest_is_missing(tmp_path: Path) -> None:
     with patch("scripts.production_gate_controller._head_sha", return_value="abc123"):
-        report = decide(tmp_path / "missing.json", "abc123", _outcomes())
+        report = _decide_with_test_trust_anchor(tmp_path / "missing.json", "abc123", _outcomes())
     assert report["decision"] == "NOT_LOCKED"
     assert any(item.startswith("MANIFEST_UNREADABLE_") for item in report["failures"])
 
@@ -213,7 +249,7 @@ def test_controller_fails_closed_when_source_policy_withholds_production_authori
     }
     manifest = _write_manifest(tmp_path, data)
     with patch("scripts.production_gate_controller._head_sha", return_value="abc123"):
-        report = decide(manifest, "abc123", _outcomes())
+        report = _decide_with_test_trust_anchor(manifest, "abc123", _outcomes())
     assert report["decision"] == "NOT_LOCKED"
     assert "LOCK_POLICY_PRODUCTION_LOCK_AUTHORIZED_NOT_SATISFIED" in report["failures"]
 
@@ -223,7 +259,7 @@ def test_controller_fails_closed_when_external_organizational_evidence_is_missin
     data["external_organizational_evidence"] = None
     manifest = _write_manifest(tmp_path, data)
     with patch("scripts.production_gate_controller._head_sha", return_value="abc123"):
-        report = decide(manifest, "abc123", _outcomes())
+        report = _decide_with_test_trust_anchor(manifest, "abc123", _outcomes())
     assert report["decision"] == "NOT_LOCKED"
     assert "EXTERNAL_ORGANIZATIONAL_EVIDENCE_MISSING" in report["failures"]
 
@@ -234,9 +270,10 @@ def test_controller_fails_closed_on_external_evidence_sha_and_file_hash_mismatch
     evidence_root.mkdir(parents=True)
     item_path = evidence_root / "iam-proof.txt"
     item_path.write_text("tampered after reviewer verification", encoding="utf-8")
-    data["external_organizational_evidence"] = {
+    data["external_organizational_evidence"] = _sign_test_external_evidence({
         "status": "VERIFIED",
         "commit_sha": "stale-sha",
+        "key_id": _TEST_ORG_KEY_ID,
         "verified_by": "test-independent-reviewer",
         "verified_at": "2026-11-05T00:00:00+00:00",
         "authorized_by": "test-authorized-approver",
@@ -247,10 +284,10 @@ def test_controller_fails_closed_on_external_evidence_sha_and_file_hash_mismatch
             "path": "external-organizational-evidence/iam-proof.txt",
             "sha256": "0" * 64,
         }],
-    }
+    })
     manifest = _write_manifest(tmp_path, data)
     with patch("scripts.production_gate_controller._head_sha", return_value="abc123"):
-        report = decide(manifest, "abc123", _outcomes())
+        report = _decide_with_test_trust_anchor(manifest, "abc123", _outcomes())
     assert report["decision"] == "NOT_LOCKED"
     assert "EXTERNAL_ORGANIZATIONAL_EVIDENCE_SHA_MISMATCH" in report["failures"]
     assert "EXTERNAL_ORGANIZATIONAL_EVIDENCE_HASH_MISMATCH_IAM_MFA_PRIVILEGED_ACCESS" in report["failures"]
@@ -260,9 +297,39 @@ def test_controller_fails_closed_on_external_evidence_sha_and_file_hash_mismatch
 def test_controller_fails_closed_when_external_evidence_path_escapes_artifact(tmp_path: Path) -> None:
     data = _manifest("abc123")
     _write_manifest(tmp_path, data)  # materialize the synthetic, hash-bound test evidence first
-    data["external_organizational_evidence"]["evidence"][0]["path"] = "../outside.txt"
+    unsigned = {
+        key: value for key, value in data["external_organizational_evidence"].items()
+        if key != "signature_b64"
+    }
+    unsigned["evidence"] = [dict(item) for item in unsigned["evidence"]]
+    unsigned["evidence"][0]["path"] = "../outside.txt"
+    data["external_organizational_evidence"] = _sign_test_external_evidence(unsigned)
     manifest = _write_manifest(tmp_path, data)
     with patch("scripts.production_gate_controller._head_sha", return_value="abc123"):
-        report = decide(manifest, "abc123", _outcomes())
+        report = _decide_with_test_trust_anchor(manifest, "abc123", _outcomes())
     assert report["decision"] == "NOT_LOCKED"
     assert "EXTERNAL_ORGANIZATIONAL_EVIDENCE_FILE_MISSING_OR_UNSAFE_IAM_MFA_PRIVILEGED_ACCESS" in report["failures"]
+
+
+
+def test_controller_fails_closed_when_external_attestation_signature_is_tampered(tmp_path: Path) -> None:
+    data = _manifest("abc123")
+    data["external_organizational_evidence"]["signature_b64"] = base64.b64encode(
+        b"invalid-signature"
+    ).decode("ascii")
+    manifest = _write_manifest(tmp_path, data)
+    report = _decide_with_test_trust_anchor(manifest, "abc123", _outcomes())
+    assert report["decision"] == "NOT_LOCKED"
+    assert "EXTERNAL_ORGANIZATIONAL_EVIDENCE_SIGNATURE_INVALID" in report["failures"]
+
+
+def test_controller_fails_closed_when_protected_organizational_key_is_not_configured(tmp_path: Path) -> None:
+    data = _manifest("abc123")
+    manifest = _write_manifest(tmp_path, data)
+    with patch.dict(os.environ, {
+        "GERCHAIN_ORG_EVIDENCE_KEY_ID": "",
+        "GERCHAIN_ORG_EVIDENCE_PUBLIC_KEY_B64": "",
+    }):
+        report = decide(manifest, "abc123", _outcomes())
+    assert report["decision"] == "NOT_LOCKED"
+    assert "EXTERNAL_ORGANIZATIONAL_TRUST_ANCHOR_MISSING" in report["failures"]

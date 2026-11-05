@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import base64
 import hashlib
 import json
 import os
@@ -88,6 +89,43 @@ def _organizational_lock_failures(
     for field in ("verified_at", "authorized_at"):
         if not _is_aware_timestamp(external.get(field)):
             failures.append(f"EXTERNAL_ORGANIZATIONAL_EVIDENCE_{field.upper()}_INVALID")
+
+    # Verify the attestation with a public key supplied by protected GitHub
+    # Actions configuration. A public key or signature from the PR itself is
+    # never accepted as the trust anchor.
+    trusted_key_id = os.environ.get("GERCHAIN_ORG_EVIDENCE_KEY_ID", "").strip()
+    trusted_public_key_b64 = os.environ.get("GERCHAIN_ORG_EVIDENCE_PUBLIC_KEY_B64", "").strip()
+    if not trusted_key_id or not trusted_public_key_b64:
+        failures.append("EXTERNAL_ORGANIZATIONAL_TRUST_ANCHOR_MISSING")
+    elif external.get("key_id") != trusted_key_id:
+        failures.append("EXTERNAL_ORGANIZATIONAL_TRUST_ANCHOR_ID_MISMATCH")
+
+    signature_b64 = external.get("signature_b64")
+    if not isinstance(signature_b64, str) or not signature_b64.strip():
+        failures.append("EXTERNAL_ORGANIZATIONAL_EVIDENCE_SIGNATURE_MISSING")
+    elif trusted_key_id and trusted_public_key_b64 and external.get("key_id") == trusted_key_id:
+        try:
+            from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
+
+            unsigned_payload = {
+                key: value for key, value in external.items()
+                if key != "signature_b64"
+            }
+            signed_bytes = json.dumps(
+                unsigned_payload,
+                sort_keys=True,
+                separators=(",", ":"),
+                ensure_ascii=False,
+            ).encode("utf-8")
+            public_key = Ed25519PublicKey.from_public_bytes(
+                base64.b64decode(trusted_public_key_b64, validate=True)
+            )
+            public_key.verify(
+                base64.b64decode(signature_b64, validate=True),
+                signed_bytes,
+            )
+        except Exception:
+            failures.append("EXTERNAL_ORGANIZATIONAL_EVIDENCE_SIGNATURE_INVALID")
 
     records = external.get("evidence")
     if not isinstance(records, list):
