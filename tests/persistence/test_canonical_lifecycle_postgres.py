@@ -398,8 +398,7 @@ def test_postgres_18_migrations_and_full_value_flow_reconcile(pg_factory, monkey
         evidence_dir = Path(os.environ.get("GERCHAIN_EVIDENCE_DIR", "artifacts/ea35"))
         evidence_dir.mkdir(parents=True, exist_ok=True)
         evidence_path = evidence_dir / "postgres-value-flow-evidence.json"
-        evidence_path.write_text(json.dumps(evidence, indent=2, sort_keys=True, default=str) + "
-", encoding="utf-8")
+        evidence_path.write_text(json.dumps(evidence, indent=2, sort_keys=True, default=str) + "\n", encoding="utf-8")
         print(f"POSTGRES_VALUE_FLOW_EVIDENCE={evidence_path}")
         print(
             "EA35_POSTGRES_LIFECYCLE=PASS "
