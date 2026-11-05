@@ -65,7 +65,7 @@ def _create_escrow(factory, escrow_id, sender, beneficiary, refund_destination, 
         session.commit()
 
 
-def test_postgres_boot_and_canonical_release_refund_cancel_truth():
+def test_postgres_boot_and_canonical_release_refund_cancel_truth(signed_change_factory):
     factory = _factory()
     with factory.engine.begin() as connection:
         connection.exec_driver_sql(
@@ -95,6 +95,10 @@ def test_postgres_boot_and_canonical_release_refund_cancel_truth():
             transaction_id="tx-lock-rel",
             escrow_id="ESC-REL",
         )
+        release_root, release_change, release_owner = signed_change_factory(
+            operation="RELEASE", transaction_id="tx-release-rel", escrow_id="ESC-REL",
+            destination="BEN-REL", amount=40, currency="USD", evidence=None,
+        )
         release_escrow_in_transaction(
             session,
             transaction_id="tx-release-rel",
@@ -103,7 +107,7 @@ def test_postgres_boot_and_canonical_release_refund_cancel_truth():
             amount=40,
             currency="USD",
             decision_status="APPROVE",
-            authorization_status="AUTHORIZED",
+            root=release_root, signed_change=release_change, owner_id=release_owner,
             trust=True,
             transparency=True,
             performance=True,
@@ -130,12 +134,18 @@ def test_postgres_boot_and_canonical_release_refund_cancel_truth():
             transaction_id="tx-lock-ref",
             escrow_id="ESC-REF",
         )
+        refund_root, refund_change, refund_owner = signed_change_factory(
+            operation="REFUND", transaction_id="tx-refund-ref", escrow_id="ESC-REF",
+            destination="REF-DEST", amount=25, currency="USD", evidence=None,
+        )
         refund_escrow_in_transaction(
             session,
             transaction_id="tx-refund-ref",
             escrow_id="ESC-REF",
             amount=25,
             currency="USD",
+            root=refund_root, signed_change=refund_change, owner_id=refund_owner,
+            authorized=True, transparency=True, dispute_or_cancellation_verified=True,
         )
         session.commit()
 
