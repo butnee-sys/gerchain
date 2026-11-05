@@ -13,7 +13,7 @@ from persistence.recovery_outbox import OutboxBase, OutboxEvent
 from services.gerchain_runtime_factory import ProductionRuntimeConfig, ProductionRuntimeFactory
 
 
-def test_production_postgresql_boot_and_value_truth():
+def test_production_postgresql_boot_and_value_truth(signed_change_factory):
     # EA-35.16: branch-tip production PostgreSQL re-performance evidence.
     dsn = os.environ["GERCHAIN_DATABASE_URL"]
     engine = create_engine(dsn, pool_pre_ping=True)
@@ -82,13 +82,18 @@ def test_production_postgresql_boot_and_value_truth():
         report = deep_reconcile_value_truth(session)
         assert report.matched, report.issues
 
+    release_root, release_change, release_owner = signed_change_factory(
+        operation="RELEASE", transaction_id="prod-release-1", escrow_id="prod-esc-1",
+        destination="PROD-BEN", amount=100, currency="MNT", evidence={"test": True},
+    )
     result = runtime.release(
         transaction_id="prod-release-1",
         destination="PROD-BEN",
         timestamp="T3",
         evidence={"test": True},
-        root=object(),
-        owner_id="prod-owner",
+        root=release_root,
+        signed_change=release_change,
+        owner_id=release_owner,
         authorized=True,
         evidence_verified=True,
         trinity_proof={"trust": True, "transparency": True, "performance": True},
@@ -99,8 +104,9 @@ def test_production_postgresql_boot_and_value_truth():
         destination="PROD-BEN",
         timestamp="T3",
         evidence={"test": True},
-        root=object(),
-        owner_id="prod-owner",
+        root=release_root,
+        signed_change=release_change,
+        owner_id=release_owner,
         authorized=True,
         evidence_verified=True,
         trinity_proof={"trust": True, "transparency": True, "performance": True},
@@ -125,7 +131,16 @@ def test_production_postgresql_boot_and_value_truth():
     refund_runtime = ProductionRuntimeFactory(ProductionRuntimeConfig(database_url=dsn, escrow_id="prod-refund-esc", amount=100, currency="MNT", witness_id="prod-refund-witness"), engine=engine).create()
     refund_runtime.fund("prod-refund-fund", "REFUND-SRC", "T4", {"test": True})
     refund_runtime.lock("prod-refund-lock", "T5", {"test": True})
-    refund_result = refund_runtime.refund(transaction_id="prod-refund-1", destination="ATTACKER", timestamp="T6", evidence={"test": True}, root=object(), owner_id="prod-owner", authorized=True, evidence_verified=True, trinity_proof={"trust": True, "transparency": True, "performance": True})
+    refund_root, refund_change, refund_owner = signed_change_factory(
+        operation="REFUND", transaction_id="prod-refund-1", escrow_id="prod-refund-esc",
+        destination="REFUND-SRC", amount=100, currency="MNT", evidence={"test": True},
+    )
+    refund_result = refund_runtime.refund(
+        transaction_id="prod-refund-1", destination="ATTACKER", timestamp="T6",
+        evidence={"test": True}, root=refund_root, signed_change=refund_change,
+        owner_id=refund_owner, authorized=True, transparency=True,
+        dispute_or_cancellation_verified=True,
+    )
     assert refund_result["replayed"] is False
     assert refund_runtime.get_escrow_state()["state"] == "REFUNDED"
     assert refund_runtime.get_balance("REFUND-SRC") == 100

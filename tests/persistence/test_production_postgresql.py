@@ -15,7 +15,7 @@ from services.gerchain_runtime_factory import ProductionRuntimeConfig, Productio
 
 
 def _factory():
-    url = os.environ.get("GERCHAIN_TEST_DATABASE_URL", os.environ["GERCHAIN_DATABASE_URL"])
+    url = os.environ.get("GERCHAIN_TEST_DATABASE_URL") or os.environ["GERCHAIN_DATABASE_URL"]
     return ProductionRuntimeFactory(
         ProductionRuntimeConfig(
             database_url=url,
@@ -57,7 +57,7 @@ def _seed_escrow(session, escrow_id, *, amount=100, refund_destination="SRC"):
     )
 
 
-def test_real_postgresql_factory_and_value_truth():
+def test_real_postgresql_factory_and_value_truth(signed_change_factory):
     factory = _factory()
     runtime = factory.create()
     _reset_database(factory)
@@ -84,12 +84,16 @@ def test_real_postgresql_factory_and_value_truth():
         lock_escrow_in_transaction(session, transaction_id="tx-lock", escrow_id="esc-prod")
         session.commit()
 
+    root, signed_change, owner_id = signed_change_factory(
+        operation="RELEASE", transaction_id="tx-release", escrow_id="esc-prod",
+        destination="DST", amount=100, currency="USD", evidence=None,
+    )
     with factory.session_factory() as session:
         from persistence.release_escrow import release_escrow_in_transaction
         release_escrow_in_transaction(
             session, transaction_id="tx-release", escrow_id="esc-prod",
             beneficiary="DST", amount=100, currency="USD",
-            decision_status="APPROVE", authorization_status="AUTHORIZED",
+            decision_status="APPROVE", root=root, signed_change=signed_change, owner_id=owner_id,
             trust=True, transparency=True, performance=True, evidence_verified=True
         )
         session.commit()
