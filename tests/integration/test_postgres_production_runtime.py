@@ -1,3 +1,29 @@
+from __future__ import annotations
+
+import os
+import base64
+import json
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+from dee_security.root_of_trust import RootOfTrust, SignedChange
+from persistence.signed_change_authorization import (
+    SignedChangeAuthorization, canonical_release_payload, canonical_payload_hash,
+)
+from datetime import datetime, timezone
+
+import pytest
+from sqlalchemy import create_engine, select
+
+from persistence.atomic_ledger import LedgerAccountModel
+from persistence.deep_value_reconciliation import deep_reconcile_value_truth
+from persistence.escrow_aggregate import CanonicalEscrow, EscrowState
+from persistence.fund_escrow import fund_escrow_in_transaction
+from persistence.lock_escrow import lock_escrow_in_transaction
+from persistence.release_escrow import release_escrow_in_transaction
+from persistence.atomic_ledger import LedgerMovementModel
+from services.gerchain_runtime_factory import ProductionRuntimeConfig, ProductionRuntimeFactory
+
+
 
 def _signed_release(*, transaction_id, escrow_id, destination, amount, currency, evidence, monkeypatch, transparency=True):
     private_key = Ed25519PrivateKey.from_private_bytes(bytes(range(32)))
@@ -30,33 +56,6 @@ def _signed_release(*, transaction_id, escrow_id, destination, amount, currency,
         signature=base64.b64encode(private_key.sign(signing_bytes)).decode("ascii"),
     )
     return root, signed_change, owner_id
-
-from __future__ import annotations
-
-import os
-import base64
-import json
-from cryptography.hazmat.primitives import serialization
-from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
-from dee_security.root_of_trust import RootOfTrust, SignedChange
-from persistence.signed_change_authorization import (
-    SignedChangeAuthorization, canonical_release_payload, canonical_payload_hash,
-)
-from datetime import datetime, timezone
-
-import pytest
-from sqlalchemy import create_engine, select
-
-from persistence.atomic_ledger import LedgerAccountModel
-from persistence.deep_value_reconciliation import deep_reconcile_value_truth
-from persistence.escrow_aggregate import CanonicalEscrow, EscrowState
-from persistence.fund_escrow import fund_escrow_in_transaction
-from persistence.lock_escrow import lock_escrow_in_transaction
-from persistence.release_escrow import release_escrow_in_transaction
-from persistence.atomic_ledger import LedgerMovementModel
-from services.gerchain_runtime_factory import ProductionRuntimeConfig, ProductionRuntimeFactory
-
-
 @pytest.mark.integration
 def test_real_postgresql_canonical_runtime_and_value_truth(monkeypatch):
     url = os.environ.get("GERCHAIN_DATABASE_URL")

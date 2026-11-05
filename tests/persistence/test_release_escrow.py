@@ -1,3 +1,27 @@
+from __future__ import annotations
+
+from datetime import datetime, timezone
+import os
+
+import base64
+import json
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+from dee_security.root_of_trust import RootOfTrust, SignedChange
+from persistence.signed_change_authorization import (
+    SignedChangeAuthorization, canonical_release_payload, canonical_payload_hash,
+)
+
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+
+from persistence.atomic_ledger import AtomicLedgerBase, LedgerAccountModel, LedgerMovementModel
+from persistence.atomic_value_transaction import TransactionWitness, WitnessBase
+from persistence.durable_idempotency import DurableIdempotencyRecord, IdempotencyBase
+from persistence.escrow_aggregate import CanonicalEscrow, EscrowBase, EscrowState
+from persistence.recovery_outbox import OutboxBase, OutboxEvent
+from persistence.release_escrow import release_escrow_in_transaction
+
 
 def _signed_release(*, transaction_id, escrow_id, destination, amount, currency, evidence, monkeypatch, transparency=True):
     private_key = Ed25519PrivateKey.from_private_bytes(bytes(range(32)))
@@ -30,31 +54,6 @@ def _signed_release(*, transaction_id, escrow_id, destination, amount, currency,
         signature=base64.b64encode(private_key.sign(signing_bytes)).decode("ascii"),
     )
     return root, signed_change, owner_id
-
-from __future__ import annotations
-
-from datetime import datetime, timezone
-import os
-
-import base64
-import json
-from cryptography.hazmat.primitives import serialization
-from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
-from dee_security.root_of_trust import RootOfTrust, SignedChange
-from persistence.signed_change_authorization import (
-    SignedChangeAuthorization, canonical_release_payload, canonical_payload_hash,
-)
-
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-
-from persistence.atomic_ledger import AtomicLedgerBase, LedgerAccountModel, LedgerMovementModel
-from persistence.atomic_value_transaction import TransactionWitness, WitnessBase
-from persistence.durable_idempotency import DurableIdempotencyRecord, IdempotencyBase
-from persistence.escrow_aggregate import CanonicalEscrow, EscrowBase, EscrowState
-from persistence.recovery_outbox import OutboxBase, OutboxEvent
-from persistence.release_escrow import release_escrow_in_transaction
-
 
 def _setup():
     engine = create_engine("sqlite+pysqlite:///:memory:", future=True)
