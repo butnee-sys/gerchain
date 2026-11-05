@@ -435,6 +435,9 @@ def test_postgres_release_and_refund_authorization_roll_back_with_failed_value_t
         )
         for operation, case in cases.items():
             escrow_id = case["escrow_id"]
+            PostgreSQLAtomicLedger.create_account_in_transaction(
+                session, escrow_id, currency, 0
+            )
             create_escrow_in_transaction(
                 session,
                 escrow_id=escrow_id,
