@@ -48,6 +48,47 @@ def _outcomes() -> dict[str, str]:
 
 
 def _write_manifest(tmp_path: Path, value: dict) -> Path:
+    value.setdefault("lock_policy", {
+        "all_30_gates_must_pass": True,
+        "same_exact_commit_sha_required": True,
+        "workflow_run_and_attempt_required": True,
+        "missing_or_stale_evidence_means_pass": False,
+        "external_organizational_evidence_required": True,
+        "production_lock_authorized": True,
+    })
+    if "external_organizational_evidence" not in value:
+        evidence_root = tmp_path / "external-organizational-evidence"
+        evidence_root.mkdir(parents=True, exist_ok=True)
+        domains = (
+            "iam_mfa_privileged_access",
+            "observability_alerting_slo",
+            "performance_stress_capacity",
+            "backup_restore_rpo_rto",
+            "incident_recovery",
+            "ci_release_governance",
+            "independent_human_review",
+            "authorized_release_approval",
+        )
+        records = []
+        for domain in domains:
+            relative_path = Path("external-organizational-evidence") / f"{domain}.txt"
+            evidence_file = tmp_path / relative_path
+            evidence_file.write_text(f"test-only evidence for {domain}", encoding="utf-8")
+            records.append({
+                "domain": domain,
+                "commit_sha": value.get("commit_sha"),
+                "path": relative_path.as_posix(),
+                "sha256": hashlib.sha256(evidence_file.read_bytes()).hexdigest(),
+            })
+        value["external_organizational_evidence"] = {
+            "status": "VERIFIED",
+            "commit_sha": value.get("commit_sha"),
+            "verified_by": "test-independent-reviewer",
+            "verified_at": "2026-11-05T00:00:00+00:00",
+            "authorized_by": "test-authorized-approver",
+            "authorized_at": "2026-11-05T00:01:00+00:00",
+            "evidence": records,
+        }
     path = tmp_path / "manifest.json"
     path.write_text(json.dumps(value), encoding="utf-8")
     return path
@@ -157,3 +198,70 @@ def test_controller_cli_accepts_expected_sha_alias() -> None:
     ]):
         args = _parse_args()
     assert args.expected_source_sha == "candidate-sha"
+
+
+
+def test_controller_fails_closed_when_source_policy_withholds_production_authorization(tmp_path: Path) -> None:
+    data = _manifest("abc123")
+    data["lock_policy"] = {
+        "all_30_gates_must_pass": True,
+        "same_exact_commit_sha_required": True,
+        "workflow_run_and_attempt_required": True,
+        "missing_or_stale_evidence_means_pass": False,
+        "external_organizational_evidence_required": True,
+        "production_lock_authorized": False,
+    }
+    manifest = _write_manifest(tmp_path, data)
+    with patch("scripts.production_gate_controller._head_sha", return_value="abc123"):
+        report = decide(manifest, "abc123", _outcomes())
+    assert report["decision"] == "NOT_LOCKED"
+    assert "LOCK_POLICY_PRODUCTION_LOCK_AUTHORIZED_NOT_SATISFIED" in report["failures"]
+
+
+def test_controller_fails_closed_when_external_organizational_evidence_is_missing(tmp_path: Path) -> None:
+    data = _manifest("abc123")
+    data["external_organizational_evidence"] = None
+    manifest = _write_manifest(tmp_path, data)
+    with patch("scripts.production_gate_controller._head_sha", return_value="abc123"):
+        report = decide(manifest, "abc123", _outcomes())
+    assert report["decision"] == "NOT_LOCKED"
+    assert "EXTERNAL_ORGANIZATIONAL_EVIDENCE_MISSING" in report["failures"]
+
+
+def test_controller_fails_closed_on_external_evidence_sha_and_file_hash_mismatch(tmp_path: Path) -> None:
+    data = _manifest("abc123")
+    evidence_root = tmp_path / "external-organizational-evidence"
+    evidence_root.mkdir(parents=True)
+    item_path = evidence_root / "iam-proof.txt"
+    item_path.write_text("tampered after reviewer verification", encoding="utf-8")
+    data["external_organizational_evidence"] = {
+        "status": "VERIFIED",
+        "commit_sha": "stale-sha",
+        "verified_by": "test-independent-reviewer",
+        "verified_at": "2026-11-05T00:00:00+00:00",
+        "authorized_by": "test-authorized-approver",
+        "authorized_at": "2026-11-05T00:01:00+00:00",
+        "evidence": [{
+            "domain": "iam_mfa_privileged_access",
+            "commit_sha": "stale-sha",
+            "path": "external-organizational-evidence/iam-proof.txt",
+            "sha256": "0" * 64,
+        }],
+    }
+    manifest = _write_manifest(tmp_path, data)
+    with patch("scripts.production_gate_controller._head_sha", return_value="abc123"):
+        report = decide(manifest, "abc123", _outcomes())
+    assert report["decision"] == "NOT_LOCKED"
+    assert "EXTERNAL_ORGANIZATIONAL_EVIDENCE_SHA_MISMATCH" in report["failures"]
+    assert "EXTERNAL_ORGANIZATIONAL_EVIDENCE_HASH_MISMATCH_IAM_MFA_PRIVILEGED_ACCESS" in report["failures"]
+    assert "EXTERNAL_ORGANIZATIONAL_EVIDENCE_DOMAIN_MISSING_AUTHORIZED_RELEASE_APPROVAL" in report["failures"]
+
+
+def test_controller_fails_closed_when_external_evidence_path_escapes_artifact(tmp_path: Path) -> None:
+    data = _manifest("abc123")
+    data["external_organizational_evidence"]["evidence"][0]["path"] = "../outside.txt"
+    manifest = _write_manifest(tmp_path, data)
+    with patch("scripts.production_gate_controller._head_sha", return_value="abc123"):
+        report = decide(manifest, "abc123", _outcomes())
+    assert report["decision"] == "NOT_LOCKED"
+    assert "EXTERNAL_ORGANIZATIONAL_EVIDENCE_FILE_MISSING_OR_UNSAFE_IAM_MFA_PRIVILEGED_ACCESS" in report["failures"]

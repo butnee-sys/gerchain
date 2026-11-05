@@ -7,6 +7,7 @@ import os
 import pathlib
 import subprocess
 import sys
+from datetime import datetime
 
 ARCHITECTURE_GATES = [
     "inventory_map", "error_duplicate_excess", "cross_store_reconciliation",
@@ -24,7 +25,106 @@ POSTGRES_GATES = [
     "migration_catalog", "deep_reconciliation", "manifest",
 ]
 
+
 REQUIRED_GATES = ARCHITECTURE_GATES + POSTGRES_GATES
+
+REQUIRED_ORGANIZATIONAL_EVIDENCE = (
+    "iam_mfa_privileged_access",
+    "observability_alerting_slo",
+    "performance_stress_capacity",
+    "backup_restore_rpo_rto",
+    "incident_recovery",
+    "ci_release_governance",
+    "independent_human_review",
+    "authorized_release_approval",
+)
+
+
+def _is_aware_timestamp(value: object) -> bool:
+    if not isinstance(value, str) or not value.strip():
+        return False
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return False
+    return parsed.tzinfo is not None and parsed.utcoffset() is not None
+
+
+def _organizational_lock_failures(
+    manifest: dict,
+    manifest_path: pathlib.Path,
+    expected_source_sha: str,
+) -> list[str]:
+    """Require explicit authorization and hash-verified external evidence before LOCKED."""
+    failures: list[str] = []
+    policy = manifest.get("lock_policy")
+    if not isinstance(policy, dict):
+        return ["LOCK_POLICY_MISSING"]
+
+    required_policy = {
+        "all_30_gates_must_pass": True,
+        "same_exact_commit_sha_required": True,
+        "workflow_run_and_attempt_required": True,
+        "missing_or_stale_evidence_means_pass": False,
+        "external_organizational_evidence_required": True,
+        "production_lock_authorized": True,
+    }
+    for key, required_value in required_policy.items():
+        if policy.get(key) is not required_value:
+            failures.append(f"LOCK_POLICY_{key.upper()}_NOT_SATISFIED")
+
+    external = manifest.get("external_organizational_evidence")
+    if not isinstance(external, dict):
+        failures.append("EXTERNAL_ORGANIZATIONAL_EVIDENCE_MISSING")
+        return failures
+
+    if external.get("status") != "VERIFIED":
+        failures.append("EXTERNAL_ORGANIZATIONAL_EVIDENCE_NOT_VERIFIED")
+    if external.get("commit_sha") != expected_source_sha:
+        failures.append("EXTERNAL_ORGANIZATIONAL_EVIDENCE_SHA_MISMATCH")
+    for field in ("verified_by", "authorized_by"):
+        if not isinstance(external.get(field), str) or not external[field].strip():
+            failures.append(f"EXTERNAL_ORGANIZATIONAL_EVIDENCE_{field.upper()}_MISSING")
+    for field in ("verified_at", "authorized_at"):
+        if not _is_aware_timestamp(external.get(field)):
+            failures.append(f"EXTERNAL_ORGANIZATIONAL_EVIDENCE_{field.upper()}_INVALID")
+
+    records = external.get("evidence")
+    if not isinstance(records, list):
+        failures.append("EXTERNAL_ORGANIZATIONAL_EVIDENCE_INVENTORY_MISSING")
+        return failures
+
+    seen: set[str] = set()
+    for record in records:
+        if not isinstance(record, dict):
+            failures.append("EXTERNAL_ORGANIZATIONAL_EVIDENCE_RECORD_INVALID")
+            continue
+        domain = record.get("domain")
+        if not isinstance(domain, str) or domain not in REQUIRED_ORGANIZATIONAL_EVIDENCE:
+            failures.append("EXTERNAL_ORGANIZATIONAL_EVIDENCE_DOMAIN_INVALID")
+            continue
+        if domain in seen:
+            failures.append(f"EXTERNAL_ORGANIZATIONAL_EVIDENCE_DUPLICATE_{domain.upper()}")
+            continue
+        seen.add(domain)
+        if record.get("commit_sha") != expected_source_sha:
+            failures.append(f"EXTERNAL_ORGANIZATIONAL_EVIDENCE_RECORD_SHA_MISMATCH_{domain.upper()}")
+        evidence_path = resolve_artifact_evidence(manifest_path.parent, record.get("path"))
+        if evidence_path is None:
+            failures.append(f"EXTERNAL_ORGANIZATIONAL_EVIDENCE_FILE_MISSING_OR_UNSAFE_{domain.upper()}")
+            continue
+        expected_digest = record.get("sha256")
+        if not isinstance(expected_digest, str) or len(expected_digest) != 64:
+            failures.append(f"EXTERNAL_ORGANIZATIONAL_EVIDENCE_HASH_MISSING_{domain.upper()}")
+            continue
+        actual_digest = hashlib.sha256(evidence_path.read_bytes()).hexdigest()
+        if actual_digest != expected_digest.lower():
+            failures.append(f"EXTERNAL_ORGANIZATIONAL_EVIDENCE_HASH_MISMATCH_{domain.upper()}")
+
+    for domain in REQUIRED_ORGANIZATIONAL_EVIDENCE:
+        if domain not in seen:
+            failures.append(f"EXTERNAL_ORGANIZATIONAL_EVIDENCE_DOMAIN_MISSING_{domain.upper()}")
+    return failures
 
 
 
@@ -190,6 +290,7 @@ def decide(
         failures.append("MANIFEST_COMMIT_SHA_MATCH_FLAG_NOT_TRUE")
 
     failures.extend(_migration_failures(manifest, repo_root))
+    failures.extend(_organizational_lock_failures(manifest, manifest_path, expected_source_sha))
 
     for gate in REQUIRED_GATES:
         if gate not in outcomes:

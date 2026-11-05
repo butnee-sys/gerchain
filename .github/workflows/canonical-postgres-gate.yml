@@ -275,8 +275,13 @@ jobs:
                   item['database_checksum'] == item['runner_checksum']
                   if item['database_checksum'] is not None else None
               )
+          source_master_template = json.loads(
+              Path('docs/production-master-gate-manifest.json').read_text(encoding='utf-8')
+          )
           manifest = {
               'repository': os.environ.get('GITHUB_REPOSITORY'),
+              'lock_policy': source_master_template.get('lock_policy'),
+              'external_organizational_evidence': source_master_template.get('external_organizational_evidence'),
               'commit_sha': os.environ['EVIDENCE_COMMIT_SHA'],
               'candidate_head_sha': os.environ['EVIDENCE_COMMIT_SHA'],
               'workflow_sha': os.environ['EVIDENCE_WORKFLOW_SHA'],
