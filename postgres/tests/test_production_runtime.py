@@ -33,7 +33,16 @@ DATABASE_URL = os.environ.get("GERCHAIN_POSTGRES_DSN")
 pytestmark = pytest.mark.skipif(not DATABASE_URL, reason="GERCHAIN_POSTGRES_DSN is not configured")
 
 
-def test_production_runtime_canonical_value_flow_and_reconciliation():
+def test_production_runtime_canonical_value_flow_and_reconciliation(monkeypatch):
+    private_key = Ed25519PrivateKey.from_private_bytes(bytes(range(32)))
+    public_key = private_key.public_key().public_bytes(
+        serialization.Encoding.Raw, serialization.PublicFormat.Raw
+    )
+    public_key_b64 = base64.b64encode(public_key).decode("ascii")
+    owner_id = "production-test-owner"
+    monkeypatch.setenv("GERCHAIN_AUTH_OWNER_ID", owner_id)
+    monkeypatch.setenv("GERCHAIN_AUTH_PUBLIC_KEY_B64", public_key_b64)
+
     engine = create_engine(DATABASE_URL, pool_pre_ping=True)
     factory = sessionmaker(bind=engine, expire_on_commit=False)
 
@@ -111,7 +120,7 @@ def test_production_runtime_canonical_value_flow_and_reconciliation():
             evidence=None,
         )
         unsigned_change = SignedChange(
-            owner_id="production-test-owner",
+            owner_id=owner_id,
             change_id="production-release-approval-1",
             version=1,
             payload_hash=canonical_payload_hash(release_payload),
@@ -131,8 +140,8 @@ def test_production_runtime_canonical_value_flow_and_reconciliation():
             signature=base64.b64encode(private_key.sign(signing_bytes)).decode("ascii"),
         )
         root = RootOfTrust(
-            owner_id="production-test-owner",
-            public_key_b64=base64.b64encode(public_key).decode("ascii"),
+            owner_id=owner_id,
+            public_key_b64=public_key_b64,
         )
         release_escrow_in_transaction(
             session,
