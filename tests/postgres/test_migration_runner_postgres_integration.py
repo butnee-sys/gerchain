@@ -345,7 +345,7 @@ def test_postgres_migration_018_rejects_incompatible_preexisting_authorization_t
                 "CREATE TABLE gerchain_authorization_changes (change_id TEXT PRIMARY KEY)"
             )
 
-        with pytest.raises(RuntimeError, match="exactly 9 canonical columns"):
+        with pytest.raises(psycopg.Error, match="exactly 9 canonical columns"):
             with _connect(schema) as conn:
                 apply_migrations(conn, MIGRATIONS)
 
