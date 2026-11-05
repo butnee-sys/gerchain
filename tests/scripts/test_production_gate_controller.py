@@ -259,6 +259,7 @@ def test_controller_fails_closed_on_external_evidence_sha_and_file_hash_mismatch
 
 def test_controller_fails_closed_when_external_evidence_path_escapes_artifact(tmp_path: Path) -> None:
     data = _manifest("abc123")
+    _write_manifest(tmp_path, data)  # materialize the synthetic, hash-bound test evidence first
     data["external_organizational_evidence"]["evidence"][0]["path"] = "../outside.txt"
     manifest = _write_manifest(tmp_path, data)
     with patch("scripts.production_gate_controller._head_sha", return_value="abc123"):
