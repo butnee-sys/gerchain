@@ -16,6 +16,7 @@ def test_canonical_manifest_matches_physical_migration_files():
     }
     assert actual == CANONICAL_MIGRATION_NAMES
     assert sorted(actual) == list(range(1, len(CANONICAL_MIGRATION_NAMES) + 1))
+    assert CANONICAL_MIGRATION_NAMES[18] == "018_eai_signed_change_authorization.sql"
     assert len({path.name for path in files}) == len(files)
 
 
