@@ -535,6 +535,10 @@ def test_postgres_release_and_refund_authorization_roll_back_with_failed_value_t
             assert session.query(DurableIdempotencyRecord).filter_by(
                 key=transaction_id
             ).count() == 0
-            assert session.query(OutboxEvent).filter(
-                OutboxEvent.event_id.like(f"%{suffix}%")
+            expected_event_type = (
+                "GERCHAIN_RELEASED" if operation == "RELEASE" else "GERCHAIN_REFUNDED"
+            )
+            assert session.query(OutboxEvent).filter_by(
+                aggregate_id=escrow_id,
+                event_type=expected_event_type,
             ).count() == 0
