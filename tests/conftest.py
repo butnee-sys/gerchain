@@ -53,7 +53,15 @@ def isolate_postgresql_core_state():
         "gerchain_release_accounts",
     )
     with engine.begin() as connection:
-        connection.execute(text("TRUNCATE TABLE " + ", ".join(tables) + " RESTART IDENTITY CASCADE"))
+        authorization_table_exists = connection.execute(
+            text("SELECT to_regclass('gerchain_authorization_changes')")
+        ).scalar_one()
+        truncate_tables = tables + (
+            ("gerchain_authorization_changes",) if authorization_table_exists else ()
+        )
+        connection.execute(
+            text("TRUNCATE TABLE " + ", ".join(truncate_tables) + " RESTART IDENTITY CASCADE")
+        )
     yield
     engine.dispose()
 
