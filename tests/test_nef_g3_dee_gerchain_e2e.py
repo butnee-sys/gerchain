@@ -263,7 +263,7 @@ def test_nef_17_engine_truth_reaches_authoritative_gerchain_release():
 def test_nef_unknown_validation_stops_before_value_flow():
     nef = build_nef_asset()
     runtime = build_runtime()
-    root, manifest, release = build_signed_release()
+    root, manifest, release, _private = build_signed_release()
     boundary = NEFToGerChainAdapter(
         G3DEEAuthorizedHandler(
             G3CoreRuntimeHandler(runtime),
