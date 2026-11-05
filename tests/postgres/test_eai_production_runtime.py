@@ -1,6 +1,47 @@
+
+def _signed_release(*, transaction_id, escrow_id, destination, amount, currency, evidence, monkeypatch, transparency=True):
+    private_key = Ed25519PrivateKey.from_private_bytes(bytes(range(32)))
+    public_key = private_key.public_key().public_bytes(
+        serialization.Encoding.Raw, serialization.PublicFormat.Raw
+    )
+    public_key_b64 = base64.b64encode(public_key).decode("ascii")
+    owner_id = "eai-postgres-runtime-test-owner"
+    monkeypatch.setenv("GERCHAIN_AUTH_OWNER_ID", owner_id)
+    monkeypatch.setenv("GERCHAIN_AUTH_PUBLIC_KEY_B64", public_key_b64)
+    root = RootOfTrust(owner_id=owner_id, public_key_b64=public_key_b64)
+    payload = canonical_release_payload(
+        transaction_id=transaction_id, escrow_id=escrow_id,
+        source=escrow_id, destination=destination, amount=amount,
+        currency=currency, decision_status="APPROVE", trust=True,
+        transparency=transparency, performance=True, evidence_verified=True,
+        evidence=evidence,
+    )
+    unsigned = SignedChange(
+        owner_id=owner_id, change_id=f"CHANGE-{transaction_id}", version=1,
+        payload_hash=canonical_payload_hash(payload), signature="",
+    )
+    signing_bytes = json.dumps(
+        unsigned.signing_payload(), sort_keys=True, separators=(",", ":"),
+        ensure_ascii=False,
+    ).encode("utf-8")
+    signed_change = SignedChange(
+        owner_id=owner_id, change_id=unsigned.change_id, version=1,
+        payload_hash=unsigned.payload_hash,
+        signature=base64.b64encode(private_key.sign(signing_bytes)).decode("ascii"),
+    )
+    return root, signed_change, owner_id
+
 from __future__ import annotations
 
 import os
+import base64
+import json
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+from dee_security.root_of_trust import RootOfTrust, SignedChange
+from persistence.signed_change_authorization import (
+    SignedChangeAuthorization, canonical_release_payload, canonical_payload_hash,
+)
 from datetime import datetime, timezone
 
 import pytest
@@ -42,7 +83,7 @@ def test_production_factory_establishes_canonical_authority(production_runtime):
     assert runtime.runtime_mode == "production-postgresql"
 
 
-def test_postgresql_canonical_fund_lock_release_proof(production_runtime):
+def test_postgresql_canonical_fund_lock_release_proof(production_runtime, monkeypatch):
     runtime, factory = production_runtime
     sf = factory.session_factory
     now = datetime.now(timezone.utc)
@@ -89,6 +130,12 @@ def test_postgresql_canonical_fund_lock_release_proof(production_runtime):
         )
         session.commit()
 
+    evidence = None
+    root, signed_change, owner_id = _signed_release(
+        transaction_id="pg-release-1", escrow_id="eai-pg-proof",
+        destination="pg-beneficiary", amount=100, currency="USD",
+        evidence=evidence, monkeypatch=monkeypatch,
+    )
     with sf() as session:
         release_escrow_in_transaction(
             session,
@@ -98,7 +145,7 @@ def test_postgresql_canonical_fund_lock_release_proof(production_runtime):
             amount=100,
             currency="USD",
             decision_status="APPROVE",
-            authorization_status="AUTHORIZED",
+            root=root,\n            signed_change=signed_change,\n            owner_id=owner_id,
             trust=True,
             transparency=True,
             performance=True,
