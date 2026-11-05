@@ -33,6 +33,16 @@ BEGIN
         RAISE EXCEPTION 'canonical SignedChange table was not created in current_schema()';
     END IF;
 
+    IF (
+        SELECT COUNT(*)
+        FROM information_schema.columns
+        WHERE table_schema = current_schema()
+          AND table_name = 'gerchain_authorization_changes'
+    ) <> 9 THEN
+        RAISE EXCEPTION
+            'pre-existing gerchain_authorization_changes must have exactly 9 canonical columns';
+    END IF;
+
     SELECT array_agg(expected.column_name ORDER BY expected.column_name)
     INTO incompatible_columns
     FROM (VALUES

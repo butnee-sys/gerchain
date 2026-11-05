@@ -334,3 +334,27 @@ def test_postgres_migration_018_reconciles_compatible_preexisting_authorization_
             engine.dispose()
     finally:
         _drop_schema(schema)
+
+
+
+def test_postgres_migration_018_rejects_incompatible_preexisting_authorization_table():
+    schema = _schema()
+    try:
+        with _connect(schema) as conn:
+            conn.execute(
+                "CREATE TABLE gerchain_authorization_changes (change_id TEXT PRIMARY KEY)"
+            )
+
+        with pytest.raises(RuntimeError, match="exactly 9 canonical columns"):
+            with _connect(schema) as conn:
+                apply_migrations(conn, MIGRATIONS)
+
+        with _connect(schema) as conn:
+            assert conn.execute(
+                "SELECT to_regclass('schema_version')"
+            ).fetchone()[0] is None
+            assert conn.execute(
+                "SELECT to_regclass('gerchain_authorization_changes')"
+            ).fetchone()[0] is not None
+    finally:
+        _drop_schema(schema)
