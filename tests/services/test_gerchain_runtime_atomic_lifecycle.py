@@ -17,7 +17,7 @@ from persistence.recovery_outbox import OutboxBase, OutboxEvent
 from services.gerchain_runtime import GerchainRuntime
 
 
-def test_canonical_runtime_create_fund_lock_release_is_one_consistent_evidence_graph():
+def test_canonical_runtime_create_fund_lock_release_is_one_consistent_evidence_graph(signed_change_factory):
     engine = create_engine("sqlite+pysqlite:///:memory:", future=True)
     AtomicLedgerBase.metadata.create_all(engine)
     EscrowBase.metadata.create_all(engine)
