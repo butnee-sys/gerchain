@@ -170,7 +170,7 @@ def test_controller_fails_closed_when_any_gate_is_missing_or_skipped(tmp_path: P
     outcomes["production_boot"] = "skipped"
     del outcomes["deep_reconciliation"]
     with patch("scripts.production_gate_controller._head_sha", return_value="abc123"):
-        report = decide(manifest, "abc123", outcomes)
+        report = _decide_with_test_trust_anchor(manifest, "abc123", outcomes)
     assert report["decision"] == "NOT_LOCKED"
     assert "GATE_PRODUCTION_BOOT_NOT_SUCCESS" in report["failures"]
     assert "GATE_DEEP_RECONCILIATION_MISSING" in report["failures"]
