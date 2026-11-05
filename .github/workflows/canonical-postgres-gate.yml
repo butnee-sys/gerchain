@@ -439,7 +439,9 @@ jobs:
           createdb --host=localhost --username=postgres gerchain_restore_test
           pg_restore --no-owner --no-privileges --dbname="$RESTORE_DSN" artifacts/ea35-current/postgres-backup.dump
           python - <<'PY' | tee artifacts/ea35-current/logs/disaster-recovery-restore.log
+          from pathlib import Path
           from sqlalchemy import create_engine, inspect, text
+          from postgres.migrations import _canonical_migration_files
           url = "postgresql+psycopg://postgres:postgres@localhost:5432/gerchain_restore_test"
           engine = create_engine(url, pool_pre_ping=True)
           try:
@@ -450,7 +452,7 @@ jobs:
                   tables = set(inspect(conn).get_table_names())
                   required = {
                       "escrows", "gerchain_ledger_accounts", "gerchain_ledger_movements",
-                      "gerchain_transaction_witnesses", "gerchain_outbox_events",
+                      "gerchain_transaction_witnesses", "gerchain_authorization_changes", "gerchain_outbox_events",
                       "gerchain_idempotency_records",
                   }
                   missing = required - tables
