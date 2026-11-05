@@ -57,6 +57,7 @@ CANONICAL_MIGRATION_NAMES = {
     15: "015_repair_escrow_state_constraint_drift.sql",
     16: "016_reconcile_escrow_state_constraint.sql",
     17: "017_ea35_created_witness_event.sql",
+    18: "018_eai_signed_change_authorization.sql",
 }
 
 # Version 004 previously shipped with explicit BEGIN/COMMIT wrappers. Keep its
@@ -354,13 +355,23 @@ def apply_migrations(conn, migration_dir: str | Path) -> None:
                 accepted_digests = set(LEGACY_CHECKSUMS.get(version, set()))
                 accepted_digests.update(FROZEN_CHECKSUMS.get(version, set()))
 
+                legacy_checksum_reconciliation = False
                 if version in applied:
-                    if applied[version] != digest and applied[version] not in accepted_digests:
+                    if applied[version] == digest:
+                        continue
+                    if applied[version] not in accepted_digests:
                         raise RuntimeError(
                             f"Migration checksum mismatch for version {version}: "
                             f"applied={applied[version]} expected={digest}"
                         )
-                    continue
+                    # Migration 018 is deliberately reconcilable: a known legacy
+                    # digest may represent an installation whose SQL constraints
+                    # were only partially applied. Re-run its idempotent SQL and
+                    # replace the historical digest atomically after DDL succeeds.
+                    if version == 18 and applied[version] in LEGACY_CHECKSUMS.get(18, set()):
+                        legacy_checksum_reconciliation = True
+                    else:
+                        continue
 
                 # Migration 013 hardens refund_destination/currency to NOT NULL.
                 # On legacy escrows, 012 adds those columns but existing rows
@@ -416,22 +427,37 @@ def apply_migrations(conn, migration_dir: str | Path) -> None:
                 # returns the existing checksum; a conflicting checksum returns no
                 # row and fails closed. The unique index is the final arbiter even
                 # if a writer bypasses this runner's advisory lock.
-                recorded = _execute(
-                    conn,
-                    """
-                    INSERT INTO schema_version(version, checksum)
-                    VALUES (%s, %s)
-                    ON CONFLICT (version) DO UPDATE
-                    SET checksum = schema_version.checksum
-                    WHERE schema_version.checksum = EXCLUDED.checksum
-                    RETURNING checksum
-                    """,
-                    (version, digest),
-                ).fetchone()
-                if recorded is None or recorded[0] != digest:
-                    raise RuntimeError(
-                        f"Migration checksum mismatch for version {version}"
+                if legacy_checksum_reconciliation:
+                    updated = _execute(
+                        conn,
+                        """
+                        UPDATE schema_version
+                        SET checksum = %s
+                        WHERE version = %s AND checksum = %s
+                        """,
+                        (digest, version, applied[version]),
                     )
+                    if updated.rowcount != 1:
+                        raise RuntimeError(
+                            f"Legacy migration checksum reconciliation lost its row for version {version}"
+                        )
+                else:
+                    recorded = _execute(
+                        conn,
+                        """
+                        INSERT INTO schema_version(version, checksum)
+                        VALUES (%s, %s)
+                        ON CONFLICT (version) DO UPDATE
+                        SET checksum = schema_version.checksum
+                        WHERE schema_version.checksum = EXCLUDED.checksum
+                        RETURNING checksum
+                        """,
+                        (version, digest),
+                    ).fetchone()
+                    if recorded is None or recorded[0] != digest:
+                        raise RuntimeError(
+                            f"Migration checksum mismatch for version {version}"
+                        )
                 applied_now.append(version)
     except Exception:
         if hasattr(conn, "rollback"):
