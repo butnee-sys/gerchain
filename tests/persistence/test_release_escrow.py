@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-import os
+import pytest
 
 import base64
 import json
@@ -9,7 +9,7 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from dee_security.root_of_trust import RootOfTrust, SignedChange
 from persistence.signed_change_authorization import (
-    SignedChangeAuthorization, canonical_release_payload, canonical_payload_hash,
+    AuthorizationBase, SignedChangeAuthorization, canonical_release_payload, canonical_payload_hash,
 )
 
 from sqlalchemy import create_engine
@@ -81,13 +81,14 @@ def _seed(factory):
         ])
 
 
-def _release(session, monkeypatch, tx="R1", transparency=True):
+def _release(session, monkeypatch, tx="R1", transparency=True, ledger_transfer=None):
     evidence = {"proof": "release-test"}
     root, signed_change, owner_id = _signed_release(
         transaction_id=tx, escrow_id="E1", destination="BEN", amount=100,
         currency="MNT", evidence=evidence, monkeypatch=monkeypatch,
         transparency=transparency,
     )
+    extra = {"ledger_transfer": ledger_transfer} if ledger_transfer is not None else {}
     return release_escrow_in_transaction(
         session,
         transaction_id=tx,
@@ -104,6 +105,7 @@ def _release(session, monkeypatch, tx="R1", transparency=True):
         performance=True,
         evidence_verified=True,
         payload={"evidence": evidence},
+        **extra,
     )
 
 
@@ -173,3 +175,29 @@ def test_release_replay_does_not_move_value_twice(monkeypatch):
         assert session.get(LedgerAccountModel, "E1").balance == 0
         assert session.get(LedgerAccountModel, "BEN").balance == 100
         assert session.query(LedgerMovementModel).count() == 1
+
+
+
+def test_release_authorization_rolls_back_with_failed_value_transfer(monkeypatch):
+    factory = _setup()
+    _seed(factory)
+
+    def fail_ledger_transfer(*args, **kwargs):
+        raise RuntimeError("ledger transfer failed")
+
+    with pytest.raises(RuntimeError, match="ledger transfer failed"):
+        with factory.begin() as session:
+            _release(
+                session, monkeypatch,
+                ledger_transfer=fail_ledger_transfer,
+            )
+
+    with factory() as session:
+        assert session.get(LedgerAccountModel, "E1").balance == 100
+        assert session.get(LedgerAccountModel, "BEN").balance == 0
+        assert session.get(CanonicalEscrow, "E1").state == EscrowState.LOCKED.value
+        assert session.query(SignedChangeAuthorization).count() == 0
+        assert session.query(LedgerMovementModel).count() == 0
+        assert session.query(TransactionWitness).count() == 0
+        assert session.query(OutboxEvent).count() == 0
+        assert session.query(DurableIdempotencyRecord).count() == 0

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+
+import pytest
 import base64
 import json
 
@@ -158,3 +160,39 @@ def test_refund_replay_does_not_move_value_twice(monkeypatch):
     with factory() as session:
         assert session.get(LedgerAccountModel, "SOURCE").balance == 100
         assert session.query(LedgerMovementModel).count() == 1
+
+
+
+def test_refund_authorization_rolls_back_with_failed_value_transfer(monkeypatch):
+    factory = _setup()
+    _seed(factory)
+    evidence = {"reason": "verified-cancellation"}
+    auth, public_key_b64 = _signed_refund(evidence=evidence)
+    monkeypatch.setenv("GERCHAIN_AUTH_OWNER_ID", "refund-test-owner")
+    monkeypatch.setenv("GERCHAIN_AUTH_PUBLIC_KEY_B64", public_key_b64)
+
+    def fail_ledger_transfer(*args, **kwargs):
+        raise RuntimeError("ledger transfer failed")
+
+    with pytest.raises(RuntimeError, match="ledger transfer failed"):
+        with factory.begin() as session:
+            refund_escrow_in_transaction(
+                session,
+                transaction_id="RF1",
+                escrow_id="E1",
+                amount=100,
+                currency="MNT",
+                ledger_transfer=fail_ledger_transfer,
+                payload={"evidence": evidence},
+                **auth,
+            )
+
+    with factory() as session:
+        assert session.get(LedgerAccountModel, "E1").balance == 100
+        assert session.get(LedgerAccountModel, "SOURCE").balance == 0
+        assert session.get(CanonicalEscrow, "E1").state == EscrowState.LOCKED.value
+        assert session.query(SignedChangeAuthorization).count() == 0
+        assert session.query(LedgerMovementModel).count() == 0
+        assert session.query(TransactionWitness).count() == 0
+        assert session.query(OutboxEvent).count() == 0
+        assert session.query(DurableIdempotencyRecord).count() == 0
