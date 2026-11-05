@@ -14,6 +14,7 @@ from persistence.escrow_aggregate import (
     create_escrow_in_transaction,
 )
 from persistence.recovery_outbox import OutboxBase, OutboxEvent
+from persistence.signed_change_authorization import AuthorizationBase
 from services.gerchain_runtime import GerchainRuntime
 
 
@@ -24,6 +25,7 @@ def test_canonical_runtime_create_fund_lock_release_is_one_consistent_evidence_g
     WitnessBase.metadata.create_all(engine)
     IdempotencyBase.metadata.create_all(engine)
     OutboxBase.metadata.create_all(engine)
+    AuthorizationBase.metadata.create_all(engine)
     factory = sessionmaker(bind=engine, expire_on_commit=False, future=True)
     now = datetime.now(timezone.utc)
 
