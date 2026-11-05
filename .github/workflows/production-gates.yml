@@ -86,6 +86,9 @@ jobs:
           --health-retries 20
     env:
       GERCHAIN_TEST_DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/gerchain
+      GERCHAIN_DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/gerchain
+      GERCHAIN_POSTGRES_DSN: postgresql://postgres:postgres@localhost:5432/gerchain
+      GERCHAIN_TEST_POSTGRES_URL: postgresql://postgres:postgres@localhost:5432/gerchain
     steps:
       - name: Checkout exact tested revision
         uses: actions/checkout@v4
@@ -98,6 +101,8 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt pytest
+      - name: Configure ephemeral CI Root of Trust
+        uses: ./.github/actions/setup-ci-root-of-trust
       - name: Run production entrypoint guard tests
         run: pytest -q tests/services/test_production_entrypoint.py
       - name: Run deep value-truth reconciliation tests on PostgreSQL
