@@ -11,7 +11,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import sessionmaker
 
-from postgres.migrations import apply_migrations
+from postgres.migrations import CANONICAL_MIGRATION_NAMES, apply_migrations
 from dee_security.root_of_trust import RootOfTrust
 from services.gerchain_runtime import GerchainRuntime
 
@@ -161,6 +161,19 @@ def assert_canonical_production_schema(connection: Any) -> None:
     ).scalar_one()
     if not version_index:
         raise RuntimeError("schema_version.version must have a unique index")
+
+    migration_rows = connection.exec_driver_sql(
+        "SELECT version, applied_at FROM schema_version ORDER BY version"
+    ).all()
+    expected_versions = list(CANONICAL_MIGRATION_NAMES)
+    actual_versions = [row[0] for row in migration_rows]
+    if actual_versions != expected_versions:
+        raise RuntimeError(
+            "canonical migration history incomplete or non-canonical: "
+            f"required={len(expected_versions)} expected={expected_versions} actual={actual_versions}"
+        )
+    if any(row[1] is None for row in migration_rows):
+        raise RuntimeError("canonical migration history contains missing applied_at timestamps")
 
     state_constraints = connection.exec_driver_sql(
         """

@@ -8,6 +8,7 @@ from persistence.atomic_value_transaction import WitnessBase
 from persistence.durable_idempotency import IdempotencyBase
 from persistence.escrow_aggregate import EscrowBase
 from persistence.recovery_outbox import OutboxBase
+from persistence.signed_change_authorization import AuthorizationBase
 from services.gerchain_runtime_factory import assert_canonical_production_schema
 
 
@@ -22,7 +23,7 @@ def _create_canonical_test_schema(engine) -> None:
         ))
         connection.execute(
             text("INSERT INTO schema_version(version, checksum) VALUES (:version, :checksum)"),
-            [{"version": version, "checksum": f"test-{version}"} for version in range(1, 14)],
+            [{"version": version, "checksum": f"test-{version}"} for version in range(1, 19)],
         )
 
 
@@ -66,6 +67,6 @@ def test_canonical_schema_assertion_rejects_incomplete_migration_history() -> No
             "INSERT INTO schema_version(version, checksum) VALUES (12, 'test')"
         ))
     with engine.connect() as connection:
-        with pytest.raises(RuntimeError, match="required=13"):
+        with pytest.raises(RuntimeError, match="required=18"):
             assert_canonical_production_schema(connection)
     engine.dispose()
