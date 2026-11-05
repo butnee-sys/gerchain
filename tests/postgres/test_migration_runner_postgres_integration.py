@@ -381,7 +381,9 @@ def test_postgres_migration_018_repairs_legacy_checksum_and_missing_constraint()
             conn.commit()
 
         with _connect(schema) as conn:
-            assert apply_migrations(conn, MIGRATIONS) == ()
+            # A recognized legacy v18 checksum must trigger the idempotent SQL
+            # reconciliation and checksum upgrade, not be silently skipped.
+            assert apply_migrations(conn, MIGRATIONS) == (18,)
 
         with _connect(schema) as conn:
             check_names = {
