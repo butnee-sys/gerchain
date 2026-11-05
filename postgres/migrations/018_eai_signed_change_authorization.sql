@@ -146,6 +146,7 @@ BEGIN
         WHERE conrelid = table_oid
           AND conname = 'gerchain_authorization_operation_check'
           AND contype = 'c'
+          AND convalidated
           AND position('operation' in lower(pg_get_constraintdef(oid))) > 0
           AND position('release' in lower(pg_get_constraintdef(oid))) > 0
           AND position('refund' in lower(pg_get_constraintdef(oid))) > 0
@@ -158,6 +159,7 @@ BEGIN
         WHERE conrelid = table_oid
           AND conname = 'gerchain_authorization_version_check'
           AND contype = 'c'
+          AND convalidated
           AND position('version' in lower(pg_get_constraintdef(oid))) > 0
           AND position('> 0' in lower(pg_get_constraintdef(oid))) > 0
     ) THEN
@@ -168,11 +170,9 @@ BEGIN
         WHERE conrelid = table_oid
           AND conname = 'gerchain_authorization_payload_hash_check'
           AND contype = 'c'
+          AND convalidated
           AND position('payload_hash' in lower(pg_get_constraintdef(oid))) > 0
-          AND position('^[0-9a-f]{64}
-ALTER TABLE gerchain_authorization_changes
-    ALTER COLUMN created_at SET DEFAULT now();
- in lower(pg_get_constraintdef(oid))) > 0
+          AND position('^[0-9a-f]{64}' in lower(pg_get_constraintdef(oid))) > 0
     ) THEN
         RAISE EXCEPTION 'SignedChange payload-hash CHECK is missing or weakened';
     END IF;
@@ -181,6 +181,7 @@ ALTER TABLE gerchain_authorization_changes
         WHERE conrelid = table_oid
           AND conname = 'gerchain_authorization_signature_check'
           AND contype = 'c'
+          AND convalidated
           AND position('length(signature)' in lower(pg_get_constraintdef(oid))) > 0
           AND position('> 0' in lower(pg_get_constraintdef(oid))) > 0
     ) THEN
