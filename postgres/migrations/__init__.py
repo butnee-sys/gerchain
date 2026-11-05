@@ -51,6 +51,9 @@ LEGACY_CHECKSUMS: dict[int, frozenset[str]] = {
         "494763e210c8a3839972ba21e8705dcf2e6564e5abca9c76161f2f49c6664ec8",
         "6766267c9e939a320bf6ac28ee516c4c11fe537ef2b6a7778d94ca6e3cd5b246",
     }),
+    18: frozenset({
+        "26b1e2a7a7398e493fa36292e67ea47e7ff7d5af0a9036419838565852108a34",
+    }),
 }
 
 
@@ -369,6 +372,21 @@ def apply_migrations(connection: Connection, migration_dir: Path) -> tuple[int, 
                     if is_canonical_chain and version == 16:
                         for statement in _split_sql_statements(source):
                             connection.execute(statement)
+                    # Version 018 was previously published with a non-reconciling
+                    # CREATE TABLE statement. If that historical checksum is found,
+                    # rerun the now-idempotent, fail-closed reconciliation and bind
+                    # schema_version to the current canonical migration checksum.
+                    if (
+                        is_canonical_chain
+                        and version == 18
+                        and row[0] in LEGACY_CHECKSUMS.get(18, frozenset())
+                    ):
+                        for statement in _split_sql_statements(source):
+                            connection.execute(statement)
+                        connection.execute(
+                            "UPDATE schema_version SET checksum = %s WHERE version = %s",
+                            (digest, version),
+                        )
                     continue
                 for statement in _split_sql_statements(source):
                     connection.execute(statement)
