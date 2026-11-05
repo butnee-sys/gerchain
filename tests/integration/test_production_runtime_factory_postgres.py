@@ -34,7 +34,7 @@ def test_production_runtime_factory_boots_against_postgresql():
         # ProductionRuntimeFactory applies the canonical numbered migration
         # registry under postgres/migrations (001..018). The older postgres/schema
         # directory is a compatibility bundle and is not the production registry.
-        assert versions == list(range(1, 18))
+        assert versions == list(range(1, 19))
 
         tables = {
             row[0]
