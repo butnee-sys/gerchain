@@ -67,6 +67,8 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r requirements-dee-security.txt -r postgres/requirements-test.txt
 
+      - name: Configure ephemeral CI Root of Trust
+        uses: ./.github/actions/setup-ci-root-of-trust
       - name: Compile all production, persistence, migration, and CORE modules first
         run: python -m compileall -q services production_entrypoint.py persistence postgres
 

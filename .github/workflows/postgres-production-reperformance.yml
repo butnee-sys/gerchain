@@ -47,6 +47,8 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements-dee-security.txt
           pip install pytest "psycopg[binary]"
+      - name: Configure ephemeral CI Root of Trust
+        uses: ./.github/actions/setup-ci-root-of-trust
       - name: Record tested revision and PostgreSQL version
         run: |
           mkdir -p production-gate-evidence

@@ -57,6 +57,7 @@ def test_release_cannot_redirect_authoritative_beneficiary():
                 evidence_verified=True,
             )
 
+        session.rollback()
         assert session.get(CanonicalEscrow, "esc-release").state == EscrowState.LOCKED.value
         assert session.query(TransactionWitness).count() == 0
     engine.dispose()

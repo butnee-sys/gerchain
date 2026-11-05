@@ -42,6 +42,8 @@ def set_required_env(monkeypatch, url="postgresql+psycopg://user:pass@localhost/
     monkeypatch.setenv("GERCHAIN_ESCROW_AMOUNT", "100")
     monkeypatch.setenv("GERCHAIN_CURRENCY", "MNT")
     monkeypatch.setenv("GERCHAIN_WITNESS_ID", "witness-1")
+    monkeypatch.setenv("GERCHAIN_AUTH_OWNER_ID", "release-owner")
+    monkeypatch.setenv("GERCHAIN_AUTH_PUBLIC_KEY_B64", "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=")
 
 
 def _stub_postgres_boot(monkeypatch, engine):

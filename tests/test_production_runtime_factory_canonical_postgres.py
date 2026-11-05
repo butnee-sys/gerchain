@@ -8,7 +8,9 @@ from services.gerchain_runtime_factory import ProductionRuntimeConfig, Productio
 
 
 @pytest.mark.integration
-def test_production_factory_builds_real_postgresql_canonical_runtime():
+def test_production_factory_builds_real_postgresql_canonical_runtime(monkeypatch):
+    monkeypatch.setenv("GERCHAIN_AUTH_OWNER_ID", "production-test-owner")
+    monkeypatch.setenv("GERCHAIN_AUTH_PUBLIC_KEY_B64", "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=")
     database_url = os.getenv("GERCHAIN_TEST_DATABASE_URL")
     if not database_url:
         pytest.skip("GERCHAIN_TEST_DATABASE_URL is required")
@@ -42,4 +44,5 @@ def test_production_factory_builds_real_postgresql_canonical_runtime():
             "gerchain_transaction_witnesses",
             "gerchain_outbox_events",
             "gerchain_idempotency_records",
+        "gerchain_authorization_changes",
         }.issubset(tables)

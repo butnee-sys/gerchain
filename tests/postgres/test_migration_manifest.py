@@ -11,8 +11,8 @@ def test_postgresql_migration_versions_resolve_to_exact_canonical_chain():
     selected = _canonical_migration_files(_migration_dir())
     versions = [int(path.name.split("_", 1)[0]) for path in selected]
 
-    assert len(selected) == 17
-    assert versions == list(range(1, 18))
+    assert len(selected) == 18
+    assert versions == list(range(1, 19))
 
 
 def test_canonical_migration_chain_contains_required_stages():
@@ -36,5 +36,6 @@ def test_canonical_migration_chain_contains_required_stages():
         "015_repair_escrow_state_constraint_drift.sql",
         "016_reconcile_escrow_state_constraint.sql",
         "017_ea35_created_witness_event.sql",
+        "018_eai_signed_change_authorization.sql",
     }
     assert names == required

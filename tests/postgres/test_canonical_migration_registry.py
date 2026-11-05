@@ -39,7 +39,7 @@ def test_canonical_migration_registry_rejects_missing_version(tmp_path):
 
 def test_canonical_migration_registry_rejects_unexpected_version(tmp_path):
     _write_chain(tmp_path)
-    (tmp_path / "019_unapproved.sql").write_text("SELECT 19;", encoding="utf-8")
+    (tmp_path / "019_unapproved.sql").write_text("SELECT 18;", encoding="utf-8")
     with pytest.raises(RuntimeError, match="unexpected migration versions"):
         _canonical_migration_files(tmp_path)
 

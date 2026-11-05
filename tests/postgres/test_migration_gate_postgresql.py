@@ -1,4 +1,4 @@
-"""Real PostgreSQL proof for the canonical 001..016 migration gate.
+"""Real PostgreSQL proof for the complete canonical migration gate.
 
 Set GERCHAIN_TEST_DATABASE_URL to a disposable PostgreSQL database. Tests create
 and drop an isolated schema; they never target public schema directly.
@@ -13,11 +13,12 @@ from pathlib import Path
 import psycopg
 import pytest
 
-from postgres.migrations import apply_migrations
+from postgres.migrations import CANONICAL_MIGRATION_NAMES, apply_migrations
 
 
 DATABASE_URL = os.environ.get("GERCHAIN_TEST_DATABASE_URL")
 MIGRATION_DIR = Path(__file__).resolve().parents[2] / "postgres" / "migrations"
+CANONICAL_VERSIONS = list(CANONICAL_MIGRATION_NAMES)
 pytestmark = pytest.mark.skipif(
     not DATABASE_URL,
     reason="GERCHAIN_TEST_DATABASE_URL must point to a disposable PostgreSQL database",
@@ -96,13 +97,13 @@ def test_postgresql_clean_migration_rerun_and_checksum_drift_are_safe(tmp_path: 
         # PostgreSQL search_path isolates every unqualified migration object.
         with psycopg.connect(DATABASE_URL, options=f"-c search_path={schema},public") as connection:
             first = apply_migrations(connection, MIGRATION_DIR)
-            assert first == tuple(range(1, 17))
+            assert first == tuple(CANONICAL_VERSIONS)
 
             history = connection.execute(
                 f'SELECT version, checksum FROM "{schema}".schema_version ORDER BY version'
             ).fetchall()
-            assert [version for version, _ in history] == list(range(1, 17))
-            assert len({version for version, _ in history}) == 16
+            assert [version for version, _ in history] == CANONICAL_VERSIONS
+            assert len({version for version, _ in history}) == len(CANONICAL_VERSIONS)
             assert all(len(digest) == 64 for _, digest in history)
             assert all(
                 all(character in "0123456789abcdef" for character in digest)

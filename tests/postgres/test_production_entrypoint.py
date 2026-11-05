@@ -39,7 +39,7 @@ def test_production_entrypoint_boots_canonical_postgres_schema(monkeypatch):
             versions = connection.execute(
                 text("SELECT version FROM schema_version ORDER BY version")
             ).scalars().all()
-            assert versions == list(range(1, 18))
+            assert versions == list(range(1, 19))
 
             inspector = inspect(connection)
             required = {
@@ -49,6 +49,7 @@ def test_production_entrypoint_boots_canonical_postgres_schema(monkeypatch):
                 "gerchain_transaction_witnesses",
                 "gerchain_outbox_events",
                 "gerchain_idempotency_records",
+                "gerchain_authorization_changes",
             }
             assert required.issubset(set(inspector.get_table_names()))
     finally:

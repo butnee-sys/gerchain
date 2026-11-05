@@ -44,6 +44,8 @@ def test_build_production_runtime_uses_canonical_factory_and_validated_env(monke
     monkeypatch.setenv("GERCHAIN_ESCROW_AMOUNT", "25")
     monkeypatch.setenv("GERCHAIN_CURRENCY", "MNT")
     monkeypatch.setenv("GERCHAIN_WITNESS_ID", "W-1")
+    monkeypatch.setenv("GERCHAIN_AUTH_OWNER_ID", "release-owner")
+    monkeypatch.setenv("GERCHAIN_AUTH_PUBLIC_KEY_B64", "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=")
     monkeypatch.setattr(entrypoint, "create_engine", lambda *a, **k: engine)
 
     class FakeConfig:
@@ -96,6 +98,8 @@ def test_build_production_runtime_rejects_invalid_configuration(
     monkeypatch.setenv("GERCHAIN_ESCROW_AMOUNT", "25")
     monkeypatch.setenv("GERCHAIN_CURRENCY", "MNT")
     monkeypatch.setenv("GERCHAIN_WITNESS_ID", "W-1")
+    monkeypatch.setenv("GERCHAIN_AUTH_OWNER_ID", "release-owner")
+    monkeypatch.setenv("GERCHAIN_AUTH_PUBLIC_KEY_B64", "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=")
     monkeypatch.setenv(variable, value)
 
     with pytest.raises(RuntimeError, match=message):
@@ -109,6 +113,8 @@ def test_build_production_runtime_disposes_engine_if_factory_fails(monkeypatch):
     monkeypatch.setenv("GERCHAIN_ESCROW_AMOUNT", "25")
     monkeypatch.setenv("GERCHAIN_CURRENCY", "MNT")
     monkeypatch.setenv("GERCHAIN_WITNESS_ID", "W-1")
+    monkeypatch.setenv("GERCHAIN_AUTH_OWNER_ID", "release-owner")
+    monkeypatch.setenv("GERCHAIN_AUTH_PUBLIC_KEY_B64", "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=")
     monkeypatch.setattr(entrypoint, "create_engine", lambda *a, **k: engine)
 
     class FakeFactory:

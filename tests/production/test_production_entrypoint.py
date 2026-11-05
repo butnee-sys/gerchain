@@ -52,6 +52,8 @@ def set_required_env(monkeypatch, url="postgresql+psycopg://user:pass@localhost/
     monkeypatch.setenv("GERCHAIN_ESCROW_AMOUNT", "100")
     monkeypatch.setenv("GERCHAIN_CURRENCY", "MNT")
     monkeypatch.setenv("GERCHAIN_WITNESS_ID", "witness-1")
+    monkeypatch.setenv("GERCHAIN_AUTH_OWNER_ID", "release-owner")
+    monkeypatch.setenv("GERCHAIN_AUTH_PUBLIC_KEY_B64", "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=")
 
 
 def test_build_production_runtime_uses_configured_factory_and_canonical_authority(monkeypatch):
