@@ -84,7 +84,11 @@ def _seed(factory):
 
 def _release(session, monkeypatch, tx="R1", transparency=True):
     evidence = {"proof": "release-test"}
-    root, signed_change, owner_id = _signed_release(\n        transaction_id=tx, escrow_id="E1", destination="BEN", amount=100,\n        currency="MNT", evidence=evidence, monkeypatch=monkeypatch,\n        transparency=transparency,\n    )
+    root, signed_change, owner_id = _signed_release(
+        transaction_id=tx, escrow_id="E1", destination="BEN", amount=100,
+        currency="MNT", evidence=evidence, monkeypatch=monkeypatch,
+        transparency=transparency,
+    )
     return release_escrow_in_transaction(
         session,
         transaction_id=tx,
@@ -93,7 +97,9 @@ def _release(session, monkeypatch, tx="R1", transparency=True):
         amount=100,
         currency="MNT",
         decision_status="APPROVE",
-        root=root,\n        signed_change=signed_change,\n        owner_id=owner_id,
+        root=root,
+        signed_change=signed_change,
+        owner_id=owner_id,
         trust=True,
         transparency=transparency,
         performance=True,
@@ -161,7 +167,7 @@ def test_release_replay_does_not_move_value_twice(monkeypatch):
         _release(session, monkeypatch)
 
     with factory.begin() as session:
-        result = _release(session)
+        result = _release(session, monkeypatch)
         assert result["replayed"] is True
 
     with factory() as session:
