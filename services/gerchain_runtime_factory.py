@@ -142,25 +142,47 @@ def assert_canonical_production_schema(connection: Any) -> None:
 
     # The migration runner owns schema evolution. Startup independently verifies
     # the two safety-critical catalog invariants before exposing a production runtime.
-    version_index = connection.exec_driver_sql(
-        """
-        SELECT EXISTS (
-            SELECT 1
-            FROM pg_index i
-            JOIN pg_class t ON t.oid = i.indrelid
-            JOIN pg_namespace n ON n.oid = t.relnamespace
-            JOIN pg_attribute a ON a.attrelid = t.oid AND a.attnum = i.indkey[0]
-            WHERE n.nspname = current_schema()
-              AND t.relname = 'schema_version'
-              AND i.indisunique
-              AND i.indpred IS NULL
-              AND i.indnkeyatts = 1
-              AND a.attname = 'version'
-        )
-        """
-    ).scalar_one()
-    if not version_index:
-        raise RuntimeError("schema_version.version must have a unique index")
+    dialect = connection.dialect.name
+    if dialect == "postgresql":
+        version_index = connection.exec_driver_sql(
+            """
+            SELECT EXISTS (
+                SELECT 1
+                FROM pg_index i
+                JOIN pg_class t ON t.oid = i.indrelid
+                JOIN pg_namespace n ON n.oid = t.relnamespace
+                JOIN pg_attribute a ON a.attrelid = t.oid AND a.attnum = i.indkey[0]
+                WHERE n.nspname = current_schema()
+                  AND t.relname = 'schema_version'
+                  AND i.indisunique
+                  AND i.indpred IS NULL
+                  AND i.indnkeyatts = 1
+                  AND a.attname = 'version'
+            )
+            """
+        ).scalar_one()
+        if not version_index:
+            raise RuntimeError("schema_version.version must have a unique index")
+
+        state_constraints = connection.exec_driver_sql(
+            """
+            SELECT conname, pg_get_constraintdef(oid), convalidated
+            FROM pg_constraint
+            WHERE conrelid = 'escrows'::regclass
+              AND contype = 'c'
+              AND position('state' in lower(pg_get_constraintdef(oid))) > 0
+            """
+        ).all()
+    elif dialect == "sqlite":
+        if not _has_unique_key(inspector, "schema_version", ("version",)):
+            raise RuntimeError("schema_version.version must have a unique key")
+        state_constraints = [
+            (item.get("name"), item.get("sqltext", ""), True)
+            for item in inspector.get_check_constraints("escrows")
+            if "state" in str(item.get("sqltext", "")).lower()
+        ]
+    else:
+        raise RuntimeError(f"unsupported canonical schema inspection dialect: {dialect}")
 
     migration_rows = connection.exec_driver_sql(
         "SELECT version, applied_at FROM schema_version ORDER BY version"
