@@ -128,7 +128,7 @@ jobs:
                   assert after[14][1] == checksum((migration_dir / "015_repair_escrow_state_constraint_drift.sql").read_text(encoding="utf-8"))
                   assert after[15][1] == checksum((migration_dir / "016_reconcile_escrow_state_constraint.sql").read_text(encoding="utf-8"))
                   assert after[16][1] == checksum((migration_dir / "017_ea35_created_witness_event.sql").read_text(encoding="utf-8"))
-            assert after[17][1] == checksum((migration_dir / "018_eai_signed_change_authorization.sql").read_text(encoding="utf-8"))
+                  assert after[17][1] == checksum((migration_dir / "018_eai_signed_change_authorization.sql").read_text(encoding="utf-8"))
                   preservation_after = connection.execute("""
                     SELECT id, sender_address, receiver_address, amount, state,
                            condition_desc, refund_destination, currency, version,
