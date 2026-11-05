@@ -1,6 +1,6 @@
 """Serialized, checksummed PostgreSQL migration runner.
 
-The 17-file canonical chain is explicit because historical aliases coexist in
+The 18-file canonical chain is explicit because historical aliases coexist in
 this directory. Schema DDL, checksum verification, and schema_version publication run in one
 transaction while a session-level advisory lock serializes competing migration
 processes. The lock is explicitly released after commit or rollback.
@@ -32,10 +32,30 @@ _CANONICAL_FILES = (
     "015_repair_escrow_state_constraint_drift.sql",
     "016_reconcile_escrow_state_constraint.sql",
     "017_ea35_created_witness_event.sql",
+    "018_eai_signed_change_authorization.sql",
 )
 
 
 CANONICAL_MIGRATION_NAMES = {version: name for version, name in enumerate(_CANONICAL_FILES, start=1)}
+
+# One authoritative registry for checksums accepted from historical schema_version
+# rows. The migration runner and inventory audit both consume these exact values.
+# Frozen v1 digests were accepted by the original runner before the canonical
+# migration file was finalized; preserve them explicitly for safe upgrades.
+FROZEN_CHECKSUMS: dict[int, frozenset[str]] = {}
+LEGACY_CHECKSUMS: dict[int, frozenset[str]] = {
+    1: frozenset({
+        "6eea24dae8b3ac9aa9413a32da1617250f14725bdb19f50e5d8300308ad173d4",
+        "538e0f5132ec775ec8963a2a72072dd00e81afa37383a6c5f6a8f54259716a31",
+        "ab6838b3e69a9a9faa28bdd82c98fe579921763be8b5dd56e1c686b77c098596",
+        "494763e210c8a3839972ba21e8705dcf2e6564e5abca9c76161f2f49c6664ec8",
+        "6766267c9e939a320bf6ac28ee516c4c11fe537ef2b6a7778d94ca6e3cd5b246",
+    }),
+    18: frozenset({
+        "26b1e2a7a7398e493fa36292e67ea47e7ff7d5af0a9036419838565852108a34",
+    }),
+}
+
 
 
 def checksum(source: str) -> str:
@@ -322,16 +342,11 @@ def apply_migrations(connection: Connection, migration_dir: Path) -> tuple[int, 
                 if not source.strip():
                     raise ValueError(f"empty migration is not allowed: {path.name}")
                 digest = checksum(source)
-                historical_checksums = {
-                    1: {
-                        "6eea24dae8b3ac9aa9413a32da1617250f14725bdb19f50e5d8300308ad173d4",
-                        "538e0f5132ec775ec8963a2a72072dd00e81afa37383a6c5f6a8f54259716a31",
-                        "ab6838b3e69a9a9faa28bdd82c98fe579921763be8b5dd56e1c686b77c098596",
-                        "494763e210c8a3839972ba21e8705dcf2e6564e5abca9c76161f2f49c6664ec8",
-                        "6766267c9e939a320bf6ac28ee516c4c11fe537ef2b6a7778d94ca6e3cd5b246",
-                    }
-                }
-                accepted_checksums = {digest} | historical_checksums.get(version, set())
+                accepted_checksums = (
+                    {digest}
+                    | set(FROZEN_CHECKSUMS.get(version, frozenset()))
+                    | set(LEGACY_CHECKSUMS.get(version, frozenset()))
+                )
                 # Version 002 hardens refund_destination before later EA-35
                 # finalization migrations. Existing legacy rows must be backfilled
                 # before the first NOT NULL DDL, not only before v11/v13. Run this
@@ -357,6 +372,21 @@ def apply_migrations(connection: Connection, migration_dir: Path) -> tuple[int, 
                     if is_canonical_chain and version == 16:
                         for statement in _split_sql_statements(source):
                             connection.execute(statement)
+                    # Version 018 was previously published with a non-reconciling
+                    # CREATE TABLE statement. If that historical checksum is found,
+                    # rerun the now-idempotent, fail-closed reconciliation and bind
+                    # schema_version to the current canonical migration checksum.
+                    if (
+                        is_canonical_chain
+                        and version == 18
+                        and row[0] in LEGACY_CHECKSUMS.get(18, frozenset())
+                    ):
+                        for statement in _split_sql_statements(source):
+                            connection.execute(statement)
+                        connection.execute(
+                            "UPDATE schema_version SET checksum = %s WHERE version = %s",
+                            (digest, version),
+                        )
                     continue
                 for statement in _split_sql_statements(source):
                     connection.execute(statement)
@@ -392,4 +422,4 @@ def apply_migrations(connection: Connection, migration_dir: Path) -> tuple[int, 
     return tuple(applied_now)
 
 
-__all__ = ["apply_migrations", "checksum", "CANONICAL_MIGRATION_NAMES", "_canonical_migration_files", "_split_sql_statements"]
+__all__ = ["apply_migrations", "checksum", "CANONICAL_MIGRATION_NAMES", "FROZEN_CHECKSUMS", "LEGACY_CHECKSUMS", "_canonical_migration_files", "_split_sql_statements"]

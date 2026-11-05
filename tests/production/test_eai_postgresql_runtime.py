@@ -19,7 +19,7 @@ DATABASE_URL = os.environ.get("GERCHAIN_POSTGRES_DSN")
 MIGRATION_DIR = Path(__file__).resolve().parents[2] / "postgres" / "migrations"
 
 
-def test_production_factory_and_canonical_runtime_postgresql():
+def test_production_factory_and_canonical_runtime_postgresql(signed_change_factory):
     assert DATABASE_URL, "GERCHAIN_POSTGRES_DSN is required"
 
     engine = create_engine(DATABASE_URL, pool_pre_ping=True)
@@ -85,13 +85,18 @@ def test_production_factory_and_canonical_runtime_postgresql():
 
         runtime.fund("fund-prod-1", "SRC", "T1", {"verified": True})
         runtime.lock("lock-prod-1", "T2", {"verified": True})
+        root, signed_change, owner_id = signed_change_factory(
+            operation="RELEASE", transaction_id="release-prod-1", escrow_id="eai-prod-1",
+            destination="BEN", amount=100, currency="MNT", evidence={"verified": True},
+        )
         runtime.release(
             transaction_id="release-prod-1",
             destination="BEN",
             timestamp="T3",
             evidence={"verified": True},
-            root=object(),
-            owner_id="production-test",
+            root=root,
+            signed_change=signed_change,
+            owner_id=owner_id,
             authorized=True,
             evidence_verified=True,
             trinity_proof={"trust": True, "transparency": True, "performance": True},

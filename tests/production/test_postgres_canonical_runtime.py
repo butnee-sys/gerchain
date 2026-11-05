@@ -22,7 +22,7 @@ def _reset_canonical_test_state(engine):
         )
 
 
-def test_postgres_canonical_fund_lock_release_reconciles():
+def test_postgres_canonical_fund_lock_release_reconciles(signed_change_factory):
     url = os.environ.get("GERCHAIN_DATABASE_URL") or os.environ["GERCHAIN_TEST_DATABASE_URL"]
     engine = create_engine(url, pool_pre_ping=True)
     factory = ProductionRuntimeFactory(
@@ -88,6 +88,10 @@ def test_postgres_canonical_fund_lock_release_reconciles():
         )
         session.commit()
 
+    root, signed_change, owner_id = signed_change_factory(
+        operation="RELEASE", transaction_id="pg-proof-release", escrow_id="pg-proof-escrow",
+        destination="pg-proof-beneficiary", amount=100, currency="MNT", evidence=None,
+    )
     with Session() as session:
         release_escrow_in_transaction(
             session,
@@ -96,8 +100,7 @@ def test_postgres_canonical_fund_lock_release_reconciles():
             beneficiary="pg-proof-beneficiary",
             amount=100,
             currency="MNT",
-            decision_status="APPROVE",
-            authorization_status="AUTHORIZED",
+            decision_status="APPROVE", root=root, signed_change=signed_change, owner_id=owner_id,
             trust=True,
             transparency=True,
             performance=True,
@@ -122,7 +125,7 @@ def test_postgres_canonical_fund_lock_release_reconciles():
     engine.dispose()
 
 
-def test_postgres_canonical_refund_and_cancel_value_paths_reconcile():
+def test_postgres_canonical_refund_and_cancel_value_paths_reconcile(signed_change_factory):
     url = os.environ["GERCHAIN_DATABASE_URL"]
     engine = create_engine(url, pool_pre_ping=True)
     factory = ProductionRuntimeFactory(
@@ -157,8 +160,16 @@ def test_postgres_canonical_refund_and_cancel_value_paths_reconcile():
         session.commit()
 
     from persistence.refund_escrow import refund_escrow_in_transaction
+    root, signed_change, owner_id = signed_change_factory(
+        operation="REFUND", transaction_id="pg-proof-refund", escrow_id="pg-proof-refund-escrow",
+        destination="pg-proof-refund-source", amount=50, currency="MNT", evidence=None,
+    )
     with Session() as session:
-        refund_escrow_in_transaction(session, transaction_id="pg-proof-refund", escrow_id="pg-proof-refund-escrow", amount=50, currency="MNT")
+        refund_escrow_in_transaction(
+            session, transaction_id="pg-proof-refund", escrow_id="pg-proof-refund-escrow",
+            amount=50, currency="MNT", root=root, signed_change=signed_change, owner_id=owner_id,
+            authorized=True, transparency=True, dispute_or_cancellation_verified=True,
+        )
         session.commit()
 
     with Session() as session:

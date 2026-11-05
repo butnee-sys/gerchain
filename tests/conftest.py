@@ -53,7 +53,15 @@ def isolate_postgresql_core_state():
         "gerchain_release_accounts",
     )
     with engine.begin() as connection:
-        connection.execute(text("TRUNCATE TABLE " + ", ".join(tables) + " RESTART IDENTITY CASCADE"))
+        authorization_table_exists = connection.execute(
+            text("SELECT to_regclass('gerchain_authorization_changes')")
+        ).scalar_one()
+        truncate_tables = tables + (
+            ("gerchain_authorization_changes",) if authorization_table_exists else ()
+        )
+        connection.execute(
+            text("TRUNCATE TABLE " + ", ".join(truncate_tables) + " RESTART IDENTITY CASCADE")
+        )
     yield
     engine.dispose()
 
@@ -67,3 +75,95 @@ def canonical_postgresql_engine():
     engine = create_engine(url, pool_pre_ping=True)
     yield engine
     engine.dispose()
+
+
+@pytest.fixture
+def signed_change_factory(monkeypatch):
+    """Create deterministic Ed25519 approvals for canonical PostgreSQL tests."""
+    import base64
+    import json
+
+    from cryptography.hazmat.primitives import serialization
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+
+    from dee_security.root_of_trust import RootOfTrust, SignedChange
+    from persistence.signed_change_authorization import (
+        canonical_payload_hash,
+        canonical_refund_payload,
+        canonical_release_payload,
+    )
+
+    private_key = Ed25519PrivateKey.from_private_bytes(bytes(range(32)))
+    public_key = private_key.public_key().public_bytes(
+        serialization.Encoding.Raw, serialization.PublicFormat.Raw
+    )
+    owner_id = "gerchain-postgres-regression-owner"
+    public_key_b64 = base64.b64encode(public_key).decode("ascii")
+    monkeypatch.setenv("GERCHAIN_AUTH_OWNER_ID", owner_id)
+    monkeypatch.setenv("GERCHAIN_AUTH_PUBLIC_KEY_B64", public_key_b64)
+    root = RootOfTrust(owner_id=owner_id, public_key_b64=public_key_b64)
+
+    def build(
+        *,
+        operation,
+        transaction_id,
+        escrow_id,
+        destination,
+        amount,
+        currency,
+        evidence=None,
+    ):
+        if operation == "RELEASE":
+            protected = canonical_release_payload(
+                transaction_id=transaction_id,
+                escrow_id=escrow_id,
+                source=escrow_id,
+                destination=destination,
+                amount=amount,
+                currency=currency,
+                decision_status="APPROVE",
+                trust=True,
+                transparency=True,
+                performance=True,
+                evidence_verified=True,
+                evidence=evidence,
+            )
+        elif operation == "REFUND":
+            protected = canonical_refund_payload(
+                transaction_id=transaction_id,
+                escrow_id=escrow_id,
+                source=escrow_id,
+                destination=destination,
+                amount=amount,
+                currency=currency,
+                authorized=True,
+                transparency=True,
+                dispute_or_cancellation_verified=True,
+                evidence=evidence,
+            )
+        else:
+            raise ValueError(f"unsupported signed test operation: {operation}")
+
+        unsigned = SignedChange(
+            owner_id=owner_id,
+            change_id=f"CHANGE-{transaction_id}",
+            version=1,
+            payload_hash=canonical_payload_hash(protected),
+            signature="",
+        )
+        signing_bytes = json.dumps(
+            unsigned.signing_payload(),
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=False,
+        ).encode("utf-8")
+        signed = SignedChange(
+            owner_id=owner_id,
+            change_id=unsigned.change_id,
+            version=1,
+            payload_hash=unsigned.payload_hash,
+            signature=base64.b64encode(private_key.sign(signing_bytes)).decode("ascii"),
+        )
+        return root, signed, owner_id
+
+    return build

@@ -16,7 +16,7 @@ import psycopg
 import pytest
 from psycopg import sql
 
-from postgres.migrations import _canonical_migration_files, apply_migrations
+from postgres.migrations import CANONICAL_MIGRATION_NAMES, _canonical_migration_files, apply_migrations, checksum
 from services.gerchain_runtime_factory import assert_canonical_production_schema
 from sqlalchemy import create_engine
 from persistence.atomic_ledger import AtomicLedgerBase
@@ -24,11 +24,13 @@ from persistence.atomic_value_transaction import WitnessBase
 from persistence.durable_idempotency import IdempotencyBase
 from persistence.escrow_aggregate import EscrowBase
 from persistence.recovery_outbox import OutboxBase
+from persistence.signed_change_authorization import AuthorizationBase
 
 ROOT = Path(__file__).resolve().parents[2]
 MIGRATIONS = ROOT / "postgres" / "migrations"
 DSN = os.environ.get("GERCHAIN_TEST_POSTGRES_URL")
 pytestmark = pytest.mark.skipif(not DSN, reason="GERCHAIN_TEST_POSTGRES_URL is not configured")
+CANONICAL_VERSIONS = tuple(CANONICAL_MIGRATION_NAMES)
 
 
 def _schema():
@@ -93,7 +95,7 @@ def test_postgres_upgrade_from_014_preserves_frozen_history_and_repairs_state_co
             conn.commit()
         with _connect(schema) as conn:
             applied = apply_migrations(conn, MIGRATIONS)
-            assert applied == (15, 16, 17)
+            assert applied == (15, 16, 17, 18)
         with _connect(schema) as conn:
             after = conn.execute(
                 "SELECT version, checksum, applied_at FROM schema_version ORDER BY version"
@@ -102,6 +104,7 @@ def test_postgres_upgrade_from_014_preserves_frozen_history_and_repairs_state_co
             assert after[14][0] == 15
             assert after[15][0] == 16
             assert after[16][0] == 17
+            assert after[17][0] == 18
             _assert_migration_015_constraints(conn)
 
         with _connect(schema) as conn:
@@ -121,12 +124,12 @@ def test_postgres_clean_apply_rerun_and_history_stability():
     try:
         with _connect(schema) as conn:
             first = apply_migrations(conn, MIGRATIONS)
-            assert first == tuple(range(1, 18))
+            assert first == CANONICAL_VERSIONS
         with _connect(schema) as conn:
             before = conn.execute(
                 "SELECT version, checksum, applied_at FROM schema_version ORDER BY version"
             ).fetchall()
-            assert [row[0] for row in before] == list(range(1, 18))
+            assert [row[0] for row in before] == list(CANONICAL_VERSIONS)
             _assert_migration_015_constraints(conn)
 
         engine = create_engine(DSN, connect_args={"options": f"-c search_path={schema}"})
@@ -163,9 +166,9 @@ def test_postgres_two_concurrent_runners_publish_each_version_once():
             rows = conn.execute(
                 "SELECT version, COUNT(*) FROM schema_version GROUP BY version ORDER BY version"
             ).fetchall()
-        assert [row[0] for row in rows] == list(range(1, 18))
+        assert [row[0] for row in rows] == list(CANONICAL_VERSIONS)
         assert all(row[1] == 1 for row in rows)
-        assert sorted(len(result) for result in results) == [0, 17]
+        assert sorted(len(result) for result in results) == [0, len(CANONICAL_VERSIONS)]
         with _connect(schema) as conn:
             _assert_migration_015_constraints(conn)
     finally:
@@ -254,7 +257,7 @@ def test_v016_repairs_escrow_state_constraint_drift_after_v015_is_recorded(drift
             conn.commit()
 
         with _connect(schema) as conn:
-            assert apply_migrations(conn, MIGRATIONS) == (16, 17)
+            assert apply_migrations(conn, MIGRATIONS) == (16, 17, 18)
 
         with _connect(schema) as conn:
             _assert_migration_015_constraints(conn)
@@ -271,10 +274,134 @@ def test_v016_repairs_escrow_state_constraint_drift_after_v015_is_recorded(drift
             versions = conn.execute(
                 "SELECT version FROM schema_version ORDER BY version"
             ).fetchall()
-            assert [row[0] for row in versions] == list(range(1, 18))
+            assert [row[0] for row in versions] == list(CANONICAL_VERSIONS)
             # The SELECT above opens a transaction in psycopg; the migration
             # runner deliberately requires a clean connection on entry.
             conn.commit()
             assert apply_migrations(conn, MIGRATIONS) == ()
+    finally:
+        _drop_schema(schema)
+
+
+
+def test_postgres_migration_018_reconciles_compatible_preexisting_authorization_table():
+    schema = _schema()
+    try:
+        engine = create_engine(
+            DSN,
+            connect_args={"options": f"-c search_path={schema}"},
+        )
+        try:
+            # Simulate a compatible legacy/ORM-created table without a v18
+            # schema_version publication. Migration 018 must validate and adopt
+            # it, not fail with DuplicateTable or silently accept a bad shape.
+            AuthorizationBase.metadata.create_all(engine)
+        finally:
+            engine.dispose()
+
+        with _connect(schema) as conn:
+            applied = apply_migrations(conn, MIGRATIONS)
+            assert applied == CANONICAL_VERSIONS
+
+        with _connect(schema) as conn:
+            check_names = {
+                row[0]
+                for row in conn.execute(
+                    """
+                    SELECT conname
+                    FROM pg_constraint
+                    WHERE conrelid = 'gerchain_authorization_changes'::regclass
+                      AND contype = 'c'
+                    """
+                ).fetchall()
+            }
+            assert check_names == {
+                "gerchain_authorization_operation_check",
+                "gerchain_authorization_version_check",
+                "gerchain_authorization_payload_hash_check",
+                "gerchain_authorization_signature_check",
+            }
+            conn.commit()
+            assert apply_migrations(conn, MIGRATIONS) == ()
+
+        engine = create_engine(
+            DSN,
+            connect_args={"options": f"-c search_path={schema}"},
+        )
+        try:
+            with engine.connect() as connection:
+                assert_canonical_production_schema(connection)
+        finally:
+            engine.dispose()
+    finally:
+        _drop_schema(schema)
+
+
+
+def test_postgres_migration_018_rejects_incompatible_preexisting_authorization_table():
+    schema = _schema()
+    try:
+        with _connect(schema) as conn:
+            conn.execute(
+                "CREATE TABLE gerchain_authorization_changes (change_id TEXT PRIMARY KEY)"
+            )
+
+        with pytest.raises(psycopg.Error, match="exactly 9 canonical columns"):
+            with _connect(schema) as conn:
+                apply_migrations(conn, MIGRATIONS)
+
+        with _connect(schema) as conn:
+            assert conn.execute(
+                "SELECT to_regclass('schema_version')"
+            ).fetchone()[0] is None
+            assert conn.execute(
+                "SELECT to_regclass('gerchain_authorization_changes')"
+            ).fetchone()[0] is not None
+    finally:
+        _drop_schema(schema)
+
+
+
+def test_postgres_migration_018_repairs_legacy_checksum_and_missing_constraint():
+    schema = _schema()
+    legacy_checksum = "26b1e2a7a7398e493fa36292e67ea47e7ff7d5af0a9036419838565852108a34"
+    try:
+        with _connect(schema) as conn:
+            assert apply_migrations(conn, MIGRATIONS) == CANONICAL_VERSIONS
+
+        with _connect(schema) as conn:
+            conn.execute(
+                "ALTER TABLE gerchain_authorization_changes "
+                "DROP CONSTRAINT gerchain_authorization_signature_check"
+            )
+            conn.execute(
+                "UPDATE schema_version SET checksum = %s WHERE version = 18",
+                (legacy_checksum,),
+            )
+            conn.commit()
+
+        with _connect(schema) as conn:
+            assert apply_migrations(conn, MIGRATIONS) == ()
+
+        with _connect(schema) as conn:
+            check_names = {
+                row[0]
+                for row in conn.execute(
+                    """
+                    SELECT conname
+                    FROM pg_constraint
+                    WHERE conrelid = 'gerchain_authorization_changes'::regclass
+                      AND contype = 'c'
+                    """
+                ).fetchall()
+            }
+            assert "gerchain_authorization_signature_check" in check_names
+            expected_checksum = checksum(
+                (MIGRATIONS / "018_eai_signed_change_authorization.sql").read_text(encoding="utf-8")
+            )
+            actual_checksum = conn.execute(
+                "SELECT checksum FROM schema_version WHERE version = 18"
+            ).fetchone()[0]
+            assert actual_checksum == expected_checksum
     finally:
         _drop_schema(schema)

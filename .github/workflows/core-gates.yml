@@ -17,6 +17,7 @@ on:
 jobs:
   core-gates:
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     services:
       postgres:
         image: postgres:16
@@ -46,7 +47,10 @@ jobs:
           if [ -f requirements-dee-security.txt ]; then pip install -r requirements-dee-security.txt; fi
           if [ -f postgres/requirements-test.txt ]; then pip install -r postgres/requirements-test.txt; fi
           pip install "sqlalchemy>=2" "psycopg[binary]" fastapi uvicorn httpx pytest pyyaml "cryptography>=43,<47"
-          python -c "import cryptography; print('CRYPTOGRAPHY_VERSION=' + cryptography.__version__)"
+      - name: Configure ephemeral CI Root of Trust
+        uses: ./.github/actions/setup-ci-root-of-trust
+      - name: Record cryptography version
+        run: python -c "import cryptography; print('CRYPTOGRAPHY_VERSION=' + cryptography.__version__)"
       - name: Validate workflow YAML
         run: |
           python - <<'PY'
@@ -97,6 +101,7 @@ jobs:
           GERCHAIN_TEST_POSTGRES_URL: postgresql://gerchain:gerchain@127.0.0.1:5432/gerchain_test
         run: pytest -q --import-mode=importlib
       - name: Audit canonical migration inventory and applied history
+        if: always()
         env:
           GERCHAIN_MIGRATION_AUDIT_DATABASE_URL: postgresql://gerchain:gerchain@127.0.0.1:5432/gerchain_test
           REQUIRE_MIGRATION_HISTORY: "1"

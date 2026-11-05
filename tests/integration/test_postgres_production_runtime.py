@@ -1,6 +1,14 @@
 from __future__ import annotations
 
 import os
+import base64
+import json
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+from dee_security.root_of_trust import RootOfTrust, SignedChange
+from persistence.signed_change_authorization import (
+    SignedChangeAuthorization, canonical_release_payload, canonical_payload_hash,
+)
 from datetime import datetime, timezone
 
 import pytest
@@ -16,8 +24,40 @@ from persistence.atomic_ledger import LedgerMovementModel
 from services.gerchain_runtime_factory import ProductionRuntimeConfig, ProductionRuntimeFactory
 
 
+
+def _signed_release(*, transaction_id, escrow_id, destination, amount, currency, evidence, monkeypatch, transparency=True):
+    private_key = Ed25519PrivateKey.from_private_bytes(bytes(range(32)))
+    public_key = private_key.public_key().public_bytes(
+        serialization.Encoding.Raw, serialization.PublicFormat.Raw
+    )
+    public_key_b64 = base64.b64encode(public_key).decode("ascii")
+    owner_id = "eai-integration-test-owner"
+    monkeypatch.setenv("GERCHAIN_AUTH_OWNER_ID", owner_id)
+    monkeypatch.setenv("GERCHAIN_AUTH_PUBLIC_KEY_B64", public_key_b64)
+    root = RootOfTrust(owner_id=owner_id, public_key_b64=public_key_b64)
+    payload = canonical_release_payload(
+        transaction_id=transaction_id, escrow_id=escrow_id,
+        source=escrow_id, destination=destination, amount=amount,
+        currency=currency, decision_status="APPROVE", trust=True,
+        transparency=transparency, performance=True, evidence_verified=True,
+        evidence=evidence,
+    )
+    unsigned = SignedChange(
+        owner_id=owner_id, change_id=f"CHANGE-{transaction_id}", version=1,
+        payload_hash=canonical_payload_hash(payload), signature="",
+    )
+    signing_bytes = json.dumps(
+        unsigned.signing_payload(), sort_keys=True, separators=(",", ":"),
+        ensure_ascii=False,
+    ).encode("utf-8")
+    signed_change = SignedChange(
+        owner_id=owner_id, change_id=unsigned.change_id, version=1,
+        payload_hash=unsigned.payload_hash,
+        signature=base64.b64encode(private_key.sign(signing_bytes)).decode("ascii"),
+    )
+    return root, signed_change, owner_id
 @pytest.mark.integration
-def test_real_postgresql_canonical_runtime_and_value_truth():
+def test_real_postgresql_canonical_runtime_and_value_truth(monkeypatch):
     url = os.environ.get("GERCHAIN_DATABASE_URL")
     if not url:
         pytest.skip("GERCHAIN_DATABASE_URL is not configured")
@@ -86,6 +126,12 @@ def test_real_postgresql_canonical_runtime_and_value_truth():
         )
         session.commit()
 
+        evidence = None
+        root, signed_change, owner_id = _signed_release(
+            transaction_id="pg-ea35-release", escrow_id="pg-ea35-escrow",
+            destination="pg-beneficiary", amount=100, currency="USD",
+            evidence=evidence, monkeypatch=monkeypatch,
+        )
         release_escrow_in_transaction(
             session,
             transaction_id="pg-ea35-release",
@@ -94,7 +140,9 @@ def test_real_postgresql_canonical_runtime_and_value_truth():
             amount=100,
             currency="USD",
             decision_status="APPROVE",
-            authorization_status="AUTHORIZED",
+            root=root,
+            signed_change=signed_change,
+            owner_id=owner_id,
             trust=True,
             transparency=True,
             performance=True,

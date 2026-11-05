@@ -12,7 +12,9 @@ from services.gerchain_runtime_factory import (
 
 
 @pytest.mark.integration
-def test_production_factory_boots_real_postgresql_and_establishes_canonical_authority():
+def test_production_factory_boots_real_postgresql_and_establishes_canonical_authority(monkeypatch):
+    monkeypatch.setenv("GERCHAIN_AUTH_OWNER_ID", "production-test-owner")
+    monkeypatch.setenv("GERCHAIN_AUTH_PUBLIC_KEY_B64", "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=")
     database_url = os.getenv("GERCHAIN_TEST_DATABASE_URL")
     if not database_url:
         pytest.skip("GERCHAIN_TEST_DATABASE_URL is required for PostgreSQL re-performance")
@@ -47,13 +49,15 @@ def test_production_factory_boots_real_postgresql_and_establishes_canonical_auth
                 "gerchain_transaction_witnesses",
                 "gerchain_outbox_events",
                 "gerchain_idempotency_records",
+        "gerchain_authorization_changes",
                 "schema_version",
+                "gerchain_authorization_changes",
             }.issubset(set(inspector.get_table_names()))
 
             migration_rows = connection.execute(
                 text("SELECT version, checksum FROM schema_version ORDER BY version")
             ).all()
-            assert [row.version for row in migration_rows] == list(range(1, 18))
+            assert [row.version for row in migration_rows] == list(range(1, 19))
             # Bind production boot evidence to the full versioned migration history,
             # not merely the presence of a schema_version table.
             assert all(len(row.checksum) == 64 for row in migration_rows)

@@ -1,6 +1,7 @@
 name: Production master gate and lock decision
 
 on:
+  pull_request:
   push:
     branches:
       - feat/ea21-transaction-aware-ledger
@@ -15,21 +16,21 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 70
     steps:
-      - name: Checkout exact pushed revision
+      - name: Checkout exact candidate revision
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.sha }}
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Test the fail-closed decision controller
         run: |
-          python -m pip install 'pytest>=8,<9' 'sqlalchemy>=2,<3' 'psycopg[binary]>=3.2,<4'
+          python -m pip install 'pytest>=8,<9' 'sqlalchemy>=2,<3' 'psycopg[binary]>=3.2,<4' 'cryptography>=46,<47'
           pytest -q tests/scripts/test_production_gate_controller.py
 
       - name: Find and wait for the PostgreSQL evidence run for this exact SHA
         id: source_run
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TARGET_SHA: ${{ github.sha }}
+          TARGET_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
           set -euo pipefail
           for attempt in $(seq 1 360); do
@@ -39,9 +40,11 @@ jobs:
               run_data=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}")
               status=$(printf '%s' "$run_data" | jq -r '.status')
               conclusion=$(printf '%s' "$run_data" | jq -r '.conclusion // "pending"')
-              echo "Found PostgreSQL gate run=${run_id} status=${status} conclusion=${conclusion}"
+              run_attempt=$(printf '%s' "$run_data" | jq -r '.run_attempt // 1')
+              echo "Found PostgreSQL gate run=${run_id} attempt=${run_attempt} status=${status} conclusion=${conclusion}"
               if [ "$status" = "completed" ]; then
                 echo "run_id=${run_id}" >> "$GITHUB_OUTPUT"
+                echo "run_attempt=${run_attempt}" >> "$GITHUB_OUTPUT"
                 echo "conclusion=${conclusion}" >> "$GITHUB_OUTPUT"
                 exit 0
               fi
@@ -50,6 +53,7 @@ jobs:
           done
           echo 'Timed out waiting for PostgreSQL evidence run for exact SHA' >&2
           echo 'run_id=' >> "$GITHUB_OUTPUT"
+          echo 'run_attempt=' >> "$GITHUB_OUTPUT"
           echo 'conclusion=missing' >> "$GITHUB_OUTPUT"
           exit 1
 
@@ -58,23 +62,74 @@ jobs:
         if: always() && steps.source_run.outputs.run_id != ''
         uses: actions/download-artifact@v4
         with:
-          name: ea35-${{ github.sha }}
-          path: artifacts/ea35
+          name: ea35-${{ github.event.pull_request.head.sha || github.sha }}-${{ steps.source_run.outputs.run_id }}-${{ steps.source_run.outputs.run_attempt }}
+          path: artifacts/ea35-current
           github-token: ${{ secrets.GITHUB_TOKEN }}
           run-id: ${{ steps.source_run.outputs.run_id }}
+
+      - name: Find and wait for independent EAI audit on this exact SHA
+        id: independent_run
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TARGET_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 360); do
+            runs=$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/independent-production-audit.yml/runs?head_sha=${TARGET_SHA}&per_page=20")
+            run_id=$(printf '%s' "$runs" | jq -r --arg sha "$TARGET_SHA" '[.workflow_runs[] | select(.head_sha == $sha)] | sort_by(.run_number) | last | .id // empty')
+            if [ -n "$run_id" ]; then
+              run_data=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}")
+              status=$(printf '%s' "$run_data" | jq -r '.status')
+              conclusion=$(printf '%s' "$run_data" | jq -r '.conclusion // "pending"')
+              run_attempt=$(printf '%s' "$run_data" | jq -r '.run_attempt // 1')
+              artifacts=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/artifacts?per_page=100")
+              artifact_name=$(printf '%s' "$artifacts" | jq -r '[.artifacts[] | select(.expired == false and (.name | startswith("eai-production-audit-")))] | sort_by(.created_at) | last | .name // empty')
+              echo "Independent audit run=${run_id} attempt=${run_attempt} status=${status} conclusion=${conclusion} artifact=${artifact_name}"
+              if [ "$status" = "completed" ] && [ -n "$artifact_name" ]; then
+                echo "run_id=${run_id}" >> "$GITHUB_OUTPUT"
+                echo "run_attempt=${run_attempt}" >> "$GITHUB_OUTPUT"
+                echo "conclusion=${conclusion}" >> "$GITHUB_OUTPUT"
+                echo "artifact_name=${artifact_name}" >> "$GITHUB_OUTPUT"
+                exit 0
+              fi
+            fi
+            sleep 10
+          done
+          echo 'Timed out waiting for exact-SHA independent audit evidence' >&2
+          echo 'run_id=' >> "$GITHUB_OUTPUT"
+          echo 'run_attempt=' >> "$GITHUB_OUTPUT"
+          echo 'conclusion=missing' >> "$GITHUB_OUTPUT"
+          echo 'artifact_name=' >> "$GITHUB_OUTPUT"
+          exit 1
+
+      - name: Download exact-SHA independent EAI audit evidence
+        if: always() && steps.independent_run.outputs.run_id != '' && steps.independent_run.outputs.artifact_name != ''
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ steps.independent_run.outputs.artifact_name }}
+          path: artifacts/independent-audit
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ steps.independent_run.outputs.run_id }}
 
       - name: Decide LOCKED versus NOT_LOCKED from all required gates
         id: decision
         if: always()
         env:
-          GITHUB_SHA: ${{ github.sha }}
+          CANDIDATE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           GATE_CONCLUSION: ${{ steps.source_run.outputs.conclusion || 'missing' }}
           SOURCE_RUN_ID: ${{ steps.source_run.outputs.run_id || '' }}
+          SOURCE_RUN_ATTEMPT: ${{ steps.source_run.outputs.run_attempt || '' }}
+          INDEPENDENT_RUN_ID: ${{ steps.independent_run.outputs.run_id || '' }}
+          INDEPENDENT_RUN_ATTEMPT: ${{ steps.independent_run.outputs.run_attempt || '' }}
+          INDEPENDENT_CONCLUSION: ${{ steps.independent_run.outputs.conclusion || 'missing' }}
+          GERCHAIN_ORG_EVIDENCE_KEY_ID: ${{ vars.GERCHAIN_ORG_EVIDENCE_KEY_ID }}
+          GERCHAIN_ORG_EVIDENCE_PUBLIC_KEY_B64: ${{ secrets.GERCHAIN_ORG_EVIDENCE_PUBLIC_KEY_B64 }}
         run: |
           python - <<'PY'
-          import json, os, subprocess
+          import hashlib, json, os, subprocess
           from pathlib import Path
+          from scripts.production_gate_controller import resolve_artifact_evidence
           postgres_gates = (
               'compile', 'regression', 'postgres_connection', 'migration_atomicity',
               'legacy_upgrade', 'lifecycle', 'migration_concurrency',
@@ -94,26 +149,113 @@ jobs:
           )
           conclusion = os.environ.get('GATE_CONCLUSION', 'missing')
           source_run_id = os.environ.get('SOURCE_RUN_ID', '')
-          target_sha = os.environ['GITHUB_SHA']
+          target_sha = os.environ['CANDIDATE_SHA']
           outcomes = {name: 'missing' for name in (*postgres_gates, *architecture_gates)}
 
-          # PostgreSQL outcomes are only accepted from a completed workflow run
-          # attached to the exact target SHA; its manifest is independently
-          # checked by production_gate_controller.py.
-          if conclusion == 'success' and source_run_id:
-              outcomes.update({name: 'success' for name in postgres_gates})
+          # Verify the downloaded artifact's detached checksum index before
+          # accepting any per-gate evidence from it.
+          artifact_root = Path('artifacts/ea35-current')
+          artifact_integrity_ok = False
+          try:
+              sums_path = artifact_root / 'SHA256SUMS'
+              detached_path = artifact_root / 'MANIFEST.SHA256'
+              detached_line = detached_path.read_text(encoding='utf-8').strip().split('  ', 1)
+              sums_bytes = sums_path.read_bytes()
+              artifact_integrity_ok = (
+                  len(detached_line) == 2
+                  and detached_line[1] == 'SHA256SUMS'
+                  and hashlib.sha256(sums_bytes).hexdigest() == detached_line[0]
+              )
+              if artifact_integrity_ok:
+                  # Historical master_v1 certificates are never valid inputs to a
+                  # current candidate decision, even if accidentally copied in.
+                  if any(p.is_file() for p in artifact_root.rglob('master_certificate.json')):
+                      artifact_integrity_ok = False
+                  if any(p.is_dir() for p in artifact_root.rglob('master_v1')):
+                      artifact_integrity_ok = False
+                  for line in sums_bytes.decode('utf-8').splitlines():
+                      digest, relative_name = line.split('  ', 1)
+                      relative_path = Path(relative_name)
+                      if relative_path.is_absolute() or '..' in relative_path.parts:
+                          artifact_integrity_ok = False
+                          break
+                      evidence_path = artifact_root / relative_path
+                      if not evidence_path.is_file() or hashlib.sha256(evidence_path.read_bytes()).hexdigest() != digest:
+                          artifact_integrity_ok = False
+                          break
+          except (OSError, ValueError, UnicodeDecodeError):
+              artifact_integrity_ok = False
+
+          # PostgreSQL gates are accepted individually from the exact-SHA,
+          # exact-run artifact. Aggregate workflow success alone is insufficient.
+          postgres_file = Path('artifacts/ea35-current/postgres-gates.json')
+          if conclusion == 'success' and source_run_id and postgres_file.is_file():
+              try:
+                  postgres_bundle = json.loads(postgres_file.read_text(encoding='utf-8'))
+                  bundle_matches = (
+                      artifact_integrity_ok
+                      and postgres_bundle.get('commit_sha') == target_sha
+                      and postgres_bundle.get('candidate_head_sha') == target_sha
+                      and bool(postgres_bundle.get('workflow_sha'))
+                      and postgres_bundle.get('checked_out_head_sha') == target_sha
+                      and str(postgres_bundle.get('workflow_run_id')) == source_run_id
+                      and str(postgres_bundle.get('workflow_run_attempt')) == os.environ.get('SOURCE_RUN_ATTEMPT', '')
+                  )
+                  if bundle_matches:
+                      records = postgres_bundle.get('gates', {})
+                      for name in postgres_gates:
+                          record = records.get(name)
+                          if not isinstance(record, dict) or record.get('outcome') != 'success':
+                              outcomes[name] = record.get('outcome', 'missing') if isinstance(record, dict) else 'missing'
+                              continue
+                          evidence = record.get('evidence')
+                          if not isinstance(evidence, list) or not evidence:
+                              outcomes[name] = 'missing_evidence'
+                              continue
+                          valid = True
+                          for item in evidence:
+                              if not isinstance(item, dict) or not isinstance(item.get('path'), str):
+                                  valid = False
+                                  break
+                              relative = Path(item['path'])
+                              if relative.is_absolute() or '..' in relative.parts:
+                                  valid = False
+                                  break
+                              evidence_path = Path('artifacts/ea35-current') / relative
+                              if not evidence_path.is_file():
+                                  valid = False
+                                  break
+                              digest = hashlib.sha256(evidence_path.read_bytes()).hexdigest()
+                              if digest != item.get('sha256'):
+                                  valid = False
+                                  break
+                          outcomes[name] = 'success' if valid else 'invalid_evidence'
+                  else:
+                      outcomes.update({name: 'evidence_sha_or_run_mismatch' for name in postgres_gates})
+              except (OSError, json.JSONDecodeError, AttributeError, TypeError):
+                  outcomes.update({name: 'evidence_bundle_invalid' for name in postgres_gates})
           else:
-              outcomes.update({name: conclusion if conclusion else 'missing' for name in postgres_gates})
+              postgres_status = conclusion if conclusion and conclusion != 'success' else 'missing_evidence'
+              outcomes.update({name: postgres_status for name in postgres_gates})
 
           # Architecture gates must come from an explicit evidence file in the
           # downloaded bundle. Never infer their success from PostgreSQL tests.
           # Required shape:
           # {"commit_sha":"<exact SHA>","gates":{"inventory_map":{"outcome":"success","evidence":"path-or-URI"}, ...}}
-          architecture_file = Path('artifacts/ea35/architecture-gates.json')
+          architecture_file = Path('artifacts/ea35-current/architecture-gates.json')
           if architecture_file.is_file():
               try:
                   architecture_bundle = json.loads(architecture_file.read_text(encoding='utf-8'))
-                  if architecture_bundle.get('commit_sha') == target_sha:
+                  architecture_bundle_matches = (
+                      artifact_integrity_ok
+                      and architecture_bundle.get('commit_sha') == target_sha
+                      and architecture_bundle.get('candidate_head_sha') == target_sha
+                      and bool(architecture_bundle.get('workflow_sha'))
+                      and architecture_bundle.get('checked_out_head_sha') == target_sha
+                      and str(architecture_bundle.get('workflow_run_id')) == source_run_id
+                      and str(architecture_bundle.get('workflow_run_attempt')) == os.environ.get('SOURCE_RUN_ATTEMPT', '')
+                  )
+                  if architecture_bundle_matches:
                       gate_records = architecture_bundle.get('gates', {})
                       for name in architecture_gates:
                           record = gate_records.get(name)
@@ -122,13 +264,17 @@ jobs:
                               evidence = record.get('evidence')
                               if outcome == 'success' and isinstance(evidence, str) and evidence.strip():
                                   evidence_path = Path(evidence)
-                                  # Local evidence paths must resolve inside the downloaded artifact.
-                                  if evidence_path.is_absolute() or '..' in evidence_path.parts:
+                                  # Accept only an existing file confined to the downloaded artifact.
+                                  # Remote URLs and URNs are never proof unless their content is fetched and authenticated.
+                                  resolved_evidence = resolve_artifact_evidence(
+                                      Path('artifacts/ea35-current'), evidence
+                                  )
+                                  if resolved_evidence is not None:
+                                      outcomes[name] = 'success'
+                                  elif evidence_path.is_absolute() or '..' in evidence_path.parts:
                                       outcomes[name] = 'invalid_evidence_path'
-                                  elif (Path('artifacts/ea35') / evidence_path).is_file():
-                                      outcomes[name] = 'success'
-                                  elif evidence.startswith(('https://', 'urn:')):
-                                      outcomes[name] = 'success'
+                                  else:
+                                      outcomes[name] = 'unverified_or_missing_evidence'
                               elif isinstance(outcome, str):
                                   outcomes[name] = outcome
                   else:
@@ -137,24 +283,86 @@ jobs:
               except (OSError, json.JSONDecodeError, AttributeError, TypeError):
                   for name in architecture_gates:
                       outcomes[name] = 'evidence_bundle_invalid'
-          output = Path('artifacts/ea35/production-gate-decision.json')
+          # Accept independent re-performance only from its own exact-SHA,
+          # exact-run artifact with a verified detached checksum index.
+          independent_root = Path('artifacts/independent-audit')
+          independent_run_id = os.environ.get('INDEPENDENT_RUN_ID', '')
+          independent_attempt = os.environ.get('INDEPENDENT_RUN_ATTEMPT', '')
+          independent_conclusion = os.environ.get('INDEPENDENT_CONCLUSION', 'missing')
+          independent_valid = False
+          try:
+              sums = independent_root / 'SHA256SUMS'
+              expected_files = {
+                  'audit-metadata.txt', 'audit-verdict.md', 'postgres-preflight.txt',
+                  'pytest-collect.log', 'pytest-eai.log',
+              }
+              listed = {}
+              for line in sums.read_text(encoding='utf-8').splitlines():
+                  digest, name = line.split('  ', 1)
+                  if name in listed or Path(name).name != name:
+                      raise ValueError('duplicate or unsafe checksum entry')
+                  listed[name] = digest
+              if set(listed) != expected_files:
+                  raise ValueError('independent audit checksum inventory mismatch')
+              for name, digest in listed.items():
+                  evidence_path = independent_root / name
+                  if not evidence_path.is_file() or hashlib.sha256(evidence_path.read_bytes()).hexdigest() != digest:
+                      raise ValueError(f'independent audit checksum mismatch: {name}')
+              metadata = {}
+              for line in (independent_root / 'audit-metadata.txt').read_text(encoding='utf-8').splitlines():
+                  if '=' in line:
+                      key, value = line.split('=', 1)
+                      metadata[key] = value
+              verdict = (independent_root / 'audit-verdict.md').read_text(encoding='utf-8')
+              preflight = (independent_root / 'postgres-preflight.txt').read_text(encoding='utf-8')
+              collected_log = (independent_root / 'pytest-collect.log').read_text(encoding='utf-8')
+              test_log = (independent_root / 'pytest-eai.log').read_text(encoding='utf-8')
+              import re
+              collected = re.search(r'(\d+) tests? collected', collected_log)
+              passed = re.search(r'(\d+) passed(?: in [^\n]+)?', test_log)
+              independent_valid = (
+                  independent_conclusion == 'success'
+                  and bool(independent_run_id)
+                  and bool(independent_attempt)
+                  and metadata.get('commit_sha') == target_sha
+                  and metadata.get('run_id') == independent_run_id
+                  and metadata.get('attempt') == independent_attempt
+                  and 'Collection: success' in verdict
+                  and 'EAI tests: success' in verdict
+                  and 'server_version: 16' in preflight
+                  and collected is not None
+                  and passed is not None
+                  and int(collected.group(1)) > 0
+                  and int(collected.group(1)) == int(passed.group(1))
+                  and 'failed' not in test_log.lower()
+                  and 'skipped' not in test_log.lower()
+              )
+          except (OSError, ValueError, UnicodeDecodeError, AttributeError):
+              independent_valid = False
+          outcomes['independent_reperformance'] = 'success' if independent_valid else 'independent_evidence_invalid'
+          output = Path('artifacts/ea35-current/production-gate-decision.json')
           output.parent.mkdir(parents=True, exist_ok=True)
           subprocess.run([
               'python', 'scripts/production_gate_controller.py',
-              '--manifest', 'artifacts/ea35/manifest.json',
+              '--manifest', 'artifacts/ea35-current/manifest.json',
               '--output', str(output),
-              '--expected-sha', os.environ['GITHUB_SHA'],
+              '--expected-sha', os.environ['CANDIDATE_SHA'],
               '--outcomes-json', json.dumps(outcomes, sort_keys=True),
           ], check=False)
           report = json.loads(output.read_text(encoding='utf-8'))
           report['postgres_gate_run_id'] = os.environ.get('SOURCE_RUN_ID') or None
           report['postgres_gate_conclusion'] = conclusion
+          report['independent_audit_run_id'] = os.environ.get('INDEPENDENT_RUN_ID') or None
+          report['independent_audit_run_attempt'] = os.environ.get('INDEPENDENT_RUN_ATTEMPT') or None
+          report['independent_audit_conclusion'] = os.environ.get('INDEPENDENT_CONCLUSION') or 'missing'
+          report['independent_audit_evidence_verified'] = independent_valid
+          report['historical_master_certificates_accepted'] = False
           output.write_text(json.dumps(report, indent=2, sort_keys=True) + '\n', encoding='utf-8')
           summary = Path(os.environ['GITHUB_STEP_SUMMARY'])
           summary.write_text(
               '# Production master gate\n\n'
               + f"**Decision:** `{report.get('decision', 'NOT_LOCKED')}`\n\n"
-              + f"**Commit:** `{os.environ['GITHUB_SHA']}`\n\n"
+              + f"**Commit:** `{os.environ['CANDIDATE_SHA']}`\n\n"
               + f"**PostgreSQL gate:** `{conclusion}` (run `{os.environ.get('SOURCE_RUN_ID') or 'missing'}`)\n\n"
               + '## Blocking findings\n'
               + ''.join(f'- `{failure}`\n' for failure in report.get('failures', [])),
@@ -168,8 +376,8 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: production-master-gate-${{ github.sha }}
-          path: artifacts/ea35/production-gate-decision.json
+          name: production-master-gate-${{ github.event.pull_request.head.sha || github.sha }}
+          path: artifacts/ea35-current/production-gate-decision.json
           if-no-files-found: error
           retention-days: 90
 
@@ -179,7 +387,7 @@ jobs:
           python - <<'PY'
           import json
           from pathlib import Path
-          path = Path('artifacts/ea35/production-gate-decision.json')
+          path = Path('artifacts/ea35-current/production-gate-decision.json')
           if not path.exists():
               raise SystemExit('NOT_LOCKED: decision evidence missing')
           report = json.loads(path.read_text(encoding='utf-8'))

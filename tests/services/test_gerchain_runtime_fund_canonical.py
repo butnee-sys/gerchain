@@ -49,14 +49,11 @@ def test_production_runtime_fund_uses_canonical_ledger_and_durable_escrow():
     engine.dispose()
 
 
-def test_production_release_mode_cannot_fall_back_to_memory_fund():
+def test_legacy_postgres_release_adapter_is_closed_at_configuration_time():
     import pytest
 
     runtime = GerchainRuntime(
         escrow_id="escrow-1", amount=40, currency="USD", witness_id="w-1"
     )
-    # This legacy production mode is intentionally not Canonical Ledger authority.
-    runtime.configure_postgres_release(lambda: None)
-
-    with pytest.raises(RuntimeError, match="FUND requires Canonical Ledger authority"):
-        runtime.fund("fund-1", "alice", "T0", {"evidence": "must-not-move"})
+    with pytest.raises(RuntimeError, match="legacy PostgreSQL release adapter is disabled"):
+        runtime.configure_postgres_release(lambda: None)

@@ -10,6 +10,7 @@ on:
 jobs:
   production-gate:
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     services:
       postgres:
         image: postgres:16
@@ -45,6 +46,8 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt -r postgres/requirements-test.txt
           python -m pip install fastapi uvicorn httpx python-multipart
+      - name: Configure ephemeral CI Root of Trust
+        uses: ./.github/actions/setup-ci-root-of-trust
       - name: Create isolated PostgreSQL migration-test database
         env:
           PGPASSWORD: gerchain
@@ -59,6 +62,7 @@ jobs:
           python -m pytest --import-mode=importlib -q --junitxml=production-evidence/junit.xml
 
       - name: Apply canonical migrations and capture PostgreSQL evidence
+        if: always()
         env:
           GERCHAIN_MIGRATION_TEST_DSN: postgresql://gerchain:gerchain@localhost:5432/gerchain_migration_test
           SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
@@ -69,15 +73,16 @@ jobs:
           python - <<'PY'
           import json, os
           import psycopg
-          from postgres.migrations import apply_migrations
+          from postgres.migrations import CANONICAL_MIGRATION_NAMES, apply_migrations
           dsn = os.environ["GERCHAIN_MIGRATION_TEST_DSN"]
           with psycopg.connect(dsn) as conn:
               apply_migrations(conn, "postgres/migrations")
               history = conn.execute("SELECT version, checksum FROM schema_version ORDER BY version").fetchall()
-              if len(history) != 17:
-                  raise SystemExit(f"FAIL: expected 17 applied migrations, found {len(history)}")
+              expected_versions = list(CANONICAL_MIGRATION_NAMES)
               versions = [row[0] for row in history]
-              if len(set(versions)) != 17:
+              if versions != expected_versions:
+                  raise SystemExit(f"FAIL: migration history differs from canonical registry; expected={expected_versions}, found={versions}")
+              if len(set(versions)) != len(expected_versions):
                   raise SystemExit("FAIL: duplicate migration version in schema_version")
               constraints = conn.execute("""
                   SELECT tc.table_schema, tc.table_name, tc.constraint_name,

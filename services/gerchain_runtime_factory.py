@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import os
 from pathlib import Path
 from typing import Any, Callable
 
@@ -10,7 +11,8 @@ from sqlalchemy import create_engine
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import sessionmaker
 
-from postgres.migrations import apply_migrations
+from postgres.migrations import CANONICAL_MIGRATION_NAMES, apply_migrations
+from dee_security.root_of_trust import RootOfTrust
 from services.gerchain_runtime import GerchainRuntime
 
 
@@ -96,6 +98,10 @@ def assert_canonical_production_schema(connection: Any) -> None:
         "gerchain_transaction_witnesses": {"transaction_id", "event_type"},
         "gerchain_outbox_events": {"event_id", "event_type", "aggregate_id", "state"},
         "gerchain_idempotency_records": {"key", "fingerprint", "state"},
+        "gerchain_authorization_changes": {
+            "change_id", "owner_id", "operation", "transaction_id", "escrow_id",
+            "version", "payload_hash", "signature", "created_at",
+        },
     }
     tables = set(inspector.get_table_names())
     missing_tables = sorted(set(required) - tables)
@@ -119,6 +125,7 @@ def assert_canonical_production_schema(connection: Any) -> None:
         "gerchain_outbox_events": ("event_id",),
         "gerchain_transaction_witnesses": ("transaction_id",),
         "gerchain_idempotency_records": ("key",),
+        "gerchain_authorization_changes": ("change_id",),
     }
     for table, columns in unique_requirements.items():
         if not _has_unique_key(inspector, table, columns):
@@ -126,52 +133,124 @@ def assert_canonical_production_schema(connection: Any) -> None:
                 f"{table} must enforce unique key on {', '.join(columns)}"
             )
 
-    # The migration runner owns schema evolution. Startup independently verifies
-    # the two safety-critical catalog invariants before exposing a production runtime.
-    version_index = connection.exec_driver_sql(
-        """
-        SELECT EXISTS (
-            SELECT 1
-            FROM pg_index i
-            JOIN pg_class t ON t.oid = i.indrelid
-            JOIN pg_namespace n ON n.oid = t.relnamespace
-            JOIN pg_attribute a ON a.attrelid = t.oid AND a.attnum = i.indkey[0]
-            WHERE n.nspname = current_schema()
-              AND t.relname = 'schema_version'
-              AND i.indisunique
-              AND i.indpred IS NULL
-              AND i.indnkeyatts = 1
-              AND a.attname = 'version'
-        )
-        """
-    ).scalar_one()
-    if not version_index:
-        raise RuntimeError("schema_version.version must have a unique index")
-
-    state_constraints = connection.exec_driver_sql(
-        """
-        SELECT conname, pg_get_constraintdef(oid), convalidated
-        FROM pg_constraint
-        WHERE conrelid = 'escrows'::regclass
-          AND contype = 'c'
-          AND position('state' in lower(pg_get_constraintdef(oid))) > 0
-        """
-    ).all()
-    if len(state_constraints) != 1:
-        raise RuntimeError(
-            "escrows.state must have exactly one canonical state CHECK constraint"
-        )
-    name, definition, validated = state_constraints[0]
-    required_states = ("CREATED", "FUNDED", "LOCKED", "RELEASED", "REFUNDED", "CANCELLED")
-    normalized_definition = str(definition).upper()
-    if (
-        name != "escrows_state_canonical_check"
-        or not validated
-        or any(state not in normalized_definition for state in required_states)
+    if not _has_unique_key(
+        inspector, "gerchain_authorization_changes", ("operation", "transaction_id")
     ):
         raise RuntimeError(
-            "escrows.state canonical CHECK is missing, unvalidated, or incomplete"
+            "gerchain_authorization_changes must enforce unique operation/transaction_id"
         )
+
+    # The migration runner owns schema evolution. Startup independently verifies
+    # the two safety-critical catalog invariants before exposing a production runtime.
+    dialect = connection.dialect.name
+    if dialect == "postgresql":
+        authorization_check_rows = connection.exec_driver_sql(
+            """
+            SELECT conname, pg_get_constraintdef(oid), convalidated
+            FROM pg_constraint
+            WHERE conrelid = 'gerchain_authorization_changes'::regclass
+              AND contype = 'c'
+            """
+        ).all()
+        authorization_check_definitions = {
+            name: definition for name, definition, _validated in authorization_check_rows
+        }
+        authorization_check_requirements = {
+            "gerchain_authorization_operation_check": (
+                "operation", "release", "refund", "cancel",
+            ),
+            "gerchain_authorization_version_check": ("version", ">0"),
+            "gerchain_authorization_payload_hash_check": (
+                "payload_hash", "^[0-9a-f]{64}$",
+            ),
+            "gerchain_authorization_signature_check": (
+                "length(signature)", ">0",
+            ),
+        }
+        authorization_check_drift = _constraint_definition_drift(
+            authorization_check_requirements,
+            authorization_check_definitions,
+        )
+        unvalidated_authorization_checks = [
+            name for name, _definition, validated in authorization_check_rows
+            if name in authorization_check_requirements and not validated
+        ]
+        if authorization_check_drift or unvalidated_authorization_checks:
+            raise RuntimeError(
+                "SignedChange authorization CHECK constraints are missing, weakened, "
+                f"or unvalidated: drift={authorization_check_drift}; "
+                f"unvalidated={unvalidated_authorization_checks}"
+            )
+
+        version_index = connection.exec_driver_sql(
+            """
+            SELECT EXISTS (
+                SELECT 1
+                FROM pg_index i
+                JOIN pg_class t ON t.oid = i.indrelid
+                JOIN pg_namespace n ON n.oid = t.relnamespace
+                JOIN pg_attribute a ON a.attrelid = t.oid AND a.attnum = i.indkey[0]
+                WHERE n.nspname = current_schema()
+                  AND t.relname = 'schema_version'
+                  AND i.indisunique
+                  AND i.indpred IS NULL
+                  AND i.indnkeyatts = 1
+                  AND a.attname = 'version'
+            )
+            """
+        ).scalar_one()
+        if not version_index:
+            raise RuntimeError("schema_version.version must have a unique index")
+
+        state_constraints = connection.exec_driver_sql(
+            """
+            SELECT conname, pg_get_constraintdef(oid), convalidated
+            FROM pg_constraint
+            WHERE conrelid = 'escrows'::regclass
+              AND contype = 'c'
+              AND position('state' in lower(pg_get_constraintdef(oid))) > 0
+            """
+        ).all()
+    elif dialect == "sqlite":
+        if not _has_unique_key(inspector, "schema_version", ("version",)):
+            raise RuntimeError("schema_version.version must have a unique key")
+        state_constraints = [
+            (item.get("name"), item.get("sqltext", ""), True)
+            for item in inspector.get_check_constraints("escrows")
+            if "state" in str(item.get("sqltext", "")).lower()
+        ]
+    else:
+        raise RuntimeError(f"unsupported canonical schema inspection dialect: {dialect}")
+
+    migration_rows = connection.exec_driver_sql(
+        "SELECT version, applied_at FROM schema_version ORDER BY version"
+    ).all()
+    expected_versions = list(CANONICAL_MIGRATION_NAMES)
+    actual_versions = [row[0] for row in migration_rows]
+    if actual_versions != expected_versions:
+        raise RuntimeError(
+            "canonical migration history incomplete or non-canonical: "
+            f"required={len(expected_versions)} expected={expected_versions} actual={actual_versions}"
+        )
+    if any(row[1] is None for row in migration_rows):
+        raise RuntimeError("canonical migration history contains missing applied_at timestamps")
+
+    if dialect == "postgresql":
+        if len(state_constraints) != 1:
+            raise RuntimeError(
+                "escrows.state must have exactly one canonical state CHECK constraint"
+            )
+        name, definition, validated = state_constraints[0]
+        required_states = ("CREATED", "FUNDED", "LOCKED", "RELEASED", "REFUNDED", "CANCELLED")
+        normalized_definition = str(definition).upper()
+        if (
+            name != "escrows_state_canonical_check"
+            or not validated
+            or any(state not in normalized_definition for state in required_states)
+        ):
+            raise RuntimeError(
+                "escrows.state canonical CHECK is missing, unvalidated, or incomplete"
+            )
 
 
 class ProductionRuntimeFactory:
@@ -204,6 +283,19 @@ class ProductionRuntimeFactory:
             assert_canonical_production_schema(connection)
 
     def create(self) -> GerchainRuntime:
+        owner_id = os.environ.get("GERCHAIN_AUTH_OWNER_ID")
+        public_key_b64 = os.environ.get("GERCHAIN_AUTH_PUBLIC_KEY_B64")
+        if not owner_id or not public_key_b64:
+            raise RuntimeError(
+                "production runtime requires GERCHAIN_AUTH_OWNER_ID and "
+                "GERCHAIN_AUTH_PUBLIC_KEY_B64"
+            )
+        # Validate and pin the public trust anchor before applying migrations
+        # or exposing any production runtime.
+        root_of_trust = RootOfTrust(
+            owner_id=owner_id,
+            public_key_b64=public_key_b64,
+        )
         self.initialize()
         runtime = GerchainRuntime(
             escrow_id=self.config.escrow_id,
@@ -211,6 +303,7 @@ class ProductionRuntimeFactory:
             currency=self.config.currency,
             witness_id=self.config.witness_id,
         )
+        runtime.configure_root_of_trust(root_of_trust)
         runtime.configure_canonical_ledger(self.session_factory)
         runtime.require_canonical_ledger_authority()
         return runtime

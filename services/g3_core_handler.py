@@ -5,7 +5,7 @@ from dataclasses import asdict
 from typing import Any, Mapping
 
 from architecture.contracts import BoundaryError, BoundaryRequest, BoundaryResponse
-from dee_security.root_of_trust import RootOfTrust
+from dee_security.root_of_trust import RootOfTrust, SignedChange
 from services.gerchain_runtime import GerchainRuntime
 
 
@@ -41,7 +41,8 @@ class G3CoreRuntimeHandler:
 
         root = dee_context.get("root")
         owner_id = dee_context.get("owner_id")
-        if not isinstance(root, RootOfTrust) or not owner_id:
+        signed_change = dee_context.get("signed_change")
+        if not isinstance(root, RootOfTrust) or not isinstance(signed_change, SignedChange) or not owner_id:
             return self._deny(request, "Core release requires valid DEE root and owner")
 
         destination = payload.get("destination")
@@ -76,6 +77,7 @@ class G3CoreRuntimeHandler:
                 "escrow": dict(escrow),
             },
             root=root,
+            signed_change=signed_change,
             owner_id=str(owner_id),
             authorized=True,
             evidence_verified=evidence_verified,

@@ -15,11 +15,24 @@ from persistence.lock_escrow import lock_escrow_in_transaction
 from persistence.release_escrow import release_escrow_in_transaction
 from persistence.recovery_outbox import OutboxBase, OutboxEvent
 from persistence.deep_value_reconciliation import deep_reconcile_value_truth
+from services.gerchain_runtime_factory import ProductionRuntimeConfig, ProductionRuntimeFactory
 
 
-def test_real_postgresql_canonical_eai_fund_lock_release_reconciles() -> None:
-    dsn = os.environ["GERCHAIN_DATABASE_URL"]
+def test_real_postgresql_canonical_eai_fund_lock_release_reconciles(signed_change_factory) -> None:
+    dsn = os.environ.get("GERCHAIN_DATABASE_URL") or os.environ["GERCHAIN_TEST_DATABASE_URL"]
     engine = create_engine(dsn, pool_pre_ping=True)
+    production_factory = ProductionRuntimeFactory(
+        ProductionRuntimeConfig(
+            database_url=dsn,
+            escrow_id="pg-escrow-1",
+            amount=40,
+            currency="USD",
+            witness_id="pg-eai-integration-witness",
+        ),
+        engine=engine,
+    )
+    runtime = production_factory.create()
+    assert runtime.is_canonical_ledger_authoritative
     for base in (AtomicLedgerBase, EscrowBase, WitnessBase, IdempotencyBase, OutboxBase):
         base.metadata.create_all(engine)
     factory = sessionmaker(bind=engine, expire_on_commit=False)
@@ -63,6 +76,10 @@ def test_real_postgresql_canonical_eai_fund_lock_release_reconciles() -> None:
         )
         session.commit()
 
+        root, signed_change, owner_id = signed_change_factory(
+            operation="RELEASE", transaction_id="pg-release-1", escrow_id="pg-escrow-1",
+            destination="pg-beneficiary", amount=40, currency="USD", evidence=None,
+        )
         release_escrow_in_transaction(
             session,
             transaction_id="pg-release-1",
@@ -71,7 +88,9 @@ def test_real_postgresql_canonical_eai_fund_lock_release_reconciles() -> None:
             amount=40,
             currency="USD",
             decision_status="APPROVE",
-            authorization_status="AUTHORIZED",
+            root=root,
+            signed_change=signed_change,
+            owner_id=owner_id,
             trust=True,
             transparency=True,
             performance=True,

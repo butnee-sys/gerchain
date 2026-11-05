@@ -14,16 +14,18 @@ from persistence.escrow_aggregate import (
     create_escrow_in_transaction,
 )
 from persistence.recovery_outbox import OutboxBase, OutboxEvent
+from persistence.signed_change_authorization import AuthorizationBase
 from services.gerchain_runtime import GerchainRuntime
 
 
-def test_canonical_runtime_create_fund_lock_release_is_one_consistent_evidence_graph():
+def test_canonical_runtime_create_fund_lock_release_is_one_consistent_evidence_graph(signed_change_factory):
     engine = create_engine("sqlite+pysqlite:///:memory:", future=True)
     AtomicLedgerBase.metadata.create_all(engine)
     EscrowBase.metadata.create_all(engine)
     WitnessBase.metadata.create_all(engine)
     IdempotencyBase.metadata.create_all(engine)
     OutboxBase.metadata.create_all(engine)
+    AuthorizationBase.metadata.create_all(engine)
     factory = sessionmaker(bind=engine, expire_on_commit=False, future=True)
     now = datetime.now(timezone.utc)
 
@@ -63,13 +65,19 @@ def test_canonical_runtime_create_fund_lock_release_is_one_consistent_evidence_g
 
     funded = runtime.fund("atomic-fund-1", "alice", "T1", {"evidence": "funded"})
     locked = runtime.lock("atomic-lock-1", "T2", {"evidence": "locked"})
+    root, signed_change, owner_id = signed_change_factory(
+        operation="RELEASE", transaction_id="atomic-release-1", escrow_id="escrow-atomic-1",
+        destination="bob", amount=40, currency="MNT", evidence={"evidence": "release-verified"},
+    )
+    runtime.configure_root_of_trust(root)
     released = runtime.release(
         transaction_id="atomic-release-1",
         destination="bob",
         timestamp="T3",
         evidence={"evidence": "release-verified"},
-        root=object(),
-        owner_id="owner-1",
+        root=root,
+        signed_change=signed_change,
+        owner_id=owner_id,
         authorized=True,
         evidence_verified=True,
         trinity_proof={"trust": True, "transparency": True, "performance": True},

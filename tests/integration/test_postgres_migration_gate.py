@@ -14,13 +14,14 @@ import psycopg
 import pytest
 from sqlalchemy import create_engine, inspect, text
 
-from postgres.migrations import apply_migrations
+from postgres.migrations import CANONICAL_MIGRATION_NAMES, apply_migrations
 from services.gerchain_runtime_factory import (
     ProductionRuntimeConfig,
     ProductionRuntimeFactory,
 )
 
 DATABASE_URL = os.getenv("GERCHAIN_TEST_DATABASE_URL")
+CANONICAL_VERSIONS = list(CANONICAL_MIGRATION_NAMES)
 pytestmark = pytest.mark.skipif(
     not DATABASE_URL,
     reason="GERCHAIN_TEST_DATABASE_URL must point to disposable PostgreSQL",
@@ -47,7 +48,7 @@ def test_canonical_migrations_apply_idempotently_on_real_postgres():
     try:
         with psycopg.connect(_driver_url(DATABASE_URL), options=options) as conn:
             first = apply_migrations(conn, migration_dir)
-        assert first == tuple(range(1, 18))
+        assert first == tuple(CANONICAL_VERSIONS)
 
         with psycopg.connect(_driver_url(DATABASE_URL), options=options) as conn:
             second = apply_migrations(conn, migration_dir)
@@ -68,7 +69,7 @@ def test_canonical_migrations_apply_idempotently_on_real_postgres():
             versions = conn.execute(
                 text("SELECT version FROM schema_version ORDER BY version")
             ).scalars().all()
-            assert versions == list(range(1, 18))
+            assert versions == CANONICAL_VERSIONS
 
             constraints = conn.execute(
                 text(

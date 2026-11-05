@@ -1,11 +1,14 @@
 import base64
 from decimal import Decimal
+import json
 
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
 from architecture.contracts import ActorType, BoundaryRequest
 from architecture.nef_gerchain import NEFToGerChainAdapter
 from dee_security import AuthorizationPolicy, ReleaseAuthorization, RootOfTrust, build_manifest, sign_release
+from dee_security.root_of_trust import SignedChange
+from persistence.signed_change_authorization import canonical_payload_hash, canonical_release_payload
 from nef import (
     Asset,
     AssetIdentityEngine,
@@ -155,13 +158,14 @@ def build_signed_release():
         commit_sha=manifest["commit_sha"],
         manifest_hash=manifest["manifest_hash"],
     )
-    return root, manifest, release
+    return root, manifest, release, private
 
 
 def test_nef_17_engine_truth_reaches_authoritative_gerchain_release():
     nef = build_nef_asset()
     runtime = build_runtime()
-    root, manifest, release = build_signed_release()
+    root, manifest, release, private = build_signed_release()
+    runtime.configure_root_of_trust(root)
 
     core = G3CoreRuntimeHandler(runtime)
     dee = G3DEEAuthorizedHandler(
@@ -199,6 +203,45 @@ def test_nef_17_engine_truth_reaches_authoritative_gerchain_release():
         },
     }
 
+    signed_evidence = {
+        **payload["evidence"],
+        "dee_release_id": release.release_id,
+        "dee_manifest_hash": release.manifest_hash,
+        "dee_commit_sha": release.commit_sha,
+    }
+    protected_payload = canonical_release_payload(
+        transaction_id=payload["transaction_id"],
+        escrow_id=ESCROW_ID,
+        source=ESCROW_ID,
+        destination=payload["destination"],
+        amount=VALUE,
+        currency="MNT",
+        decision_status="APPROVE",
+        trust=True,
+        transparency=True,
+        performance=True,
+        evidence_verified=True,
+        evidence=signed_evidence,
+    )
+    unsigned_change = SignedChange(
+        owner_id=root.owner_id,
+        change_id="CHANGE-TX-FULL-E2E-RELEASE",
+        version=1,
+        payload_hash=canonical_payload_hash(protected_payload),
+        signature="",
+    )
+    signing_bytes = json.dumps(
+        unsigned_change.signing_payload(), sort_keys=True, separators=(",", ":"), ensure_ascii=False
+    ).encode("utf-8")
+    signed_change = SignedChange(
+        owner_id=unsigned_change.owner_id,
+        change_id=unsigned_change.change_id,
+        version=1,
+        payload_hash=unsigned_change.payload_hash,
+        signature=base64.b64encode(private.sign(signing_bytes)).decode("ascii"),
+    )
+    payload["signed_change"] = signed_change
+
     response = boundary.handle(
         BoundaryRequest(
             actor_type=ActorType.COMPANY,
@@ -220,7 +263,7 @@ def test_nef_17_engine_truth_reaches_authoritative_gerchain_release():
 def test_nef_unknown_validation_stops_before_value_flow():
     nef = build_nef_asset()
     runtime = build_runtime()
-    root, manifest, release = build_signed_release()
+    root, manifest, release, _private = build_signed_release()
     boundary = NEFToGerChainAdapter(
         G3DEEAuthorizedHandler(
             G3CoreRuntimeHandler(runtime),

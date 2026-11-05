@@ -33,7 +33,7 @@ def _required_postgres_url() -> str:
     return url
 
 
-def test_production_postgres_factory_and_canonical_value_flow():
+def test_production_postgres_factory_and_canonical_value_flow(signed_change_factory):
     url = _required_postgres_url()
     engine = create_engine(url, pool_pre_ping=True)
     factory = ProductionRuntimeFactory(
@@ -50,11 +50,11 @@ def test_production_postgres_factory_and_canonical_value_flow():
     assert runtime.is_canonical_ledger_authoritative
 
     # Prove the runtime boot used the actual canonical migration runner and the
-    # repository's exact 17-file migration chain, rather than metadata.create_all
+    # repository's exact 18-file migration chain, rather than metadata.create_all
     # alone. This assertion runs against the real PostgreSQL service in CI.
     migration_dir = Path(__file__).resolve().parents[2] / "postgres" / "migrations"
     canonical_files = _canonical_migration_files(migration_dir)
-    assert [int(path.name.split("_", 1)[0]) for path in canonical_files] == list(range(1, 18))
+    assert [int(path.name.split("_", 1)[0]) for path in canonical_files] == list(range(1, 19))
     expected_checksums = {
         int(path.name.split("_", 1)[0]): checksum(path.read_text(encoding="utf-8"))
         for path in canonical_files
@@ -64,7 +64,7 @@ def test_production_postgres_factory_and_canonical_value_flow():
             text("SELECT version, checksum FROM schema_version ORDER BY version")
         ).all()
     applied_checksums = {int(version): digest for version, digest in applied_rows}
-    assert list(applied_checksums) == list(range(1, 18)), applied_checksums
+    assert list(applied_checksums) == list(range(1, 19)), applied_checksums
     assert applied_checksums == expected_checksums, {
         "expected": expected_checksums,
         "applied": applied_checksums,
@@ -107,11 +107,30 @@ def test_production_postgres_factory_and_canonical_value_flow():
         # Same operation/key/payload replay must be a no-op: no second ledger movement.
         fund_escrow_in_transaction(session, transaction_id="pg-fund-tx", escrow_id="pg-release-escrow", source="pg-fund-source", amount=100, currency="MNT")
         lock_escrow_in_transaction(session, transaction_id="pg-lock-tx", escrow_id="pg-release-escrow")
-        release_escrow_in_transaction(session, transaction_id="pg-release-tx", escrow_id="pg-release-escrow", beneficiary="pg-release-beneficiary", amount=100, currency="MNT", decision_status="APPROVE", authorization_status="AUTHORIZED", trust=True, transparency=True, performance=True, evidence_verified=True)
+        release_root, release_change, release_owner = signed_change_factory(
+            operation="RELEASE", transaction_id="pg-release-tx", escrow_id="pg-release-escrow",
+            destination="pg-release-beneficiary", amount=100, currency="MNT", evidence=None,
+        )
+        release_escrow_in_transaction(
+            session, transaction_id="pg-release-tx", escrow_id="pg-release-escrow",
+            beneficiary="pg-release-beneficiary", amount=100, currency="MNT",
+            decision_status="APPROVE", root=release_root,
+            signed_change=release_change, owner_id=release_owner,
+            trust=True, transparency=True, performance=True, evidence_verified=True,
+        )
 
         fund_escrow_in_transaction(session, transaction_id="pg-refund-fund-tx", escrow_id="pg-refund-escrow", source="pg-refund-source", amount=100, currency="MNT")
         lock_escrow_in_transaction(session, transaction_id="pg-refund-lock-tx", escrow_id="pg-refund-escrow")
-        refund_escrow_in_transaction(session, transaction_id="pg-refund-tx", escrow_id="pg-refund-escrow", amount=100, currency="MNT")
+        refund_root, refund_change, refund_owner = signed_change_factory(
+            operation="REFUND", transaction_id="pg-refund-tx", escrow_id="pg-refund-escrow",
+            destination="pg-refund-source", amount=100, currency="MNT", evidence=None,
+        )
+        refund_escrow_in_transaction(
+            session, transaction_id="pg-refund-tx", escrow_id="pg-refund-escrow",
+            amount=100, currency="MNT", root=refund_root,
+            signed_change=refund_change, owner_id=refund_owner,
+            authorized=True, transparency=True, dispute_or_cancellation_verified=True,
+        )
 
         fund_escrow_in_transaction(session, transaction_id="pg-cancel-fund-tx", escrow_id="pg-cancel-escrow", source="pg-cancel-source", amount=75, currency="MNT")
         cancel_escrow_in_transaction(session, transaction_id="pg-cancel-tx", escrow_id="pg-cancel-escrow")

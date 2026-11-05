@@ -1,24 +1,30 @@
 """PostgreSQL end-to-end proof for canonical escrow/value-flow operations.
 
 Requires GERCHAIN_TEST_DATABASE_URL pointing at a disposable PostgreSQL database.
-The test applies the exact canonical 17-migration chain, executes all required
+The test applies the exact canonical 18-migration chain, executes all required
 operations using the real SQLAlchemy/PostgreSQL boundary, then reconciles the
 persisted movement/evidence graph. It intentionally never truncates shared data.
 """
 from __future__ import annotations
 
 import json
+import base64
 import os
 import uuid
 from pathlib import Path
-from pathlib import Path
 
 import psycopg
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 import pytest
 from sqlalchemy import create_engine, select, text
 from sqlalchemy.orm import sessionmaker
 
 from persistence.atomic_ledger import AtomicLedgerBase, LedgerAccountModel, LedgerMovementModel, PostgreSQLAtomicLedger
+from persistence.signed_change_authorization import (
+    SignedChangeAuthorization, canonical_release_payload, canonical_refund_payload, canonical_payload_hash,
+)
+from dee_security.root_of_trust import RootOfTrust, SignedChange
 from persistence.atomic_value_transaction import TransactionWitness
 from persistence.cancel_escrow import cancel_escrow_in_transaction
 from persistence.deep_value_reconciliation import deep_reconcile_value_truth
@@ -30,6 +36,52 @@ from persistence.recovery_outbox import OutboxBase, OutboxEvent
 from persistence.refund_escrow import refund_escrow_in_transaction
 from persistence.release_escrow import release_escrow_in_transaction
 from persistence.settlement_coordinator import SettlementCoordinator
+
+
+
+def _signed_authorization(*, operation, transaction_id, escrow_id, destination, amount, currency, evidence, monkeypatch):
+    private_key = Ed25519PrivateKey.from_private_bytes(bytes(range(32)))
+    public_key = private_key.public_key().public_bytes(
+        serialization.Encoding.Raw, serialization.PublicFormat.Raw
+    )
+    public_key_b64 = base64.b64encode(public_key).decode("ascii")
+    owner_id = "gerchain-postgres-eai-test-owner"
+    monkeypatch.setenv("GERCHAIN_AUTH_OWNER_ID", owner_id)
+    monkeypatch.setenv("GERCHAIN_AUTH_PUBLIC_KEY_B64", public_key_b64)
+    root = RootOfTrust(owner_id=owner_id, public_key_b64=public_key_b64)
+
+    if operation == "RELEASE":
+        protected_payload = canonical_release_payload(
+            transaction_id=transaction_id, escrow_id=escrow_id,
+            source=escrow_id, destination=destination, amount=amount,
+            currency=currency, decision_status="APPROVE", trust=True,
+            transparency=True, performance=True, evidence_verified=True,
+            evidence=evidence,
+        )
+    elif operation == "REFUND":
+        protected_payload = canonical_refund_payload(
+            transaction_id=transaction_id, escrow_id=escrow_id,
+            source=escrow_id, destination=destination, amount=amount,
+            currency=currency, authorized=True, transparency=True,
+            dispute_or_cancellation_verified=True, evidence=evidence,
+        )
+    else:
+        raise ValueError(f"unsupported test authorization operation: {operation}")
+
+    unsigned = SignedChange(
+        owner_id=owner_id, change_id=f"CHANGE-{transaction_id}", version=1,
+        payload_hash=canonical_payload_hash(protected_payload), signature="",
+    )
+    signing_bytes = json.dumps(
+        unsigned.signing_payload(), sort_keys=True, separators=(",", ":"),
+        ensure_ascii=False,
+    ).encode("utf-8")
+    signed_change = SignedChange(
+        owner_id=owner_id, change_id=unsigned.change_id, version=1,
+        payload_hash=unsigned.payload_hash,
+        signature=base64.b64encode(private_key.sign(signing_bytes)).decode("ascii"),
+    )
+    return root, signed_change, owner_id
 
 
 @pytest.fixture()
@@ -46,7 +98,7 @@ def pg_factory():
         rows = connection.execute(
             "SELECT version, checksum FROM schema_version ORDER BY version"
         ).fetchall()
-        assert [row[0] for row in rows] == list(range(1, 18)), rows
+        assert [row[0] for row in rows] == list(range(1, 19)), rows
         assert all(row[1] for row in rows), rows
 
     engine = create_engine(url, pool_pre_ping=True)
@@ -61,7 +113,7 @@ def pg_factory():
         engine.dispose()
 
 
-def test_postgres_17_migrations_and_full_value_flow_reconcile(pg_factory):
+def test_postgres_18_migrations_and_full_value_flow_reconcile(pg_factory, monkeypatch):
     suffix = uuid.uuid4().hex[:12]
     currency = "MNT"
     amount = 100
@@ -124,12 +176,21 @@ def test_postgres_17_migrations_and_full_value_flow_reconcile(pg_factory):
             session, transaction_id=f"lock-release-{suffix}", escrow_id=release_id,
         )
         session.commit()
+    release_tx_id = f"release-{suffix}"
+    release_evidence = {"decision_record": f"approved-{suffix}"}
+    release_root, release_change, release_owner = _signed_authorization(
+        operation="RELEASE", transaction_id=release_tx_id, escrow_id=release_id,
+        destination=beneficiary, amount=amount, currency=currency,
+        evidence=release_evidence, monkeypatch=monkeypatch,
+    )
     with pg_factory() as session:
         release_escrow_in_transaction(
-            session, transaction_id=f"release-{suffix}", escrow_id=release_id,
+            session, transaction_id=release_tx_id, escrow_id=release_id,
             beneficiary=beneficiary, amount=amount, currency=currency,
-            decision_status="APPROVE", authorization_status="AUTHORIZED",
+            decision_status="APPROVE", root=release_root,
+            signed_change=release_change, owner_id=release_owner,
             trust=True, transparency=True, performance=True, evidence_verified=True,
+            payload={"evidence": release_evidence},
         )
         session.commit()
 
@@ -146,10 +207,21 @@ def test_postgres_17_migrations_and_full_value_flow_reconcile(pg_factory):
             session, transaction_id=f"lock-refund-{suffix}", escrow_id=refund_id,
         )
         session.commit()
+    refund_tx_id = f"refund-{suffix}"
+    refund_evidence = {"case_record": f"verified-cancellation-{suffix}"}
+    refund_root, refund_change, refund_owner = _signed_authorization(
+        operation="REFUND", transaction_id=refund_tx_id, escrow_id=refund_id,
+        destination=source, amount=amount, currency=currency,
+        evidence=refund_evidence, monkeypatch=monkeypatch,
+    )
     with pg_factory() as session:
         refund_escrow_in_transaction(
-            session, transaction_id=f"refund-{suffix}", escrow_id=refund_id,
-            amount=amount, currency=currency,
+            session, transaction_id=refund_tx_id, escrow_id=refund_id,
+            amount=amount, currency=currency, root=refund_root,
+            signed_change=refund_change, owner_id=refund_owner,
+            authorized=True, transparency=True,
+            dispute_or_cancellation_verified=True,
+            payload={"evidence": refund_evidence},
         )
         session.commit()
 
@@ -264,6 +336,12 @@ def test_postgres_17_migrations_and_full_value_flow_reconcile(pg_factory):
         assert len(witness_rows) == 10
         assert len(outbox_rows) == 10
         assert len(idempotency_rows) == 10
+        authorization_rows = list(session.execute(
+            select(SignedChangeAuthorization).where(
+                SignedChangeAuthorization.transaction_id.in_((release_tx_id, refund_tx_id))
+            )
+        ).scalars())
+        assert len(authorization_rows) == 2
         assert all(row.state == "COMPLETED" for row in idempotency_rows)
 
         evidence = {
@@ -300,6 +378,7 @@ def test_postgres_17_migrations_and_full_value_flow_reconcile(pg_factory):
                 for row in outbox_rows
             ],
             "idempotency_count": len(idempotency_rows),
+            "signed_authorization_count": len(authorization_rows),
             "idempotency": [
                 {"key": row.key, "fingerprint": row.fingerprint, "state": row.state}
                 for row in idempotency_rows
@@ -327,3 +406,141 @@ def test_postgres_17_migrations_and_full_value_flow_reconcile(pg_factory):
             f"witness_count={len(witness_rows)} outbox_count={len(outbox_rows)} "
             f"idempotency_count={len(idempotency_rows)} reconciliation_issues={len(final_report.issues)}"
         )
+
+
+def test_postgres_release_and_refund_authorization_roll_back_with_failed_value_transfer(pg_factory, monkeypatch):
+    """Authorization and every value/evidence write must roll back on PostgreSQL."""
+    suffix = uuid.uuid4().hex[:12]
+    source = f"rollback-src-{suffix}"
+    beneficiary = f"rollback-ben-{suffix}"
+    amount = 100
+    currency = "MNT"
+    cases = {
+        "RELEASE": {
+            "escrow_id": f"rollback-release-{suffix}",
+            "transaction_id": f"rollback-release-tx-{suffix}",
+        },
+        "REFUND": {
+            "escrow_id": f"rollback-refund-{suffix}",
+            "transaction_id": f"rollback-refund-tx-{suffix}",
+        },
+    }
+
+    with pg_factory() as session:
+        PostgreSQLAtomicLedger.create_account_in_transaction(
+            session, source, currency, 1000
+        )
+        PostgreSQLAtomicLedger.create_account_in_transaction(
+            session, beneficiary, currency, 0
+        )
+        for operation, case in cases.items():
+            escrow_id = case["escrow_id"]
+            PostgreSQLAtomicLedger.create_account_in_transaction(
+                session, escrow_id, currency, 0
+            )
+            create_escrow_in_transaction(
+                session,
+                escrow_id=escrow_id,
+                sender=source,
+                beneficiary=beneficiary,
+                refund_destination=source,
+                amount=amount,
+                currency=currency,
+                condition=f"PostgreSQL {operation} rollback proof",
+            )
+            fund_escrow_in_transaction(
+                session,
+                transaction_id=f"fund-{case['transaction_id']}",
+                escrow_id=escrow_id,
+                source=source,
+                amount=amount,
+                currency=currency,
+            )
+            lock_escrow_in_transaction(
+                session,
+                transaction_id=f"lock-{case['transaction_id']}",
+                escrow_id=escrow_id,
+            )
+        session.commit()
+
+    def fail_ledger_transfer(*args, **kwargs):
+        raise RuntimeError("injected PostgreSQL ledger transfer failure")
+
+    for operation, case in cases.items():
+        escrow_id = case["escrow_id"]
+        transaction_id = case["transaction_id"]
+        destination = beneficiary if operation == "RELEASE" else source
+        evidence = {"rollback_case": operation, "nonce": suffix}
+        root, signed_change, owner_id = _signed_authorization(
+            operation=operation,
+            transaction_id=transaction_id,
+            escrow_id=escrow_id,
+            destination=destination,
+            amount=amount,
+            currency=currency,
+            evidence=evidence,
+            monkeypatch=monkeypatch,
+        )
+
+        with pytest.raises(RuntimeError, match="injected PostgreSQL ledger transfer failure"):
+            with pg_factory.begin() as session:
+                if operation == "RELEASE":
+                    release_escrow_in_transaction(
+                        session,
+                        transaction_id=transaction_id,
+                        escrow_id=escrow_id,
+                        beneficiary=beneficiary,
+                        amount=amount,
+                        currency=currency,
+                        decision_status="APPROVE",
+                        root=root,
+                        signed_change=signed_change,
+                        owner_id=owner_id,
+                        trust=True,
+                        transparency=True,
+                        performance=True,
+                        evidence_verified=True,
+                        ledger_transfer=fail_ledger_transfer,
+                        payload={"evidence": evidence},
+                    )
+                else:
+                    refund_escrow_in_transaction(
+                        session,
+                        transaction_id=transaction_id,
+                        escrow_id=escrow_id,
+                        amount=amount,
+                        currency=currency,
+                        root=root,
+                        signed_change=signed_change,
+                        owner_id=owner_id,
+                        authorized=True,
+                        transparency=True,
+                        dispute_or_cancellation_verified=True,
+                        ledger_transfer=fail_ledger_transfer,
+                        payload={"evidence": evidence},
+                    )
+
+        with pg_factory() as session:
+            assert session.get(CanonicalEscrow, escrow_id).state == "LOCKED"
+            assert session.get(LedgerAccountModel, escrow_id).balance == amount
+            assert session.get(LedgerAccountModel, source).balance == 1000 - amount * 2
+            assert session.get(LedgerAccountModel, beneficiary).balance == 0
+            assert session.query(SignedChangeAuthorization).filter_by(
+                transaction_id=transaction_id
+            ).count() == 0
+            assert session.query(LedgerMovementModel).filter_by(
+                transaction_id=transaction_id
+            ).count() == 0
+            assert session.query(TransactionWitness).filter_by(
+                transaction_id=transaction_id
+            ).count() == 0
+            assert session.query(DurableIdempotencyRecord).filter_by(
+                key=transaction_id
+            ).count() == 0
+            expected_event_type = (
+                "GERCHAIN_RELEASED" if operation == "RELEASE" else "GERCHAIN_REFUNDED"
+            )
+            assert session.query(OutboxEvent).filter_by(
+                aggregate_id=escrow_id,
+                event_type=expected_event_type,
+            ).count() == 0

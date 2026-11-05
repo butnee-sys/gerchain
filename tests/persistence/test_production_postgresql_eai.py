@@ -13,7 +13,7 @@ from persistence.release_escrow import release_escrow_in_transaction
 from services.gerchain_runtime_factory import ProductionRuntimeConfig, ProductionRuntimeFactory
 
 
-def test_production_postgresql_canonical_value_flow():
+def test_production_postgresql_canonical_value_flow(signed_change_factory):
     database_url = os.environ["GERCHAIN_POSTGRES_DSN"]
     engine = create_engine(database_url, pool_pre_ping=True)
     factory = ProductionRuntimeFactory(
@@ -70,6 +70,10 @@ def test_production_postgresql_canonical_value_flow():
         )
         session.commit()
 
+        root, signed_change, owner_id = signed_change_factory(
+            operation="RELEASE", transaction_id="eai-release-1", escrow_id="eai-proof-1",
+            destination="DST", amount=10, currency="USD", evidence=None,
+        )
         release_escrow_in_transaction(
             session,
             transaction_id="eai-release-1",
@@ -78,7 +82,9 @@ def test_production_postgresql_canonical_value_flow():
             amount=10,
             currency="USD",
             decision_status="APPROVE",
-            authorization_status="AUTHORIZED",
+            root=root,
+            signed_change=signed_change,
+            owner_id=owner_id,
             trust=True,
             transparency=True,
             performance=True,

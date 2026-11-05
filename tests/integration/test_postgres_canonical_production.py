@@ -9,7 +9,7 @@ from persistence.release_escrow import release_escrow_in_transaction
 from persistence.deep_value_reconciliation import deep_reconcile_value_truth
 from services.gerchain_runtime_factory import ProductionRuntimeConfig, ProductionRuntimeFactory
 
-def test_postgres_canonical_production_flow():
+def test_postgres_canonical_production_flow(signed_change_factory):
     url = os.environ["GERCHAIN_DATABASE_URL"]
     escrow_id, source, beneficiary, currency, amount = "ci-escrow-1", "ci-source", "ci-beneficiary", "USD", 100
     factory = ProductionRuntimeFactory(ProductionRuntimeConfig(url, escrow_id, amount, currency, "ci-witness"))
@@ -29,10 +29,14 @@ def test_postgres_canonical_production_flow():
         session.commit()
         lock_escrow_in_transaction(session, transaction_id="ci-lock-1", escrow_id=escrow_id)
         session.commit()
+        root, signed_change, owner_id = signed_change_factory(
+            operation="RELEASE", transaction_id="ci-release-1", escrow_id=escrow_id,
+            destination=beneficiary, amount=amount, currency=currency, evidence=None,
+        )
         release_escrow_in_transaction(
             session, transaction_id="ci-release-1", escrow_id=escrow_id,
             beneficiary=beneficiary, amount=amount, currency=currency,
-            decision_status="APPROVE", authorization_status="AUTHORIZED",
+            decision_status="APPROVE", root=root, signed_change=signed_change, owner_id=owner_id,
             trust=True, transparency=True, performance=True, evidence_verified=True)
         session.commit()
         escrow = session.execute(select(CanonicalEscrow).where(CanonicalEscrow.id == escrow_id)).scalar_one()

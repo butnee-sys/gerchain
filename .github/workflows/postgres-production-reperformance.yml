@@ -30,6 +30,8 @@ jobs:
     env:
       GERCHAIN_TEST_DATABASE_URL: postgresql+psycopg://gerchain:gerchain_test@localhost:5432/gerchain_test
       GERCHAIN_DATABASE_URL: postgresql+psycopg://gerchain:gerchain_test@localhost:5432/gerchain_test
+      GERCHAIN_POSTGRES_DSN: postgresql://gerchain:gerchain_test@localhost:5432/gerchain_test
+      GERCHAIN_TEST_POSTGRES_URL: postgresql://gerchain:gerchain_test@localhost:5432/gerchain_test
       GERCHAIN_ESCROW_ID: production-gate-smoke-escrow
       GERCHAIN_ESCROW_AMOUNT: "100"
       GERCHAIN_CURRENCY: TST
@@ -47,6 +49,8 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements-dee-security.txt
           pip install pytest "psycopg[binary]"
+      - name: Configure ephemeral CI Root of Trust
+        uses: ./.github/actions/setup-ci-root-of-trust
       - name: Record tested revision and PostgreSQL version
         run: |
           mkdir -p production-gate-evidence
@@ -66,7 +70,7 @@ jobs:
           fi
           grep -F "GerChain production runtime initialized:" production-gate-evidence/production-boot.log
           echo "PASS: PostgreSQL migrations, schema assertions, and canonical runtime boot" > production-gate-evidence/production-boot-status.txt
-      - name: Capture migration history, 16 source hashes, and validated constraints
+      - name: Capture migration history, canonical source hashes, and validated constraints
         env:
           RUN_ID: ${{ github.run_id }}
           RUN_ATTEMPT: ${{ github.run_attempt }}
@@ -94,6 +98,7 @@ jobs:
               "015_repair_escrow_state_constraint_drift.sql",
               "016_reconcile_escrow_state_constraint.sql",
               "017_ea35_created_witness_event.sql",
+              "018_eai_signed_change_authorization.sql",
           ]
           hashes = []
           for name in expected:
@@ -130,10 +135,10 @@ jobs:
               "migration_history": history,
               "escrow_constraints": constraints,
           }
-          if len(hashes) != 17:
-              raise SystemExit(f"expected 17 migration hashes, got {len(hashes)}")
-          if [row["version"] for row in history] != list(range(1, 18)):
-              raise SystemExit("migration history is not exactly versions 1..17")
+          if len(hashes) != len(expected):
+              raise SystemExit(f"expected {len(expected)} migration hashes, got {len(hashes)}")
+          if [row["version"] for row in history] != list(range(1, len(expected) + 1)):
+              raise SystemExit(f"migration history is not exactly versions 1..{len(expected)}")
           if not constraints or any(not row["validated"] for row in constraints if row["constraint_type"] == "c"):
               raise SystemExit("missing escrow constraints or an unvalidated CHECK constraint")
           out = pathlib.Path("production-gate-evidence/migration-catalog-proof.json")
