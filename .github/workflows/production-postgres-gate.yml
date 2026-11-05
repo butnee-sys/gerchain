@@ -156,12 +156,13 @@ jobs:
       - name: Verify PostgreSQL migration concurrency, checksum rollback, and production factory
         run: python -m pytest -q tests/persistence/test_postgres_migration_concurrency.py
 
-      - name: Re-perform canonical PostgreSQL value lifecycle
+      - name: Re-perform canonical PostgreSQL lifecycle and SignedChange rollback
         run: >-
           python -m pytest -vv -s
           --junitxml=artifacts/postgres-lifecycle-junit.xml
           tests/postgres/test_production_postgres_reperformance.py
           tests/persistence/test_deep_value_reconciliation_postgres.py
+          tests/persistence/test_canonical_lifecycle_postgres.py
 
       - name: Write SHA-bound PostgreSQL migration and lifecycle evidence
         if: always()
