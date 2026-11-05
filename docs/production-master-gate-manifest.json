@@ -128,7 +128,7 @@
     },
     {
       "id": "migration_catalog",
-      "required_evidence": "Actual PostgreSQL migration catalog, 17-version history and checksum evidence.",
+      "required_evidence": "Actual PostgreSQL migration catalog, 18-version history and checksum evidence.",
       "evidence_path": "migration-history-summary.md"
     },
     {
@@ -184,10 +184,10 @@
   },
   "migration_registry": {
     "canonical_source": "postgres/migrations/__init__.py",
-    "canonical_version_range": "1..17",
-    "canonical_migration_count": 17,
+    "canonical_version_range": "1..18",
+    "canonical_migration_count": 18,
     "baseline_main_sha": "8f800f7d911d9011e8534ae6be1495e3e1d359a3",
-    "disposition": "MAIN_CANONICAL_BASELINE",
-    "note": "The 018 migration appears in unmerged PR #115 only; it is not part of the main baseline and is not promoted by this RCA-05/08 remediation branch."
+    "disposition": "REPAIR_CANDIDATE_PENDING_VALIDATION",
+    "note": "Migration 018 is included in the repair candidate; the 18-version chain remains unverified until exact-SHA PostgreSQL migration and lifecycle evidence is captured."
   }
 }
