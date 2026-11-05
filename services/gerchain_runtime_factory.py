@@ -144,6 +144,44 @@ def assert_canonical_production_schema(connection: Any) -> None:
     # the two safety-critical catalog invariants before exposing a production runtime.
     dialect = connection.dialect.name
     if dialect == "postgresql":
+        authorization_check_rows = connection.exec_driver_sql(
+            """
+            SELECT conname, pg_get_constraintdef(oid), convalidated
+            FROM pg_constraint
+            WHERE conrelid = 'gerchain_authorization_changes'::regclass
+              AND contype = 'c'
+            """
+        ).all()
+        authorization_check_definitions = {
+            name: definition for name, definition, _validated in authorization_check_rows
+        }
+        authorization_check_requirements = {
+            "gerchain_authorization_operation_check": (
+                "operation", "release", "refund", "cancel",
+            ),
+            "gerchain_authorization_version_check": ("version", ">0"),
+            "gerchain_authorization_payload_hash_check": (
+                "payload_hash", "^[0-9a-f]{64}$",
+            ),
+            "gerchain_authorization_signature_check": (
+                "length(signature)", ">0",
+            ),
+        }
+        authorization_check_drift = _constraint_definition_drift(
+            authorization_check_requirements,
+            authorization_check_definitions,
+        )
+        unvalidated_authorization_checks = [
+            name for name, _definition, validated in authorization_check_rows
+            if name in authorization_check_requirements and not validated
+        ]
+        if authorization_check_drift or unvalidated_authorization_checks:
+            raise RuntimeError(
+                "SignedChange authorization CHECK constraints are missing, weakened, "
+                f"or unvalidated: drift={authorization_check_drift}; "
+                f"unvalidated={unvalidated_authorization_checks}"
+            )
+
         version_index = connection.exec_driver_sql(
             """
             SELECT EXISTS (
