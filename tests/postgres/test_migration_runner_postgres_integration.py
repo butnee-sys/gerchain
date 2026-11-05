@@ -24,6 +24,7 @@ from persistence.atomic_value_transaction import WitnessBase
 from persistence.durable_idempotency import IdempotencyBase
 from persistence.escrow_aggregate import EscrowBase
 from persistence.recovery_outbox import OutboxBase
+from persistence.signed_change_authorization import AuthorizationBase
 
 ROOT = Path(__file__).resolve().parents[2]
 MIGRATIONS = ROOT / "postgres" / "migrations"
@@ -278,5 +279,58 @@ def test_v016_repairs_escrow_state_constraint_drift_after_v015_is_recorded(drift
             # runner deliberately requires a clean connection on entry.
             conn.commit()
             assert apply_migrations(conn, MIGRATIONS) == ()
+    finally:
+        _drop_schema(schema)
+
+
+
+def test_postgres_migration_018_reconciles_compatible_preexisting_authorization_table():
+    schema = _schema()
+    try:
+        engine = create_engine(
+            DSN,
+            connect_args={"options": f"-c search_path={schema}"},
+        )
+        try:
+            # Simulate a compatible legacy/ORM-created table without a v18
+            # schema_version publication. Migration 018 must validate and adopt
+            # it, not fail with DuplicateTable or silently accept a bad shape.
+            AuthorizationBase.metadata.create_all(engine)
+        finally:
+            engine.dispose()
+
+        with _connect(schema) as conn:
+            applied = apply_migrations(conn, MIGRATIONS)
+            assert applied == CANONICAL_VERSIONS
+
+        with _connect(schema) as conn:
+            check_names = {
+                row[0]
+                for row in conn.execute(
+                    """
+                    SELECT conname
+                    FROM pg_constraint
+                    WHERE conrelid = 'gerchain_authorization_changes'::regclass
+                      AND contype = 'c'
+                    """
+                ).fetchall()
+            }
+            assert check_names == {
+                "gerchain_authorization_operation_check",
+                "gerchain_authorization_version_check",
+                "gerchain_authorization_payload_hash_check",
+                "gerchain_authorization_signature_check",
+            }
+            assert apply_migrations(conn, MIGRATIONS) == ()
+
+        engine = create_engine(
+            DSN,
+            connect_args={"options": f"-c search_path={schema}"},
+        )
+        try:
+            with engine.connect() as connection:
+                assert_canonical_production_schema(connection)
+        finally:
+            engine.dispose()
     finally:
         _drop_schema(schema)
