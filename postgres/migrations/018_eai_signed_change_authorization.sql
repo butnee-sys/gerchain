@@ -26,17 +26,28 @@ CREATE TABLE IF NOT EXISTS gerchain_authorization_changes (
 DO $$
 DECLARE
     table_oid REGCLASS;
+    table_schema_name TEXT;
     incompatible_columns TEXT[];
 BEGIN
     table_oid := to_regclass('gerchain_authorization_changes');
     IF table_oid IS NULL THEN
-        RAISE EXCEPTION 'canonical SignedChange table was not created in current_schema()';
+        RAISE EXCEPTION 'canonical SignedChange table was not created in the active search path';
     END IF;
+
+    -- Resolve the schema from the actual relation found by to_regclass().
+    -- current_schema() can differ when search_path contains an existing table
+    -- in a later schema; inspecting current_schema() would then count zero
+    -- columns and reject a valid pre-existing canonical table.
+    SELECT namespace.nspname
+    INTO table_schema_name
+    FROM pg_class AS relation
+    JOIN pg_namespace AS namespace ON namespace.oid = relation.relnamespace
+    WHERE relation.oid = table_oid;
 
     IF (
         SELECT COUNT(*)
         FROM information_schema.columns
-        WHERE table_schema = current_schema()
+        WHERE table_schema = table_schema_name
           AND table_name = 'gerchain_authorization_changes'
     ) <> 9 THEN
         RAISE EXCEPTION
@@ -57,7 +68,7 @@ BEGIN
         ('created_at', 'timestamp with time zone', NULL::integer, 'NO')
     ) AS expected(column_name, data_type, max_length, is_nullable)
     LEFT JOIN information_schema.columns AS actual
-      ON actual.table_schema = current_schema()
+      ON actual.table_schema = table_schema_name
      AND actual.table_name = 'gerchain_authorization_changes'
      AND actual.column_name = expected.column_name
     WHERE actual.column_name IS NULL
