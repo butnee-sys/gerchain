@@ -313,11 +313,13 @@ def test_controller_fails_closed_when_external_evidence_path_escapes_artifact(tm
 
 
 def test_controller_fails_closed_when_external_attestation_signature_is_tampered(tmp_path: Path) -> None:
-    data = _manifest("abc123")
+    # Materialize the test-only signed evidence before tampering with its signature.
+    manifest = _write_manifest(tmp_path, _manifest("abc123"))
+    data = json.loads(manifest.read_text(encoding="utf-8"))
     data["external_organizational_evidence"]["signature_b64"] = base64.b64encode(
         b"invalid-signature"
     ).decode("ascii")
-    manifest = _write_manifest(tmp_path, data)
+    manifest.write_text(json.dumps(data), encoding="utf-8")
     report = _decide_with_test_trust_anchor(manifest, "abc123", _outcomes())
     assert report["decision"] == "NOT_LOCKED"
     assert "EXTERNAL_ORGANIZATIONAL_EVIDENCE_SIGNATURE_INVALID" in report["failures"]
