@@ -164,6 +164,80 @@ def test_controller_locks_only_when_every_gate_and_migration_evidence_match(tmp_
     assert report["passed_gate_count"] == 30
 
 
+def test_controller_accepts_repository_owner_approval_without_external_organization(tmp_path: Path) -> None:
+    data = _manifest("abc123")
+    data["lock_policy"] = {
+        "all_30_gates_must_pass": True,
+        "same_exact_commit_sha_required": True,
+        "workflow_run_and_attempt_required": True,
+        "missing_or_stale_evidence_means_pass": False,
+        "owner_attestation_required": True,
+        "external_organizational_evidence_required": False,
+        "production_lock_authorized": True,
+    }
+    data["external_organizational_evidence"] = None
+    data["owner_attestation"] = {
+        "status": "APPROVED",
+        "commit_sha": "abc123",
+        "approved_by": "butnee-sys",
+        "repository_owner": "butnee-sys",
+        "workflow_run_id": "100",
+        "workflow_run_attempt": "1",
+    }
+    manifest = tmp_path / "manifest.json"
+    manifest.write_text(json.dumps(data), encoding="utf-8")
+    environment = {
+        "GITHUB_REPOSITORY_OWNER": "butnee-sys",
+        "GITHUB_ACTOR": "butnee-sys",
+        "GITHUB_RUN_ID": "100",
+        "GITHUB_RUN_ATTEMPT": "1",
+        "GERCHAIN_PRODUCTION_GATE_RUN_ID": "200",
+        "GERCHAIN_PRODUCTION_GATE_SHA": "abc123",
+        "GERCHAIN_PRODUCTION_GATE_CONCLUSION": "success",
+    }
+    with patch("scripts.production_gate_controller._head_sha", return_value="abc123"), patch.dict(os.environ, environment):
+        report = decide(manifest, "abc123", _outcomes())
+    assert report["decision"] == "LOCKED"
+    assert report["failures"] == []
+
+
+def test_controller_rejects_owner_approval_when_production_gate_is_incomplete(tmp_path: Path) -> None:
+    data = _manifest("abc123")
+    data["lock_policy"] = {
+        "all_30_gates_must_pass": True,
+        "same_exact_commit_sha_required": True,
+        "workflow_run_and_attempt_required": True,
+        "missing_or_stale_evidence_means_pass": False,
+        "owner_attestation_required": True,
+        "external_organizational_evidence_required": False,
+        "production_lock_authorized": True,
+    }
+    data["external_organizational_evidence"] = None
+    data["owner_attestation"] = {
+        "status": "APPROVED",
+        "commit_sha": "abc123",
+        "approved_by": "butnee-sys",
+        "repository_owner": "butnee-sys",
+        "workflow_run_id": "100",
+        "workflow_run_attempt": "1",
+    }
+    manifest = tmp_path / "manifest.json"
+    manifest.write_text(json.dumps(data), encoding="utf-8")
+    environment = {
+        "GITHUB_REPOSITORY_OWNER": "butnee-sys",
+        "GITHUB_ACTOR": "butnee-sys",
+        "GITHUB_RUN_ID": "100",
+        "GITHUB_RUN_ATTEMPT": "1",
+        "GERCHAIN_PRODUCTION_GATE_RUN_ID": "200",
+        "GERCHAIN_PRODUCTION_GATE_SHA": "abc123",
+        "GERCHAIN_PRODUCTION_GATE_CONCLUSION": "in_progress",
+    }
+    with patch("scripts.production_gate_controller._head_sha", return_value="abc123"), patch.dict(os.environ, environment):
+        report = decide(manifest, "abc123", _outcomes())
+    assert report["decision"] == "NOT_LOCKED"
+    assert "PRODUCTION_GATE_WORKFLOW_NOT_SUCCESS" in report["failures"]
+
+
 def test_controller_fails_closed_when_any_gate_is_missing_or_skipped(tmp_path: Path) -> None:
     manifest = _write_manifest(tmp_path, _manifest("abc123"))
     outcomes = _outcomes()
