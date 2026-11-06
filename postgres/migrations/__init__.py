@@ -387,6 +387,10 @@ def apply_migrations(connection: Connection, migration_dir: Path) -> tuple[int, 
                             "UPDATE schema_version SET checksum = %s WHERE version = %s",
                             (digest, version),
                         )
+                        # Report the schema repair as applied so migration evidence
+                        # records the reconciled version instead of returning an
+                        # empty result for a real DDL/checksum repair.
+                        applied_now.append(version)
                     continue
                 for statement in _split_sql_statements(source):
                     connection.execute(statement)
