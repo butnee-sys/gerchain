@@ -160,10 +160,6 @@ jobs:
           PRODUCTION_GATE_RUN_ATTEMPT: ${{ steps.production_run.outputs.run_attempt || '' }}
           PRODUCTION_GATE_CONCLUSION: ${{ steps.production_run.outputs.conclusion || 'missing' }}
           PRODUCTION_GATE_SHA: ${{ steps.production_run.outputs.sha || '' }}
-          GITHUB_REPOSITORY_OWNER: ${{ github.repository_owner }}
-          GITHUB_ACTOR: ${{ github.actor }}
-          GITHUB_RUN_ID: ${{ github.run_id }}
-          GITHUB_RUN_ATTEMPT: ${{ github.run_attempt }}
         run: |
           python - <<'PY'
           import hashlib, json, os, subprocess
