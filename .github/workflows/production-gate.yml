@@ -56,10 +56,68 @@ jobs:
         run: python -m compileall -q .
       - name: Collect the complete test suite (fail closed)
         run: python -m pytest --import-mode=importlib --collect-only -q
-      - name: Run complete test suite and emit JUnit evidence
+      - name: Run complete test suite with live failure and hang diagnostics
         run: |
           mkdir -p production-evidence
-          python -m pytest --import-mode=importlib -q --junitxml=production-evidence/junit.xml
+          python - <<'PY'
+          import sys
+          import time
+          from datetime import datetime, timezone
+
+          import pytest
+
+          class LiveTestDiagnostics:
+              def __init__(self):
+                  self.started = {}
+
+              @staticmethod
+              def emit(message):
+                  stamp = datetime.now(timezone.utc).isoformat(timespec="seconds")
+                  print(f"[PYTEST-DIAG {stamp}] {message}", flush=True)
+
+              def pytest_runtest_logstart(self, nodeid, location):
+                  self.started[nodeid] = time.monotonic()
+                  self.emit(f"TEST-START {nodeid}")
+
+              def pytest_runtest_logreport(self, report):
+                  self.emit(
+                      f"PHASE-END {report.nodeid} phase={report.when} "
+                      f"outcome={report.outcome} duration={report.duration:.3f}s"
+                  )
+                  if report.failed:
+                      self.emit(
+                          f"FAILURE-TRACEBACK-BEGIN {report.nodeid} phase={report.when}"
+                      )
+                      self.emit(report.longreprtext)
+                      self.emit(
+                          f"FAILURE-TRACEBACK-END {report.nodeid} phase={report.when}"
+                      )
+
+              def pytest_runtest_logfinish(self, nodeid, location):
+                  started = self.started.pop(nodeid, None)
+                  if started is not None:
+                      elapsed = time.monotonic() - started
+                      self.emit(f"TEST-END {nodeid} total_duration={elapsed:.3f}s")
+                      if elapsed >= 30:
+                          self.emit(f"SLOW-TEST {nodeid} total_duration={elapsed:.3f}s")
+
+          args = [
+              "--import-mode=importlib",
+              "-q",
+              "-s",
+              "--tb=long",
+              "--junitxml=production-evidence/junit.xml",
+              "-o",
+              "faulthandler_timeout=120",
+          ]
+          LiveTestDiagnostics.emit(
+              "SUITE-START; faulthandler_timeout=120s; per-test start/end and "
+              "failure tracebacks are streamed as they occur."
+          )
+          exit_code = pytest.main(args, plugins=[LiveTestDiagnostics()])
+          LiveTestDiagnostics.emit(f"SUITE-END exit_code={int(exit_code)}")
+          raise SystemExit(int(exit_code))
+          PY
 
       - name: Apply canonical migrations and capture PostgreSQL evidence
         if: always()
