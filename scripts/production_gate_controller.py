@@ -56,7 +56,7 @@ def _organizational_lock_failures(
     manifest_path: pathlib.Path,
     expected_source_sha: str,
 ) -> list[str]:
-    """Require explicit authorization and hash-verified external evidence before LOCKED."""
+    """Verify either owner authorization or a separately trusted organizational attestation."""
     failures: list[str] = []
     policy = manifest.get("lock_policy")
     if not isinstance(policy, dict):
@@ -67,103 +67,138 @@ def _organizational_lock_failures(
         "same_exact_commit_sha_required": True,
         "workflow_run_and_attempt_required": True,
         "missing_or_stale_evidence_means_pass": False,
-        "external_organizational_evidence_required": True,
         "production_lock_authorized": True,
     }
     for key, required_value in required_policy.items():
         if policy.get(key) is not required_value:
             failures.append(f"LOCK_POLICY_{key.upper()}_NOT_SATISFIED")
 
-    external = manifest.get("external_organizational_evidence")
-    if not isinstance(external, dict):
-        failures.append("EXTERNAL_ORGANIZATIONAL_EVIDENCE_MISSING")
-        return failures
+    owner_required = policy.get("owner_attestation_required") is True
+    external_required = policy.get("external_organizational_evidence_required") is True
+    if not owner_required and not external_required:
+        failures.append("LOCK_POLICY_AUTHORITY_SOURCE_MISSING")
 
-    if external.get("status") != "VERIFIED":
-        failures.append("EXTERNAL_ORGANIZATIONAL_EVIDENCE_NOT_VERIFIED")
-    if external.get("commit_sha") != expected_source_sha:
-        failures.append("EXTERNAL_ORGANIZATIONAL_EVIDENCE_SHA_MISMATCH")
-    for field in ("verified_by", "authorized_by"):
-        if not isinstance(external.get(field), str) or not external[field].strip():
-            failures.append(f"EXTERNAL_ORGANIZATIONAL_EVIDENCE_{field.upper()}_MISSING")
-    for field in ("verified_at", "authorized_at"):
-        if not _is_aware_timestamp(external.get(field)):
-            failures.append(f"EXTERNAL_ORGANIZATIONAL_EVIDENCE_{field.upper()}_INVALID")
+    if owner_required:
+        owner = manifest.get("owner_attestation")
+        if not isinstance(owner, dict):
+            failures.append("OWNER_ATTESTATION_MISSING")
+        else:
+            repository_owner = os.environ.get("GITHUB_REPOSITORY_OWNER", "").strip()
+            approving_actor = os.environ.get("GITHUB_ACTOR", "").strip()
+            workflow_run_id = os.environ.get("GITHUB_RUN_ID", "").strip()
+            workflow_attempt = os.environ.get("GITHUB_RUN_ATTEMPT", "").strip()
+            if not repository_owner or not approving_actor or approving_actor.casefold() != repository_owner.casefold():
+                failures.append("OWNER_ATTESTATION_ACTOR_NOT_REPOSITORY_OWNER")
+            if owner.get("status") != "APPROVED":
+                failures.append("OWNER_ATTESTATION_NOT_APPROVED")
+            if owner.get("commit_sha") != expected_source_sha:
+                failures.append("OWNER_ATTESTATION_SHA_MISMATCH")
+            if owner.get("approved_by") != approving_actor or not approving_actor:
+                failures.append("OWNER_ATTESTATION_APPROVER_MISMATCH")
+            if owner.get("repository_owner") != repository_owner or not repository_owner:
+                failures.append("OWNER_ATTESTATION_REPOSITORY_OWNER_MISMATCH")
+            if str(owner.get("workflow_run_id", "")) != workflow_run_id or not workflow_run_id:
+                failures.append("OWNER_ATTESTATION_RUN_ID_MISMATCH")
+            if str(owner.get("workflow_run_attempt", "")) != workflow_attempt or not workflow_attempt:
+                failures.append("OWNER_ATTESTATION_RUN_ATTEMPT_MISMATCH")
 
-    # Verify the attestation with a public key supplied by protected GitHub
-    # Actions configuration. A public key or signature from the PR itself is
-    # never accepted as the trust anchor.
-    trusted_key_id = os.environ.get("GERCHAIN_ORG_EVIDENCE_KEY_ID", "").strip()
-    trusted_public_key_b64 = os.environ.get("GERCHAIN_ORG_EVIDENCE_PUBLIC_KEY_B64", "").strip()
-    if not trusted_key_id or not trusted_public_key_b64:
-        failures.append("EXTERNAL_ORGANIZATIONAL_TRUST_ANCHOR_MISSING")
-    elif external.get("key_id") != trusted_key_id:
-        failures.append("EXTERNAL_ORGANIZATIONAL_TRUST_ANCHOR_ID_MISMATCH")
+            production_run_id = os.environ.get("GERCHAIN_PRODUCTION_GATE_RUN_ID", "").strip()
+            production_sha = os.environ.get("GERCHAIN_PRODUCTION_GATE_SHA", "").strip()
+            production_conclusion = os.environ.get("GERCHAIN_PRODUCTION_GATE_CONCLUSION", "").strip()
+            if not production_run_id:
+                failures.append("PRODUCTION_GATE_WORKFLOW_RUN_MISSING")
+            if production_sha != expected_source_sha:
+                failures.append("PRODUCTION_GATE_WORKFLOW_SHA_MISMATCH")
+            if production_conclusion != "success":
+                failures.append("PRODUCTION_GATE_WORKFLOW_NOT_SUCCESS")
 
-    signature_b64 = external.get("signature_b64")
-    if not isinstance(signature_b64, str) or not signature_b64.strip():
-        failures.append("EXTERNAL_ORGANIZATIONAL_EVIDENCE_SIGNATURE_MISSING")
-    elif trusted_key_id and trusted_public_key_b64 and external.get("key_id") == trusted_key_id:
-        try:
-            from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
+    if external_required:
+        external = manifest.get("external_organizational_evidence")
+        if not isinstance(external, dict):
+            failures.append("EXTERNAL_ORGANIZATIONAL_EVIDENCE_MISSING")
+            return failures
 
-            unsigned_payload = {
-                key: value for key, value in external.items()
-                if key != "signature_b64"
-            }
-            signed_bytes = json.dumps(
-                unsigned_payload,
-                sort_keys=True,
-                separators=(",", ":"),
-                ensure_ascii=False,
-            ).encode("utf-8")
-            public_key = Ed25519PublicKey.from_public_bytes(
-                base64.b64decode(trusted_public_key_b64, validate=True)
-            )
-            public_key.verify(
-                base64.b64decode(signature_b64, validate=True),
-                signed_bytes,
-            )
-        except Exception:
-            failures.append("EXTERNAL_ORGANIZATIONAL_EVIDENCE_SIGNATURE_INVALID")
+        if external.get("status") != "VERIFIED":
+            failures.append("EXTERNAL_ORGANIZATIONAL_EVIDENCE_NOT_VERIFIED")
+        if external.get("commit_sha") != expected_source_sha:
+            failures.append("EXTERNAL_ORGANIZATIONAL_EVIDENCE_SHA_MISMATCH")
+        for field in ("verified_by", "authorized_by"):
+            if not isinstance(external.get(field), str) or not external[field].strip():
+                failures.append(f"EXTERNAL_ORGANIZATIONAL_EVIDENCE_{field.upper()}_MISSING")
+        for field in ("verified_at", "authorized_at"):
+            if not _is_aware_timestamp(external.get(field)):
+                failures.append(f"EXTERNAL_ORGANIZATIONAL_EVIDENCE_{field.upper()}_INVALID")
 
-    records = external.get("evidence")
-    if not isinstance(records, list):
-        failures.append("EXTERNAL_ORGANIZATIONAL_EVIDENCE_INVENTORY_MISSING")
-        return failures
+        trusted_key_id = os.environ.get("GERCHAIN_ORG_EVIDENCE_KEY_ID", "").strip()
+        trusted_public_key_b64 = os.environ.get("GERCHAIN_ORG_EVIDENCE_PUBLIC_KEY_B64", "").strip()
+        if not trusted_key_id or not trusted_public_key_b64:
+            failures.append("EXTERNAL_ORGANIZATIONAL_TRUST_ANCHOR_MISSING")
+        elif external.get("key_id") != trusted_key_id:
+            failures.append("EXTERNAL_ORGANIZATIONAL_TRUST_ANCHOR_ID_MISMATCH")
 
-    seen: set[str] = set()
-    for record in records:
-        if not isinstance(record, dict):
-            failures.append("EXTERNAL_ORGANIZATIONAL_EVIDENCE_RECORD_INVALID")
-            continue
-        domain = record.get("domain")
-        if not isinstance(domain, str) or domain not in REQUIRED_ORGANIZATIONAL_EVIDENCE:
-            failures.append("EXTERNAL_ORGANIZATIONAL_EVIDENCE_DOMAIN_INVALID")
-            continue
-        if domain in seen:
-            failures.append(f"EXTERNAL_ORGANIZATIONAL_EVIDENCE_DUPLICATE_{domain.upper()}")
-            continue
-        seen.add(domain)
-        if record.get("commit_sha") != expected_source_sha:
-            failures.append(f"EXTERNAL_ORGANIZATIONAL_EVIDENCE_RECORD_SHA_MISMATCH_{domain.upper()}")
-        evidence_path = resolve_artifact_evidence(manifest_path.parent, record.get("path"))
-        if evidence_path is None:
-            failures.append(f"EXTERNAL_ORGANIZATIONAL_EVIDENCE_FILE_MISSING_OR_UNSAFE_{domain.upper()}")
-            continue
-        expected_digest = record.get("sha256")
-        if not isinstance(expected_digest, str) or len(expected_digest) != 64:
-            failures.append(f"EXTERNAL_ORGANIZATIONAL_EVIDENCE_HASH_MISSING_{domain.upper()}")
-            continue
-        actual_digest = hashlib.sha256(evidence_path.read_bytes()).hexdigest()
-        if actual_digest != expected_digest.lower():
-            failures.append(f"EXTERNAL_ORGANIZATIONAL_EVIDENCE_HASH_MISMATCH_{domain.upper()}")
+        signature_b64 = external.get("signature_b64")
+        if not isinstance(signature_b64, str) or not signature_b64.strip():
+            failures.append("EXTERNAL_ORGANIZATIONAL_EVIDENCE_SIGNATURE_MISSING")
+        elif trusted_key_id and trusted_public_key_b64 and external.get("key_id") == trusted_key_id:
+            try:
+                from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 
-    for domain in REQUIRED_ORGANIZATIONAL_EVIDENCE:
-        if domain not in seen:
-            failures.append(f"EXTERNAL_ORGANIZATIONAL_EVIDENCE_DOMAIN_MISSING_{domain.upper()}")
+                unsigned_payload = {
+                    key: value for key, value in external.items()
+                    if key != "signature_b64"
+                }
+                signed_bytes = json.dumps(
+                    unsigned_payload,
+                    sort_keys=True,
+                    separators=(",", ":"),
+                    ensure_ascii=False,
+                ).encode("utf-8")
+                public_key = Ed25519PublicKey.from_public_bytes(
+                    base64.b64decode(trusted_public_key_b64, validate=True)
+                )
+                public_key.verify(
+                    base64.b64decode(signature_b64, validate=True),
+                    signed_bytes,
+                )
+            except Exception:
+                failures.append("EXTERNAL_ORGANIZATIONAL_EVIDENCE_SIGNATURE_INVALID")
+
+        records = external.get("evidence")
+        if not isinstance(records, list):
+            failures.append("EXTERNAL_ORGANIZATIONAL_EVIDENCE_INVENTORY_MISSING")
+            return failures
+
+        seen: set[str] = set()
+        for record in records:
+            if not isinstance(record, dict):
+                failures.append("EXTERNAL_ORGANIZATIONAL_EVIDENCE_RECORD_INVALID")
+                continue
+            domain = record.get("domain")
+            if not isinstance(domain, str) or domain not in REQUIRED_ORGANIZATIONAL_EVIDENCE:
+                failures.append("EXTERNAL_ORGANIZATIONAL_EVIDENCE_DOMAIN_INVALID")
+                continue
+            if domain in seen:
+                failures.append(f"EXTERNAL_ORGANIZATIONAL_EVIDENCE_DUPLICATE_{domain.upper()}")
+                continue
+            seen.add(domain)
+            if record.get("commit_sha") != expected_source_sha:
+                failures.append(f"EXTERNAL_ORGANIZATIONAL_EVIDENCE_RECORD_SHA_MISMATCH_{domain.upper()}")
+            evidence_path = resolve_artifact_evidence(manifest_path.parent, record.get("path"))
+            if evidence_path is None:
+                failures.append(f"EXTERNAL_ORGANIZATIONAL_EVIDENCE_FILE_MISSING_OR_UNSAFE_{domain.upper()}")
+                continue
+            expected_digest = record.get("sha256")
+            if not isinstance(expected_digest, str) or len(expected_digest) != 64:
+                failures.append(f"EXTERNAL_ORGANIZATIONAL_EVIDENCE_HASH_MISSING_{domain.upper()}")
+                continue
+            actual_digest = hashlib.sha256(evidence_path.read_bytes()).hexdigest()
+            if actual_digest != expected_digest.lower():
+                failures.append(f"EXTERNAL_ORGANIZATIONAL_EVIDENCE_HASH_MISMATCH_{domain.upper()}")
+
+        for domain in REQUIRED_ORGANIZATIONAL_EVIDENCE:
+            if domain not in seen:
+                failures.append(f"EXTERNAL_ORGANIZATIONAL_EVIDENCE_DOMAIN_MISSING_{domain.upper()}")
     return failures
-
 
 
 def resolve_artifact_evidence(artifact_root: pathlib.Path, evidence: object) -> pathlib.Path | None:
