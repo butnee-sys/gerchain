@@ -410,6 +410,13 @@ jobs:
               '--outcomes-json', json.dumps(outcomes, sort_keys=True),
           ], check=False)
           report = json.loads(output.read_text(encoding='utf-8'))
+          report['owner_approval_model'] = 'repository_owner_self_attestation'
+          report['owner_attestation'] = manifest.get('owner_attestation')
+          report['external_organizational_evidence_required'] = False
+          report['production_gate_run_id'] = os.environ.get('PRODUCTION_GATE_RUN_ID') or None
+          report['production_gate_run_attempt'] = os.environ.get('PRODUCTION_GATE_RUN_ATTEMPT') or None
+          report['production_gate_conclusion'] = os.environ.get('PRODUCTION_GATE_CONCLUSION') or 'missing'
+          report['production_gate_sha'] = os.environ.get('PRODUCTION_GATE_SHA') or None
           report['postgres_gate_run_id'] = os.environ.get('SOURCE_RUN_ID') or None
           report['postgres_gate_conclusion'] = conclusion
           report['independent_audit_run_id'] = os.environ.get('INDEPENDENT_RUN_ID') or None
