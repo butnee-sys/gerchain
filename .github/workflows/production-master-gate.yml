@@ -396,7 +396,7 @@ jobs:
               'workflow_run_id': os.environ.get('GITHUB_RUN_ID', ''),
               'workflow_run_attempt': os.environ.get('GITHUB_RUN_ATTEMPT', ''),
           }
-          manifest_path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + '\\n', encoding='utf-8')
+          manifest_path.write_text(json.dumps(manifest, indent=2, sort_keys=True), encoding='utf-8')
           os.environ['GERCHAIN_PRODUCTION_GATE_RUN_ID'] = os.environ.get('PRODUCTION_GATE_RUN_ID', '')
           os.environ['GERCHAIN_PRODUCTION_GATE_SHA'] = os.environ.get('PRODUCTION_GATE_SHA', '')
           os.environ['GERCHAIN_PRODUCTION_GATE_CONCLUSION'] = os.environ.get('PRODUCTION_GATE_CONCLUSION', 'missing')
