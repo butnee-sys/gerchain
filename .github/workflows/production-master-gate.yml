@@ -225,6 +225,7 @@ jobs:
           lineage = json.loads(lineage_path.read_text(encoding='utf-8')) if lineage_path.is_file() else {}
           source_sha = lineage.get('source_sha', '')
           allowed_files = sorted([
+              '.github/workflows/core-gates.yml',
               '.github/workflows/production-gate.yml',
               '.github/workflows/production-master-gate.yml',
           ])
