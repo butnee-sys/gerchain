@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from postgres.migrations import CANONICAL_MIGRATION_NAMES, _canonical_migration_files
+from postgres.migrations import CANONICAL_MIGRATION_NAMES, LEGACY_CHECKSUMS, _canonical_migration_files
 from scripts.postgres_migration_runner import CANONICAL_MIGRATION_DIR
 from scripts.apply_postgres_migration import apply_migration
 
@@ -16,6 +16,8 @@ def test_canonical_manifest_matches_physical_migration_files():
     }
     assert actual == CANONICAL_MIGRATION_NAMES
     assert sorted(actual) == list(range(1, len(CANONICAL_MIGRATION_NAMES) + 1))
+    assert CANONICAL_MIGRATION_NAMES[18] == "018_eai_signed_change_authorization.sql"
+    assert "26b1e2a7a7398e493fa36292e67ea47e7ff7d5af0a9036419838565852108a34" in LEGACY_CHECKSUMS[18]
     assert len({path.name for path in files}) == len(files)
 
 
