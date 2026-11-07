@@ -229,7 +229,7 @@ jobs:
               '.github/workflows/production-master-gate.yml',
           ])
           changed_files = lineage.get('changed_files', [])
-          changed_digest = hashlib.sha256(("\\n".join(changed_files) + "\\n").encode()).hexdigest() if isinstance(changed_files, list) else ''
+          changed_digest = hashlib.sha256(("\n".join(changed_files) + "\n").encode()).hexdigest() if isinstance(changed_files, list) else ''
           lineage_valid = (
               lineage.get('policy') == 'FAIL_CLOSED'
               and source_sha == '89d698b1f6cac407f83df2830209773f52eabc18'
