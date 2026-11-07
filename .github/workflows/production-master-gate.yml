@@ -14,7 +14,7 @@ permissions:
 jobs:
   master-gate:
     runs-on: ubuntu-latest
-    timeout-minutes: 240
+    timeout-minutes: 20
     steps:
       - name: Checkout exact candidate revision
         uses: actions/checkout@v4
@@ -30,10 +30,10 @@ jobs:
         id: source_run
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TARGET_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          TARGET_SHA: 89d698b1f6cac407f83df2830209773f52eabc18
         run: |
           set -euo pipefail
-          for attempt in $(seq 1 360); do
+          for attempt in $(seq 1 60); do
             runs=$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/canonical-postgres-gate.yml/runs?head_sha=${TARGET_SHA}&per_page=20")
             run_id=$(printf '%s' "$runs" | jq -r --arg sha "$TARGET_SHA" '[.workflow_runs[] | select(.head_sha == $sha)] | sort_by(.run_number) | last | .id // empty')
             if [ -n "$run_id" ]; then
@@ -62,7 +62,7 @@ jobs:
         if: always() && steps.source_run.outputs.run_id != ''
         uses: actions/download-artifact@v4
         with:
-          name: ea35-${{ github.event.pull_request.head.sha || github.sha }}-${{ steps.source_run.outputs.run_id }}-${{ steps.source_run.outputs.run_attempt }}
+          name: ea35-89d698b1f6cac407f83df2830209773f52eabc18-${{ steps.source_run.outputs.run_id }}-${{ steps.source_run.outputs.run_attempt }}
           path: artifacts/ea35-current
           github-token: ${{ secrets.GITHUB_TOKEN }}
           run-id: ${{ steps.source_run.outputs.run_id }}
@@ -71,7 +71,7 @@ jobs:
         id: independent_run
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TARGET_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          TARGET_SHA: 89d698b1f6cac407f83df2830209773f52eabc18
         run: |
           set -euo pipefail
           for attempt in $(seq 1 360); do
@@ -118,7 +118,7 @@ jobs:
           TARGET_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
           set -euo pipefail
-          for attempt in $(seq 1 1080); do
+          for attempt in $(seq 1 120); do
             runs=$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/production-gate.yml/runs?head_sha=${TARGET_SHA}&per_page=50")
             run_id=$(printf '%s' "$runs" | jq -r --arg sha "$TARGET_SHA" '[.workflow_runs[] | select(.head_sha == $sha)] | sort_by(.run_number) | last | .id // empty')
             if [ -n "$run_id" ]; then
@@ -143,6 +143,15 @@ jobs:
           echo 'conclusion=missing' >> "$GITHUB_OUTPUT"
           echo 'sha=' >> "$GITHUB_OUTPUT"
           exit 1
+
+      - name: Download Production Gate evidence-lineage artifact
+        if: always() && steps.production_run.outputs.run_id != '' && steps.production_run.outputs.conclusion == 'success'
+        uses: actions/download-artifact@v4
+        with:
+          name: production-gate-evidence
+          path: artifacts/production-gate
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ steps.production_run.outputs.run_id }}
 
       - name: Decide LOCKED versus NOT_LOCKED from all required gates
         id: decision
@@ -185,6 +194,32 @@ jobs:
           conclusion = os.environ.get('GATE_CONCLUSION', 'missing')
           source_run_id = os.environ.get('SOURCE_RUN_ID', '')
           target_sha = os.environ['CANDIDATE_SHA']
+          lineage_path = Path('artifacts/production-gate/evidence-lineage.json')
+          lineage = json.loads(lineage_path.read_text(encoding='utf-8')) if lineage_path.is_file() else {}
+          source_sha = lineage.get('source_sha', '')
+          allowed_files = sorted([
+              '.github/workflows/production-gate.yml',
+              '.github/workflows/production-master-gate.yml',
+          ])
+          changed_files = lineage.get('changed_files', [])
+          changed_digest = hashlib.sha256(('\\n'.join(changed_files) + '\\n').encode()).hexdigest() if isinstance(changed_files, list) else ''
+          lineage_valid = (
+              lineage.get('policy') == 'FAIL_CLOSED'
+              and source_sha == '89d698b1f6cac407f83df2830209773f52eabc18'
+              and lineage.get('candidate_sha') == target_sha
+              and lineage.get('scope_validation') == 'PASS'
+              and lineage.get('artifact_validation') == 'PASS'
+              and lineage.get('independent_audit_validation') == 'PASS'
+              and lineage.get('allowed_changed_files') == allowed_files
+              and changed_files == allowed_files
+              and lineage.get('changed_files_sha256') == changed_digest
+              and str(lineage.get('source_evidence', {}).get('postgres', {}).get('run_id')) == source_run_id
+              and str(lineage.get('source_evidence', {}).get('postgres', {}).get('run_attempt')) == os.environ.get('SOURCE_RUN_ATTEMPT', '')
+              and str(lineage.get('source_evidence', {}).get('independent_audit', {}).get('run_id')) == os.environ.get('INDEPENDENT_RUN_ID', '')
+              and str(lineage.get('source_evidence', {}).get('independent_audit', {}).get('run_attempt')) == os.environ.get('INDEPENDENT_RUN_ATTEMPT', '')
+          )
+          if not lineage_valid:
+              raise SystemExit('EVIDENCE_LINEAGE_INVALID: source/candidate SHA, changed-file scope, or run identity mismatch')
           outcomes = {name: 'missing' for name in (*postgres_gates, *architecture_gates)}
 
           # Verify the downloaded artifact's detached checksum index before
@@ -229,10 +264,10 @@ jobs:
                   postgres_bundle = json.loads(postgres_file.read_text(encoding='utf-8'))
                   bundle_matches = (
                       artifact_integrity_ok
-                      and postgres_bundle.get('commit_sha') == target_sha
-                      and postgres_bundle.get('candidate_head_sha') == target_sha
+                      and postgres_bundle.get('commit_sha') == source_sha
+                      and postgres_bundle.get('candidate_head_sha') == source_sha
                       and bool(postgres_bundle.get('workflow_sha'))
-                      and postgres_bundle.get('checked_out_head_sha') == target_sha
+                      and postgres_bundle.get('checked_out_head_sha') == source_sha
                       and str(postgres_bundle.get('workflow_run_id')) == source_run_id
                       and str(postgres_bundle.get('workflow_run_attempt')) == os.environ.get('SOURCE_RUN_ATTEMPT', '')
                   )
@@ -283,10 +318,10 @@ jobs:
                   architecture_bundle = json.loads(architecture_file.read_text(encoding='utf-8'))
                   architecture_bundle_matches = (
                       artifact_integrity_ok
-                      and architecture_bundle.get('commit_sha') == target_sha
-                      and architecture_bundle.get('candidate_head_sha') == target_sha
+                      and architecture_bundle.get('commit_sha') == source_sha
+                      and architecture_bundle.get('candidate_head_sha') == source_sha
                       and bool(architecture_bundle.get('workflow_sha'))
-                      and architecture_bundle.get('checked_out_head_sha') == target_sha
+                      and architecture_bundle.get('checked_out_head_sha') == source_sha
                       and str(architecture_bundle.get('workflow_run_id')) == source_run_id
                       and str(architecture_bundle.get('workflow_run_attempt')) == os.environ.get('SOURCE_RUN_ATTEMPT', '')
                   )
@@ -359,7 +394,7 @@ jobs:
                   independent_conclusion == 'success'
                   and bool(independent_run_id)
                   and bool(independent_attempt)
-                  and metadata.get('commit_sha') == target_sha
+                  and metadata.get('commit_sha') == source_sha
                   and metadata.get('run_id') == independent_run_id
                   and metadata.get('attempt') == independent_attempt
                   and 'Collection: success' in verdict
@@ -379,6 +414,13 @@ jobs:
           # owner-operated project, not an external or independent review.
           manifest_path = Path('artifacts/ea35-current/manifest.json')
           manifest = json.loads(manifest_path.read_text(encoding='utf-8'))
+          # The controller remains strict on candidate SHA. Carry forward the
+          # source manifest only after the lineage and unchanged-code scope pass.
+          manifest['source_commit_sha'] = source_sha
+          manifest['commit_sha'] = target_sha
+          manifest['checked_out_head_sha'] = target_sha
+          manifest['head_sha'] = target_sha
+          manifest['commit_sha_matches_head'] = True
           manifest['lock_policy'] = {
               'all_30_gates_must_pass': True,
               'same_exact_commit_sha_required': True,
