@@ -194,7 +194,34 @@ jobs:
           conclusion = os.environ.get('GATE_CONCLUSION', 'missing')
           source_run_id = os.environ.get('SOURCE_RUN_ID', '')
           target_sha = os.environ['CANDIDATE_SHA']
-          lineage_path = Path('artifacts/production-gate/evidence-lineage.json')
+          lineage_root = Path('artifacts/production-gate')
+          lineage_sums = lineage_root / 'SHA256SUMS'
+          lineage_manifest = lineage_root / 'MANIFEST.SHA256'
+          lineage_integrity_ok = False
+          try:
+              detached = lineage_manifest.read_text(encoding='utf-8').strip().split('  ', 1)
+              sums_bytes = lineage_sums.read_bytes()
+              lineage_integrity_ok = (
+                  len(detached) == 2
+                  and detached[1] == 'SHA256SUMS'
+                  and hashlib.sha256(sums_bytes).hexdigest() == detached[0]
+              )
+              if lineage_integrity_ok:
+                  for entry in sums_bytes.decode('utf-8').splitlines():
+                      digest, name = entry.split('  ', 1)
+                      relative = Path(name)
+                      if relative.is_absolute() or '..' in relative.parts:
+                          lineage_integrity_ok = False
+                          break
+                      evidence_file = lineage_root / relative
+                      if not evidence_file.is_file() or hashlib.sha256(evidence_file.read_bytes()).hexdigest() != digest:
+                          lineage_integrity_ok = False
+                          break
+          except (OSError, ValueError, UnicodeDecodeError):
+              lineage_integrity_ok = False
+          if not lineage_integrity_ok:
+              raise SystemExit('PRODUCTION_GATE_ARTIFACT_CHECKSUM_INVALID')
+          lineage_path = lineage_root / 'evidence-lineage.json'
           lineage = json.loads(lineage_path.read_text(encoding='utf-8')) if lineage_path.is_file() else {}
           source_sha = lineage.get('source_sha', '')
           allowed_files = sorted([
@@ -202,7 +229,7 @@ jobs:
               '.github/workflows/production-master-gate.yml',
           ])
           changed_files = lineage.get('changed_files', [])
-          changed_digest = hashlib.sha256(('\\n'.join(changed_files) + '\\n').encode()).hexdigest() if isinstance(changed_files, list) else ''
+          changed_digest = hashlib.sha256(("\\n".join(changed_files) + "\\n").encode()).hexdigest() if isinstance(changed_files, list) else ''
           lineage_valid = (
               lineage.get('policy') == 'FAIL_CLOSED'
               and source_sha == '89d698b1f6cac407f83df2830209773f52eabc18'
@@ -214,8 +241,14 @@ jobs:
               and changed_files == allowed_files
               and lineage.get('changed_files_sha256') == changed_digest
               and str(lineage.get('source_evidence', {}).get('postgres', {}).get('run_id')) == source_run_id
+              and str(lineage.get('source_evidence', {}).get('postgres', {}).get('run_id')) == '42196184243'
+              and str(lineage.get('source_evidence', {}).get('postgres', {}).get('artifact_id')) == '13491983619'
+              and lineage.get('source_evidence', {}).get('postgres', {}).get('artifact_digest') == 'sha256:d3e2ab98e99790fecc964b78ffefa72af8fde5561fb454662243c2727756d683'
               and str(lineage.get('source_evidence', {}).get('postgres', {}).get('run_attempt')) == os.environ.get('SOURCE_RUN_ATTEMPT', '')
               and str(lineage.get('source_evidence', {}).get('independent_audit', {}).get('run_id')) == os.environ.get('INDEPENDENT_RUN_ID', '')
+              and str(lineage.get('source_evidence', {}).get('independent_audit', {}).get('run_id')) == '42196184415'
+              and str(lineage.get('source_evidence', {}).get('independent_audit', {}).get('artifact_id')) == '13492437402'
+              and lineage.get('source_evidence', {}).get('independent_audit', {}).get('artifact_digest') == 'sha256:1a0fb0d3a2d71bd4effa8c5af940cc41eea219cafe1b71b0d5a4bd9abb2f2193'
               and str(lineage.get('source_evidence', {}).get('independent_audit', {}).get('run_attempt')) == os.environ.get('INDEPENDENT_RUN_ATTEMPT', '')
           )
           if not lineage_valid:
@@ -410,6 +443,24 @@ jobs:
           except (OSError, ValueError, UnicodeDecodeError, AttributeError):
               independent_valid = False
           outcomes['independent_reperformance'] = 'success' if independent_valid else 'independent_evidence_invalid'
+
+          def checksum_inventory(root):
+              records = {}
+              for line in (root / 'SHA256SUMS').read_text(encoding='utf-8').splitlines():
+                  digest, name = line.split('  ', 1)
+                  records[name] = digest
+              return records
+
+          lineage_valid = (
+              lineage_valid
+              and lineage_integrity_ok
+              and artifact_integrity_ok
+              and independent_valid
+              and lineage.get('source_evidence', {}).get('postgres', {}).get('file_checksums') == checksum_inventory(artifact_root)
+              and lineage.get('source_evidence', {}).get('independent_audit', {}).get('file_checksums') == checksum_inventory(independent_root)
+          )
+          if not lineage_valid:
+              raise SystemExit('EVIDENCE_LINEAGE_INVALID: artifact checksums or source evidence inventory mismatch')
           # Repository-owner approval is an authenticated self-approval for this
           # owner-operated project, not an external or independent review.
           manifest_path = Path('artifacts/ea35-current/manifest.json')
